@@ -6,9 +6,10 @@
 //
 // Production wiring forwards the selected runtime's binary, model and config
 // directory, including custom Claude forks. Focused tests replace only runFn.
+//
+// RFC-370 §10 V16 — the narrative is stored in the selected code-review
+// artifact store and its input is read through the selected revision content.
 
-import { join } from 'node:path'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import {
   buildChangeGroups,
   changeNarrativeSchema,
@@ -22,15 +23,22 @@ import {
   type Task,
 } from '@agent-workflow/shared'
 import { DomainError } from '@/util/errors'
-import { appHome } from '@/util/paths'
-import { gitChangedEntries, gitDiffNumstat } from '@/util/git'
 import type { Logger } from '@/util/log'
 import type { Actor } from '@/auth/actor'
 import { canonicalRepoKeys } from '@/services/repoLabels'
 import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
-import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
+import {
+  codeReviewReads,
+  getTaskStructuralDiff,
+  type CodeReviewReadInput,
+  type CodeReviewReads,
+} from '@/services/structuralDiff/service'
 import { ecosystemForManifest } from '@/services/structuralDiff/deps/manifests'
 import type { CodeWorkspaceRead } from '@/modules/code-capability/application/ports/codeWorkspaceRead'
+import {
+  composeLocalCodeReviewArtifacts,
+  type CodeReviewArtifactStore,
+} from '@/modules/code-capability/public/participants'
 
 const NARRATIVE_TIMEOUT_MS = 120_000
 /** A failed generation stays reportable this long, then decays to the 404
@@ -40,25 +48,6 @@ const PROMPT_MAX_CHARS = 30_000
 const TOP_SYMBOLS_PER_GROUP = 12
 
 export const NARRATIVE_AGENT_NAME = 'change-narrative'
-
-// ---------------------------------------------------------------------------
-// disk cache (same directory family as the structural-diff artifact, so the
-// task-deletion chain that removes structural-diffs/{taskId} covers both)
-// ---------------------------------------------------------------------------
-
-function narrativePath(taskId: string): string {
-  return join(appHome(), 'structural-diffs', taskId, 'narrative-task.json')
-}
-
-async function readNarrative(taskId: string): Promise<ChangeNarrative | null> {
-  try {
-    const raw = await readFile(narrativePath(taskId), 'utf8')
-    const parsed = changeNarrativeSchema.safeParse(JSON.parse(raw))
-    return parsed.success ? parsed.data : null
-  } catch {
-    return null
-  }
-}
 
 // ---------------------------------------------------------------------------
 // in-memory generation state (single-flight per task; daemon-local by design —
@@ -94,10 +83,11 @@ export interface NarrativeInput {
 }
 
 export async function buildNarrativeInput(
-  workspace: CodeWorkspaceRead,
+  input: CodeReviewReadInput,
   task: Task,
 ): Promise<NarrativeInput> {
-  const diff = await getTaskStructuralDiff(workspace, task.id, 'task')
+  const reads = codeReviewReads(input)
+  const diff = await getTaskStructuralDiff(reads, task.id, 'task')
   const multiRepo = task.repoCount > 1
 
   // The FILE universe is the git enumeration, NOT diff.files — the structural
@@ -122,10 +112,13 @@ export async function buildNarrativeInput(
     const label = labels[i]
     const key = (rel: string): string => (label === undefined ? rel : `${label}/${rel}`)
     let changed
-    let lineStats = new Map<string, { added: number; removed: number }>()
+    let lineStats: ReadonlyMap<string, { added: number; removed: number }> = new Map()
     try {
-      changed = await gitChangedEntries(repo.worktreePath, repo.base)
-      lineStats = await gitDiffNumstat(repo.worktreePath, repo.base)
+      const changes = await reads.content
+        .bind(repo.worktreePath)
+        .changes({ from: repo.base, lineStats: true })
+      changed = changes.entries
+      lineStats = changes.lineStats ?? lineStats
     } catch {
       continue // a broken repo shard degrades that repo, not the whole input
     }
@@ -298,7 +291,8 @@ export function extractJsonObject(text: string): unknown | null {
 // ---------------------------------------------------------------------------
 
 export interface ChangeNarrativeDeps {
-  workspace: CodeWorkspaceRead
+  /** The bare workspace port keeps the standalone content and artifact store. */
+  workspace: CodeWorkspaceRead | CodeReviewReads
   /** Closed collaboration authorization; no task/member rows cross this seam. */
   requireMember(actor: Actor, taskId: string): Promise<void>
   /** Provider-neutral runtime profile resolved by the runtime-registry owner. */
@@ -326,10 +320,11 @@ export interface ChangeNarrativeDeps {
 
 export async function getChangeNarrativeStatus(
   taskId: string,
+  artifacts: CodeReviewArtifactStore = composeLocalCodeReviewArtifacts(),
 ): Promise<ChangeNarrativeStatus | null> {
   const gen = generating.get(taskId)
   if (gen !== undefined) return { status: 'generating', startedAt: gen.startedAt }
-  const stored = await readNarrative(taskId)
+  const stored = await artifacts.readNarrative(taskId)
   if (stored !== null) return { status: 'ready', narrative: stored }
   const failed = failures.get(taskId)
   if (failed !== undefined && Date.now() - failed.at < FAILURE_TTL_MS) {
@@ -453,20 +448,16 @@ async function runGeneration(
 
     // Deletion race (design §3.2-5): the task may be deleted while the agent
     // runs. Check before writing (skip entirely) and after (remove what we just
-    // wrote so the deletion chain's directory removal stays final).
-    if ((await deps.workspace.findTask(task.id)) === null) return
-    const path = narrativePath(task.id)
+    // wrote so the deletion chain's removal stays final).
+    const reads = codeReviewReads(deps.workspace)
+    if ((await reads.workspace.findTask(task.id)) === null) return
     try {
-      await mkdir(join(appHome(), 'structural-diffs', task.id), { recursive: true })
-      await writeFile(path, JSON.stringify(pruned), 'utf8')
+      await reads.artifacts.writeNarrative(task.id, pruned)
     } catch {
       return // best-effort persistence; the trigger's browser still got 'generating'
     }
-    if ((await deps.workspace.findTask(task.id)) === null) {
-      await rm(join(appHome(), 'structural-diffs', task.id), {
-        recursive: true,
-        force: true,
-      }).catch(() => {})
+    if ((await reads.workspace.findTask(task.id)) === null) {
+      await reads.artifacts.removeTask(task.id).catch(() => {})
     }
   } finally {
     try {

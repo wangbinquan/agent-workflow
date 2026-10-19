@@ -40,6 +40,11 @@ export type AutomationWorkspaceTreeOperation =
   | 'validate-workspace-outcome'
   | 'action-scene-prepare'
   | 'action-tree-digest'
+  // RFC-370 §10 V18: repository facts from the HEAD tree; upload seed trees.
+  | 'repository-facts-scan'
+  | 'seed-tree-digest'
+  | 'seed-tree-discard'
+  | 'seed-tree-publish'
 
 export interface AutomationWorkspaceTreeOperations {
   run(operation: AutomationWorkspaceTreeOperation, input: unknown): Promise<unknown>

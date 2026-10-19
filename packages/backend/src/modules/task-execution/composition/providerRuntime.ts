@@ -485,6 +485,7 @@ export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
   readonly lifecycleRepair: Omit<AutomaticTaskRepairOptions, 'resume'>
   readonly fusion: Readonly<{
     appHome: string
+    workspaces: Parameters<typeof createPostgresqlFusionEngineTaskOperations>[0]['workspaces']
     runConfiguration?: Parameters<
       typeof createPostgresqlFusionEngineTaskOperations
     >[0]['runConfiguration']
@@ -670,6 +671,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     fusion: createPostgresqlFusionEngineTaskOperations({
       db,
       appHome: dependencies.fusion.appHome,
+      workspaces: dependencies.fusion.workspaces,
       ...(dependencies.fusion.runConfiguration === undefined
         ? {}
         : { runConfiguration: dependencies.fusion.runConfiguration }),

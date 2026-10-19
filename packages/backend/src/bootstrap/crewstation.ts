@@ -1,6 +1,7 @@
 import { createCrewStationMcpDiagnostics } from '@/modules/resource-catalog/composition/crewstationMcpDiagnostics'
 import { createLogger } from '@/util/log'
 import { composeCrewStationRecovery } from '@/modules/task-execution/composition/crewstationRecovery'
+import { createHostedScriptFixtureProcess } from '@/modules/task-execution/composition/programTools'
 import {
   composeCrewStationCredentialAdapters,
   composeCrewStationRecoveryRequester,
@@ -20,6 +21,7 @@ import {
   validateCrewStationEventSubscriptions,
 } from '@/modules/integration/composition/crewstationEvents'
 import { composeCrewStationReviewArtifacts } from '@/modules/collaboration/composition/crewstationReviewArtifacts'
+import { composeCrewStationCodeReviewArtifacts } from '@/modules/code-capability/composition/crewstationCodeReviewArtifacts'
 import { composeCrewStationMaintenanceDescriptor } from './crewstationMaintenance'
 import { composeCrewStationResourceArtifacts } from '@/modules/resource-catalog/composition/crewstationArtifacts'
 import {
@@ -267,6 +269,9 @@ export async function composeCrewStationStartOptions(
     }),
     ...evidence,
     reviewArtifacts,
+    // §10 V16: structural diffs and change narratives as object publications;
+    // the code-review reads themselves arrive with the workspace selections.
+    codeReviewArtifacts: composeCrewStationCodeReviewArtifacts({ objects, publications }),
     taskArchive: composeCrewStationTaskArchive({
       db,
       fence,
@@ -301,6 +306,8 @@ export async function composeCrewStationStartOptions(
       },
     },
     customObserverPrograms: createCrewStationObserverProgramFactory(execution.helper),
+    // RFC-370 §10 V19: program tool contract fixtures run in the task image.
+    programFixtureProcess: createHostedScriptFixtureProcess({ helper: execution.helper }),
     verificationCommands: createCrewStationVerificationCommandEffectsFactory({
       helper: execution.helper,
       locate: workspace.locate,

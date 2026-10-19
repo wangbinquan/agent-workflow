@@ -21,9 +21,9 @@
 // 关于 fixture（设计门 P1-3）
 // --------------------------
 // 工具路径是**真调 handler** 推出来的，不是读源码猜的。但调用需要按工具定制响应：
-// RFC-326 的 recorder 对每次 dispatch 固定返回 `{}`，于是 `list_repo_refs` 的第一跳拿到空
-// items、找不到行就抛错，**第二跳永远不会发生**，守卫会把 `/api/repos/refs` 误报成 uncovered。
-// `TOOL_FIXTURES` 就是为这件事存在的。
+// RFC-326 的 recorder 对每次 dispatch 固定返回 `{}`，于是需要多跳的工具在第一跳拿到空响应
+// 就会提前结束，后续路径永远不会发生，守卫会把它们误报成 uncovered。`TOOL_FIXTURES` 就是为
+// 这件事存在的（`list_repo_refs` 自 RFC-370 §10 V17 起按 id 一跳，不再需要 fixture）。
 
 import { describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
@@ -93,11 +93,6 @@ function mountedRoutes(): Array<{ key: string; permissions: ReadonlyArray<Permis
  * to make every call it would make in production. Default is `{}`.
  */
 const TOOL_FIXTURES: Readonly<Record<string, (path: string) => unknown>> = {
-  // Two hops: hop 1 must return a row whose id matches the argument below,
-  // or the tool refuses before hop 2 (which is the correct behaviour, and also
-  // what makes a fixed `{}` fixture wrong for this tool).
-  list_repo_refs: (path) =>
-    path === '/api/cached-repos' ? { items: [{ id: 'FIXTURE_ID', localPath: '/m/x' }] } : {},
   // Settles on the first poll instead of blocking for 240s.
   watch_task: () => ({ status: 'done' }),
 }

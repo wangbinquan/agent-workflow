@@ -4,78 +4,39 @@
 // index over the whole repo (so the chain can穿透 into unchanged files) + a
 // path-safe file reader. The index is cheap (regex over decl lines) and cached
 // per worktree path. Best-effort by design.
+//
+// RFC-370 §10 V16 — the index and the file reads come from the selected
+// revision content (the native worktree, or a hosted task volume).
 
-import { readFile as fsReadFile, readdir } from 'node:fs/promises'
-import { join, relative, resolve, sep } from 'node:path'
 import type { CallTarget } from '@agent-workflow/shared'
 import type { TaskCallGraphWorkspaceReadModel } from '@/modules/task-execution/public/types'
+import {
+  composeLocalRepositoryRevisionContent,
+  type RepositoryClassIndex,
+  type RepositoryRevisionContent,
+  type RepositoryRevisionContentFactory,
+} from '@/modules/source-control/public/participants'
 import { DomainError, NotFoundError } from '@/util/errors'
-import { isGitWorkTree } from '@/util/git'
 import { resolveLang } from '../lang/grammars'
-import { scanClassDecls, buildClassIndex } from './classIndex'
 import { expandMethod, type ExpandCtx } from './service'
-import { toPortableRelativePath } from '@/util/platformExec'
 
-const IGNORE_DIRS = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  'target',
-  'out',
-  '.next',
-  'vendor',
-])
-const MAX_INDEX_FILES = 8000
 const MAX_FILE_BYTES = 2_000_000
 
-const _indexCache = new Map<string, Promise<Map<string, string[]>>>()
-
-/** Tracked source files under `root` (supported extensions only), skipping
- *  common build/vendor dirs. Bounded by MAX_INDEX_FILES. */
-async function listSourceFiles(root: string): Promise<string[]> {
-  const out: string[] = []
-  const walk = async (dir: string): Promise<void> => {
-    if (out.length >= MAX_INDEX_FILES) return
-    const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
-    for (const e of entries) {
-      if (out.length >= MAX_INDEX_FILES) return
-      if (e.isDirectory()) {
-        if (!IGNORE_DIRS.has(e.name) && !e.name.startsWith('.')) await walk(join(dir, e.name))
-      } else if (e.isFile() && resolveLang(e.name) !== null) {
-        // RFC-254 T32: these relative paths ARE the identifier. They become the
-        // `ref` (`src/A.java#A.run`) and `ownerClass` that callers pass back in,
-        // store, and display — and `relative` answers in the HOST spelling, so
-        // on Windows the index produced `src\A.java#A.run` while every caller
-        // and fixture spells it with `/`. A ref this service emitted could not
-        // be fed back to it on the platform that emitted it.
-        out.push(toPortableRelativePath(relative(root, join(dir, e.name))))
-      }
-    }
-  }
-  await walk(root)
-  return out
-}
+const _indexCache = new Map<string, Promise<RepositoryClassIndex>>()
 
 /** Build (and cache per worktree) the class→file index by shallow-scanning every
- *  source file's declaration lines. */
-function classIndexFor(root: string): Promise<Map<string, string[]>> {
+ *  source file's declaration lines. A failed build is not cached. */
+function classIndexFor(
+  root: string,
+  content: RepositoryRevisionContent,
+): Promise<RepositoryClassIndex> {
   const cached = _indexCache.get(root)
   if (cached !== undefined) return cached
-  const built = (async (): Promise<Map<string, string[]>> => {
-    const files = await listSourceFiles(root)
-    const perFile: Array<{ file: string; names: string[] }> = []
-    for (const f of files) {
-      try {
-        const src = await fsReadFile(join(root, f), 'utf8')
-        if (src.length <= MAX_FILE_BYTES) perFile.push({ file: f, names: scanClassDecls(f, src) })
-      } catch {
-        /* skip unreadable */
-      }
-    }
-    return buildClassIndex(perFile)
-  })()
+  const built = content.classIndex()
   _indexCache.set(root, built)
+  built.catch(() => {
+    if (_indexCache.get(root) === built) _indexCache.delete(root)
+  })
   return built
 }
 
@@ -84,25 +45,22 @@ export function invalidateCallGraphIndex(root: string): void {
   _indexCache.delete(root)
 }
 
-/** Path-safe reader: only files inside `root`. */
-function makeReader(root: string): (p: string) => Promise<string | null> {
-  const rootResolved = resolve(root)
+/** Path-safe reader: only text files inside the worktree. */
+function makeReader(content: RepositoryRevisionContent): (p: string) => Promise<string | null> {
   return async (p) => {
-    const abs = resolve(root, p)
-    if (abs !== rootResolved && !abs.startsWith(rootResolved + sep)) return null // traversal guard
-    try {
-      return await fsReadFile(abs, 'utf8')
-    } catch {
-      return null
-    }
+    const read = await content.readWorktree({ path: p, maxBytes: MAX_FILE_BYTES })
+    return read.kind === 'text' ? read.content : null
   }
 }
 
 /** Build an ExpandCtx over a worktree directory (testable seam). */
-export async function worktreeExpandCtx(root: string): Promise<ExpandCtx> {
+export async function worktreeExpandCtx(
+  root: string,
+  content: RepositoryRevisionContent = composeLocalRepositoryRevisionContent().bind(root),
+): Promise<ExpandCtx> {
   return {
-    readFile: makeReader(root),
-    classIndex: await classIndexFor(root),
+    readFile: makeReader(content),
+    classIndex: await classIndexFor(root, content),
     grammarFor: resolveLang,
     maxBytes: MAX_FILE_BYTES,
   }
@@ -151,6 +109,8 @@ export async function getCallTargets(
   workspaceReadModel: TaskCallGraphWorkspaceReadModel,
   taskId: string,
   methodRef: string,
+  /** RFC-370 §10 V16 — the selected revision content; this host's worktrees when absent. */
+  revisionContent: RepositoryRevisionContentFactory = composeLocalRepositoryRevisionContent(),
 ): Promise<CallTarget[]> {
   const workspace = await workspaceReadModel.find(taskId)
   if (workspace === null) {
@@ -181,14 +141,15 @@ export async function getCallTargets(
     label = split.dir
   }
 
-  if (!(await isGitWorkTree(worktreePath))) {
+  const content = revisionContent.bind(worktreePath)
+  if ((await content.presence()) !== 'git') {
     throw new DomainError(
       'task-worktree-missing',
       `worktree '${worktreePath}' is unavailable (missing or no longer a git repository); cannot expand call chain`,
       410,
     )
   }
-  const ctx = await worktreeExpandCtx(worktreePath)
+  const ctx = await worktreeExpandCtx(worktreePath, content)
   const targets = await expandMethod(innerRef, ctx)
   return label === null ? targets : targets.map((t) => reprefixTarget(label, t))
 }

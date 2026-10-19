@@ -46,6 +46,7 @@ export function createCodeWorkspaceRead(db: ProviderNeutralDatabase): CodeWorksp
           worktreePath: tasks.worktreePath,
           baseCommit: tasks.baseCommit,
           repoCount: tasks.repoCount,
+          finishedAt: tasks.finishedAt,
         })
         .from(tasks)
         .where(eq(tasks.id, taskId))

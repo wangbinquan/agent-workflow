@@ -357,6 +357,12 @@ export function BatchImportDialog({
       case 'cloning':
         return t('repos.batchImport.statusCloning')
       case 'done':
+        // RFC-370 §10 V17: a hosted deployment verifies the remote and registers
+        // it; the clone happens inside each task's own volume.
+        if (row.verifiedOnly === true)
+          return row.cold === true
+            ? t('repos.batchImport.statusDoneVerified')
+            : t('repos.batchImport.statusDoneVerifiedHit')
         if (row.cold === true) return t('repos.batchImport.statusDoneCold')
         if (row.fetchOk === false) return t('repos.batchImport.statusDoneHitFetchFail')
         return t('repos.batchImport.statusDoneHit')

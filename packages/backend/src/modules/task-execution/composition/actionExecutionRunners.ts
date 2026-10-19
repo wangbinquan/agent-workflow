@@ -142,6 +142,20 @@ export interface ActionExecutionEnvironment {
    */
   readonly onTerminal?: (executionRef: string) => void | Promise<void>
   readonly terminalPollMs?: number
+  /**
+   * RFC-370 §10 V18: whether an entry exists below the action workspace (its
+   * `.git`, an input mount). The selected workspace implementation interprets
+   * the reference; a standalone daemon checks its own filesystem.
+   */
+  readonly workspaceEntries?: ActionWorkspaceEntries
+}
+
+export interface ActionWorkspaceEntries {
+  exists(workspacePath: string, relativePath: string): Promise<boolean>
+}
+
+const localWorkspaceEntries: ActionWorkspaceEntries = {
+  exists: async (workspacePath, relativePath) => existsSync(join(workspacePath, relativePath)),
 }
 
 function fail(
@@ -185,16 +199,18 @@ export async function ensureDigitalEmployeeHostWorkflow(
     .onConflictDoNothing({ target: workflows.id })
 }
 
-/** 共享的工作区 / 输入挂载前置校验（纯文件系统 + 纯函数）。 */
-function assertWorkspace(input: {
+/** 共享的工作区 / 输入挂载前置校验（经所选工作区实现查存在性 + 纯函数）。 */
+async function assertWorkspace(input: {
   readonly workspacePath: string
   readonly baselineSha: string
   readonly platformInputPaths: readonly string[]
   readonly codes: Readonly<{ baseline: string; workspace: string; mount: string }>
   readonly checkMounts: boolean
-}):
+  readonly entries: ActionWorkspaceEntries
+}): Promise<
   | { ok: true; platformInputPaths: readonly string[] }
-  | { ok: false; failure: AgentExecutionFailure } {
+  | { ok: false; failure: AgentExecutionFailure }
+> {
   if (!/^[0-9a-f]{40}$/.test(input.baselineSha)) {
     return fail(
       'contract-violation',
@@ -203,7 +219,7 @@ function assertWorkspace(input: {
       'baselineSha must be a 40-hex commit sha',
     )
   }
-  if (!existsSync(join(input.workspacePath, '.git'))) {
+  if (!(await input.entries.exists(input.workspacePath, '.git'))) {
     return fail(
       'configuration',
       input.codes.workspace,
@@ -221,7 +237,12 @@ function assertWorkspace(input: {
     )
   }
   if (input.checkMounts) {
-    const missing = platformInputPaths.find((path) => !existsSync(join(input.workspacePath, path)))
+    let missing: string | undefined
+    for (const path of platformInputPaths) {
+      if (await input.entries.exists(input.workspacePath, path)) continue
+      missing = path
+      break
+    }
     if (missing !== undefined) {
       return fail(
         'configuration',
@@ -294,7 +315,8 @@ export function createAgentActionExecutionRunner(
 ): AgentActionExecutionRunner {
   return {
     async launch(input) {
-      const workspace = assertWorkspace({
+      const workspace = await assertWorkspace({
+        entries: env.workspaceEntries ?? localWorkspaceEntries,
         workspacePath: input.workspacePath,
         baselineSha: input.baselineSha,
         platformInputPaths: input.platformInputPaths,
@@ -363,7 +385,8 @@ export function createScriptActionExecutionRunner(
 ): ScriptActionExecutionRunner {
   return {
     async launch(input) {
-      const workspace = assertWorkspace({
+      const workspace = await assertWorkspace({
+        entries: env.workspaceEntries ?? localWorkspaceEntries,
         workspacePath: input.workspacePath,
         baselineSha: input.baselineSha,
         platformInputPaths: input.platformInputPaths,

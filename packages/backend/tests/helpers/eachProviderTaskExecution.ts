@@ -77,6 +77,7 @@ import { admitTestDirectAuthority } from './identityAccessAuthority'
 import type { ProviderHarness } from './eachProvider'
 import { createTestRepositoryPublicationTransport } from './taskExecutionTestTopology'
 import { sqliteMemoryInjectionQueries } from './memoryInjection'
+import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
 
 /** Real catalog rows and owner decoders supply the validation inventory on either DB. */
 export function createTestDynamicWorkflowOperations(
@@ -307,7 +308,7 @@ export async function createEachProviderTaskExecution(
           ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
         }),
         lifecycleRepair: {},
-        fusion: { appHome },
+        fusion: { appHome, workspaces: createFileFusionWorkspaceEffects({ appHome }) },
         rootResumeRuntime,
         repositoryPreparationRetry: {
           retry: async () => unavailable('repository preparation retry'),
@@ -447,7 +448,7 @@ export async function createEachProviderTaskExecution(
         ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
       }),
       lifecycleRepair: {},
-      fusion: { appHome },
+      fusion: { appHome, workspaces: createFileFusionWorkspaceEffects({ appHome }) },
       rootResumeRuntime,
       workgroupTaskRoom: { collaboration: workgroupClarify },
     })

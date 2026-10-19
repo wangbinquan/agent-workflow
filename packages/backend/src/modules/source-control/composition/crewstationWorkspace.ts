@@ -9,6 +9,8 @@ import type { WorkspaceExcludeProfileReceipt } from '../public/types'
 import { createHostedTaskWorkspaces } from '../infrastructure/crewstation/taskWorkspace'
 import { createHostedWorkspaceCommands } from '../infrastructure/crewstation/workspaceCommands'
 import { createHostedWorkspaceEffects } from '../infrastructure/crewstation/workspaceEffects'
+import { createHostedRepositoryRevisionContent } from '../infrastructure/crewstation/repositoryRevisionContent'
+import { createHostedRepositoryRemote } from '../infrastructure/crewstation/repositoryRemote'
 import { createHostedWorkspaceMaintenance } from '../infrastructure/crewstation/workspaceMaintenance'
 import { createHostedIsolationWorkspaces } from '../infrastructure/crewstation/isolationWorkspace'
 import { createHostedRepositoryCandidateOperations } from '../infrastructure/crewstation/repositoryCandidate'
@@ -31,6 +33,7 @@ import {
   createHostedRepositoryPreparation,
   createHostedScratchWorkspaces,
 } from '../infrastructure/crewstation/repositoryPreparation'
+import { createHostedFusionWorkspaces } from '../infrastructure/crewstation/fusionWorkspace'
 import {
   hostedWorkspaceReference,
   parseHostedWorkspaceReference,
@@ -158,9 +161,16 @@ export function composeCrewStationWorkspaceOwner(
         workspaces,
         isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
       })
+      const hostedEffects = createHostedWorkspaceEffects({ helper, workspaces, api: input.api })
       return {
         // §9.2 V3: a task publication's network Git runs in its task volume.
         repositoryPublicationTransport: createHostedRepositoryPublicationTransport({ helper }),
+        // §10 V16: code-review reads answer from the task volume.
+        repositoryRevisionContent: createHostedRepositoryRevisionContent({
+          helper,
+          workspaces,
+          api: input.api,
+        }),
         // RFC-308 workspace profiles are written where the worktree lives.
         workspaceExcludeProfiles: {
           bind: ({ workspaceRef }: { workspaceRef: string }) => {
@@ -195,7 +205,14 @@ export function composeCrewStationWorkspaceOwner(
           helper,
           taskId: 'development:shared',
         }),
-        ...createHostedWorkspaceEffects({ helper, workspaces, api: input.api }),
+        ...hostedEffects,
+        // §10 V18: an action scene's `.git` and input mounts, below its reference.
+        actionWorkspaceEntries: {
+          exists: async (workspacePath: string, relativePath: string) =>
+            await hostedEffects.workspaceReads.exists(
+              joinHostedWorkspaceReference(workspacePath, relativePath),
+            ),
+        },
         workspacePresence: { exists: workspaceMaintenanceFilesystem.exists },
         workspaceMaintenanceFilesystem,
         isolationWorkspaces: createHostedIsolationWorkspaces(helper),
@@ -218,6 +235,15 @@ export function composeCrewStationWorkspaceOwner(
             helper.recover<MaterializedSpace>(taskId, operationId),
         }),
         scratchWorkspaceEffects: createHostedScratchWorkspaces(helper, workspaces),
+        // §10 V20: a fusion engine task's working copy lives in its own volume.
+        fusionWorkspaceEffects: createHostedFusionWorkspaces({
+          helper,
+          workspaces,
+          api: input.api,
+        }),
+        // §10 V17: repository pickers and registration read the remote from
+        // the release's system volume; mirrors clone only in task volumes.
+        repositoryRemote: createHostedRepositoryRemote({ helper }),
       }
     },
   }

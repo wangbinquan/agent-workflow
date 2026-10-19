@@ -5,6 +5,10 @@
 // POST   /api/cached-repos/:id/refresh  manual `git fetch --all --prune --tags`
 // DELETE /api/cached-repos/:id?force=1  remove cache dir + DB row (force=1 skips
 //                                       the "referenced by N tasks" guard)
+//
+// RFC-370 §10 V17: where the selected mirrors register by verifying the remote
+// (hosted), a refresh verifies it again and a batch import registers each URL
+// without cloning; a standalone daemon keeps cloning and fetching its mirrors.
 
 import {
   CachedRepoPageQuerySchema,
@@ -14,6 +18,7 @@ import {
 import type { Hono } from 'hono'
 import type { SecretBox } from '@/auth/secretBox'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
+import type { RepositoryMirrors } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
@@ -40,7 +45,11 @@ export function mountCachedRepoRoutes(
   app: Hono,
   deps: CachedRepoRouteDependencies,
   store: RepositoryWorkspaceStore,
+  mirrors: RepositoryMirrors,
 ): void {
+  const remote = mirrors.remoteRegistration
+  const registration =
+    remote === undefined ? {} : { register: (url: string) => remote.register(url) }
   registerRoute(
     app,
     {
@@ -95,6 +104,7 @@ export function mountCachedRepoRoutes(
     },
     async (c) => {
       const id = c.req.param('id')
+      if (remote !== undefined) return c.json(await remote.refresh(id))
       // RFC-208: `gitCloneTimeoutMs` was dead config — the schema accepted it but
       // nothing ever passed it to `cloneTimeoutMs`, so an operator tightening the
       // window had no effect. Manual refresh shells out to `git fetch` against a
@@ -187,6 +197,7 @@ export function mountCachedRepoRoutes(
           ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
           concurrency: cfg.repoBatchImportConcurrency,
           retentionMs: cfg.repoBatchImportRetentionMs,
+          ...registration,
         },
         parsed.data,
         // RFC-285 B6②：发起者归属（WS 升级门判定依据）。
@@ -244,6 +255,7 @@ export function mountCachedRepoRoutes(
           store,
           ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
           ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+          ...registration,
         },
         batchId,
         rowId,

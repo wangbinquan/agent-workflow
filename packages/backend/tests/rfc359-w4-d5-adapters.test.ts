@@ -113,6 +113,11 @@ async function seedApprovedMemory(db: ProviderNeutralDatabase): Promise<string> 
   return id
 }
 
+/** RFC-370 §10 V20: the proposal reaches apply as the exact tree, not a directory. */
+function proposalTree(directory: string) {
+  return [{ path: 'SKILL.md', content: new Uint8Array(readFileSync(join(directory, 'SKILL.md'))) }]
+}
+
 function seedSkillFiles(appHome: string, skillId: string): { live: string; proposal: string } {
   const live = join(appHome, `skills/${skillId}/files`)
   const versionOne = join(appHome, `skills/${skillId}/versions/v1/files`)
@@ -168,8 +173,7 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
     const applied = await persistence.apply({
       fusionId,
       actor,
-      appHome,
-      proposedWorktreePath: proposal,
+      proposal: proposalTree(proposal),
       incorporatedMemoryIds: [memoryId],
       summary: 'merged memory',
       now: 10,
@@ -212,8 +216,7 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
       persistence.apply({
         fusionId: second,
         actor,
-        appHome,
-        proposedWorktreePath: proposal,
+        proposal: proposalTree(proposal),
         incorporatedMemoryIds: [],
         summary: 's',
         now: 11,
@@ -241,8 +244,7 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
       persistence.apply({
         fusionId: third,
         actor,
-        appHome,
-        proposedWorktreePath: proposal,
+        proposal: proposalTree(proposal),
         incorporatedMemoryIds: [],
         summary: 's',
         now: 12,

@@ -10,6 +10,9 @@
 //              (transparently 'inferred' — may miss AND over-report, F-08).
 // side='base' always resolves baseline against the base revision (F-05: the
 // SCIP index only covers the worktree).
+// RFC-370 §10 V16 — reads go through the selected revision content; deep needs
+// content on this host (`capabilities.indexing`), a hosted task degrades to
+// baseline with `indexing-unavailable`.
 
 import { extname } from 'node:path'
 import {
@@ -19,10 +22,16 @@ import {
   type SymbolResolution,
 } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import type { CodeWorkspaceRead } from '@/modules/code-capability/application/ports/codeWorkspaceRead'
+import type { CodeWorkspaceTask } from '@/modules/code-capability/application/ports/codeWorkspaceRead'
 import { getTaskFileSymbols, resolveRepoTarget } from './fileSymbols'
-import { worktreeSnapshotDigest } from './snapshot'
-import { readStoredDiff } from '@/services/structuralDiff/store'
+import {
+  codeReviewReads,
+  readStoredTaskDiff,
+  terminalGeneration,
+  type CodeReviewReadInput,
+  type ResolvedCodeReviewReads,
+} from '@/services/structuralDiff/service'
+import { DEEP_INDEXING_UNAVAILABLE } from '@/services/structuralDiff/deep/service'
 import { INDEXER_SPECS, type IndexerId } from '@/services/structuralDiff/deep/indexers'
 import { occurrencesOf, type ScipGraph } from '@/services/structuralDiff/deep/scip'
 import { scipIndexCache, type ScipIndexCache } from '@/services/structuralDiff/deep/indexCache'
@@ -89,7 +98,7 @@ function spanWidth(span: {
 }
 
 export async function getCodeIntel(
-  workspace: CodeWorkspaceRead,
+  input: CodeReviewReadInput,
   taskId: string,
   q: CodeIntelQuery,
   deps: CodeIntelDeps = {},
@@ -107,7 +116,8 @@ export async function getCodeIntel(
       'path, name and 1-based line/col query params are required',
     )
   }
-  const task = await workspace.findTask(taskId)
+  const reads = codeReviewReads(input)
+  const task = await reads.workspace.findTask(taskId)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
@@ -115,47 +125,35 @@ export async function getCodeIntel(
   const repoKey = task.repoCount > 1 ? parseRepoKeyWire(q.repo ?? '') : ''
 
   if (q.mode === 'deep' && q.side === 'worktree') {
+    const content = reads.content.bind(worktreePath)
+    if (!content.capabilities.indexing) {
+      return baseline(reads, task, repoKey, q, 'deep', DEEP_INDEXING_UNAVAILABLE)
+    }
     const indexerId = indexerForPath(q.path)
     if (indexerId === null) {
-      return baseline(
-        workspace,
-        task.id,
-        task.repoCount,
-        repoKey,
-        q,
-        'deep',
-        'no-indexer-for-language',
-      )
+      return baseline(reads, task, repoKey, q, 'deep', 'no-indexer-for-language')
     }
     const cache = deps.cache ?? scipIndexCache()
-    const snapshotDigest = await worktreeSnapshotDigest(worktreePath)
+    const snapshotDigest = await content.snapshotDigest()
     const answer = await cache.get({
       taskId: task.id,
       repoKey,
       snapshotDigest,
       indexerId,
-      worktreePath,
+      worktreePath: content.capabilities.indexRoot,
     })
     if (!answer.ok) {
-      return baseline(workspace, task.id, task.repoCount, repoKey, q, 'deep', answer.reason)
+      return baseline(reads, task, repoKey, q, 'deep', answer.reason)
     }
     const doc = answer.graph.documents.find((d) => d.relativePath === q.path)
     if (doc === undefined) {
-      return baseline(
-        workspace,
-        task.id,
-        task.repoCount,
-        repoKey,
-        q,
-        'deep',
-        'document-not-indexed',
-      )
+      return baseline(reads, task, repoKey, q, 'deep', 'document-not-indexed')
     }
     return deepResolve(answer.graph, doc.relativePath, repoKey, q)
   }
 
   const degraded = q.mode === 'deep' && q.side === 'base' ? 'base-side-not-indexed' : undefined
-  return baseline(workspace, task.id, task.repoCount, repoKey, q, q.mode, degraded)
+  return baseline(reads, task, repoKey, q, q.mode, degraded)
 }
 
 function deepResolve(
@@ -212,9 +210,8 @@ function deepResolve(
 }
 
 async function baseline(
-  workspace: CodeWorkspaceRead,
-  taskId: string,
-  repoCount: number,
+  reads: ResolvedCodeReviewReads,
+  task: CodeWorkspaceTask,
   repoKey: string,
   q: CodeIntelQuery,
   requestedEngine: 'deep' | 'baseline',
@@ -227,7 +224,7 @@ async function baseline(
 
   // Source 1 — the clicked file's own symbol table (both sides supported).
   try {
-    const fileSyms = await getTaskFileSymbols(workspace, taskId, {
+    const fileSyms = await getTaskFileSymbols(reads, task.id, {
       path: q.path,
       side: q.side,
       ...(q.repo !== undefined ? { repo: q.repo } : {}),
@@ -253,8 +250,12 @@ async function baseline(
   // Single-repo only: the stored artifact's file paths carry display labels in
   // multi-repo tasks and MUST NOT be prefix-guessed back to repos (F-04).
   let multiRepoLimited = false
-  if (repoCount <= 1) {
-    const stored = await readStoredDiff(taskId, 'task')
+  if (task.repoCount <= 1) {
+    const stored = await readStoredTaskDiff(reads.artifacts, {
+      taskId: task.id,
+      scope: 'task',
+      generation: terminalGeneration(task),
+    })
     if (stored !== null) {
       for (const f of stored.files) {
         for (const ch of f.changes) {

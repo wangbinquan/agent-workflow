@@ -43,7 +43,6 @@ import {
 } from '@/modules/task-execution/public/queries'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { Paths } from '@/util/paths'
 import { safeJsonOrEmpty } from '@/util/http'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/catalog'
@@ -74,7 +73,6 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
         : await resolveTaskLaunchRuntimeConfiguration(deps.launchConfiguration)
     return {
       operations: deps.operations,
-      appHome: Paths.root,
       configPath: deps.configPath,
       ...(defaultPerNodeTimeoutMs !== undefined ? { defaultPerNodeTimeoutMs } : {}),
       ...(defaultNodeRetries !== undefined ? { defaultNodeRetries } : {}),

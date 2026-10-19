@@ -63,7 +63,9 @@ const TASK_INSERT_SITES: readonly string[] = [
   // `greatest()`，多了一行 import。站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
   'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts:561 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-370 v2 P1: the host write selection is gone; the site keeps all three columns.
-  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts:121 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  // RFC-370 §10 V20: 121 → 129 — the workspace lane's imports, dependency and the
+  // prepared-workspace parameter sit above it; the site and its three columns are unchanged.
+  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts:129 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 788 → 813——延后仓库准备的判据与注释加在
   // `workspace.prepare` 之前，站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：行号 813 → 826——`resourceAuthorityFor` 从两条臂的

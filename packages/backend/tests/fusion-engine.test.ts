@@ -65,6 +65,7 @@ import { composeIdentityAccess } from '../src/modules/identity-access/compositio
 import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
 import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
+import { createFileFusionWorkspaceEffects } from '../src/modules/source-control/composition'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import {
@@ -183,6 +184,10 @@ interface H {
   db: DbClient
   appHome: string
   deps: TestFusionDeps
+  /** RFC-370 §10 V20: the same harness with an injected workspace Git (seed fault tests). */
+  withSeedGit: (
+    git: Parameters<typeof createFileFusionWorkspaceEffects>[0]['git'],
+  ) => TestFusionDeps
   cleanup: () => void
 }
 async function build(): Promise<H> {
@@ -200,21 +205,37 @@ async function build(): Promise<H> {
     contexts: composeIdentityAccess(db).contexts,
     authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
   })
-  const deps: TestFusionDeps = {
+  const binaryOverride = makeClarifyStub(tmp)
+  const depsWith = (
+    git?: Parameters<typeof createFileFusionWorkspaceEffects>[0]['git'],
+  ): TestFusionDeps => ({
     db,
     operations: composeSqliteFusionOperations({
       ...TEST_SQLITE_FUSION_PARTICIPANTS,
       db,
       appHome,
       memories: memoryCatalog,
-      tasks: createSqliteFusionEngineTaskOperations({ db, appHome, schedulerDriver }),
+      tasks: createSqliteFusionEngineTaskOperations({
+        db,
+        appHome,
+        schedulerDriver,
+        workspaces: createFileFusionWorkspaceEffects({
+          appHome,
+          ...(git === undefined ? {} : { git }),
+        }),
+      }),
     }),
-    appHome,
-    binaryOverride: makeClarifyStub(tmp),
+    binaryOverride,
     awaitScheduler: true,
     defaultRuntime: VALID_OPENCODE_RUNTIME,
+  })
+  return {
+    db,
+    appHome,
+    deps: depsWith(),
+    withSeedGit: depsWith,
+    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
   }
-  return { db, appHome, deps, cleanup: () => rmSync(tmp, { recursive: true, force: true }) }
 }
 
 function approvedGlobalMemory(db: DbClient, title: string): string {
@@ -316,10 +337,11 @@ describe('createFusion preconditions', () => {
       frontmatterExtra: {},
     })
     const mem = approvedGlobalMemory(h.db, 'm')
-    const deps: TestFusionDeps = {
-      ...h.deps,
-      seedGit: async () => ({ stdout: '', stderr: 'injected seed failure', exitCode: 73 }),
-    }
+    const deps = h.withSeedGit(async () => ({
+      stdout: '',
+      stderr: 'injected seed failure',
+      exitCode: 73,
+    }))
     await expect(
       createFusion(
         { skillId: skillIdOf(h.db, 'lint'), memoryIds: [mem], intent: '' },

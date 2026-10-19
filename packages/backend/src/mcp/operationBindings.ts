@@ -365,10 +365,7 @@ export const MCP_TOOL_BINDINGS = Object.freeze({
     MCP_OPERATIONS.workflowGet,
     MCP_OPERATIONS.taskLaunch,
   ]),
-  list_repo_refs: compositeBinding('list_repo_refs', [
-    MCP_OPERATIONS.cachedReposList,
-    MCP_OPERATIONS.repoRefsList,
-  ]),
+  list_repo_refs: directBinding('list_repo_refs', MCP_OPERATIONS.repoRefsList),
   get_task: directBinding('get_task', MCP_OPERATIONS.taskGet),
   list_tasks: directBinding('list_tasks', MCP_OPERATIONS.taskList),
   watch_task: compositeBinding('watch_task', [MCP_OPERATIONS.taskGet]),

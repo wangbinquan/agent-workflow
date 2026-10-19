@@ -19,12 +19,12 @@ import {
   type SymbolNode,
   type SymbolChange,
 } from '@agent-workflow/shared'
-import { analyzeFile } from './baseline'
+import { analyzeFile, blobText, type AnalysisBlob } from './baseline'
 import { resolveLang } from './lang/grammars'
 import { aggregateDependencyChanges } from './deps/diff'
 import { ecosystemForManifest } from './deps/manifests'
 
-export type BlobReader = (path: string) => Promise<string | null>
+export type BlobReader = (path: string) => Promise<AnalysisBlob>
 
 /** A changed file: bare path, or `{ path, oldPath }` when git detected a rename
  *  (RFC-239) — the old side is then read from `oldPath` and the produced
@@ -67,7 +67,11 @@ export async function assembleStructuralDiff(opts: {
       files.push(oldPath === undefined ? analyzed : { ...analyzed, renamedFrom: oldPath })
     }
     if (isManifest) {
-      manifestInputs.push({ filePath: path, oldContent: oldText, newContent: newText })
+      manifestInputs.push({
+        filePath: path,
+        oldContent: blobText(oldText),
+        newContent: blobText(newText),
+      })
     }
   }
 

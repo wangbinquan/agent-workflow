@@ -1,5 +1,6 @@
 import type { ClassicCatalogCompositionDependencies } from './classicCatalogs'
 import type { composeSkillCatalogBoot } from './skillCatalogBoot'
+import type { SkillTreeContentStore } from '../application/skills/treeContentStore'
 
 type CatalogContent = Required<
   Pick<
@@ -19,6 +20,9 @@ type BootContent = Required<Omit<Parameters<typeof composeSkillCatalogBoot>[0], 
 export interface SkillContentBinding extends CatalogContent, BootContent {
   /** Logical namespace for the owner's existing persisted content references. */
   readonly rootReference: string
+  /** RFC-370 §10 V20: strict version trees and fusion candidates; absent → the
+   * local store under `rootReference`. */
+  readonly treeContent?: SkillTreeContentStore
 }
 
 /** Read every capability explicitly; complete bindings may expose prototype getters. */

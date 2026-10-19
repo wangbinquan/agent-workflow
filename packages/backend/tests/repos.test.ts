@@ -1,5 +1,7 @@
 // Coverage for /api/repos/* (P-1-10).
 // Builds a small real git repo per test for the refs/files endpoints to query.
+// RFC-370 §10 V17: the pickers now name a registered repository by
+// `cachedRepoId`; `?path=` stays for existing API clients of a standalone daemon.
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -20,6 +22,7 @@ const TOKEN = 'a'.repeat(64)
 let baseTmp: string
 let repoPath: string
 let app: Hono
+let database: () => ProviderNeutralDatabase
 
 beforeAll(() => {
   baseTmp = mkdtempSync(join(tmpdir(), 'aw-repos-'))
@@ -30,7 +33,7 @@ afterAll(() => {
 })
 
 async function prepareFixture<TDatabase extends ProviderNeutralDatabase>(
-  database: () => TDatabase,
+  databaseOf: () => TDatabase,
   compose: (db: TDatabase) => Hono | Promise<Hono>,
 ): Promise<void> {
   repoPath = mkdtempSync(join(baseTmp, 'repo-'))
@@ -43,7 +46,8 @@ async function prepareFixture<TDatabase extends ProviderNeutralDatabase>(
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
   await runGit(repoPath, ['tag', 'v1.0'])
 
-  const db = database()
+  const db = databaseOf()
+  database = () => db
   app = await compose(db)
   // RFC-099 (bda0d4fb): refs/files reject paths outside cached_repos mirrors.
   // Register the suite's temp root once so every per-test dir below (repo-*,
@@ -136,10 +140,58 @@ describe('repo HTTP routes', () => {
       }
     })
 
-    test('GET /api/repos/refs requires ?path=', async () => {
+    test('GET /api/repos/refs requires ?cachedRepoId=', async () => {
       const res = await req('/api/repos/refs')
       expect(res.status).toBe(422)
-      expect(((await res.json()) as { code: string }).code).toBe('path-required')
+      expect(((await res.json()) as { code: string }).code).toBe('cached-repo-id-required')
+    })
+
+    test('GET /api/repos/refs|files?cachedRepoId= read the registered mirror', async () => {
+      await database().insert(cachedRepos).values({
+        id: 'cr-repos-mirror',
+        urlRedacted: 'https://example.test/acme/repo.git',
+        urlHash: 'aw-repos-mirror-hash',
+        localPath: repoPath,
+        defaultBranch: 'main',
+        lastFetchedAt: Date.now(),
+        createdAt: Date.now(),
+      })
+      const refs = await req('/api/repos/refs?cachedRepoId=cr-repos-mirror')
+      expect(refs.status).toBe(200)
+      const body = (await refs.json()) as {
+        branches: string[]
+        tags: string[]
+        hasCommits: boolean
+      }
+      expect(body.branches).toContain('main')
+      expect(body.tags).toContain('v1.0')
+      expect(body.hasCommits).toBe(true)
+      const files = await req('/api/repos/files?cachedRepoId=cr-repos-mirror')
+      expect(((await files.json()) as { files: string[] }).files.sort()).toEqual([
+        'README.md',
+        'src.go',
+      ])
+    })
+
+    test('an unknown cachedRepoId is a 404, a missing mirror never echoes its local path', async () => {
+      const unknown = await req('/api/repos/refs?cachedRepoId=nope')
+      expect(unknown.status).toBe(404)
+      expect(((await unknown.json()) as { code: string }).code).toBe('cached-repo-not-found')
+      const missing = join(baseTmp, 'not-fetched-yet')
+      await database().insert(cachedRepos).values({
+        id: 'cr-repos-identity',
+        urlRedacted: 'https://example.test/acme/later.git',
+        urlHash: 'aw-repos-identity-hash',
+        localPath: missing,
+        defaultBranch: null,
+        lastFetchedAt: 0,
+        createdAt: Date.now(),
+      })
+      const res = await req('/api/repos/files?cachedRepoId=cr-repos-identity')
+      expect(res.status).toBe(404)
+      const text = await res.text()
+      expect(text).toContain('repo-path-missing')
+      expect(text).not.toContain(missing)
     })
 
     test('GET /api/repos/files returns git ls-files output', async () => {

@@ -13,7 +13,6 @@
 //   - Content-Type: derived from extension; unknown → application/octet-stream
 //     so the browser doesn't naively render exotic types as HTML.
 
-import { existsSync, realpathSync, statSync } from 'node:fs'
 import { extname, isAbsolute, resolve, sep } from 'node:path'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
@@ -21,6 +20,10 @@ import type {
   RepositoryWorkspaceStore,
   WorktreeTaskRecord,
 } from '@/modules/source-control/public/operations'
+import type {
+  BoundedWorkspaceContent,
+  WorkspaceReadRequest,
+} from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
 import { NotFoundError, ValidationError } from '@/util/errors'
 
@@ -42,7 +45,16 @@ const MIME_BY_EXT: Record<string, string> = {
 export interface WorktreeFilesRouteDeps {
   readonly store: RepositoryWorkspaceStore
   readonly canViewTask: (actor: Actor, task: WorktreeTaskRecord) => Promise<boolean>
+  /** RFC-370 §10 V15: bounded reads of the task's workspace through the
+   * selected Source Control content (local files, or a hosted task volume
+   * through the platform file API). */
+  readonly content: (workspaceRef: string) => {
+    read(request: WorkspaceReadRequest): Promise<BoundedWorkspaceContent>
+  }
 }
+
+/** One bounded read per streamed page (the platform file API's page size). */
+const PAGE_BYTES = 1024 * 1024
 
 export function mountWorktreeFilesRoutes(app: Hono, deps: WorktreeFilesRouteDeps): void {
   registerRoute(
@@ -123,53 +135,49 @@ export function mountWorktreeFilesRoutes(app: Hono, deps: WorktreeFilesRouteDeps
         )
       }
 
-      if (!existsSync(target)) {
-        throw new NotFoundError(
-          'worktree-file-not-found',
-          `file '${rel}' not found in task ${taskId}`,
-        )
-      }
-      const stat = statSync(target)
-      if (!stat.isFile()) {
-        throw new NotFoundError(
-          'worktree-file-not-a-file',
-          `path '${rel}' exists but is not a regular file`,
-        )
-      }
-
-      // Symlink containment: the lexical check above stops `../`, but a symlink
-      // INSIDE the worktree can still point out (e.g. → /etc/passwd). Resolve the
-      // real path and re-check under the worktree's own realpath (the root itself
-      // may live behind a symlink, e.g. macOS /tmp → /private/tmp).
-      let realTarget: string
-      try {
-        realTarget = realpathSync(target)
-      } catch {
-        throw new NotFoundError(
-          'worktree-file-not-found',
-          `file '${rel}' not found in task ${taskId}`,
-        )
-      }
-      const rootReal = realpathSync(rootAbs)
-      const rootRealPrefix = rootReal.endsWith(sep) ? rootReal : rootReal + sep
-      if (!(realTarget === rootReal || realTarget.startsWith(rootRealPrefix))) {
-        throw new ValidationError(
-          'worktree-file-symlink-escapes',
-          `path '${rel}' resolves outside the task worktree via a symlink`,
-        )
-      }
-
-      const ext = extname(target).toLowerCase()
+      // RFC-370 §10 V15: the bytes come through Source Control's workspace
+      // content port, which owns existence, the regular-file check and symlink
+      // containment (same error codes as the former local reads). A hosted task
+      // volume is read through the platform file API instead of failing with 404.
+      const content = deps.content(task.worktreePath)
+      const first = await content.read({ relativeFile: rel, offset: 0, maxBytes: PAGE_BYTES })
+      const ext = extname(rel).toLowerCase()
       const mime = MIME_BY_EXT[ext] ?? 'application/octet-stream'
-
-      // Stream the file via Bun.file for zero-copy. Set explicit Cache-Control
-      // since these are mutable design doc assets — clients should re-check.
-      const file = Bun.file(target)
-      return new Response(file, {
+      let next = first.nextOffset
+      const body = new ReadableStream<Uint8Array>(
+        {
+          start(controller) {
+            const bytes = Buffer.from(first.content, 'base64')
+            if (bytes.length > 0) controller.enqueue(bytes)
+            if (next === null) controller.close()
+          },
+          async pull(controller) {
+            if (next === null) return
+            try {
+              const page = await content.read({
+                relativeFile: rel,
+                offset: next,
+                maxBytes: PAGE_BYTES,
+              })
+              if (page.size !== first.size) throw new Error('worktree-file-changed-during-read')
+              const bytes = Buffer.from(page.content, 'base64')
+              if (bytes.length > 0) controller.enqueue(bytes)
+              next = page.nextOffset
+              if (next === null) controller.close()
+            } catch (error) {
+              controller.error(error)
+            }
+          },
+        },
+        { highWaterMark: 0 },
+      )
+      // Explicit Cache-Control since these are mutable design doc assets —
+      // clients should re-check.
+      return new Response(body, {
         headers: {
           'content-type': mime,
           'cache-control': 'no-cache',
-          'content-length': String(stat.size),
+          'content-length': String(first.size),
         },
       })
     },

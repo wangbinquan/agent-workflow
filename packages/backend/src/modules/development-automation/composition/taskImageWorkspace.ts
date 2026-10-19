@@ -15,6 +15,8 @@ import {
   validateWorkspaceOutcome,
   type SerializedWorkspaceValidationInput,
 } from '../infrastructure/workspaceValidator'
+import { scanRepositoryFacts } from '../infrastructure/repositoryFactsScan'
+import { publishSeedTree, seedTreeDigestOf } from '../infrastructure/uploadPlacement'
 
 /** RFC-370 §9.2 V3 — one whole-tree operation per command. */
 export const DEVELOPMENT_TREE_OPERATION = 'development-tree'
@@ -138,6 +140,13 @@ async function runTreeOperation(
   root: string,
   workPath: (path: unknown) => string,
 ): Promise<unknown> {
+  // Upload seed trees live only below the development volume's evidence seeds.
+  const seedPath = (path: unknown) => {
+    const full = workPath(path)
+    const seeds = join(root, 'evidence', 'seeds')
+    if (!full.startsWith(seeds + sep)) throw new Error('hosted-development-seed-path-invalid')
+    return full
+  }
   const roots = (value: unknown) =>
     Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([label, path]) => [
@@ -192,6 +201,27 @@ async function runTreeOperation(
         workPath((payload as { root: unknown }).root),
         createFileActionWorkspaceEffects(),
       )
+    // RFC-370 §10 V18: the same native scan and seed-tree steps as in-process.
+    case 'repository-facts-scan':
+      return scanRepositoryFacts(workPath((payload as { root: unknown }).root))
+    case 'seed-tree-digest':
+      return seedTreeDigestOf(seedPath((payload as { root: unknown }).root))
+    case 'seed-tree-discard':
+      rmSync(seedPath((payload as { root: unknown }).root), { recursive: true, force: true })
+      return null
+    case 'seed-tree-publish': {
+      const request = payload as {
+        staging: unknown
+        root: unknown
+        modes: readonly { path: string; mode: number }[]
+      }
+      publishSeedTree({
+        staging: seedPath(request.staging),
+        root: seedPath(request.root),
+        modes: request.modes,
+      })
+      return null
+    }
     default:
       throw new Error('hosted-development-tree-operation-unknown')
   }

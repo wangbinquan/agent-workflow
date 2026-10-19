@@ -33,6 +33,10 @@ export class DeepUnavailableError extends Error {
   }
 }
 
+/** RFC-370 §10 V16 — the content of this task does not live on this host, so
+ *  no SCIP indexer can run against it; the baseline answers instead. */
+export const DEEP_INDEXING_UNAVAILABLE = 'indexing-unavailable'
+
 export interface ResolvedDeepConfig {
   overrides?: DeepIndexerOverrides
   timeoutMs: number
@@ -45,6 +49,9 @@ export interface DeepDeps {
    *  Callers that can name the cache scope pass it; tests with injected
    *  probe/run seams keep the direct path. */
   cacheScope?: { taskId: string; repoKey: string; cache?: ScipIndexCache }
+  /** RFC-370 §10 V16 — the selected content's snapshot digest (the cache key);
+   *  the native worktree's when absent. */
+  snapshotDigest?: () => Promise<string>
   /** injection seams for tests (stub probe/run, no real indexer). */
   probeIndexer?: (spec: IndexerSpec, overrides?: DeepIndexerOverrides) => Promise<IndexerProbe>
   runIndexer?: (opts: {
@@ -79,7 +86,7 @@ export async function computeDeepStructuralDiff(args: {
     deps.runIndexer === undefined
   ) {
     const cache = deps.cacheScope.cache ?? scipIndexCache()
-    const snapshotDigest = await worktreeSnapshotDigest(worktreePath)
+    const snapshotDigest = await (deps.snapshotDigest?.() ?? worktreeSnapshotDigest(worktreePath))
     const graphs: ScipGraph[] = []
     let lastReason: DeepDegradedReason = 'indexer-missing'
     let anyAvailable = false

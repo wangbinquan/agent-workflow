@@ -62,10 +62,29 @@ export function composeCrewStationDevelopmentWorkspaces(input: {
   ): { readonly owner: string; readonly native: unknown } => {
     switch (operation) {
       case 'business-tree-snapshot':
-      case 'action-tree-digest': {
+      case 'action-tree-digest':
+      case 'repository-facts-scan':
+      case 'seed-tree-digest':
+      case 'seed-tree-discard': {
         const { root } = value as { readonly root: string }
         const located = volume({ root })
         return { owner: located.owner, native: { root: located.paths.root } }
+      }
+      case 'seed-tree-publish': {
+        const request = value as {
+          readonly staging: string
+          readonly root: string
+          readonly modes: readonly { readonly path: string; readonly mode: number }[]
+        }
+        const located = volume({ staging: request.staging, root: request.root })
+        return {
+          owner: located.owner,
+          native: {
+            staging: located.paths.staging,
+            root: located.paths.root,
+            modes: request.modes,
+          },
+        }
       }
       case 'protected-root-snapshot': {
         const request = value as { readonly roots: Record<string, string>; readonly opts: unknown }

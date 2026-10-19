@@ -3,17 +3,15 @@
 // resolution (gate F-06). Reuses the file-content read primitives (contained
 // worktree read / base blob) and the baseline extractor verbatim; the ONLY new
 // logic is mapping extractor state onto the honest `status` field (F-09).
+// RFC-370 §10 V16 — both sides are read through the selected revision content.
 
 import { basename } from 'node:path'
 import { parseRepoKeyWire, type FileSymbolsResult, type SymbolNode } from '@agent-workflow/shared'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { readBlobAtRef } from '@/util/git'
-import type {
-  CodeWorkspaceRead,
-  CodeWorkspaceTask,
-} from '@/modules/code-capability/application/ports/codeWorkspaceRead'
+import type { CodeWorkspaceTask } from '@/modules/code-capability/application/ports/codeWorkspaceRead'
 import { canonicalRepoKeys } from '@/services/repoLabels'
-import { FILE_CONTENT_MAX_BYTES, openContainedFile } from '@/services/worktreeFileContent'
+import { FILE_CONTENT_MAX_BYTES } from '@/services/worktreeFileContent'
+import { codeReviewReads, type CodeReviewReadInput } from '@/services/structuralDiff/service'
 import { resolveLang } from '@/services/structuralDiff/lang/grammars'
 import { extractSymbols } from '@/services/structuralDiff/lang/extract'
 
@@ -99,18 +97,20 @@ function toResult(
 }
 
 export async function getTaskFileSymbols(
-  workspace: CodeWorkspaceRead,
+  input: CodeReviewReadInput,
   taskId: string,
   q: FileSymbolsQuery,
 ): Promise<FileSymbolsResult> {
   if (q.path === '') {
     throw new ValidationError('file-symbols-missing-path', 'path query param required')
   }
-  const task = await workspace.findTask(taskId)
+  const reads = codeReviewReads(input)
+  const task = await reads.workspace.findTask(taskId)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
   const { worktreePath, baseCommit } = resolveRepoTarget(task, q.repo)
+  const content = reads.content.bind(worktreePath)
 
   let source: string
   if (q.side === 'base') {
@@ -121,22 +121,29 @@ export async function getTaskFileSymbols(
         409,
       )
     }
-    const blob = await readBlobAtRef(worktreePath, baseCommit, q.path)
-    if (blob === null) {
+    const blob = (
+      await content.readRevision({
+        rev: baseCommit,
+        paths: [q.path],
+        maxBytes: FILE_CONTENT_MAX_BYTES,
+      })
+    ).get(q.path) ?? { kind: 'absent' as const }
+    if (blob.kind === 'absent') {
       throw new NotFoundError('file-symbols-not-found', `'${basename(q.path)}' not in base`)
     }
-    if (blob.length > FILE_CONTENT_MAX_BYTES) {
+    if (blob.kind === 'oversized') {
       throw new DomainError('file-symbols-oversized', 'file exceeds the analyzable limit', 413)
     }
-    if (blob.includes('\x00')) return toResult(null, 'unsupported')
-    source = blob
+    if (blob.kind === 'binary' || blob.content.includes('\x00'))
+      return toResult(null, 'unsupported')
+    source = blob.content
   } else {
-    const read = openContainedFile(worktreePath, q.path)
+    const read = await content.readWorktree({ path: q.path, maxBytes: FILE_CONTENT_MAX_BYTES })
     switch (read.kind) {
-      case 'ok':
+      case 'text':
         source = read.content
         break
-      case 'not-found':
+      case 'absent':
         throw new NotFoundError('file-symbols-not-found', `'${basename(q.path)}' not found`)
       case 'outside':
         throw new ValidationError(

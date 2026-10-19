@@ -49,6 +49,7 @@ import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-e
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
+import { composeRepositoryMirrors } from '@/modules/source-control/composition'
 import { mountClarifyRoutes } from '@/routes/clarify'
 import { mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
@@ -202,6 +203,7 @@ export async function createProductionPerformanceApplication(
         app,
         { configuration: composeFileApplicationConfigurationQueries(configPath), appHome },
         repositoryStore,
+        composeRepositoryMirrors({ store: repositoryStore, appHome }),
       )
       mountWorkgroupTaskRoutes(app, {
         module: workgroupTaskRoom,

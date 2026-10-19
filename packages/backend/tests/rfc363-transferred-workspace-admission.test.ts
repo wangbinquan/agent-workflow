@@ -12,6 +12,7 @@ import { createProviderTaskExecutionModule } from '@/modules/task-execution/comp
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 import { admitTransferredWorkspace } from '@/modules/task-execution/infrastructure/transferredWorkspaceAdmission'
 import type { TaskExecutionTopologyLogger } from '@/modules/task-execution/application/ports/taskExecutionTopology'
+import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const roots: string[] = []
@@ -110,13 +111,29 @@ describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
       },
     }
     const persistence = createTaskExecutionPersistence(harness.db)
+    const baseCommit = git('rev-parse', 'HEAD')
+    // RFC-370 §10 V20: the workspace arrives through the selected effects; this
+    // fixture hands the existing prepared repository over unchanged.
+    const workspaces: FusionWorkspaceEffects = {
+      prepare: async () => ({ worktreePath: root, baseCommit }),
+      collect: async () => {
+        throw new Error('unused')
+      },
+      release: async () => {},
+    }
     const operations =
       binding.provider === 'sqlite'
-        ? createSqliteFusionEngineTaskOperations({ db: binding.db, appHome: root, schedulerDriver })
+        ? createSqliteFusionEngineTaskOperations({
+            db: binding.db,
+            appHome: root,
+            schedulerDriver,
+            workspaces,
+          })
         : createPostgresqlFusionEngineTaskOperations({
             db: binding.db,
             appHome: root,
             schedulerDriver,
+            workspaces,
             persistence,
             executionModule: createProviderTaskExecutionModule({
               daemonGeneration: 'rfc363-fusion',
@@ -132,8 +149,9 @@ describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
       inputs: {},
       ownerUserId,
       initiator: 'manual',
-      worktreePath: root,
-      baseCommit: git('rev-parse', 'HEAD'),
+      fusionId: ulid(),
+      iteration: 1,
+      seed: { base: [], overlay: null },
       platformInputPaths: [],
       awaitScheduler: true,
     })

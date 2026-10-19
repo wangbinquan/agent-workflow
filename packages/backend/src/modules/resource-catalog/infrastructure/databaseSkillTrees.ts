@@ -67,7 +67,12 @@ export function decodeEntry(row: Pick<EntryRow, 'encoding' | 'content'>): Uint8A
 }
 
 function encodeBytes(bytes: Uint8Array): Pick<EntryRow, 'encoding' | 'content'> {
-  if (!bytes.includes(0)) {
+  // A leading byte-order mark is kept as bytes (RFC-370 §10 V20): text layers
+  // between here and the column drop it (the default decoder, and the SQLite
+  // driver's text read), so a SKILL.md with a BOM came back 3 bytes short — a
+  // different skill-tree digest.
+  const bom = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf
+  if (!bom && !bytes.includes(0)) {
     try {
       const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
       return { encoding: 'utf8', content: text }

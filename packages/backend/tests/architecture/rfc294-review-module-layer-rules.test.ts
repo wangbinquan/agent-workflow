@@ -46,13 +46,6 @@ export function moduleLayerViolations(units: readonly SourceUnit[]): ModuleLayer
  */
 export const MODULE_LAYER_RULE_DEBT: readonly ModuleLayerDebt[] = [
   {
-    rule: 'application-composition-import',
-    file: 'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts',
-    specifier: '@/modules/source-control/composition',
-    why: 'RFC-376 Phase B committed baseline; move cross-context assembly and inbound calls behind exact public contracts.',
-    removeAfterWave: 'RFC-294 S5/S6',
-  },
-  {
     rule: 'inbound-context-internal-import',
     file: 'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts',
     specifier: '@/modules/task-execution/inbound/directTaskInitiator',

@@ -2563,6 +2563,8 @@ export const enUS: Resources = {
       statusDoneCold: 'Cloned',
       statusDoneHit: 'Cached (fetched)',
       statusDoneHitFetchFail: 'Cached (fetch failed)',
+      statusDoneVerified: 'Verified and registered',
+      statusDoneVerifiedHit: 'Already registered (verified)',
       statusFailed: 'Failed',
       retry: 'Retry',
       retryWithEdit: 'Retry with new URL',

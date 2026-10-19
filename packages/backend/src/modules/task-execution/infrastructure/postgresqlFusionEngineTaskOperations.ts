@@ -3,6 +3,10 @@ import type {
   FusionEngineTaskLaunch,
   FusionEngineTaskOperations,
 } from '@/modules/knowledge-evolution/public/participants'
+import type {
+  FusionWorkspaceEffects,
+  FusionWorkspacePreparation,
+} from '@/modules/source-control/public/participants'
 import { CANCELABLE_TASK_STATUSES, allowedFromStatusesForEvent } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -34,6 +38,7 @@ import type {
 import type { ProviderTaskExecutionModule } from '../composition'
 import { sha256Hex } from '../domain/digest'
 import type { OwnershipToken } from '../domain/ownership'
+import { launchInFusionWorkspace, releaseFusionWorkspace } from './fusionWorkspaceLaunch'
 import { createTaskDriverLifecyclePort } from './taskDriverLifecycle'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 import { withSerializableTaskExecution } from './taskLifecycleTransaction'
@@ -52,6 +57,8 @@ export interface PostgresqlFusionEngineTaskDependencies {
   readonly executionModule: ProviderTaskExecutionModule
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
   readonly log: TaskExecutionTopologyLogger
+  /** RFC-370 §10 V20: the selected engine workspace (hosted: the task's own volume). */
+  readonly workspaces: FusionWorkspaceEffects
   /** Bootstrap projects the same selected Task query; invoked only at actual launch. */
   readonly runConfiguration?: () => TaskDriveRuntimeOptions | Promise<TaskDriveRuntimeOptions>
 }
@@ -89,6 +96,7 @@ async function validateCollaborators(
 async function insertFusionTask(
   dependencies: PostgresqlFusionEngineTaskDependencies,
   command: FusionEngineTaskLaunch,
+  workspace: FusionWorkspacePreparation,
 ): Promise<string> {
   const workflowRows = await dependencies.db
     .select({
@@ -114,8 +122,8 @@ async function insertFusionTask(
     await admitTransferredWorkspace(tx, {
       kind: 'fusion',
       taskId: command.taskId,
-      worktreePath: command.worktreePath,
-      baseCommit: command.baseCommit,
+      worktreePath: workspace.worktreePath,
+      baseCommit: workspace.baseCommit,
       ownerRef: command.taskId,
     })
     await tx.insert(tasks).values({
@@ -124,11 +132,11 @@ async function insertFusionTask(
       workflowId: workflow.id,
       workflowSnapshot: workflow.definition,
       workflowVersion: workflow.version,
-      repoPath: command.worktreePath,
-      worktreePath: command.worktreePath,
+      repoPath: workspace.worktreePath,
+      worktreePath: workspace.worktreePath,
       baseBranch: 'fusion',
       branch: 'fusion',
-      baseCommit: command.baseCommit,
+      baseCommit: workspace.baseCommit,
       status: 'pending',
       inputs: JSON.stringify(command.inputs),
       startedAt: now,
@@ -146,14 +154,14 @@ async function insertFusionTask(
     await tx.insert(taskRepos).values({
       taskId: command.taskId,
       repoIndex: 0,
-      repoPath: command.worktreePath,
+      repoPath: workspace.worktreePath,
       repoUrl: null,
       cachedRepoId: null,
       baseBranch: 'fusion',
       branch: 'fusion',
       workingBranch: null,
-      baseCommit: command.baseCommit,
-      worktreePath: command.worktreePath,
+      baseCommit: workspace.baseCommit,
+      worktreePath: workspace.worktreePath,
       worktreeDirName: '',
       mountPath: '',
       subdir: '',
@@ -328,92 +336,126 @@ export function createPostgresqlFusionEngineTaskOperations(
     log: dependencies.log,
     finalizeWorkspace: dependencies.finalizeWorkspace,
   })
+  async function loadTask(taskId: string) {
+    const rows = await dependencies.db
+      .select({
+        status: tasks.status,
+        errorSummary: tasks.errorSummary,
+        worktreePath: tasks.worktreePath,
+        baseCommit: tasks.baseCommit,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
+    return rows[0] ?? null
+  }
+  async function launchPrepared(
+    command: FusionEngineTaskLaunch,
+    workspace: FusionWorkspacePreparation,
+  ) {
+    const intentId = await insertFusionTask(dependencies, command, workspace)
+    const runtime = resolveTaskDriveConfig({
+      ...(dependencies.runConfiguration === undefined ? {} : await dependencies.runConfiguration()),
+      appHome: dependencies.appHome,
+      ensureWorkspaceProfiles: true,
+      ...(command.binaryOverride === undefined ? {} : { binaryOverride: command.binaryOverride }),
+      ...(command.configPath === undefined ? {} : { configPath: command.configPath }),
+      ...(command.defaultPerNodeTimeoutMs === undefined
+        ? {}
+        : { defaultPerNodeTimeoutMs: command.defaultPerNodeTimeoutMs }),
+      ...(command.defaultNodeRetries === undefined
+        ? {}
+        : { defaultNodeRetries: command.defaultNodeRetries }),
+      ...(command.sessionRestartBudget === undefined
+        ? {}
+        : { sessionRestartBudget: command.sessionRestartBudget }),
+      ...(command.defaultRuntime === undefined ? {} : { defaultRuntime: command.defaultRuntime }),
+    })
+    const coordinator = new DefaultTaskDriveCoordinator({
+      runtime,
+      lifecycle,
+      repositoryPreparation: skipRepositoryPreparation,
+      engineOrchestrator: {
+        async drive(context) {
+          await dependencies.schedulerDriver.drive({
+            taskId: context.taskId,
+            appHome: context.runtime.appHome,
+            ...context.runtime.runtime,
+            ...(context.runtime.ensureWorkspaceProfiles ? { ensureWorkspaceProfiles: true } : {}),
+            signal: context.signal,
+            executionContext: context.execution,
+          })
+        },
+      },
+      failureReporter: {
+        async report({ taskId, error, execution }) {
+          const now = Date.now()
+          await dependencies.persistence.runtimeLifecycle.trySet({
+            taskId,
+            to: 'failed',
+            allowedFrom: ['pending', 'running'],
+            extra: {
+              finishedAt: now,
+              errorSummary: 'fusion engine task failed',
+              errorMessage: error instanceof Error ? error.message : String(error),
+            },
+            executionContext: execution,
+            now,
+            reason: 'fusion-engine-launch',
+          })
+          await dependencies.persistence.intentTerminalization.terminalize({
+            taskId,
+            state: 'failed',
+            failureCode: 'fusion-engine-launch-failed',
+            now,
+          })
+        },
+      },
+    })
+    const receipt = await coordinator.submit({
+      taskId: command.taskId,
+      intentId,
+      completionMode: command.awaitScheduler === true ? 'await-settle' : 'background',
+    })
+    if (receipt.kind === 'not-attached') {
+      throw new ConflictError(
+        'task-launch-not-attached',
+        `fusion task '${command.taskId}' could not attach its launch intent`,
+      )
+    }
+  }
   return Object.freeze({
     async launch(command: FusionEngineTaskLaunch) {
-      const intentId = await insertFusionTask(dependencies, command)
-      const runtime = resolveTaskDriveConfig({
-        ...(dependencies.runConfiguration === undefined
-          ? {}
-          : await dependencies.runConfiguration()),
-        appHome: dependencies.appHome,
-        ensureWorkspaceProfiles: true,
-        ...(command.binaryOverride === undefined ? {} : { binaryOverride: command.binaryOverride }),
-        ...(command.configPath === undefined ? {} : { configPath: command.configPath }),
-        ...(command.defaultPerNodeTimeoutMs === undefined
-          ? {}
-          : { defaultPerNodeTimeoutMs: command.defaultPerNodeTimeoutMs }),
-        ...(command.defaultNodeRetries === undefined
-          ? {}
-          : { defaultNodeRetries: command.defaultNodeRetries }),
-        ...(command.sessionRestartBudget === undefined
-          ? {}
-          : { sessionRestartBudget: command.sessionRestartBudget }),
-        ...(command.defaultRuntime === undefined ? {} : { defaultRuntime: command.defaultRuntime }),
-      })
-      const coordinator = new DefaultTaskDriveCoordinator({
-        runtime,
-        lifecycle,
-        repositoryPreparation: skipRepositoryPreparation,
-        engineOrchestrator: {
-          async drive(context) {
-            await dependencies.schedulerDriver.drive({
-              taskId: context.taskId,
-              appHome: context.runtime.appHome,
-              ...context.runtime.runtime,
-              ...(context.runtime.ensureWorkspaceProfiles ? { ensureWorkspaceProfiles: true } : {}),
-              signal: context.signal,
-              executionContext: context.execution,
-            })
-          },
+      await launchInFusionWorkspace({
+        workspaces: dependencies.workspaces,
+        request: {
+          fusionId: command.fusionId,
+          iteration: command.iteration,
+          taskId: command.taskId,
+          base: command.seed.base,
+          overlay: command.seed.overlay,
         },
-        failureReporter: {
-          async report({ taskId, error, execution }) {
-            const now = Date.now()
-            await dependencies.persistence.runtimeLifecycle.trySet({
-              taskId,
-              to: 'failed',
-              allowedFrom: ['pending', 'running'],
-              extra: {
-                finishedAt: now,
-                errorSummary: 'fusion engine task failed',
-                errorMessage: error instanceof Error ? error.message : String(error),
-              },
-              executionContext: execution,
-              now,
-              reason: 'fusion-engine-launch',
-            })
-            await dependencies.persistence.intentTerminalization.terminalize({
-              taskId,
-              state: 'failed',
-              failureCode: 'fusion-engine-launch-failed',
-              now,
-            })
-          },
-        },
+        admitted: async () => (await loadTask(command.taskId)) !== null,
+        launch: (workspace) => launchPrepared(command, workspace),
       })
-      const receipt = await coordinator.submit({
-        taskId: command.taskId,
-        intentId,
-        completionMode: command.awaitScheduler === true ? 'await-settle' : 'background',
-      })
-      if (receipt.kind === 'not-attached') {
-        throw new ConflictError(
-          'task-launch-not-attached',
-          `fusion task '${command.taskId}' could not attach its launch intent`,
-        )
-      }
     },
-    async load(taskId: string) {
-      const rows = await dependencies.db
-        .select({
-          status: tasks.status,
-          errorSummary: tasks.errorSummary,
-          worktreePath: tasks.worktreePath,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1)
-      return rows[0] ?? null
+    load: loadTask,
+    async collect(taskId: string) {
+      const task = await loadTask(taskId)
+      if (task === null) return null
+      if (task.baseCommit === null) throw new Error('fusion engine task has no baseline commit')
+      return await dependencies.workspaces.collect({
+        taskId,
+        worktreePath: task.worktreePath,
+        baseCommit: task.baseCommit,
+      })
+    },
+    async release(taskId: string) {
+      const task = await loadTask(taskId)
+      await releaseFusionWorkspace(
+        dependencies.workspaces,
+        task === null ? null : { taskId, worktreePath: task.worktreePath },
+      )
     },
     async cancel(taskId: string) {
       await cancelPostgresqlTask(dependencies, taskId)

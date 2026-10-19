@@ -11,146 +11,25 @@
 // （CONTRIBUTING/AGENTS/CLAUDE 类根文档）与 per-module 语言归属投影为 `__`
 // 前缀内部 cells——它们是 prompt/上下文素材而非规则 facts（catalog 之外的键
 // 一律走 `__` 内部投影约定；正文永不进 cells，只投影相对路径/归属对）。
+//
+// RFC-370 §10 V18 (a)：探测读 HEAD 的提交树（`repositoryFactsScan.ts`），由所选
+// 实现执行——单机在进程内，托管在开发卷内（`repository-facts-scan`）；cells 投影
+// 只在这里一份。
 
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { runGit } from '@/util/git'
 import type { FactCell } from '../domain/factCell'
 import type { FactCellValue } from '../domain/facts'
 import type { RepositoryFactsCollectorPort } from '../application/ports/reconcilerPorts'
 import type { RepositoryLocationRead } from '../application/ports/repositoryLocationRead'
 import { createRepositoryLocationRead } from './gitBaselineReader'
+import { scanRepositoryFacts, type RepositoryFactsScan } from './repositoryFactsScan'
 
-const EXTENSION_LANGUAGES: Readonly<Record<string, string>> = {
-  '.java': 'java',
-  '.kt': 'kotlin',
-  '.kts': 'kotlin',
-  '.ts': 'typescript',
-  '.tsx': 'typescript',
-  '.js': 'javascript',
-  '.jsx': 'javascript',
-  '.mjs': 'javascript',
-  '.py': 'python',
-  '.go': 'go',
-  '.rs': 'rust',
-  '.rb': 'ruby',
-  '.cs': 'csharp',
-  '.cpp': 'cpp',
-  '.cc': 'cpp',
-  '.cxx': 'cpp',
-  '.hpp': 'cpp',
-  '.h': 'cpp',
-  '.c': 'c',
-}
-
-const BUILD_FILES: Readonly<Record<string, string>> = {
-  'pom.xml': 'maven',
-  'build.gradle': 'gradle',
-  'build.gradle.kts': 'gradle',
-  'settings.gradle': 'gradle',
-  'settings.gradle.kts': 'gradle',
-  'package.json': 'npm',
-  'go.mod': 'go',
-  'Cargo.toml': 'cargo',
-  'CMakeLists.txt': 'cmake',
-  Makefile: 'make',
-  'pyproject.toml': 'pip',
-  'requirements.txt': 'pip',
-}
-
-/** contributor 指令文档：存在性 + 相对路径投影（正文永不进 cells）。 */
-const CONTRIBUTOR_DOCS = [
-  'CONTRIBUTING.md',
-  'AGENTS.md',
-  'CLAUDE.md',
-  '.github/CONTRIBUTING.md',
-  'docs/CONTRIBUTING.md',
-] as const
-
-const SKIP_DIRS = new Set(['.git', '.agent-workflow', 'node_modules', 'target', 'dist', 'build'])
-const MAX_DEPTH = 4
-const MAX_ENTRIES = 20_000
-
-interface RepoScan {
-  readonly languages: Set<string>
-  readonly buildSystems: Set<string>
-  readonly moduleBuildDirs: Set<string>
-  readonly languagesByTopDir: Map<string, Set<string>>
-}
-
-function scanRepo(root: string): RepoScan {
-  const scan: RepoScan = {
-    languages: new Set(),
-    buildSystems: new Set(),
-    moduleBuildDirs: new Set(),
-    languagesByTopDir: new Map(),
-  }
-  let visited = 0
-  const walk = (rel: string, depth: number): void => {
-    if (depth > MAX_DEPTH || visited > MAX_ENTRIES) return
-    const abs = rel === '' ? root : join(root, rel)
-    let names: string[]
-    try {
-      names = readdirSync(abs)
-    } catch {
-      return
-    }
-    for (const name of names.sort()) {
-      if (visited > MAX_ENTRIES) return
-      visited += 1
-      const childRel = rel === '' ? name : `${rel}/${name}`
-      let st
-      try {
-        st = statSync(join(root, childRel))
-      } catch {
-        continue
-      }
-      if (st.isDirectory()) {
-        if (SKIP_DIRS.has(name)) continue
-        walk(childRel, depth + 1)
-        continue
-      }
-      if (!st.isFile()) continue
-      const buildSystem = BUILD_FILES[name]
-      if (buildSystem !== undefined) {
-        scan.buildSystems.add(buildSystem)
-        const topDir = childRel.includes('/') ? childRel.split('/')[0]! : ''
-        scan.moduleBuildDirs.add(topDir)
-      }
-      const dot = name.lastIndexOf('.')
-      if (dot > 0) {
-        const language = EXTENSION_LANGUAGES[name.slice(dot)]
-        if (language !== undefined) {
-          scan.languages.add(language)
-          const topDir = childRel.includes('/') ? childRel.split('/')[0]! : 'root'
-          const set = scan.languagesByTopDir.get(topDir) ?? new Set<string>()
-          set.add(language)
-          scan.languagesByTopDir.set(topDir, set)
-        }
-      }
-    }
-  }
-  walk('', 0)
-  return scan
-}
-
-/** maven 根 pom 的 <module> 列表（存在即优先作为 module catalog）。 */
-function mavenModules(root: string): string[] {
-  try {
-    const pom = readFileSync(join(root, 'pom.xml'), 'utf8')
-    const out: string[] = []
-    for (const match of pom.matchAll(/<module>\s*([^<\s][^<]*?)\s*<\/module>/g)) {
-      out.push(match[1]!)
-    }
-    return out
-  } catch {
-    return []
-  }
-}
+/** Scans the repository at its stored location (a local path or a volume reference). */
+export type RepositoryFactsScanner = (localPath: string) => Promise<RepositoryFactsScan>
 
 export function createRepositoryFactsCollectorFromLocations(
   repositories: RepositoryLocationRead,
+  scan: RepositoryFactsScanner = scanRepositoryFacts,
 ): RepositoryFactsCollectorPort {
   return {
     async collect(input) {
@@ -158,52 +37,42 @@ export function createRepositoryFactsCollectorFromLocations(
       if (localPath === null) {
         throw new Error(`repository not cached: ${input.repositoryId}`)
       }
-      const head = await runGit(localPath, ['rev-parse', 'HEAD'])
-      if (head.exitCode !== 0 || !/^[0-9a-f]{40}$/.test(head.stdout.trim())) {
-        throw new Error(`repository HEAD unresolvable: ${input.repositoryId}`)
+      let facts: RepositoryFactsScan
+      try {
+        facts = await scan(localPath)
+      } catch (error) {
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)}: ${input.repositoryId}`,
+        )
       }
-      const headSha = head.stdout.trim()
-
-      const scan = scanRepo(localPath)
-      const fromMaven = mavenModules(localPath)
+      const headSha = facts.headSha
       const moduleIds =
-        fromMaven.length > 0
-          ? fromMaven
-          : [...scan.moduleBuildDirs].map((dir) => (dir === '' ? 'root' : dir))
-      const contributorDocs = CONTRIBUTOR_DOCS.filter((rel) => {
-        try {
-          return statSync(join(localPath, rel)).isFile()
-        } catch {
-          return false
-        }
-      })
-
+        facts.mavenModules.length > 0
+          ? facts.mavenModules
+          : facts.moduleBuildDirs.map((dir) => (dir === '' ? 'root' : dir))
       const known = (value: FactCellValue): FactCell<FactCellValue> => ({
         state: 'known',
         value,
         sourceRevision: headSha,
       })
       const cells: Record<string, FactCell<FactCellValue>> = {
-        'repository.languages': known([...scan.languages].sort()),
-        'repository.buildSystems': known([...scan.buildSystems].sort()),
+        'repository.languages': known([...facts.languages]),
+        'repository.buildSystems': known([...facts.buildSystems]),
         'repository.moduleIds': known([...new Set(moduleIds)].sort()),
         'repository.defaultBranchKnown': known(true),
         // context projection（内部 `__` cells：素材，不是规则 facts）。
-        '__repository.contributorDocs': known([...contributorDocs]),
-        '__repository.languageByModule': known(
-          [...scan.languagesByTopDir.entries()]
-            .flatMap(([dir, langs]) => [...langs].sort().map((lang) => `${dir}=${lang}`))
-            .sort(),
-        ),
+        '__repository.contributorDocs': known([...facts.contributorDocs]),
+        '__repository.languageByModule': known([...facts.languageByModule]),
       }
       return { cells, factsRef: `repo:${headSha}` }
     },
   }
 }
 
-/** 一份实现，两个 provider 共用（RFC-359 W4-D12）。 */
+/** 一份实现，两个 provider 共用（RFC-359 W4-D12）；托管装配交入卷内扫描。 */
 export function createRepositoryFactsCollector(
   db: ProviderNeutralDatabase,
+  scan?: RepositoryFactsScanner,
 ): RepositoryFactsCollectorPort {
-  return createRepositoryFactsCollectorFromLocations(createRepositoryLocationRead(db))
+  return createRepositoryFactsCollectorFromLocations(createRepositoryLocationRead(db), scan)
 }

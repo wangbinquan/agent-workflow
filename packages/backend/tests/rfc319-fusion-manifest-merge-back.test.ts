@@ -48,6 +48,7 @@ import {
   type SkillFsOptions,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
+import { createFileFusionWorkspaceEffects } from '../src/modules/source-control/composition'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
@@ -142,9 +143,13 @@ async function build(): Promise<Harness> {
         db,
         appHome,
         memories: memoryCatalog,
-        tasks: createSqliteFusionEngineTaskOperations({ db, appHome, schedulerDriver }),
+        tasks: createSqliteFusionEngineTaskOperations({
+          db,
+          appHome,
+          schedulerDriver,
+          workspaces: createFileFusionWorkspaceEffects({ appHome }),
+        }),
       }),
-      appHome,
       binaryOverride: makeClarifyStub(tmp),
       awaitScheduler: true,
       defaultRuntime: VALID_OPENCODE_RUNTIME,

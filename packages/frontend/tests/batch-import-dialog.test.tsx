@@ -30,6 +30,7 @@ vi.mock('../src/api/client', async () => {
 
 import { api } from '../src/api/client'
 import { BatchImportDialog, parseTextarea } from '../src/components/repos/BatchImportDialog'
+import i18n from '../src/i18n'
 
 class MockSocket {
   static instances: MockSocket[] = []
@@ -372,6 +373,40 @@ describe('BatchImportDialog (RFC-033)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('batch-import-row-r1').getAttribute('data-row-status')).toBe('done')
     })
+  })
+
+  // RFC-370 §10 V17 — a hosted deployment verifies each remote and registers
+  // it without cloning; the row must say so instead of claiming a clone.
+  test('verified-only rows read "verified", never "cloned"', async () => {
+    const base = mkSnap().rows[0]!
+    const done = {
+      ...base,
+      status: 'done' as const,
+      verifiedOnly: true,
+      cachedRepoId: 'cr1',
+      startedAt: '2026-05-17T00:00:00.500Z',
+      finishedAt: '2026-05-17T00:00:01.000Z',
+    }
+    ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mkSnap({
+        rows: [
+          { ...done, rowId: 'r1', cold: true },
+          { ...done, rowId: 'r2', inputUrl: 'https://h/b.git', cold: false },
+        ],
+      }),
+    )
+    renderDialog({ activeBatchId: 'b1' })
+    await waitFor(() => {
+      expect(screen.getByTestId('batch-import-row-r1').textContent).toContain(
+        i18n.t('repos.batchImport.statusDoneVerified'),
+      )
+    })
+    expect(screen.getByTestId('batch-import-row-r2').textContent).toContain(
+      i18n.t('repos.batchImport.statusDoneVerifiedHit'),
+    )
+    expect(screen.getByTestId('batch-import-row-r1').textContent).not.toContain(
+      i18n.t('repos.batchImport.statusDoneCold'),
+    )
   })
 
   test('batch.completed flips state and enables "again" button', async () => {

@@ -9,6 +9,8 @@ import type { ReviewArtifactSelection } from '@/modules/collaboration/compositio
 import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
 import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/composition'
 import type { ScratchWorkspaceEffects } from '@/modules/source-control/composition'
+import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
+import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
@@ -85,11 +87,19 @@ import { composeRepositoryPreparation } from '@/modules/source-control/compositi
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import {
+  composeRepositoryMirrors,
+  createFileWorkspaceContentEffects,
   createWorkspaceContentScope,
   type EmployeeCaseWorkspaceEffectsFactory,
+  type RepositoryRemoteEffects,
   type WorkspaceContentEffectsFactory,
 } from '@/modules/source-control/composition'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
+import {
+  createArtifactProgramToolSource,
+  type ScriptFixtureProcess,
+} from '@/modules/task-execution/composition/programTools'
+import type { ActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionRunners'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 // RFC-349 — PostgreSQL daemon application composition.
@@ -148,6 +158,10 @@ import {
 } from '@/modules/source-control/composition'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
+import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/composition/codeReviewArtifacts'
+import type { CodeReviewArtifactStore } from '@/modules/code-capability/public/participants'
+import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
+import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
 import {
   composeCapabilityTemplateOperations,
   createPostgresqlCapabilityTemplatePackageMutationOwner,
@@ -488,6 +502,14 @@ export interface PostgresqlDaemonApplicationInput {
   readonly taskArchive?: TaskArchiveContentBinding
   readonly skillContent?: SkillContentBinding
   readonly employeePrograms?: ProgramArtifactPort
+  /** RFC-370 §10 V19: the hosted task-image fixture run; standalone runs on this host. */
+  readonly programFixtureProcess?: ScriptFixtureProcess
+  /** RFC-370 §10 V18: entry checks below a hosted action workspace; standalone checks its disk. */
+  readonly actionWorkspaceEntries?: ActionWorkspaceEntries
+  /** RFC-370 §10 V16: code-review reads of a hosted task volume; standalone reads its worktree. */
+  readonly repositoryRevisionContent?: RepositoryRevisionContentFactory
+  /** RFC-370 §10 V16: hosted code-review artifacts; standalone keeps appHome files. */
+  readonly codeReviewArtifacts?: CodeReviewArtifactStore
   readonly employeeInputArtifacts?: EmployeeInputArtifactPort
   readonly missionInputBlobs?: MissionInputBlobPersistence
   readonly pluginInstaller?: PluginInstallerPort
@@ -501,6 +523,8 @@ export interface PostgresqlDaemonApplicationInput {
   readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
   readonly resourcePackageSkillContent?: SkillPackageContentReader
   readonly workspaceContent?: WorkspaceContentEffectsFactory
+  /** RFC-370 §10 V17: hosted repository remote reads (system volume); absent, local mirrors. */
+  readonly repositoryRemote?: RepositoryRemoteEffects
   readonly workspaceUploads?: WorkspaceUploadContentFactory
   readonly isolationWorkspaces?: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
@@ -528,6 +552,8 @@ export interface PostgresqlDaemonApplicationInput {
   readonly taskInputFiles?: TaskInputFiles
   readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
   readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
+  /** RFC-370 §10 V20: the fusion engine task's workspace; standalone under appHome. */
+  readonly fusionWorkspaceEffects?: FusionWorkspaceEffects
   readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
   readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
   readonly recoveredExecutionTaskIds?: () => readonly string[]
@@ -1029,13 +1055,25 @@ export async function composePostgresqlApplication(
   })
 
   const codeHistoryQueries = composeCodeHistoryQueries(input.db)
+  // RFC-370 §10 V19: program tools read the same store the employee authoring
+  // wrote (platform objects when hosted, the application home standalone).
+  const programToolSource =
+    input.employeePrograms === undefined
+      ? undefined
+      : createArtifactProgramToolSource(input.employeePrograms)
   const executionContracts = composeExecutionContract({
     resources: createExecutionContractResourceAdapter(
       input.db,
       developmentImplicitAgentContractDeclarations,
     ),
     registrations: developmentExecutionContractRegistrations,
-    programFixtures: createExecutionContractProgramFixtureAdapter({ appHome: input.appHome }),
+    programFixtures: createExecutionContractProgramFixtureAdapter({
+      appHome: input.appHome,
+      ...(programToolSource === undefined ? {} : { programs: programToolSource }),
+      ...(input.programFixtureProcess === undefined
+        ? {}
+        : { process: input.programFixtureProcess }),
+    }),
   })
   const capabilityTemplatePersistence = createCapabilityTemplatePersistence(input.db)
   const capabilityTemplateOperations = composeCapabilityTemplateOperations({
@@ -1371,6 +1409,9 @@ export async function composePostgresqlApplication(
     },
     fusion: {
       appHome: input.appHome,
+      workspaces:
+        input.fusionWorkspaceEffects ??
+        createFileFusionWorkspaceEffects({ appHome: input.appHome }),
       ...(taskLaunchConfiguration.selectedQueries === undefined
         ? {}
         : { runConfiguration: selectedRunConfig }),
@@ -1486,6 +1527,12 @@ export async function composePostgresqlApplication(
     runtimeInventoryContent: composeTaskRuntimeInventoryContent(input.runtimeInventoryContent),
     taskRecoveryOperations: taskExecutionProvider.recovery,
     codeWorkspace,
+    // RFC-370 §10 V16: hosted reads answer from the task volume and persist as
+    // object publications; standalone PostgreSQL keeps native worktrees and files.
+    codeReview: Object.freeze({
+      content: input.repositoryRevisionContent ?? composeLocalRepositoryRevisionContent(),
+      artifacts: input.codeReviewArtifacts ?? composeLocalCodeReviewArtifacts(),
+    }),
     repositoryWorkspace: core.repositoryWorkspaceStore,
     changeNarrative: Object.freeze({
       async requireMember(actor: Actor, taskId: string) {
@@ -1522,6 +1569,9 @@ export async function composePostgresqlApplication(
     store: core.repositoryWorkspaceStore,
     canViewTask: async (actor: Actor, task: { readonly id: string }) =>
       (await collaborationTaskAccess.resolveTask(actor, task.id)).visible,
+    // RFC-370 §10 V15: the same content the task workspace queries read.
+    content: (workspaceRef: string) =>
+      input.workspaceContent?.bind(workspaceRef) ?? createFileWorkspaceContentEffects(workspaceRef),
   })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
     followupGenerator: composeClarifyFollowupGenerator({
@@ -1535,7 +1585,10 @@ export async function composePostgresqlApplication(
   const fusionOperations = composePostgresqlFusionOperations({
     // RFC-353 T6/T7：同 SQLite 侧——provider 装配只在 bootstrap 根上完成。
     memoryMembership: composeSkillMemoryFusionParticipantFactory(),
-    skillVersionCommit: composeSkillVersionCommitParticipantFactory(),
+    // RFC-370 §10 V20: hosted skills live in the database binding; seeds and versions follow it.
+    skillVersionCommit: composeSkillVersionCommitParticipantFactory({
+      skillContent: input.skillContent,
+    }),
     db: input.db,
     appHome: input.appHome,
     memories: memoryCatalog,
@@ -1862,6 +1915,7 @@ export async function composePostgresqlApplication(
   const employeeExecution = composeReactionExecutionProvider({
     db: input.db,
     appHome: input.appHome,
+    ...(programToolSource === undefined ? {} : { programs: programToolSource }),
     resolveActor: async () => systemActor,
     resourceAuthorityFor: (actor) => ({
       actor,
@@ -2022,6 +2076,9 @@ export async function composePostgresqlApplication(
     agents: {
       get: (id: string) => classicCatalogs.agent.queries.get(authorityFor(systemActor), { id }),
     },
+    ...(input.actionWorkspaceEntries === undefined
+      ? {}
+      : { workspaceEntries: input.actionWorkspaceEntries }),
   }
   const developmentAutomation = composeDevelopmentAutomation({
     verificationCommands:
@@ -2458,6 +2515,12 @@ export async function composePostgresqlApplication(
         secretBox: input.secretBox,
       }),
       groups: Object.freeze({ configuration }),
+      mirrors: composeRepositoryMirrors({
+        store: core.repositoryWorkspaceStore,
+        secretBox: input.secretBox,
+        appHome: input.appHome,
+        ...(input.repositoryRemote === undefined ? {} : { remote: input.repositoryRemote }),
+      }),
     }),
     workflows: Object.freeze({
       runtime:

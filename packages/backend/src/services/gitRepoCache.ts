@@ -350,7 +350,7 @@ export interface FastForwardOutcome {
   warning: string | null
 }
 
-function rowToCached(row: CachedRepositoryRecord, referencingTaskCount = 0): CachedRepo {
+export function rowToCached(row: CachedRepositoryRecord, referencingTaskCount = 0): CachedRepo {
   return {
     id: row.id,
     // RFC-204: the original URL never leaves the daemon — cached_repos is a

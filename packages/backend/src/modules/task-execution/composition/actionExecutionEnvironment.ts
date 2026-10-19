@@ -94,6 +94,9 @@ export interface ActionExecutionEnvironmentDependencies {
    */
   readonly onTerminal?: (executionRef: string) => void | Promise<void>
   readonly terminalPollMs?: number
+  /** RFC-370 §10 V18: the selected workspace's entry checks (hosted volumes);
+   * a standalone daemon checks its own filesystem. */
+  readonly workspaceEntries?: ActionExecutionEnvironment['workspaceEntries']
 }
 
 export function createActionExecutionEnvironment(
@@ -142,5 +145,6 @@ export function createActionExecutionEnvironment(
     },
     ...(deps.onTerminal === undefined ? {} : { onTerminal: deps.onTerminal }),
     ...(deps.terminalPollMs === undefined ? {} : { terminalPollMs: deps.terminalPollMs }),
+    ...(deps.workspaceEntries === undefined ? {} : { workspaceEntries: deps.workspaceEntries }),
   })
 }

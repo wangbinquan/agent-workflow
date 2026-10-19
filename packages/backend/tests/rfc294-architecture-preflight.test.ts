@@ -322,7 +322,6 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/intent/composition/apply.ts -> packages/backend/src/modules/resource-catalog/infrastructure/mcpTransactionLifecycle.ts',
   'packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts -> packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts',
   'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts -> packages/backend/src/modules/memory/public/catalog.ts',
-  'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts -> packages/backend/src/modules/source-control/composition.ts',
   'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts -> packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts',
   'packages/backend/src/modules/knowledge-evolution/application/skillProvenanceQuery.ts -> packages/backend/src/modules/memory/public/catalog.ts',
   'packages/backend/src/modules/knowledge-evolution/composition/fusion.ts -> packages/backend/src/modules/memory/public/catalog.ts',

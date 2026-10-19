@@ -26,6 +26,10 @@ import { repoRelativePathSchema } from '../domain/requirementManifest'
 import type { UploadPlacementPort } from '../application/ports/reconcilerPorts'
 import type { UploadPlacementPersistence } from '../application/ports/uploadPlacementStore'
 import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
+import type {
+  AutomationWorkspaceEffectsFactory,
+  AutomationWorkspaceTreeOperations,
+} from '../application/ports/automationWorkspaceEffects'
 
 /** seed 树的稳定内容 digest（相对路径排序 + 文件模式 + 每文件 sha256）。 */
 export function seedTreeDigestOf(root: string): string {
@@ -53,11 +57,83 @@ export function seedTreeDigestOf(root: string): string {
   return hash.digest('hex')
 }
 
+/** The digest of an empty seed tree (no files). */
+const EMPTY_SEED_TREE_DIGEST = createHash('sha256').digest('hex')
+
+/** Applies the seed files' modes, then replaces the seed root with the staging tree. */
+export function publishSeedTree(input: {
+  readonly staging: string
+  readonly root: string
+  readonly modes: readonly { readonly path: string; readonly mode: number }[]
+}): void {
+  for (const entry of input.modes) chmodSync(join(input.staging, entry.path), entry.mode)
+  if (existsSync(input.root)) rmSync(input.root, { recursive: true, force: true })
+  renameSync(input.staging, input.root)
+}
+
+/**
+ * RFC-370 §10 V18 (b): where seed trees live. A standalone daemon writes this
+ * filesystem; a hosted one writes the development volume, where the digest,
+ * discard and publish run as tree operations next to the files (the seed root
+ * is a `cs-workspace:` reference there, never a local path).
+ */
+interface SeedTrees {
+  resolve(root: string, ...segments: readonly string[]): string
+  exists(path: string): Promise<boolean>
+  discard(path: string): Promise<void>
+  createDirectory(path: string): Promise<void>
+  publish(input: Parameters<typeof publishSeedTree>[0]): Promise<void>
+  digest(root: string): Promise<string>
+}
+
+const localSeedTrees: SeedTrees = {
+  resolve: (root, ...segments) => join(root, ...segments),
+  exists: async (path) => existsSync(path),
+  discard: async (path) => rmSync(path, { recursive: true, force: true }),
+  createDirectory: async (path) => {
+    mkdirSync(path, { recursive: true })
+  },
+  publish: async (input) => publishSeedTree(input),
+  digest: async (root) => seedTreeDigestOf(root),
+}
+
+function volumeSeedTrees(
+  workspace: AutomationWorkspaceEffectsFactory,
+  tree: AutomationWorkspaceTreeOperations,
+): SeedTrees {
+  const withEffects = async <T>(
+    work: (
+      effects: Awaited<ReturnType<AutomationWorkspaceEffectsFactory['acquire']>>,
+    ) => T | Promise<T>,
+  ): Promise<T> => {
+    const effects = await workspace.acquire()
+    try {
+      return await work(effects)
+    } finally {
+      await effects.close()
+    }
+  }
+  return {
+    resolve: (root, ...segments) => workspace.resolve(root, ...segments),
+    exists: (path) => withEffects((effects) => effects.exists(path)),
+    discard: async (path) => {
+      await tree.run('seed-tree-discard', { root: path })
+    },
+    createDirectory: (path) => withEffects((effects) => effects.createDirectory(path, true)),
+    publish: async (input) => {
+      await tree.run('seed-tree-publish', input)
+    },
+    digest: async (root) => String(await tree.run('seed-tree-digest', { root })),
+  }
+}
+
 export interface PlacementDeps {
   readonly persistence: UploadPlacementPersistence
   readonly evidence: EvidenceArtifactPort
   readonly seedsRoot: string
   readonly now: () => number
+  /** The selected automation workspace; a volume selection carries tree operations. */
+  readonly workspace?: AutomationWorkspaceEffectsFactory
 }
 
 export interface PlacementResult {
@@ -77,7 +153,12 @@ export async function placeUploadSeed(
 ): Promise<PlacementResult> {
   const plan = await deps.persistence.load(input.planId)
   if (plan === null) throw new Error(`upload plan not found: ${input.planId}`)
-  return await seedPublications.run(join(deps.seedsRoot, plan.planDigest), async () => {
+  const trees =
+    deps.workspace?.treeOperations === undefined
+      ? localSeedTrees
+      : volumeSeedTrees(deps.workspace, deps.workspace.treeOperations)
+  const seedRoot = trees.resolve(deps.seedsRoot, plan.planDigest)
+  return await seedPublications.run(seedRoot, async () => {
     const entries = [...plan.entries].sort((a, b) => a.ordinal - b.ordinal)
 
     const active = entries.filter((e) => e.expectedTargetKind !== 'already-present')
@@ -93,63 +174,65 @@ export async function placeUploadSeed(
 
     // 全 already-present：null seed + baseline-observed fulfillment（幂等 upsert）。
     if (active.length === 0) {
-      const emptyDigest = seedTreeDigestOf(join(deps.seedsRoot, '__nonexistent__'))
       await deps.persistence.record({
         id: ulid(),
         planId: input.planId,
         baselineSnapshotRef: plan.baselineSnapshotRef,
         seedChangeRef: null,
-        seedTreeDigest: emptyDigest,
+        seedTreeDigest: EMPTY_SEED_TREE_DIGEST,
         fulfillmentKind: 'baseline-observed',
         commitSha: plan.baselineSha,
         entriesJson: JSON.stringify(dispositions),
         createdAt: deps.now(),
       })
-      return { seedChangeRef: null, seedTreeDigest: emptyDigest, dispositions }
+      return { seedChangeRef: null, seedTreeDigest: EMPTY_SEED_TREE_DIGEST, dispositions }
     }
 
-    const seedRoot = join(deps.seedsRoot, plan.planDigest)
     const rebuild = async (): Promise<void> => {
-      if (existsSync(seedRoot)) rmSync(seedRoot, { recursive: true, force: true })
-      const staging = `${seedRoot}.tmp-${ulid()}`
-      mkdirSync(staging, { recursive: true })
+      if (await trees.exists(seedRoot)) await trees.discard(seedRoot)
+      const staging = trees.resolve(deps.seedsRoot, `${plan.planDigest}.tmp-${ulid()}`)
+      await trees.createDirectory(staging)
+      const modes: { path: string; mode: number }[] = []
       for (const entry of active) {
         // 深防：plan 行必经 schema 才能落库，但 placement 是文件系统写入点，
         // 独立复验一次（手改 DB 行/未来新写入路径都拦在这）。
         if (!repoRelativePathSchema.safeParse(entry.repositoryTargetPath).success) {
-          rmSync(staging, { recursive: true, force: true })
+          await trees.discard(staging)
           throw new Error(`unsafe repository target path: ${entry.repositoryTargetPath}`)
         }
-        const dest = join(staging, entry.repositoryTargetPath)
+        const dest = trees.resolve(staging, entry.repositoryTargetPath)
         let materialized: boolean
         try {
           materialized = await deps.evidence.materializeBlob(entry.uploadBlobRef, dest)
         } catch (error) {
-          rmSync(staging, { recursive: true, force: true })
+          await trees.discard(staging)
           throw error
         }
         if (!materialized) {
-          rmSync(staging, { recursive: true, force: true })
+          await trees.discard(staging)
           throw new Error(
             `upload blob missing: ${entry.uploadBlobRef} (${entry.repositoryTargetPath})`,
           )
         }
-        chmodSync(dest, entry.targetFileMode === 'executable' ? 0o755 : 0o644)
+        modes.push({
+          path: entry.repositoryTargetPath,
+          mode: entry.targetFileMode === 'executable' ? 0o755 : 0o644,
+        })
       }
-      renameSync(staging, seedRoot)
+      await trees.publish({ staging, root: seedRoot, modes })
     }
 
     // 幂等：已有 seed 且树 digest 与内容一致 ⇒ 复用；否则废弃重建（byte-identical）。
     const expectedReceipt = plan.placementReceipt ?? undefined
-    if (!existsSync(seedRoot)) {
+    if (!(await trees.exists(seedRoot))) {
       await rebuild()
     } else if (
       expectedReceipt !== undefined &&
-      expectedReceipt.seedTreeDigest !== seedTreeDigestOf(seedRoot)
+      expectedReceipt.seedTreeDigest !== (await trees.digest(seedRoot))
     ) {
       await rebuild()
     }
-    const digest = seedTreeDigestOf(seedRoot)
+    const digest = await trees.digest(seedRoot)
     if (expectedReceipt !== undefined && expectedReceipt.seedTreeDigest !== null) {
       if (expectedReceipt.seedTreeDigest !== digest) {
         // receipt 在而内容对不上且重建后仍不一致 ⇒ blob 池损坏，显式抛出。

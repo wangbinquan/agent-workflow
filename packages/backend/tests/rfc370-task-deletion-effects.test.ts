@@ -241,6 +241,8 @@ test('native content adapter retains default directory operands and compound ide
     join(Paths.runsDir, taskId),
     join(Paths.logsDir, taskId),
     join(Paths.root, 'scratch', taskId),
+    // RFC-370 §10 V16: the task's code-review artifacts leave with it.
+    join(Paths.root, 'structural-diffs', taskId),
   ])
   const root = mkdtempSync(join(tmpdir(), 'aw-task-delete-content-'))
   try {

@@ -11,24 +11,38 @@
 // 'structural-scope-unsupported'」——该分支早已接上（见下方 scope === 'wrapper'），
 // 而 RFC-083 已 Done。这条尤其误导：它写在**文件头的 scope 说明**里，
 // 是任何人想知道「支持哪几种 scope」时第一眼看的地方。
+//
+// RFC-370 §10 V16 — every read runs through the selected revision content and
+// every persisted artifact through the selected artifact store, so a hosted
+// task (a `cs-workspace:` volume) is analyzed in its volume. A terminal
+// generation is served from the store first: no worktree read, no volume wake.
 
-import { existsSync } from 'node:fs'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { isGitWorkTree } from '@/util/git'
 import { computeSummary, type StructuralDiff, type StructuralScope } from '@agent-workflow/shared'
 import type {
   CodeWorkspaceRead,
   CodeWorkspaceTask,
 } from '@/modules/code-capability/application/ports/codeWorkspaceRead'
+import {
+  composeLocalCodeReviewArtifacts,
+  type CodeReviewArtifactStore,
+  type StructuralDiffArtifactKey,
+} from '@/modules/code-capability/public/participants'
+import {
+  composeLocalRepositoryRevisionContent,
+  type RepositoryRevisionContent,
+  type RepositoryRevisionContentFactory,
+} from '@/modules/source-control/public/participants'
 import { canonicalRepoKeys } from '@/services/repoLabels'
 import { readWrapperGitBaseline } from '@/modules/task-execution/public/queries'
 import { computeFromWorktree, computeBetweenRefs } from './gitBackend'
 import { computeContentDigest } from './digest'
 import { mergeStructuralDiffs } from './assemble'
 import { resolveNodeScope, perRepoNodeRuns } from './refSelect'
-import { readStoredDiff, writeStoredDiff, isTerminalTaskStatus } from './store'
+import { isTerminalTaskStatus } from './store'
 import {
   computeDeepStructuralDiff,
+  DEEP_INDEXING_UNAVAILABLE,
   DeepUnavailableError,
   type ResolvedDeepConfig,
 } from './deep/service'
@@ -39,23 +53,83 @@ export interface DeepOpts {
   deepCfg?: ResolvedDeepConfig
 }
 
+/** RFC-370 §10 V16 — what the code-review reads run against. */
+export interface CodeReviewReads {
+  readonly workspace: CodeWorkspaceRead
+  /** The selected revision content; the native worktrees of this host when absent. */
+  readonly content?: RepositoryRevisionContentFactory
+  /** The selected artifact store; the appHome files when absent. */
+  readonly artifacts?: CodeReviewArtifactStore
+}
+
+/** The bare workspace port keeps the standalone selections (direct callers, tests). */
+export type CodeReviewReadInput = CodeWorkspaceRead | CodeReviewReads
+
+export interface ResolvedCodeReviewReads {
+  readonly workspace: CodeWorkspaceRead
+  readonly content: RepositoryRevisionContentFactory
+  readonly artifacts: CodeReviewArtifactStore
+}
+
+export function codeReviewReads(input: CodeReviewReadInput): ResolvedCodeReviewReads {
+  if (!('workspace' in input)) {
+    return {
+      workspace: input,
+      content: composeLocalRepositoryRevisionContent(),
+      artifacts: composeLocalCodeReviewArtifacts(),
+    }
+  }
+  return {
+    workspace: input.workspace,
+    content: input.content ?? composeLocalRepositoryRevisionContent(),
+    artifacts: input.artifacts ?? composeLocalCodeReviewArtifacts(),
+  }
+}
+
+/** The terminal generation of a task (its `finishedAt`); null while it runs. */
+export function terminalGeneration(task: CodeWorkspaceTask): string | null {
+  if (!isTerminalTaskStatus(task.status)) return null
+  return task.finishedAt === undefined || task.finishedAt === null ? null : String(task.finishedAt)
+}
+
+/** The stored artifact of the task's generation, else whatever the store still
+ *  holds for the scope (a store keyed by generation has nothing more). */
+export async function readStoredTaskDiff(
+  artifacts: CodeReviewArtifactStore,
+  key: StructuralDiffArtifactKey,
+): Promise<StructuralDiff | null> {
+  if (key.generation !== null) {
+    const exact = await artifacts.readStructuralDiff(key)
+    if (exact !== null) return exact
+  }
+  return artifacts.readStructuralDiff({ ...key, generation: null })
+}
+
+/** A deep request that cannot index answers its baseline with the reason. */
+function deepUnavailable(baseline: StructuralDiff): StructuralDiff {
+  return { ...baseline, engine: 'baseline', degradedReason: DEEP_INDEXING_UNAVAILABLE }
+}
+
 /** Compute the baseline, then (if deep requested) try to upgrade its impact to
  *  precise SCIP-resolved callers — falling back to baseline on ANY failure. */
 async function withDeep(
   deepOpts: DeepOpts | undefined,
-  worktreePath: string,
+  content: RepositoryRevisionContent,
   computeBaseline: () => Promise<StructuralDiff>,
   /** RFC-258 (impl-gate P1-2) — share the code-intel index cache per repo. */
   cacheScope?: { taskId: string; repoKey: string },
 ): Promise<StructuralDiff> {
   const baseline = await computeBaseline()
   if (deepOpts?.mode !== 'deep') return baseline
+  // RFC-370 §10 V16: an indexer runs only where the content lives on this host.
+  if (!content.capabilities.indexing) return deepUnavailable(baseline)
   try {
     return await computeDeepStructuralDiff({
       baseline,
-      worktreePath,
+      worktreePath: content.capabilities.indexRoot,
       deps: {
         deepCfg: deepOpts.deepCfg,
+        snapshotDigest: () => content.snapshotDigest(),
         ...(cacheScope !== undefined ? { cacheScope } : {}),
       },
     })
@@ -65,24 +139,50 @@ async function withDeep(
   }
 }
 
+/** A terminal generation's stored diff, when this request may be served by it. */
+async function storedFirst(
+  reads: ResolvedCodeReviewReads,
+  key: StructuralDiffArtifactKey,
+  content: RepositoryRevisionContent,
+  deepOpts: DeepOpts | undefined,
+): Promise<StructuralDiff | null> {
+  if (key.generation === null) return null
+  const deep = deepOpts?.mode === 'deep'
+  // A deep request that can index computes; deep results are never stored.
+  if (deep && content.capabilities.indexing) return null
+  const stored = await reads.artifacts.readStructuralDiff(key)
+  if (stored === null) return null
+  return deep ? deepUnavailable(stored) : stored
+}
+
 export async function getTaskStructuralDiff(
-  workspace: CodeWorkspaceRead,
+  input: CodeReviewReadInput,
   taskId: string,
   scope: StructuralScope = 'task',
   nodeRunId?: string,
   deepOpts?: DeepOpts,
 ): Promise<StructuralDiff> {
-  const task = await workspace.findTask(taskId)
+  const reads = codeReviewReads(input)
+  const task = await reads.workspace.findTask(taskId)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
 
   if (scope === 'node') {
-    return getNodeStructuralDiff(workspace, task, nodeRunId, deepOpts)
+    return getNodeStructuralDiff(reads, task, nodeRunId, deepOpts)
   }
   if (scope === 'wrapper') {
-    return getWrapperStructuralDiff(workspace, task, nodeRunId, deepOpts)
+    return getWrapperStructuralDiff(reads, task, nodeRunId, deepOpts)
   }
+
+  const storeKey: StructuralDiffArtifactKey = {
+    taskId,
+    scope,
+    generation: terminalGeneration(task),
+  }
+  const content = reads.content.bind(task.worktreePath)
+  const stored = await storedFirst(reads, storeKey, content, deepOpts)
+  if (stored !== null) return withContentDigest(stored)
 
   if (task.repoCount === 1) {
     if (task.baseCommit === null) {
@@ -92,14 +192,14 @@ export async function getTaskStructuralDiff(
         409,
       )
     }
-    if (!(await isGitWorkTree(task.worktreePath))) {
+    if ((await content.presence()) !== 'git') {
       // Worktree GC'd OR no longer a git repo (source repo moved/deleted) —
       // serve the eager-persisted artifact if we have one, else a clean 410
       // (RFC-089 P1: `existsSync` alone let a broken worktree reach `git diff`
-      // and 500; `isGitWorkTree` collapses it to the same 410 as the textual
-      // diff tab).
-      const stored = await readStoredDiff(taskId, 'task')
-      if (stored !== null) return withContentDigest(stored)
+      // and 500; the git presence check collapses it to the same 410 as the
+      // textual diff tab).
+      const fallback = await readStoredTaskDiff(reads.artifacts, storeKey)
+      if (fallback !== null) return withContentDigest(fallback)
       throw new DomainError(
         'task-worktree-missing',
         `worktree '${task.worktreePath}' is unavailable (missing or no longer a git repository); cannot compute structural diff`,
@@ -111,13 +211,14 @@ export async function getTaskStructuralDiff(
       withEmptyHint(
         await withDeep(
           deepOpts,
-          task.worktreePath,
+          content,
           () =>
             computeFromWorktree({
               taskId,
               scope,
               worktreePath: task.worktreePath,
               fromRef: baseCommit,
+              content,
             }),
           { taskId, repoKey: '' },
         ),
@@ -126,27 +227,28 @@ export async function getTaskStructuralDiff(
     )
     // Persist the BASELINE for terminal tasks so the view survives a later
     // worktree GC. Never persist a deep request's result (deep is on-demand).
-    if (deepOpts?.mode !== 'deep' && isTerminalTaskStatus(task.status)) void writeStoredDiff(diff)
+    if (deepOpts?.mode !== 'deep' && isTerminalTaskStatus(task.status))
+      void reads.artifacts.writeStructuralDiff(storeKey, diff)
     return diff
   }
 
   // Multi-repo: merge per-repo diffs, labeling files by repo dir.
-  if (!existsSync(task.worktreePath)) {
-    const stored = await readStoredDiff(taskId, 'task')
-    if (stored !== null) return withContentDigest(stored)
+  if ((await content.presence()) === 'absent') {
+    const fallback = await readStoredTaskDiff(reads.artifacts, storeKey)
+    if (fallback !== null) return withContentDigest(fallback)
     throw new DomainError(
       'task-worktree-missing',
       `worktree '${task.worktreePath}' does not exist; cannot compute structural diff`,
       410,
     )
   }
-  const candidates = task.repos.filter(
-    (r) => r.baseCommit !== null && r.baseCommit !== '' && existsSync(r.worktreePath),
-  )
-  // RFC-089 P1: a repo worktree dir can outlive its source repo, so existsSync
+  const candidates = task.repos.filter((r) => r.baseCommit !== null && r.baseCommit !== '')
+  // RFC-089 P1: a repo worktree dir can outlive its source repo, so existence
   // isn't enough — drop non-git ones as bad shards (mirrors getTaskDiff).
-  const valid = await Promise.all(candidates.map((r) => isGitWorkTree(r.worktreePath)))
-  const usable = candidates.filter((_, i) => valid[i])
+  const presence = await Promise.all(
+    candidates.map((r) => reads.content.bind(r.worktreePath).presence()),
+  )
+  const usable = candidates.filter((_, i) => presence[i] === 'git')
   if (usable.length === 0) {
     throw new DomainError(
       'task-no-base-commit',
@@ -166,6 +268,7 @@ export async function getTaskStructuralDiff(
       scope,
       worktreePath: repo.worktreePath,
       fromRef: repo.baseCommit as string,
+      content: reads.content.bind(repo.worktreePath),
     })
     parts.push({ label: labelOf.get(repo) ?? 'repo', diff })
   }
@@ -187,7 +290,7 @@ export async function getTaskStructuralDiff(
       task.spaceKind,
     ),
   )
-  if (isTerminalTaskStatus(task.status)) void writeStoredDiff(merged)
+  if (isTerminalTaskStatus(task.status)) void reads.artifacts.writeStructuralDiff(storeKey, merged)
   return merged
 }
 
@@ -211,9 +314,22 @@ function withContentDigest(diff: StructuralDiff): StructuralDiff {
 
 type ResolvedTask = CodeWorkspaceTask
 
+/** RFC-370 §10 V16 — a per-node / per-wrapper diff of a terminal generation is
+ *  stored too, so browsing nodes of a finished task never wakes its volume. */
+function persistScoped(
+  reads: ResolvedCodeReviewReads,
+  key: StructuralDiffArtifactKey,
+  diff: StructuralDiff,
+  deepOpts: DeepOpts | undefined,
+): StructuralDiff {
+  if (key.generation !== null && deepOpts?.mode !== 'deep')
+    void reads.artifacts.writeStructuralDiff(key, diff).catch(() => undefined)
+  return diff
+}
+
 /** Per-node structural diff: what did this specific node run change? */
 async function getNodeStructuralDiff(
-  workspace: CodeWorkspaceRead,
+  reads: ResolvedCodeReviewReads,
   task: ResolvedTask,
   nodeRunId: string | undefined,
   deepOpts?: DeepOpts,
@@ -224,7 +340,13 @@ async function getNodeStructuralDiff(
       `structural-diff scope 'node' requires a 'nodeRunId' query param`,
     )
   }
-  const rows = await workspace.listNodeRuns(task.id)
+  const rows = await reads.workspace.listNodeRuns(task.id)
+  const storeKey: StructuralDiffArtifactKey = {
+    taskId: task.id,
+    scope: 'node',
+    nodeRunId,
+    generation: terminalGeneration(task),
+  }
 
   // RFC-089 P3 — multi-repo node scope: resolve + compute per repo (reusing the
   // single-repo resolveNodeScope over each repo's column via perRepoNodeRuns),
@@ -237,6 +359,13 @@ async function getNodeStructuralDiff(
         `node run '${nodeRunId}' not found in task '${task.id}'`,
       )
     }
+    const stored = await storedFirst(
+      reads,
+      storeKey,
+      reads.content.bind(task.worktreePath),
+      deepOpts,
+    )
+    if (stored !== null) return stored
     const parts: Array<{ label: string; diff: StructuralDiff }> = []
     let hadSnapshot = false
     let hadError = false
@@ -245,13 +374,14 @@ async function getNodeStructuralDiff(
       const res = resolveNodeScope(perRepoNodeRuns([...rows], repo.worktreeDirName), nodeRunId)
       if (res.kind !== 'between' && res.kind !== 'to-worktree') continue // node didn't write this repo
       hadSnapshot = true
-      if (!(await isGitWorkTree(repo.worktreePath))) {
+      const content = reads.content.bind(repo.worktreePath)
+      if ((await content.presence()) !== 'git') {
         hadError = true
         continue
       }
       const label = nodeLabels[repoIdx] ?? 'repo'
       try {
-        const diff = await withDeep(deepOpts, repo.worktreePath, () =>
+        const diff = await withDeep(deepOpts, content, () =>
           res.kind === 'between'
             ? computeBetweenRefs({
                 taskId: task.id,
@@ -260,6 +390,7 @@ async function getNodeStructuralDiff(
                 worktreePath: repo.worktreePath,
                 fromRef: res.fromRef,
                 toRef: res.toRef,
+                content,
               })
             : computeFromWorktree({
                 taskId: task.id,
@@ -267,6 +398,7 @@ async function getNodeStructuralDiff(
                 nodeRunId,
                 worktreePath: repo.worktreePath,
                 fromRef: res.fromRef,
+                content,
               }),
         )
         parts.push({ label, diff })
@@ -281,7 +413,7 @@ async function getNodeStructuralDiff(
         ? emptyNodeDiff(task.id, nodeRunId, 'snapshot-pruned', 'pruned')
         : emptyNodeDiff(task.id, nodeRunId, 'readonly-node-no-snapshot')
     }
-    return mergeStructuralDiffs(
+    const merged = mergeStructuralDiffs(
       {
         scope: 'node',
         taskId: task.id,
@@ -293,6 +425,7 @@ async function getNodeStructuralDiff(
       },
       parts,
     )
+    return hadError ? merged : persistScoped(reads, storeKey, merged, deepOpts)
   }
 
   // Single-repo (repoCount === 1) — unchanged.
@@ -300,7 +433,7 @@ async function getNodeStructuralDiff(
   // baseline (the wrapper's diff is baseline → worktree, not a snapshot pair).
   const target = rows.find((r) => r.id === nodeRunId)
   if (target !== undefined && parseWrapperGitBaseline(target.wrapperProgressJson) !== null) {
-    return getWrapperStructuralDiff(workspace, task, nodeRunId, deepOpts)
+    return getWrapperStructuralDiff(reads, task, nodeRunId, deepOpts)
   }
 
   const res = resolveNodeScope([...rows], nodeRunId)
@@ -314,17 +447,20 @@ async function getNodeStructuralDiff(
     // Readonly / non-write node correctly contributes nothing.
     return emptyNodeDiff(task.id, nodeRunId, 'readonly-node-no-snapshot')
   }
-  if (!(await isGitWorkTree(task.worktreePath))) {
+  const worktreePath = task.worktreePath
+  const content = reads.content.bind(worktreePath)
+  const stored = await storedFirst(reads, storeKey, content, deepOpts)
+  if (stored !== null) return stored
+  if ((await content.presence()) !== 'git') {
     throw new DomainError(
       'task-worktree-missing',
       `worktree '${task.worktreePath}' is unavailable (missing or no longer a git repository); cannot compute structural diff`,
       410,
     )
   }
-  const worktreePath = task.worktreePath
   const resolution = res
   try {
-    return await withDeep(deepOpts, worktreePath, () =>
+    const diff = await withDeep(deepOpts, content, () =>
       resolution.kind === 'between'
         ? computeBetweenRefs({
             taskId: task.id,
@@ -333,6 +469,7 @@ async function getNodeStructuralDiff(
             worktreePath,
             fromRef: resolution.fromRef,
             toRef: resolution.toRef,
+            content,
           })
         : computeFromWorktree({
             taskId: task.id,
@@ -340,9 +477,13 @@ async function getNodeStructuralDiff(
             nodeRunId,
             worktreePath,
             fromRef: resolution.fromRef,
+            content,
           }),
     )
-  } catch {
+    return persistScoped(reads, storeKey, diff, deepOpts)
+  } catch (error) {
+    // An older task image cannot answer at all: that is not a pruned snapshot.
+    if (error instanceof DomainError && error.status === 410) throw error
     // Snapshot objects pruned by a post-GC `git gc` — surface gracefully.
     return emptyNodeDiff(task.id, nodeRunId, 'snapshot-pruned', 'pruned')
   }
@@ -381,7 +522,7 @@ export function parseWrapperGitBaseline(json: string | null): string | null {
 /** Per-wrapper structural diff: what did a git-wrapper's inner scope change?
  *  fromRef = the wrapper's recorded baseline commit; toRef = the worktree. */
 async function getWrapperStructuralDiff(
-  workspace: CodeWorkspaceRead,
+  reads: ResolvedCodeReviewReads,
   task: ResolvedTask,
   nodeRunId: string | undefined,
   deepOpts?: DeepOpts,
@@ -398,7 +539,7 @@ async function getWrapperStructuralDiff(
       `per-wrapper structural diff is single-repo only in v1`,
     )
   }
-  const row = await workspace.findNodeRun(nodeRunId)
+  const row = await reads.workspace.findNodeRun(nodeRunId)
   if (row === null) {
     throw new NotFoundError(
       'node-run-not-found',
@@ -412,25 +553,37 @@ async function getWrapperStructuralDiff(
       `node run '${nodeRunId}' is not a git-wrapper with a recorded baseline commit`,
     )
   }
-  if (!(await isGitWorkTree(task.worktreePath))) {
+  const worktreePath = task.worktreePath
+  const content = reads.content.bind(worktreePath)
+  const storeKey: StructuralDiffArtifactKey = {
+    taskId: task.id,
+    scope: 'wrapper',
+    nodeRunId,
+    generation: terminalGeneration(task),
+  }
+  const stored = await storedFirst(reads, storeKey, content, deepOpts)
+  if (stored !== null) return stored
+  if ((await content.presence()) !== 'git') {
     throw new DomainError(
       'task-worktree-missing',
       `worktree '${task.worktreePath}' is unavailable (missing or no longer a git repository); cannot compute structural diff`,
       410,
     )
   }
-  const worktreePath = task.worktreePath
   try {
-    return await withDeep(deepOpts, worktreePath, () =>
+    const diff = await withDeep(deepOpts, content, () =>
       computeFromWorktree({
         taskId: task.id,
         scope: 'wrapper',
         nodeRunId,
         worktreePath,
         fromRef: baseline,
+        content,
       }),
     )
-  } catch {
+    return persistScoped(reads, storeKey, diff, deepOpts)
+  } catch (error) {
+    if (error instanceof DomainError && error.status === 410) throw error
     return emptyNodeDiff(task.id, nodeRunId, 'snapshot-pruned', 'pruned', 'wrapper')
   }
 }

@@ -15,14 +15,14 @@ import { GitPicker } from '@/components/launch/GitPicker'
 
 export function DynamicInput({
   def,
-  repoPath,
+  cachedRepoId,
   sourceKind,
   value,
   onChange,
 }: {
   def: WorkflowInput
-  /** Local path of the matched cached clone ('' → pickers fall back to text). */
-  repoPath: string
+  /** The matched registered repository's id ('' → pickers fall back to text). */
+  cachedRepoId: string
   sourceKind: 'path' | 'url'
   value: string
   onChange: (next: string) => void
@@ -81,7 +81,7 @@ export function DynamicInput({
     return (
       <FilesPicker
         def={def}
-        repoPath={repoPath}
+        cachedRepoId={cachedRepoId}
         sourceKind={sourceKind}
         value={value}
         onChange={onChange}
@@ -95,7 +95,7 @@ export function DynamicInput({
     return (
       <GitPicker
         def={def}
-        repoPath={repoPath}
+        cachedRepoId={cachedRepoId}
         sourceKind={sourceKind}
         value={value}
         onChange={onChange}

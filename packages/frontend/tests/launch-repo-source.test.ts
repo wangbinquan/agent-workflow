@@ -12,7 +12,7 @@ import { describe, expect, test } from 'vitest'
 import type { CachedRepo } from '@agent-workflow/shared'
 import {
   buildLaunchBody,
-  resolveUrlRepoPath,
+  resolveUrlCachedRepoId,
   validateRepoUrl,
   type RepoSource,
 } from '@/lib/launch-repo-source'
@@ -143,7 +143,8 @@ describe('RepoSourceRow RFC-165 retirement (source-level)', () => {
 })
 
 // -----------------------------------------------------------------------------
-// RFC-110 — resolveUrlRepoPath: pickers enumerate the matched cached clone;
+// RFC-110 — resolveUrlCachedRepoId: pickers enumerate the matched registered
+// repository (RFC-370 §10 V17: by id, not by its mirror's local path);
 // cross-protocol / miss / unparseable → '' (text fallback upstream).
 // -----------------------------------------------------------------------------
 
@@ -166,38 +167,44 @@ function cachedRepo(url: string, localPath: string): CachedRepo {
   }
 }
 
-describe('resolveUrlRepoPath (RFC-110)', () => {
-  test('hit → cached localPath, robust to .git / trailing slash', () => {
+describe('resolveUrlCachedRepoId (RFC-110, RFC-370 V17)', () => {
+  test('hit → the registered repository id, robust to .git / trailing slash', () => {
     const list = [cachedRepo('https://github.com/foo/bar.git', '/cache/bar')]
     expect(
-      resolveUrlRepoPath({ kind: 'url', repoUrl: 'https://github.com/foo/bar', ref: '' }, list),
-    ).toBe('/cache/bar')
+      resolveUrlCachedRepoId({ kind: 'url', repoUrl: 'https://github.com/foo/bar', ref: '' }, list),
+    ).toBe('id-/cache/bar')
     expect(
-      resolveUrlRepoPath({ kind: 'url', repoUrl: 'https://github.com/foo/bar/', ref: '' }, list),
-    ).toBe('/cache/bar')
+      resolveUrlCachedRepoId(
+        { kind: 'url', repoUrl: 'https://github.com/foo/bar/', ref: '' },
+        list,
+      ),
+    ).toBe('id-/cache/bar')
     expect(
-      resolveUrlRepoPath(
+      resolveUrlCachedRepoId(
         { kind: 'url', repoUrl: 'https://user:tok@github.com/foo/bar.git', ref: '' },
         list,
       ),
-    ).toBe('/cache/bar')
+    ).toBe('id-/cache/bar')
   })
 
   test('cross-protocol → no match (SSH cache, HTTPS typed)', () => {
     const list = [cachedRepo('git@github.com:foo/bar.git', '/cache/ssh')]
     expect(
-      resolveUrlRepoPath({ kind: 'url', repoUrl: 'https://github.com/foo/bar', ref: '' }, list),
+      resolveUrlCachedRepoId({ kind: 'url', repoUrl: 'https://github.com/foo/bar', ref: '' }, list),
     ).toBe('')
   })
 
   test('miss / unparseable / empty cache → ""', () => {
     const list = [cachedRepo('https://github.com/foo/bar', '/cache/bar')]
     expect(
-      resolveUrlRepoPath({ kind: 'url', repoUrl: 'https://github.com/foo/other', ref: '' }, list),
+      resolveUrlCachedRepoId(
+        { kind: 'url', repoUrl: 'https://github.com/foo/other', ref: '' },
+        list,
+      ),
     ).toBe('')
-    expect(resolveUrlRepoPath({ kind: 'url', repoUrl: 'not a url', ref: '' }, list)).toBe('')
+    expect(resolveUrlCachedRepoId({ kind: 'url', repoUrl: 'not a url', ref: '' }, list)).toBe('')
     expect(
-      resolveUrlRepoPath({ kind: 'url', repoUrl: 'https://github.com/foo/bar', ref: '' }, []),
+      resolveUrlCachedRepoId({ kind: 'url', repoUrl: 'https://github.com/foo/bar', ref: '' }, []),
     ).toBe('')
   })
 })
@@ -208,8 +215,8 @@ describe('tasks.new.tsx wiring (RFC-110 source-level)', () => {
     'utf-8',
   )
 
-  test('resolves the picker repoPath via resolveUrlRepoPath (not a hardcode)', () => {
-    expect(SRC).toContain('resolveUrlRepoPath')
+  test('resolves the picker repository via resolveUrlCachedRepoId (not a hardcode)', () => {
+    expect(SRC).toContain('resolveUrlCachedRepoId')
   })
 
   test('threads sourceKind into the dynamic input so pickers can fall back', () => {

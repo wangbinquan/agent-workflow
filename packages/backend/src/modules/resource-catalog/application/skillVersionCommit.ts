@@ -12,19 +12,19 @@
 import type {
   SkillVersionCommitHooks,
   SkillVersionCommitParticipantInTx,
-  SkillVersionCommitRequest,
+  StagedSkillTreeVersion,
 } from '../public/participants'
 
 /**
- * 各 provider 只需提供这一件事：在给定事务里做复合前置条件重验、推进 `skills`、
- * 落 `skill_versions` 行，返回新版本号。
+ * 各 provider 只需提供这一件事：在给定事务里对一个已暂存的版本做复合前置条件重验、推进
+ * `skills`、落 `skill_versions` 行并把它的操作日志推进到 db-committed，返回新版本号。
  *
  * **刻意不放在 `public/`**：调用方只认识铸好的 capability，不认识写入面
  * （RFC-294 design §3.3「无 consumer 不公开」）。
  */
 export interface SkillVersionCommitWrites {
   commit(
-    request: SkillVersionCommitRequest,
+    staged: StagedSkillTreeVersion,
     hooks?: SkillVersionCommitHooks<Promise<void> | void>,
   ): Promise<number>
 }
@@ -40,11 +40,8 @@ export function createSkillVersionCommitParticipantInTx(
   writes: SkillVersionCommitWrites,
 ): SkillVersionCommitParticipantInTx {
   const participant = Object.freeze({
-    commit(
-      request: SkillVersionCommitRequest,
-      hooks?: SkillVersionCommitHooks<Promise<void> | void>,
-    ) {
-      return writes.commit(request, hooks)
+    commit(staged: StagedSkillTreeVersion, hooks?: SkillVersionCommitHooks<Promise<void> | void>) {
+      return writes.commit(staged, hooks)
     },
   }) as unknown as SkillVersionCommitParticipantInTx
   trustedSkillVersionCommitParticipants.add(participant)

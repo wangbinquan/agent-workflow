@@ -1,17 +1,21 @@
-// RFC-083 PR-C — git-backed blob readers for a worktree. Enumerates changed
+// RFC-083 PR-C — revision-backed blob readers for a worktree. Enumerates changed
 // files between `fromRef` and the live worktree (tracked + untracked), reads the
-// old side via `git show <fromRef>:<path>` and the new side from the worktree on
-// disk, and hands them to assembleStructuralDiff. After assembly it augments the
-// impact with CROSS-FILE callers (worktree-wide `git grep` + re-parse).
+// old side at `fromRef` and the new side from the worktree, and hands them to
+// assembleStructuralDiff. After assembly it augments the impact with CROSS-FILE
+// callers (worktree-wide grep + re-parse).
+//
+// RFC-370 §10 V16 — every read goes through the selected revision content
+// (`RepositoryRevisionContent`): the native worktree on this host, or the task
+// volume of a hosted task. Each side is read once per computation and in
+// batches, so a hosted volume answers a whole diff in a few commands.
 
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import {
-  gitChangedEntries,
-  gitChangedEntriesBetween,
-  gitGrepFiles,
-  readBlobAtRef,
-} from '@/util/git'
+  composeLocalRepositoryRevisionContent,
+  type RepositoryRevisionContent,
+  type RevisionChangeEntry,
+  type RevisionFileRead,
+  type WorktreeFileRead,
+} from '@/modules/source-control/public/participants'
 import { assembleStructuralDiff } from './assemble'
 import { resolveLang } from './lang/grammars'
 import { hasExtraction } from './lang/queries'
@@ -24,15 +28,110 @@ import {
   computeClassEdges,
   computeAnonCreationEdges,
 } from './classGraph'
-import { MAX_ANALYZE_BYTES } from './baseline'
+import { ecosystemForManifest } from './deps/manifests'
+import { MAX_ANALYZE_BYTES, blobText, type AnalysisBlob } from './baseline'
 import type { ImpactItem, StructuralDiff, StructuralScope } from '@agent-workflow/shared'
 
-type BlobReader = (path: string) => Promise<string | null>
-
 /** Cap the candidate caller files we re-parse for cross-file impact (bounds the
- *  cost on large repos; `git grep` already narrows to files that mention a
+ *  cost on large repos; the grep already narrows to files that mention a
  *  changed method's name). */
 const MAX_CROSS_FILE_CANDIDATES = 60
+
+/** RFC-370 §10 V16 — the read bound of an analyzed side. Every text the
+ *  analyzer analyzes (at most MAX_ANALYZE_BYTES characters, at most three UTF-8
+ *  bytes each) still arrives as text; a larger side arrives as `oversized` and
+ *  classifies the file exactly as its text would have. */
+export const ANALYZE_READ_MAX_BYTES = MAX_ANALYZE_BYTES * 3
+
+/** Worktree files read at once (a hosted read is one platform file request). */
+const WORKTREE_READ_CONCURRENCY = 8
+
+function analysisBlob(read: RevisionFileRead | WorktreeFileRead): AnalysisBlob {
+  switch (read.kind) {
+    case 'text':
+      return read.content
+    case 'absent':
+    case 'outside':
+      return null
+    case 'oversized':
+    case 'binary':
+      return { unreadable: read.kind }
+  }
+}
+
+/** One side of one computation: each path is read once, in batches. */
+interface SideReader {
+  prefetch(paths: readonly string[]): Promise<void>
+  read(path: string): Promise<AnalysisBlob>
+}
+
+function sideReader(
+  fetch: (paths: readonly string[]) => Promise<ReadonlyMap<string, AnalysisBlob>>,
+): SideReader {
+  const cache = new Map<string, AnalysisBlob>()
+  const prefetch = async (paths: readonly string[]): Promise<void> => {
+    const missing = [...new Set(paths)].filter((path) => !cache.has(path))
+    if (missing.length === 0) return
+    const read = await fetch(missing)
+    for (const path of missing) cache.set(path, read.get(path) ?? null)
+  }
+  return {
+    prefetch,
+    async read(path) {
+      await prefetch([path])
+      return cache.get(path) ?? null
+    },
+  }
+}
+
+function revisionSide(content: RepositoryRevisionContent, rev: string): SideReader {
+  return sideReader(async (paths) => {
+    const reads = await content.readRevision({ rev, paths, maxBytes: ANALYZE_READ_MAX_BYTES })
+    return new Map(paths.map((path) => [path, analysisBlob(reads.get(path) ?? { kind: 'absent' })]))
+  })
+}
+
+function worktreeSide(content: RepositoryRevisionContent): SideReader {
+  return sideReader(async (paths) => {
+    const reads = new Map<string, AnalysisBlob>()
+    let next = 0
+    const worker = async (): Promise<void> => {
+      while (next < paths.length) {
+        const path = paths[next++]!
+        reads.set(
+          path,
+          analysisBlob(await content.readWorktree({ path, maxBytes: ANALYZE_READ_MAX_BYTES })),
+        )
+      }
+    }
+    await Promise.all(
+      Array.from({ length: Math.min(WORKTREE_READ_CONCURRENCY, paths.length) }, worker),
+    )
+    return reads
+  })
+}
+
+/** The files assembleStructuralDiff reads: code and dependency manifests. */
+async function prefetchAnalyzed(
+  changed: readonly RevisionChangeEntry[],
+  oldSide: SideReader,
+  newSide: SideReader,
+): Promise<void> {
+  const files = changed.filter(
+    (entry) => resolveLang(entry.path) !== null || ecosystemForManifest(entry.path) !== null,
+  )
+  await Promise.all([
+    oldSide.prefetch(files.map((entry) => entry.oldPath ?? entry.path)),
+    newSide.prefetch(files.map((entry) => entry.path)),
+  ])
+}
+
+function contentOf(opts: {
+  readonly worktreePath: string
+  readonly content?: RepositoryRevisionContent
+}): RepositoryRevisionContent {
+  return opts.content ?? composeLocalRepositoryRevisionContent().bind(opts.worktreePath)
+}
 
 /** Compute the baseline structural diff between `fromRef` and the current
  *  worktree state. `toRef` is the sentinel 'WORKTREE'. */
@@ -42,36 +141,33 @@ export async function computeFromWorktree(opts: {
   nodeRunId?: string
   worktreePath: string
   fromRef: string
+  /** RFC-370 §10 V16 — the selected content; the native worktree when absent. */
+  content?: RepositoryRevisionContent
 }): Promise<StructuralDiff> {
+  const content = contentOf(opts)
   // RFC-239 — typed enumeration: renames arrive as ONE entry whose old side is
   // read from `oldPath`, so a moved file diffs its real content instead of
   // reporting delete+recreate.
-  const changedFiles = await gitChangedEntries(opts.worktreePath, opts.fromRef)
-  const readOld = (p: string): Promise<string | null> =>
-    readBlobAtRef(opts.worktreePath, opts.fromRef, p)
-  const readNew = async (p: string): Promise<string | null> => {
-    try {
-      return await readFile(join(opts.worktreePath, p), 'utf8')
-    } catch {
-      return null // deleted in worktree, or unreadable
-    }
-  }
+  const changedFiles = (await content.changes({ from: opts.fromRef })).entries
+  const oldSide = revisionSide(content, opts.fromRef)
+  const newSide = worktreeSide(content)
+  await prefetchAnalyzed(changedFiles, oldSide, newSide)
   const diff = await assembleStructuralDiff({
     taskId: opts.taskId,
     scope: opts.scope,
     nodeRunId: opts.nodeRunId,
     fromRef: opts.fromRef,
     toRef: 'WORKTREE',
-    changedFiles,
-    readOld,
-    readNew,
+    changedFiles: [...changedFiles],
+    readOld: oldSide.read,
+    readNew: newSide.read,
   })
-  const withImpact = await augmentCrossFileImpact(diff, opts.worktreePath, readNew)
-  return augmentClassEdges(withImpact, readNew)
+  const withImpact = await augmentCrossFileImpact(diff, content, newSide)
+  return augmentClassEdges(withImpact, newSide)
 }
 
 /** Compute the structural diff between two refs (per-node snapshot pair). Both
- *  sides read via `git show <ref>:<path>`. */
+ *  sides are read at their revision. */
 export async function computeBetweenRefs(opts: {
   taskId: string
   scope: StructuralScope
@@ -79,40 +175,42 @@ export async function computeBetweenRefs(opts: {
   worktreePath: string
   fromRef: string
   toRef: string
+  /** RFC-370 §10 V16 — the selected content; the native worktree when absent. */
+  content?: RepositoryRevisionContent
 }): Promise<StructuralDiff> {
-  const changedFiles = await gitChangedEntriesBetween(opts.worktreePath, opts.fromRef, opts.toRef)
-  const readOld = (p: string): Promise<string | null> =>
-    readBlobAtRef(opts.worktreePath, opts.fromRef, p)
-  const readNew = (p: string): Promise<string | null> =>
-    readBlobAtRef(opts.worktreePath, opts.toRef, p)
+  const content = contentOf(opts)
+  const changedFiles = (await content.changes({ from: opts.fromRef, to: opts.toRef })).entries
+  const oldSide = revisionSide(content, opts.fromRef)
+  const newSide = revisionSide(content, opts.toRef)
+  await prefetchAnalyzed(changedFiles, oldSide, newSide)
   const diff = await assembleStructuralDiff({
     taskId: opts.taskId,
     scope: opts.scope,
     nodeRunId: opts.nodeRunId,
     fromRef: opts.fromRef,
     toRef: opts.toRef,
-    changedFiles,
-    readOld,
-    readNew,
+    changedFiles: [...changedFiles],
+    readOld: oldSide.read,
+    readNew: newSide.read,
   })
-  // Cross-file callers come from `git grep` against the worktree (the toRef
-  // snapshot is a subset of the worktree's tracked content), so the candidate
-  // bodies are read via readNew (`git show toRef:path`) for consistency.
-  const withImpact = await augmentCrossFileImpact(diff, opts.worktreePath, readNew)
-  return augmentClassEdges(withImpact, readNew)
+  // Cross-file callers come from the worktree grep (the toRef snapshot is a
+  // subset of the worktree's tracked content), so the candidate bodies are read
+  // at toRef for consistency.
+  const withImpact = await augmentCrossFileImpact(diff, content, newSide)
+  return augmentClassEdges(withImpact, newSide)
 }
 
 /**
  * Extend `diff.impact` with cross-file callers: for each changed method, find
- * other files in the worktree whose code calls it. `git grep` narrows to files
+ * other files in the worktree whose code calls it. The grep narrows to files
  * mentioning the name; each is re-parsed and its symbols' bodies checked. Merges
  * into the within-file impact already on the diff. Best-effort: any failure for
  * a candidate file is skipped, never throwing.
  */
 async function augmentCrossFileImpact(
   diff: StructuralDiff,
-  worktreePath: string,
-  readNew: BlobReader,
+  content: RepositoryRevisionContent,
+  newSide: SideReader,
 ): Promise<StructuralDiff> {
   // Cross-file names are noisier than within-file (no scope), so require ≥3 chars.
   const targets = collectImpactTargets(diff.files, 3)
@@ -120,7 +218,7 @@ async function augmentCrossFileImpact(
 
   const ownerFiles = new Set(targets.map((t) => t.ownerFile))
   const patterns = [...new Set(targets.map((t) => `${t.name}(`))]
-  const grepped = await gitGrepFiles(worktreePath, patterns)
+  const grepped = await content.grep(patterns)
   const candidates = grepped
     .filter((p) => !ownerFiles.has(p))
     .filter((p) => {
@@ -129,6 +227,7 @@ async function augmentCrossFileImpact(
     })
     .slice(0, MAX_CROSS_FILE_CANDIDATES)
   if (candidates.length === 0) return diff
+  await newSide.prefetch(candidates)
 
   // Merge by changedSymbolId so cross-file callers add to within-file ones.
   const impactById = new Map<string, ImpactItem>(
@@ -138,7 +237,7 @@ async function augmentCrossFileImpact(
   for (const path of candidates) {
     const resolution = resolveLang(path)
     if (resolution === null) continue
-    const text = await readNew(path)
+    const text = blobText(await newSide.read(path))
     if (text === null || text.length > MAX_ANALYZE_BYTES) continue
     let symbols
     try {
@@ -176,7 +275,7 @@ async function augmentCrossFileImpact(
  */
 async function augmentClassEdges(
   diff: StructuralDiff,
-  readNew: BlobReader,
+  newSide: SideReader,
 ): Promise<StructuralDiff> {
   // RFC-086 — anon "created by" edges come from the parentId chain (no file read);
   // emit them even when there are too few class nodes for the name-match pass.
@@ -190,8 +289,10 @@ async function augmentClassEdges(
   // reference. Replaces the C-family hand lexer for the production path; the
   // regex stripper inside computeClassEdges then no-ops on the masked text.
   const fileText = new Map<string, string>()
-  for (const file of new Set(nodes.map((n) => n.file))) {
-    const text = await readNew(file)
+  const files = [...new Set(nodes.map((n) => n.file))]
+  await newSide.prefetch(files)
+  for (const file of files) {
+    const text = blobText(await newSide.read(file))
     if (text === null || text.length > MAX_ANALYZE_BYTES) continue
     const r = resolveLang(file)
     fileText.set(

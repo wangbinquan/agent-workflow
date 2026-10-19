@@ -73,7 +73,11 @@ import { UploadPicker } from '@/components/launch/UploadPicker'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { useActor, usePermission } from '@/hooks/useActor'
 import { useUserLookup } from '@/hooks/useUserLookup'
-import { defaultRepoSource, resolveUrlRepoPath, validateRepoUrl } from '@/lib/launch-repo-source'
+import {
+  defaultRepoSource,
+  resolveUrlCachedRepoId,
+  validateRepoUrl,
+} from '@/lib/launch-repo-source'
 import { buildResourceOptionLabeler } from '@/lib/resource-option-label'
 import { stableStringify } from '@/lib/stable-stringify'
 import {
@@ -2568,9 +2572,9 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                     ) : (
                       <DynamicInput
                         def={def}
-                        repoPath={
+                        cachedRepoId={
                           space.kind === 'remote'
-                            ? resolveUrlRepoPath(
+                            ? resolveUrlCachedRepoId(
                                 space.repos[0] ?? { kind: 'url', repoUrl: '', ref: '' },
                                 readableCachedRepos,
                               )

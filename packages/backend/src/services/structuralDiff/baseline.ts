@@ -18,6 +18,26 @@ export const MAX_ANALYZE_BYTES = 1_500_000
 
 const NUL = '\u0000'
 
+/** RFC-370 §10 V16 — a side the content source answered with a reason instead
+ *  of text (it is larger than the read bound, or binary). It classifies the
+ *  file exactly as the text itself would have. */
+export interface UnreadableBlob {
+  readonly unreadable: 'oversized' | 'binary'
+}
+
+/** One side of a changed file: its text, null when the side does not exist, or
+ *  the reason the source gave instead of the text. */
+export type AnalysisBlob = string | null | UnreadableBlob
+
+export function isUnreadableBlob(blob: AnalysisBlob): blob is UnreadableBlob {
+  return typeof blob === 'object' && blob !== null
+}
+
+/** The text of a side, null when it is missing or unreadable. */
+export function blobText(blob: AnalysisBlob): string | null {
+  return typeof blob === 'string' ? blob : null
+}
+
 function looksBinary(text: string): boolean {
   // A NUL in the first 8KB is the cheap, reliable binary signal git itself uses.
   const slice = text.length > 8192 ? text.slice(0, 8192) : text
@@ -39,10 +59,10 @@ function anchorFor(change: SymbolChange, filePath: string) {
  */
 export async function analyzeFile(opts: {
   filePath: string
-  oldText: string | null
-  newText: string | null
+  oldText: AnalysisBlob
+  newText: AnalysisBlob
 }): Promise<FileStructuralDiff> {
-  const { filePath, oldText, newText } = opts
+  const { filePath } = opts
   const resolution = resolveLang(filePath)
   if (resolution === null) {
     return { filePath, lang: 'unknown', status: 'unsupported', changes: [], edges: [], impact: [] }
@@ -53,13 +73,22 @@ export async function analyzeFile(opts: {
     return { filePath, lang, status: 'unsupported', changes: [], edges: [], impact: [] }
   }
 
-  const present = [oldText, newText].filter((t): t is string => t !== null)
-  if (present.some(looksBinary)) {
+  const present = [opts.oldText, opts.newText].filter(
+    (t): t is string | UnreadableBlob => t !== null,
+  )
+  if (present.some((t) => (isUnreadableBlob(t) ? t.unreadable === 'binary' : looksBinary(t)))) {
     return { filePath, lang, status: 'skipped-binary', changes: [], edges: [], impact: [] }
   }
-  if (present.some((t) => t.length > MAX_ANALYZE_BYTES)) {
+  if (
+    present.some((t) =>
+      isUnreadableBlob(t) ? t.unreadable === 'oversized' : t.length > MAX_ANALYZE_BYTES,
+    )
+  ) {
     return { filePath, lang, status: 'skipped-oversized', changes: [], edges: [], impact: [] }
   }
+  // Every present side is text from here on.
+  const oldText = blobText(opts.oldText)
+  const newText = blobText(opts.newText)
 
   try {
     const oldRes =

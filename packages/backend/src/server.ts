@@ -288,8 +288,11 @@ import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution
 import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import {
+  composeRepositoryMirrors,
+  createFileWorkspaceContentEffects,
   createWorkspaceContentScope,
   type EmployeeCaseWorkspaceEffectsFactory,
+  type RepositoryMirrors,
   type WorkspaceContentEffectsFactory,
 } from '@/modules/source-control/composition'
 import {
@@ -445,6 +448,8 @@ import {
   createCapabilityTemplatePersistence,
 } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
+import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/composition/codeReviewArtifacts'
+import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
 import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import type {
   DevelopmentConfigOperations,
@@ -647,6 +652,7 @@ import { createCodeHostConnectionsService } from '@/services/codeHost/connection
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
+import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
 /**
@@ -1433,6 +1439,8 @@ export interface ProviderResourceCatalogRouteComposition {
     readonly store: Parameters<typeof mountRepoRoutes>[1]
     readonly cached: Parameters<typeof mountCachedRepoRoutes>[1]
     readonly groups: Parameters<typeof mountRepoGroupRoutes>[1]
+    /** RFC-370 §10 V17: the selected repository mirrors. */
+    readonly mirrors: RepositoryMirrors
   }>
   readonly workflows: Readonly<{
     readonly runtime: Parameters<typeof mountWorkflowRoutes>[1]
@@ -1637,18 +1645,25 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
     plugins: (app: Hono) => mountPluginRoutes(app, input.resourceCatalog.plugins),
     skills: (app: Hono) => mountSkillRoutes(app, input.resourceCatalog.skills),
     skillProvenance: (app: Hono) => mountSkillProvenanceRoutes(app, input.memory.skillProvenance),
-    repos: (app: Hono) => mountRepoRoutes(app, input.resourceCatalog.repositories.store),
+    repos: (app: Hono) =>
+      mountRepoRoutes(
+        app,
+        input.resourceCatalog.repositories.store,
+        input.resourceCatalog.repositories.mirrors,
+      ),
     cachedRepos: (app: Hono) =>
       mountCachedRepoRoutes(
         app,
         input.resourceCatalog.repositories.cached,
         input.resourceCatalog.repositories.store,
+        input.resourceCatalog.repositories.mirrors,
       ),
     repoGroups: (app: Hono) =>
       mountRepoGroupRoutes(
         app,
         input.resourceCatalog.repositories.groups,
         input.resourceCatalog.repositories.store,
+        input.resourceCatalog.repositories.mirrors,
       ),
     workflows: (app: Hono) =>
       mountWorkflowRoutes(
@@ -3074,6 +3089,12 @@ function composeSqliteApiRouteMounts(
   )
   const repositoryTransportModule = deps.repositoryTransport
   const repositoryWorkspaceStore = deps.repositoryWorkspaceStore
+  // RFC-370 §10 V17: SQLite is standalone only, so its mirrors are local clones.
+  const repositoryMirrors = composeRepositoryMirrors({
+    store: repositoryWorkspaceStore,
+    ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+    ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
+  })
   const codeHostConnections = deps.codeHostConnections
   const repositoryPublicationTransport = deps.repositoryPublicationTransport
   const schedulerDriver = deps.schedulerDriver
@@ -3235,6 +3256,11 @@ function composeSqliteApiRouteMounts(
     runtimeInventoryContent: composeTaskRuntimeInventoryContent(deps.runtimeInventoryContent),
     taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
     codeWorkspace,
+    // RFC-370 §10 V16: the SQLite root is standalone — native worktrees, appHome artifacts.
+    codeReview: {
+      content: composeLocalRepositoryRevisionContent(),
+      artifacts: composeLocalCodeReviewArtifacts(),
+    },
     repositoryWorkspace: repositoryWorkspaceStore,
     changeNarrative: {
       async requireMember(actor: Actor, taskId: string) {
@@ -3925,12 +3951,17 @@ function composeSqliteApiRouteMounts(
     store: repositoryWorkspaceStore,
     canViewTask: async (actor, task) =>
       (await collaborationTaskAccess.resolveTask(actor, task.id)).visible,
+    // RFC-370 §10 V15: the same content the task workspace queries read.
+    content: (workspaceRef) =>
+      deps.workspaceContent?.bind(workspaceRef) ?? createFileWorkspaceContentEffects(workspaceRef),
   } satisfies WorktreeFilesRouteDeps)
   const fusionOperations = composeSqliteFusionOperations({
     // RFC-353 T6/T7：跨 context 的 provider 装配一律在 bootstrap 完成（RFC-317 R2 只许经
     // exact public 交换合同，RFC-349 又不许 public 面点名 provider 适配器）。
     memoryMembership: composeSkillMemoryFusionParticipantFactory(),
-    skillVersionCommit: composeSkillVersionCommitParticipantFactory(),
+    skillVersionCommit: composeSkillVersionCommitParticipantFactory({
+      skillContent: deps.skillContent,
+    }),
     db: deps.db,
     appHome,
     memories: memoryCatalog,
@@ -3938,6 +3969,8 @@ function composeSqliteApiRouteMounts(
       db: deps.db,
       appHome,
       schedulerDriver,
+      // RFC-370 §10 V20: standalone engine workspaces under the app home.
+      workspaces: createFileFusionWorkspaceEffects({ appHome }),
       startDeps:
         taskLaunchConfiguration.selectedQueries === undefined
           ? buildStartTaskDeps(
@@ -4057,14 +4090,16 @@ function composeSqliteApiRouteMounts(
         zipImport: skillCatalog.zipImport,
         authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
       }),
-    repos: (app) => mountRepoRoutes(app, repositoryWorkspaceStore),
+    repos: (app) => mountRepoRoutes(app, repositoryWorkspaceStore, repositoryMirrors),
     cachedRepos: (app) =>
       mountCachedRepoRoutes(
         app,
         { configuration, appHome: deps.appHome, secretBox: deps.secretBox },
         repositoryWorkspaceStore,
+        repositoryMirrors,
       ),
-    repoGroups: (app) => mountRepoGroupRoutes(app, { configuration }, repositoryWorkspaceStore),
+    repoGroups: (app) =>
+      mountRepoGroupRoutes(app, { configuration }, repositoryWorkspaceStore, repositoryMirrors),
     workflows: (app) =>
       mountWorkflowRoutes(app, deps, {
         queries: workflowCatalog.queries,

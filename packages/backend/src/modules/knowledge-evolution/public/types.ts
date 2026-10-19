@@ -106,3 +106,33 @@ export interface FusionDecisionRecoveryReceipt {
   readonly rolledBack: number
   readonly rejectFailed: number
 }
+
+// ---------------------------------------------------------------------------
+// RFC-370 §10 V20 —— fusion 引擎任务的工作区载荷：种子树（技能某一版本的精确字节，可叠一层上轮
+// 提案作未提交改动）与收集回来的提案（相对基线的 diff、agent 的结果清单、编辑后的完整树）。
+// ---------------------------------------------------------------------------
+
+/** One file of a skill tree (SKILL.md included), as exact bytes. */
+export interface FusionTreeFile {
+  readonly path: string
+  readonly content: Uint8Array
+}
+
+export interface FusionWorkspaceSeed {
+  /** Committed as the workspace baseline: the diff the merger approves is measured from it. */
+  readonly base: readonly FusionTreeFile[]
+  /** Written over the baseline as uncommitted changes (a re-run refines its last attempt). */
+  readonly overlay: readonly FusionTreeFile[] | null
+}
+
+/** The agent's result manifest as the workspace held it. */
+export type FusionResultManifestRead =
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'not-a-file' }
+  | { readonly kind: 'file'; readonly text: string }
+
+export interface FusionEngineTaskResult {
+  readonly diff: string
+  readonly manifest: FusionResultManifestRead
+  readonly files: readonly FusionTreeFile[]
+}

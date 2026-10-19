@@ -277,6 +277,8 @@ const gitOperations = new Set([
   'employee-case',
   'development-workspace',
   'plugin-installation',
+  // RFC-370 §10 V17: repository picker reads and registration checks.
+  'repository-remote',
 ])
 export function createHostedGitCommandEnvironment(raw: string | undefined) {
   const environment = compileHostedGitEnvironment(raw)

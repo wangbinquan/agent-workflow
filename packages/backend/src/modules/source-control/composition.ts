@@ -82,6 +82,8 @@ export type {
  * selections (local files or a hosted volume), passed through daemon roots. */
 export type { RepositoryPreparationEffectFactory } from './application/ports/repositoryPreparationEffects'
 export type { ScratchWorkspaceEffects } from './application/ports/scratchWorkspaceEffects'
+// RFC-370 §10 V20: the standalone fusion engine workspace (`fusions/<id>/iter<n>/work`).
+export { createFileFusionWorkspaceEffects } from './infrastructure/local/fileFusionWorkspaceEffects'
 export type { WorkspaceMaintenanceFilesystem } from './application/ports/workspaceMaintenance'
 
 export interface RepositoryWorkspaceOperations {
@@ -369,10 +371,18 @@ export type {
 } from './application/ports/employeeCaseWorkspaceOperations'
 
 export { createWorkspaceContentScope } from './infrastructure/workspaceContent'
+/** The standalone workspace content (local files); hosted roots select their own. */
+export { createFileWorkspaceContentEffects } from './infrastructure/local/fileWorkspaceContentEffects'
 export type {
   WorkspaceContentEffects,
   WorkspaceContentEffectsFactory,
 } from './application/ports/workspaceContentEffects'
+/** RFC-370 §10 V17: registered repositories' reads, registration and refresh. */
+export { composeRepositoryMirrors } from './composition/repositoryMirrors'
+export type {
+  RepositoryMirrors,
+  RepositoryRemoteEffects,
+} from './application/ports/repositoryMirrors'
 // RFC-363 T4/T7 compatibility binding; launch adapters retire this path after durable cutover.
 export {
   type WorkspaceMaterializationDependencies,

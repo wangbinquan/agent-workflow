@@ -31,7 +31,11 @@ import {
 } from '@/services/tokenRedaction'
 import { parseBoolQuery } from '@/util/http'
 import { SyncWorkflowBodySchema, UpdateTaskMembersBodySchema } from '@agent-workflow/shared'
-import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
+import {
+  getTaskStructuralDiff,
+  type CodeReviewReads,
+  type ResolvedCodeReviewReads,
+} from '@/services/structuralDiff/service'
 import { getTaskFileContent } from '@/services/worktreeFileContent'
 import { getChangeNarrativeStatus, triggerChangeNarrative } from '@/services/changeNarrative'
 import { getCallTargets } from '@/services/structuralDiff/callGraph/expandService'
@@ -90,7 +94,9 @@ export interface TaskRouteDependencies {
   readonly taskExecutionReadModels: TaskExecutionReadModels
   readonly runtimeInventoryContent: TaskRuntimeInventoryContent
   readonly taskRecoveryOperations: TaskRecoveryOperations
-  readonly codeWorkspace: Parameters<typeof getTaskStructuralDiff>[0]
+  readonly codeWorkspace: CodeReviewReads['workspace']
+  /** RFC-370 §10 V16 — the selected revision content and artifact store. */
+  readonly codeReview: Pick<ResolvedCodeReviewReads, 'content' | 'artifacts'>
   readonly repositoryWorkspace: Parameters<typeof getTaskFileContent>[0]
   readonly changeNarrative: Pick<
     Parameters<typeof triggerChangeNarrative>[0],
@@ -120,10 +126,18 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
   if (deps.changeNarrative === undefined) {
     throw new Error('task-change-narrative-not-composed')
   }
+  if (deps.codeReview === undefined) {
+    throw new Error('task-code-review-not-composed')
+  }
   if (deps.runtimeInventoryContent === undefined)
     throw new Error('task-runtime-inventory-content-not-composed')
   const { operations, taskExecutionReadModels, taskRecoveryOperations } = deps
-  const { codeWorkspace, repositoryWorkspace, changeNarrative } = deps
+  const { codeWorkspace, repositoryWorkspace, changeNarrative, codeReview } = deps
+  const codeReviewInput: CodeReviewReads = {
+    workspace: codeWorkspace,
+    content: codeReview.content,
+    artifacts: codeReview.artifacts,
+  }
   registerRoute(
     app,
     {
@@ -482,7 +496,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       const nodeRunId = c.req.query('nodeRunId')
       const mode = c.req.query('mode') === 'deep' ? 'deep' : 'baseline'
       return c.json(
-        await getTaskStructuralDiff(codeWorkspace, c.req.param('id'), scope, nodeRunId, {
+        await getTaskStructuralDiff(codeReviewInput, c.req.param('id'), scope, nodeRunId, {
           mode,
           deepCfg:
             mode === 'deep' ? await resolveStructuralDeepConfig(deps.configuration) : undefined,
@@ -509,7 +523,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       if (scope !== 'task') {
         throw new ValidationError('narrative-scope-invalid', `only scope=task is supported`)
       }
-      const status = await getChangeNarrativeStatus(c.req.param('id'))
+      const status = await getChangeNarrativeStatus(c.req.param('id'), codeReview.artifacts)
       if (status === null) {
         throw new NotFoundError('narrative-not-found', 'no narrative generated for this task yet')
       }
@@ -541,7 +555,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       const narrativeCfg = await deps.configuration.read()
       const state = await triggerChangeNarrative(
         {
-          workspace: codeWorkspace,
+          workspace: codeReviewInput,
           ...changeNarrative,
           runtimeName: narrativeCfg.changeNarrativeRuntime ?? null,
           defaultRuntime: narrativeCfg.defaultRuntime ?? null,
@@ -583,7 +597,11 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       if (basePath !== undefined && basePath !== '') q.basePath = basePath
       const repo = c.req.query('repo')
       if (repo !== undefined && repo !== '') q.repo = repo
-      return c.json(await getTaskFileContent(repositoryWorkspace, c.req.param('id'), q))
+      return c.json(
+        await getTaskFileContent(repositoryWorkspace, c.req.param('id'), q, {
+          content: codeReview.content,
+        }),
+      )
     },
   )
 
@@ -607,7 +625,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       }
       const repo = c.req.query('repo')
       if (repo !== undefined && repo !== '') q.repo = repo
-      return c.json(await getTaskFileSymbols(codeWorkspace, c.req.param('id'), q))
+      return c.json(await getTaskFileSymbols(codeReviewInput, c.req.param('id'), q))
     },
   )
 
@@ -634,7 +652,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       }
       const repo = c.req.query('repo')
       if (repo !== undefined && repo !== '') q.repo = repo
-      return c.json(await getCodeIntel(codeWorkspace, c.req.param('id'), q))
+      return c.json(await getCodeIntel(codeReviewInput, c.req.param('id'), q))
     },
   )
 
@@ -663,6 +681,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
         taskExecutionReadModels.callGraphWorkspace,
         c.req.param('id'),
         methodRef,
+        codeReview.content,
       )
       return c.json({ targets })
     },

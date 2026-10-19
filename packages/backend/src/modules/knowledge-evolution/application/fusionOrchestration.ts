@@ -2,49 +2,44 @@
 //
 // A fusion runs as a normal platform TASK: a built-in workflow (aw-skill-fusion)
 // drives the built-in writer agent (aw-skill-merger) inside an EPHEMERAL git
-// repo seeded from the target skill's files/. The agent must clarify ≥1 round
-// (mandatory ask-back is automatic when the self-clarify channel is wired),
-// then edits the skill files in place and writes .agent-workflow/fusion/result.json. When
-// the engine task settles (lazy-reconciled on fetch + a periodic tick — no
-// scheduler surgery), the proposed change is the worktree diff vs its baseline
-// commit; the merger approves (atomic skill version bump + memory fuse) or
-// rejects-with-feedback (re-run seeded from the prior proposal).
+// workspace seeded from the target skill's version snapshot. The agent must
+// clarify ≥1 round (mandatory ask-back is automatic when the self-clarify
+// channel is wired), then edits the skill files in place and writes
+// .agent-workflow/fusion/result.json. When the engine task settles
+// (lazy-reconciled on fetch + a periodic tick — no scheduler surgery), the
+// proposed change is the workspace diff vs its baseline commit; the merger
+// approves (atomic skill version bump + memory fuse) or rejects-with-feedback
+// (re-run seeded from the prior proposal).
+//
+// RFC-370 §10 V20: this orchestration has no filesystem or Git of its own, so
+// it works on every deployment. Resource Catalog reads the seed (the strict
+// bytes of one version) and keeps each proposal as a candidate tree; Task
+// Execution prepares, collects and releases the engine task's workspace through
+// Source Control (a local directory standalone, the engine task's own volume
+// when hosted); the approval stages, commits and publishes the candidate as the
+// next version through Resource Catalog's journaled funnel.
 //
 // Module-cycle note: this is a top-level orchestrator. Nothing the platform
 // runtime imports imports fusion.ts back (only routes + the boot tick do), so
 // importing task/skill/skillVersion/memory here is acyclic.
 
-import {
-  cpSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-} from 'node:fs'
-import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { Fusion, FusionStatus, LaunchFusion } from '@agent-workflow/shared'
 import {
   FusionResultManifestSchema,
   PLATFORM_FUSION_MANIFEST,
-  PLATFORM_WORKSPACE_DIR,
   TERMINAL_TASK_STATUSES,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DirectTaskInitiator } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import {
-  bindWorkspaceExcludeParticipant,
-  ensureBoundPlatformWorkspaceDirectory,
-} from '@/modules/source-control/composition'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/catalog'
 import type {
   FusionDecisionRecoveryReceipt,
   FusionPersistencePatch,
   FusionPersistenceRecord,
   FusionProvenanceRepairReceipt,
+  FusionTreeFile,
 } from '@/modules/knowledge-evolution/public/types'
 import type {
   FusionEngineTaskOperations,
@@ -53,7 +48,6 @@ import type {
 } from '@/modules/knowledge-evolution/public/participants'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
 import { ConflictError, NotFoundError } from '@/util/errors'
-import { gitDiffSnapshot, runGit } from '@/util/git'
 
 // Built-in resource names live in the leaf systemResources module (single
 // source of truth shared with the list-hiding filter); re-exported here so
@@ -99,7 +93,6 @@ type FusionRow = FusionPersistenceRecord
 /** Deps createFusion needs to launch the engine task (mirrors the tasks route). */
 export interface FusionDeps {
   operations: FusionOperations
-  appHome: string
   /** TEST-ONLY runtime-neutral command-head override; production passes configPath. */
   binaryOverride?: readonly string[]
   /** Daemon config path — threaded to the scheduler's single resolution point. */
@@ -118,13 +111,8 @@ export interface FusionDeps {
   sessionRestartBudget?: number // RFC-313
   /** RFC-115 (Codex F3): global default runtime NAME, threaded into the fusion task. */
   defaultRuntime?: string
-  /** Deterministic seed-git failure injection for ownership regression tests. */
-  seedGit?: typeof runGit
-  /** Deterministic pre-handoff failure injection for ownership regression tests. */
-  beforeStartTaskHandoff?: (event: {
-    phase: 'create' | 'reject'
-    workDir: string
-  }) => void | Promise<void>
+  /** Deterministic pre-launch failure injection for ownership regression tests. */
+  beforeStartTaskHandoff?: (event: { phase: 'create' | 'reject' }) => void | Promise<void>
 }
 
 // ---------------------------------------------------------------------------
@@ -171,63 +159,52 @@ async function fusionWorkflowId(persistence: FusionPersistence): Promise<string>
 }
 
 // ---------------------------------------------------------------------------
-// Ephemeral worktree helpers
+// Proposal candidates and engine workspaces (RFC-370 §10 V20)
 // ---------------------------------------------------------------------------
 
-function fusionWorkDir(appHome: string, fusionId: string, iteration: number): string {
-  return join(appHome, 'fusions', fusionId, `iter${iteration}`, 'work')
+/** `fusions.proposed_worktree_path` names the proposal's Resource Catalog
+ * candidate. A fusion proposed before RFC-370 V20 holds its local work
+ * directory there instead; that proposal is collected again when decided. */
+const CANDIDATE_REFERENCE = /^skill-candidate:([0-9A-HJKMNP-TV-Z]{26})$/
+
+function candidateReference(candidateId: string): string {
+  return `skill-candidate:${candidateId}`
 }
 
-/** git init the work dir, commit a baseline, return the baseline (root) sha. */
-async function seedWorktree(
-  workDir: string,
-  appHome: string,
-  git: typeof runGit = runGit,
-): Promise<string> {
-  const checkedGit = async (stage: string, args: string[]) => {
-    const result = await git(workDir, args)
-    if (result.exitCode !== 0) {
-      const reason = result.stderr.trim() || result.stdout.trim() || `git exited ${result.exitCode}`
-      throw new Error(`failed to ${stage} fusion worktree: ${reason}`)
-    }
-    return result
-  }
-
-  await checkedGit('initialize', ['init', '-b', 'fusion'])
-  await bindWorkspaceExcludeParticipant({ worktreePath: workDir, appHome }).ensure()
-  ensureBoundPlatformWorkspaceDirectory({ worktreePath: workDir, kind: 'fusion' })
-  await checkedGit('stage baseline for', [
-    '-c',
-    'user.name=agent-workflow',
-    '-c',
-    'user.email=agent-workflow@local',
-    'add',
-    '-A',
-  ])
-  await checkedGit('commit baseline for', [
-    '-c',
-    'user.name=agent-workflow',
-    '-c',
-    'user.email=agent-workflow@local',
-    'commit',
-    '--allow-empty',
-    '-m',
-    'fusion baseline',
-  ])
-  const head = await checkedGit('resolve baseline for', ['rev-list', '--max-parents=0', 'HEAD'])
-  const baseCommit = head.stdout.trim()
-  if (baseCommit === '')
-    throw new Error('failed to resolve baseline for fusion worktree: empty SHA')
-  return baseCommit
+function candidateIdOf(reference: string | null): string | null {
+  return reference === null ? null : (CANDIDATE_REFERENCE.exec(reference)?.[1] ?? null)
 }
 
-/** Copy a worktree's skill content (everything except .git and the scaffold). */
-function copyWorktreeContent(src: string, dst: string): void {
-  mkdirSync(dst, { recursive: true })
-  for (const entry of readdirSync(src)) {
-    if (entry === '.git' || entry === PLATFORM_WORKSPACE_DIR) continue
-    cpSync(join(src, entry), join(dst, entry), { recursive: true })
+/** The proposal awaiting a decision as the exact skill tree; `null` once it is gone. */
+async function loadProposal(
+  operations: FusionOperations,
+  row: FusionRow,
+): Promise<readonly FusionTreeFile[] | null> {
+  if (row.proposedWorktreePath === null) return null
+  const candidateId = candidateIdOf(row.proposedWorktreePath)
+  if (candidateId !== null) {
+    return await operations.skillTrees.readCandidate({ skillId: row.skillId, candidateId })
   }
+  if (row.currentTaskId === null) return null
+  const legacy = await operations.tasks.collect(row.currentTaskId).catch(() => null)
+  return legacy?.files ?? null
+}
+
+/** Best effort: a proposal nothing can decide any more is dropped. */
+async function discardProposal(operations: FusionOperations, row: FusionRow | null): Promise<void> {
+  const candidateId = candidateIdOf(row?.proposedWorktreePath ?? null)
+  if (row === null || candidateId === null) return
+  await operations.skillTrees
+    .discardCandidate({ skillId: row.skillId, candidateId })
+    .catch(() => undefined)
+}
+
+/** Best effort: the engine task's workspace is needed only until its proposal is captured. */
+async function releaseEngineWorkspace(
+  tasks: FusionEngineTaskOperations,
+  taskId: string,
+): Promise<void> {
+  await tasks.release(taskId).catch(() => undefined)
 }
 
 // ---------------------------------------------------------------------------
@@ -240,7 +217,7 @@ export async function createFusion(
   scopeAuthority: MemoryScopeAuthority,
   launchInitiator: DirectTaskInitiator,
 ): Promise<Fusion> {
-  const { operations, appHome } = deps
+  const { operations } = deps
   const actor = scopeAuthority.actor
   await seedFusionResources(operations.persistence)
 
@@ -300,102 +277,82 @@ export async function createFusion(
     })
   }
 
-  // 3. Seed the ephemeral repo from the skill's current files/.
+  // 3. Seed tree: the token's immutable snapshot, read strictly (no live
+  //    fallback) with a generation check around the read.
   const fusionId = ulid()
-  const workDir = fusionWorkDir(appHome, fusionId, 1)
-  let ownershipTransferredToStartTask = false
-  try {
-    // Root creation through the startTask call is one ownership interval. Any
-    // seed/git/pre-call failure is ours to reclaim; once startTask has accepted
-    // the explicit cleanup lease, its outer launch guard owns success/failure.
-    mkdirSync(workDir, { recursive: true })
-    // RFC-170 T6 (Codex F10/F11): seed from the token's immutable snapshot with a
-    // generation (skillId) check; discard the worktree if it can't be seeded safely.
-    await seedFusionFromSnapshot(
-      operations.persistence,
-      appHome,
-      skill.id,
-      skill.contentVersion,
-      preconditionToken,
-      workDir,
-    )
-    const baseCommit = await seedWorktree(workDir, appHome, deps.seedGit)
+  const base = await seedFusionFromSnapshot(
+    operations,
+    skill.id,
+    skill.contentVersion,
+    preconditionToken,
+  )
 
-    // 4. Launch the engine task (preCreatedWorktree bypasses worktree creation;
-    //    repoPath = the ephemeral repo so the StartTask schema is satisfied).
-    const taskId = ulid()
-    await deps.beforeStartTaskHandoff?.({ phase: 'create', workDir })
-    const workflowId = await fusionWorkflowId(operations.persistence)
-    const taskLaunch = operations.tasks.launch({
-      taskId,
-      workflowId,
-      name: `fuse → ${skill.name}`,
-      inputs: { intent: input.intent, memories: serializeMemoriesForPrompt(loaded) },
-      ...(input.collaboratorUserIds ? { collaboratorUserIds: input.collaboratorUserIds } : {}),
-      ownerUserId: actor.user.id,
-      initiator: launchInitiator,
-      worktreePath: workDir,
-      baseCommit,
-      platformInputPaths: [MANIFEST_REL],
-      ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
-      ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-      ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
-      ...(deps.defaultPerNodeTimeoutMs !== undefined
-        ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
-        : {}),
-      ...(deps.sessionRestartBudget !== undefined
-        ? { sessionRestartBudget: deps.sessionRestartBudget }
-        : {}),
-      ...(deps.defaultNodeRetries !== undefined
-        ? { defaultNodeRetries: deps.defaultNodeRetries }
-        : {}),
-      ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
-    })
-    // Calling startTask transfers the explicit owned-root lease. It cleans on
-    // rejection and marks it committed on success, so our finally must not race
-    // or double-delete either outcome.
-    ownershipTransferredToStartTask = true
-    await taskLaunch
+  // 4. Launch the engine task. Task Execution prepares its workspace from the
+  //    seed and gives it back when the task is never admitted.
+  const taskId = ulid()
+  await deps.beforeStartTaskHandoff?.({ phase: 'create' })
+  const workflowId = await fusionWorkflowId(operations.persistence)
+  await operations.tasks.launch({
+    taskId,
+    fusionId,
+    iteration: 1,
+    seed: { base, overlay: null },
+    workflowId,
+    name: `fuse → ${skill.name}`,
+    inputs: { intent: input.intent, memories: serializeMemoriesForPrompt(loaded) },
+    ...(input.collaboratorUserIds ? { collaboratorUserIds: input.collaboratorUserIds } : {}),
+    ownerUserId: actor.user.id,
+    initiator: launchInitiator,
+    platformInputPaths: [MANIFEST_REL],
+    ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
+    ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
+    ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
+    ...(deps.defaultPerNodeTimeoutMs !== undefined
+      ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
+      : {}),
+    ...(deps.sessionRestartBudget !== undefined
+      ? { sessionRestartBudget: deps.sessionRestartBudget }
+      : {}),
+    ...(deps.defaultNodeRetries !== undefined
+      ? { defaultNodeRetries: deps.defaultNodeRetries }
+      : {}),
+    ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
+  })
 
-    // 5. Persist the fusion record with the token captured BEFORE seeding (above).
-    //    approve / re-run CAS it against the live token so a delete→recreate rebuild
-    //    (same name, new skillId — baseSkillVersion alone can't see it) or a
-    //    concurrent skill edit is 409-rejected, not silently applied onto the wrong
-    //    content.
-    const now = Date.now()
-    await operations.persistence.create({
-      id: fusionId,
-      skillId: skill.id,
-      skillName: skill.name,
-      baseSkillVersion: skill.contentVersion,
-      preconditionToken,
-      memoryIdsJson: JSON.stringify(input.memoryIds),
-      intent: input.intent,
-      status: 'running',
-      iteration: 1,
-      currentTaskId: taskId,
-      proposedWorktreePath: null,
-      proposedDiff: null,
-      incorporatedMemoryIdsJson: null,
-      skippedJson: null,
-      changelog: null,
-      appliedSkillVersion: null,
-      ownerUserId: actor.user.id,
-      createdAt: now,
-      decidedByUserId: null,
-      decidedAt: null,
-      decisionReason: null,
-      error: null,
-    })
+  // 5. Persist the fusion record with the token captured BEFORE seeding (above).
+  //    approve / re-run CAS it against the live token so a delete→recreate rebuild
+  //    (same name, new skillId — baseSkillVersion alone can't see it) or a
+  //    concurrent skill edit is 409-rejected, not silently applied onto the wrong
+  //    content.
+  const now = Date.now()
+  await operations.persistence.create({
+    id: fusionId,
+    skillId: skill.id,
+    skillName: skill.name,
+    baseSkillVersion: skill.contentVersion,
+    preconditionToken,
+    memoryIdsJson: JSON.stringify(input.memoryIds),
+    intent: input.intent,
+    status: 'running',
+    iteration: 1,
+    currentTaskId: taskId,
+    proposedWorktreePath: null,
+    proposedDiff: null,
+    incorporatedMemoryIdsJson: null,
+    skippedJson: null,
+    changelog: null,
+    appliedSkillVersion: null,
+    ownerUserId: actor.user.id,
+    createdAt: now,
+    decidedByUserId: null,
+    decidedAt: null,
+    decisionReason: null,
+    error: null,
+  })
 
-    const fresh = await operations.persistence.load(fusionId)
-    if (!fresh) throw new Error('fusion row disappeared right after insert')
-    return rowToFusion(fresh)
-  } finally {
-    if (!ownershipTransferredToStartTask) {
-      rmSync(workDir, { recursive: true, force: true })
-    }
-  }
+  const fresh = await operations.persistence.load(fusionId)
+  if (!fresh) throw new Error('fusion row disappeared right after insert')
+  return rowToFusion(fresh)
 }
 
 // ---------------------------------------------------------------------------
@@ -442,63 +399,80 @@ export async function reconcileFusion(deps: FusionDeps, id: string): Promise<voi
         extra: { error: task.errorSummary ?? `engine task ${task.status}` },
       },
     )
+    await releaseEngineWorkspace(operations.tasks, taskId)
     return
   }
 
-  // Done — compute the proposed diff vs baseline + read the agent's manifest.
-  const workDir = task.worktreePath
+  // Done — collect the proposal (diff vs the explicit baseline + the agent's
+  // manifest + the edited tree) and keep the tree as a Resource Catalog
+  // candidate: the workspace is given back once this reconcile has settled.
   try {
-    const rootSha = (await runGit(workDir, ['rev-list', '--max-parents=0', 'HEAD'])).stdout.trim()
-    const diff = await gitDiffSnapshot(workDir, rootSha)
-    ensureBoundPlatformWorkspaceDirectory({ worktreePath: workDir, kind: 'fusion' })
-    const manifestPath = join(workDir, MANIFEST_REL)
-    if (!existsSync(manifestPath)) {
+    const collected = await operations.tasks.collect(taskId)
+    if (collected === null) {
+      await reconcileFail('engine task vanished')
+    } else if (collected.manifest.kind === 'missing') {
       await reconcileFail('agent did not write the fusion result manifest')
-      return
-    }
-    const manifestStat = lstatSync(manifestPath)
-    if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) {
+    } else if (collected.manifest.kind === 'not-a-file') {
       await reconcileFail('fusion result manifest is not a plain file')
-      return
+    } else {
+      const parsed = FusionResultManifestSchema.safeParse(JSON.parse(collected.manifest.text))
+      const selected = new Set(jsonArray(row.memoryIdsJson))
+      // incorporated ⊆ selected (drop strays); skipped ∩ incorporated = ∅.
+      const incorporated = parsed.success
+        ? parsed.data.incorporatedMemoryIds.filter((m) => selected.has(m))
+        : []
+      const incSet = new Set(incorporated)
+      const skipped = parsed.success
+        ? parsed.data.skipped.filter((s) => selected.has(s.memoryId) && !incSet.has(s.memoryId))
+        : []
+      // Launch contract (D12): every selected memory must be accounted for exactly
+      // once. If the agent's manifest leaves any selected id in neither bucket,
+      // fail loudly rather than silently leave it approved-but-unexplained.
+      const accounted = new Set([...incSet, ...skipped.map((s) => s.memoryId)])
+      const unaccounted = [...selected].filter((m) => !accounted.has(m))
+      if (!parsed.success) {
+        await reconcileFail('fusion result manifest is invalid')
+      } else if (unaccounted.length > 0) {
+        await reconcileFail(
+          `agent manifest omitted ${unaccounted.length} selected memory id(s): ${unaccounted.join(', ')}`,
+        )
+      } else if (!collected.files.some((file) => file.path === 'SKILL.md')) {
+        await reconcileFail('the proposed skill tree has no SKILL.md')
+      } else {
+        const candidateId = ulid()
+        await operations.skillTrees.captureCandidate({
+          skillId: row.skillId,
+          candidateId,
+          files: collected.files,
+        })
+        const proposed = await casFusionStatus(
+          operations.persistence,
+          id,
+          ['running'],
+          'awaiting_approval',
+          {
+            expectCurrentTaskId: taskId,
+            extra: {
+              proposedWorktreePath: candidateReference(candidateId),
+              proposedDiff: collected.diff,
+              incorporatedMemoryIdsJson: JSON.stringify(incorporated),
+              skippedJson: JSON.stringify(skipped),
+              changelog: parsed.data.changelog,
+            },
+          },
+        )
+        // Lost to a concurrent decision: nothing will ever read this candidate.
+        if (!proposed) {
+          await operations.skillTrees
+            .discardCandidate({ skillId: row.skillId, candidateId })
+            .catch(() => undefined)
+        }
+      }
     }
-    const parsed = FusionResultManifestSchema.safeParse(
-      JSON.parse(readFileSync(manifestPath, 'utf-8')),
-    )
-    if (!parsed.success) {
-      await reconcileFail('fusion result manifest is invalid')
-      return
-    }
-    const selected = new Set(jsonArray(row.memoryIdsJson))
-    // incorporated ⊆ selected (drop strays); skipped ∩ incorporated = ∅.
-    const incorporated = parsed.data.incorporatedMemoryIds.filter((m) => selected.has(m))
-    const incSet = new Set(incorporated)
-    const skipped = parsed.data.skipped.filter(
-      (s) => selected.has(s.memoryId) && !incSet.has(s.memoryId),
-    )
-    // Launch contract (D12): every selected memory must be accounted for exactly
-    // once. If the agent's manifest leaves any selected id in neither bucket,
-    // fail loudly rather than silently leave it approved-but-unexplained.
-    const accounted = new Set([...incSet, ...skipped.map((s) => s.memoryId)])
-    const unaccounted = [...selected].filter((m) => !accounted.has(m))
-    if (unaccounted.length > 0) {
-      await reconcileFail(
-        `agent manifest omitted ${unaccounted.length} selected memory id(s): ${unaccounted.join(', ')}`,
-      )
-      return
-    }
-    await casFusionStatus(operations.persistence, id, ['running'], 'awaiting_approval', {
-      expectCurrentTaskId: taskId,
-      extra: {
-        proposedWorktreePath: workDir,
-        proposedDiff: diff,
-        incorporatedMemoryIdsJson: JSON.stringify(incorporated),
-        skippedJson: JSON.stringify(skipped),
-        changelog: parsed.data.changelog,
-      },
-    })
   } catch (err) {
     await reconcileFail(err instanceof Error ? err.message : String(err))
   }
+  await releaseEngineWorkspace(operations.tasks, taskId)
 }
 
 /**
@@ -693,24 +667,21 @@ async function casFusionStatus(
 }
 
 /**
- * RFC-170 T6 (Codex re-review F10/F11) — seed `workDir` from the token's IMMUTABLE
- * version snapshot (`versions/v<contentVersion>/files`), then verify the skill at
- * this name is STILL the token's exact generation. The snapshot PATH is keyed by
- * (name, version), so a same-name delete→recreate makes it resolve to a DIFFERENT
- * skill's content; the skillId in the token is the discriminator. Verifying the
- * live identity BOTH before and after the copy (the task hasn't started yet) means
- * no wrong-generation bytes ever reach a running fusion task. FAIL-CLOSED: a
- * missing snapshot or a generation mismatch throws (no live fallback, no empty
- * seed). The caller discards `workDir` on throw.
+ * RFC-170 T6 (Codex re-review F10/F11) — the seed is the token's IMMUTABLE version
+ * snapshot, then the skill is verified to STILL be the token's exact generation.
+ * Verifying the live identity BOTH before and after the read (the task hasn't
+ * started yet) means no wrong-generation bytes ever reach a running fusion task.
+ * FAIL-CLOSED: a missing snapshot or a generation mismatch throws (no live
+ * fallback, no empty seed). RFC-370 §10 V20: the bytes come from the selected
+ * skill storage through Resource Catalog, so a hosted (database) skill seeds too.
  */
 async function seedFusionFromSnapshot(
-  persistence: FusionPersistence,
-  appHome: string,
+  operations: FusionOperations,
   skillId: string,
   contentVersion: number,
   token: string | null,
-  workDir: string,
-): Promise<void> {
+): Promise<readonly FusionTreeFile[]> {
+  const persistence = operations.persistence
   if (token === null || skillId === QUARANTINED_FUSION_SKILL_ID) {
     throw new ConflictError('fusion-precondition-stale', 'invalid precondition token; re-initiate')
   }
@@ -718,29 +689,29 @@ async function seedFusionFromSnapshot(
     identity: Awaited<ReturnType<FusionPersistence['loadSkillIdentity']>>,
   ): boolean =>
     identity !== null && identity.id === skillId && identity.contentVersion === contentVersion
-  const seedDir = join(appHome, 'skills', skillId, 'versions', `v${contentVersion}`, 'files')
-  if (!existsSync(seedDir)) {
+  // Pre-read: catch a delete→recreate that already repointed this skill.
+  if (!matches(await persistence.loadSkillIdentity(skillId))) {
+    throw new ConflictError('fusion-precondition-stale', 'the target skill changed; re-initiate')
+  }
+  const seed = await operations.skillTrees.readVersionTree({ skillId, version: contentVersion })
+  if (seed === null) {
     throw new ConflictError(
       'fusion-skill-unversioned',
       `the target skill has no v${contentVersion} snapshot to fuse from; re-save it first`,
     )
   }
-  // Pre-copy: catch a delete→recreate that already repointed this name+version.
-  if (!matches(await persistence.loadSkillIdentity(skillId))) {
-    throw new ConflictError('fusion-precondition-stale', 'the target skill changed; re-initiate')
-  }
-  copyWorktreeContent(seedDir, workDir)
-  // Post-copy: catch a recreate that raced the copy (no task has started).
+  // Post-read: catch a recreate that raced the read (no task has started).
   if (!matches(await persistence.loadSkillIdentity(skillId))) {
     throw new ConflictError(
       'fusion-precondition-stale',
       'the target skill changed during setup; re-initiate',
     )
   }
+  return seed
 }
 
 export async function approveFusion(deps: FusionDeps, id: string, actor: Actor): Promise<Fusion> {
-  const { operations, appHome } = deps
+  const { operations } = deps
   const persistence = operations.persistence
   await reconcileFusion(deps, id)
   const row = await persistence.load(id)
@@ -757,8 +728,10 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
       `fusion is '${row.status}', not awaiting_approval`,
     )
   }
-  if (row.proposedWorktreePath === null || !existsSync(row.proposedWorktreePath)) {
-    throw new ConflictError('fusion-proposal-missing', 'the proposed change is no longer on disk')
+  // RFC-370 §10 V20: the proposal is the candidate tree captured at reconcile.
+  const proposal = await loadProposal(operations, row)
+  if (proposal === null) {
+    throw new ConflictError('fusion-proposal-missing', 'the proposed change is no longer available')
   }
   // RFC-170 T6 (Codex F4): re-check write access to the CURRENT skill. A managed
   // ACL transfer does not change the token, so without this the fusion owner could
@@ -773,14 +746,12 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
     throw new ConflictError('fusion-not-awaiting', 'fusion is no longer awaiting approval')
   }
   const incorporated = jsonArray(row.incorporatedMemoryIdsJson)
-  const proposedDir = row.proposedWorktreePath
   const now = Date.now()
   try {
     const version = await persistence.apply({
       fusionId: row.id,
       actor,
-      appHome,
-      proposedWorktreePath: proposedDir,
+      proposal,
       incorporatedMemoryIds: incorporated,
       summary: row.changelog ?? `Fused ${incorporated.length} memories`,
       now,
@@ -807,8 +778,12 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
     await casFusionStatus(persistence, id, ['applying'], 'failed', {
       extra: { error: msg, decidedAt: Date.now() },
     })
+    // A failed fusion is never decided again: its candidate goes.
+    await discardProposal(operations, row)
     throw err instanceof Error ? err : new Error(msg)
   }
+  // The proposal is now the skill's current version.
+  await discardProposal(operations, row)
   const fresh = await persistence.load(id)
   if (!fresh) throw new Error(`fusion '${id}' disappeared after apply`)
   return rowToFusion(fresh)
@@ -825,7 +800,7 @@ export async function rejectFusion(
   actor: Actor,
   launchInitiator: DirectTaskInitiator,
 ): Promise<Fusion> {
-  const { operations, appHome } = deps
+  const { operations } = deps
   const persistence = operations.persistence
   await reconcileFusion(deps, id)
   const row = await persistence.load(id)
@@ -875,107 +850,91 @@ export async function rejectFusion(
     }
 
     const nextIter = row.iteration + 1
-    const workDir = fusionWorkDir(appHome, row.id, nextIter)
-    let ownershipTransferredToStartTask = false
-    try {
-      mkdirSync(workDir, { recursive: true })
-      // Baseline commit = the CURRENT skill files, so the approval diff is always
-      // current-skill → proposed. apply() copies the whole worktree over the skill
-      // under OCC, so the displayed diff must be measured from the skill — NOT the
-      // per-iteration prior proposal (Codex P2: otherwise a re-run hides the
-      // earlier iteration's changes from the diff the merger approves).
-      // RFC-170 T6 (Codex F10/F11): re-run baseline = the token's immutable snapshot,
-      // with a generation (skillId) check (the claim above verified the token, but
-      // re-verify around the copy for a same-name recreate). A throw is caught below.
-      await seedFusionFromSnapshot(
-        persistence,
-        appHome,
-        row.skillId,
-        row.baseSkillVersion,
-        row.preconditionToken,
-        workDir,
+    // Baseline = the CURRENT skill version, so the approval diff is always
+    // current-skill → proposed. The approval replaces the whole tree under OCC,
+    // so the displayed diff must be measured from the skill — NOT the
+    // per-iteration prior proposal (Codex P2: otherwise a re-run hides the
+    // earlier iteration's changes from the diff the merger approves).
+    // RFC-170 T6 (Codex F10/F11): re-run baseline = the token's immutable snapshot,
+    // with a generation (skillId) check (the claim above verified the token, but
+    // re-verify around the read for a same-name recreate). A throw is caught below.
+    const base = await seedFusionFromSnapshot(
+      operations,
+      row.skillId,
+      row.baseSkillVersion,
+      row.preconditionToken,
+    )
+    // Then the PRIOR proposal goes over it as uncommitted working changes, so the
+    // agent refines its last attempt while the diff vs baseline stays full.
+    const overlay = await loadProposal(operations, row)
+
+    const taskId = ulid()
+    const intentWithFeedback = `${row.intent}\n\n## Merger feedback on the previous attempt (revise accordingly)\n${feedback}`
+    await deps.beforeStartTaskHandoff?.({ phase: 'reject' })
+    const workflowId = await fusionWorkflowId(persistence)
+    await operations.tasks.launch({
+      taskId,
+      fusionId: row.id,
+      iteration: nextIter,
+      seed: { base, overlay },
+      workflowId,
+      name: `fuse → ${row.skillName} (iter ${nextIter})`,
+      inputs: { intent: intentWithFeedback, memories: serializeMemoriesForPrompt(loaded) },
+      ownerUserId: actor.user.id,
+      initiator: launchInitiator,
+      platformInputPaths: [MANIFEST_REL],
+      ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
+      ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
+      ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
+      ...(deps.defaultPerNodeTimeoutMs !== undefined
+        ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
+        : {}),
+      ...(deps.sessionRestartBudget !== undefined
+        ? { sessionRestartBudget: deps.sessionRestartBudget }
+        : {}),
+      ...(deps.defaultNodeRetries !== undefined
+        ? { defaultNodeRetries: deps.defaultNodeRetries }
+        : {}),
+      ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
+    })
+
+    // RFC-170 T6 (Codex F7): attach the new task via CAS on (status='running',
+    // currentTaskId=null) — the intermediate state this reject claimed. A cancel
+    // that raced during seeding/launch flips status to 'canceled', so this CAS
+    // fails; we then cancel the speculative task we just started rather than
+    // orphaning it on a canceled fusion.
+    const attached = await casFusionStatus(persistence, id, ['running'], 'running', {
+      expectCurrentTaskId: null,
+      extra: {
+        iteration: nextIter,
+        currentTaskId: taskId,
+        proposedWorktreePath: null,
+        proposedDiff: null,
+        incorporatedMemoryIdsJson: null,
+        skippedJson: null,
+        changelog: null,
+        decisionReason: feedback,
+        decidedByUserId: actor.user.id,
+        decidedAt: Date.now(),
+      },
+    })
+    if (!attached) {
+      // RFC-170 T6 (Codex re-review F12): the speculative task may already be
+      // parked in its mandatory clarify round — cancelFusionEngineTask covers
+      // that (plain cancelTask would refuse it and orphan the worker/workspace).
+      await cancelFusionEngineTask(operations.tasks, taskId)
+      await releaseEngineWorkspace(operations.tasks, taskId)
+      throw new ConflictError(
+        'fusion-not-awaiting',
+        'the fusion was canceled during the re-run; the speculative task was rolled back',
       )
-      const baseCommit = await seedWorktree(workDir, appHome, deps.seedGit)
-      // Then overlay the PRIOR proposal as uncommitted working changes, so the
-      // agent refines its last attempt while the diff vs baseline stays full.
-      if (row.proposedWorktreePath !== null && existsSync(row.proposedWorktreePath)) {
-        for (const e of readdirSync(workDir)) {
-          if (e === '.git') continue
-          rmSync(join(workDir, e), { recursive: true, force: true })
-        }
-        copyWorktreeContent(row.proposedWorktreePath, workDir)
-      }
-
-      const taskId = ulid()
-      const intentWithFeedback = `${row.intent}\n\n## Merger feedback on the previous attempt (revise accordingly)\n${feedback}`
-      await deps.beforeStartTaskHandoff?.({ phase: 'reject', workDir })
-      const workflowId = await fusionWorkflowId(persistence)
-      const taskLaunch = operations.tasks.launch({
-        taskId,
-        workflowId,
-        name: `fuse → ${row.skillName} (iter ${nextIter})`,
-        inputs: { intent: intentWithFeedback, memories: serializeMemoriesForPrompt(loaded) },
-        ownerUserId: actor.user.id,
-        initiator: launchInitiator,
-        worktreePath: workDir,
-        baseCommit,
-        platformInputPaths: [MANIFEST_REL],
-        ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
-        ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-        ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
-        ...(deps.defaultPerNodeTimeoutMs !== undefined
-          ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
-          : {}),
-        ...(deps.sessionRestartBudget !== undefined
-          ? { sessionRestartBudget: deps.sessionRestartBudget }
-          : {}),
-        ...(deps.defaultNodeRetries !== undefined
-          ? { defaultNodeRetries: deps.defaultNodeRetries }
-          : {}),
-        ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
-      })
-      ownershipTransferredToStartTask = true
-      await taskLaunch
-
-      // RFC-170 T6 (Codex F7): attach the new task via CAS on (status='running',
-      // currentTaskId=null) — the intermediate state this reject claimed. A cancel
-      // that raced during seeding/startTask flips status to 'canceled', so this CAS
-      // fails; we then cancel the speculative task we just started rather than
-      // orphaning it on a canceled fusion.
-      const attached = await casFusionStatus(persistence, id, ['running'], 'running', {
-        expectCurrentTaskId: null,
-        extra: {
-          iteration: nextIter,
-          currentTaskId: taskId,
-          proposedWorktreePath: null,
-          proposedDiff: null,
-          incorporatedMemoryIdsJson: null,
-          skippedJson: null,
-          changelog: null,
-          decisionReason: feedback,
-          decidedByUserId: actor.user.id,
-          decidedAt: Date.now(),
-        },
-      })
-      if (!attached) {
-        // RFC-170 T6 (Codex re-review F12): the speculative task may already be
-        // parked in its mandatory clarify round — cancelFusionEngineTask covers
-        // that (plain cancelTask would refuse it and orphan the worker/workspace).
-        await cancelFusionEngineTask(operations.tasks, taskId)
-        throw new ConflictError(
-          'fusion-not-awaiting',
-          'the fusion was canceled during the re-run; the speculative task was rolled back',
-        )
-      }
-
-      const fresh = await persistence.load(id)
-      if (!fresh) throw new Error(`fusion '${id}' disappeared after re-run`)
-      return rowToFusion(fresh)
-    } finally {
-      if (!ownershipTransferredToStartTask) {
-        rmSync(workDir, { recursive: true, force: true })
-      }
     }
+    // The prior proposal now lives in the new workspace as its overlay.
+    await discardProposal(operations, row)
+
+    const fresh = await persistence.load(id)
+    if (!fresh) throw new Error(`fusion '${id}' disappeared after re-run`)
+    return rowToFusion(fresh)
   } catch (err) {
     // We own the 'running' claim; a post-claim failure must not leave the fusion
     // stuck running with no task — fail it (CAS from 'running', so we don't
@@ -1049,7 +1008,10 @@ export async function cancelFusion(deps: FusionDeps, id: string, actor: Actor): 
   }
   // Cancel the EXACT task current at cancel-commit time (covers parked states).
   if (claim.taskId !== null) await cancelFusionEngineTask(operations.tasks, claim.taskId)
+  // RFC-370 §10 V20: a canceled fusion keeps neither its workspace nor its candidate.
+  if (claim.taskId !== null) await releaseEngineWorkspace(operations.tasks, claim.taskId)
   const fresh = await operations.persistence.load(id)
   if (!fresh) throw new Error(`fusion '${id}' disappeared after cancel`)
+  await discardProposal(operations, fresh)
   return rowToFusion(fresh)
 }

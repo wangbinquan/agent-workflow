@@ -1,99 +1,50 @@
-import type { WorkflowNode } from '@agent-workflow/shared'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve, sep } from 'node:path'
-import { ulid } from 'ulid'
-import { z } from 'zod'
-import { resolveScriptInterpreter, runScriptProcess } from '@/services/scriptRun'
-import { sha256Hex } from '@/util/hash'
-import type { ScriptFixtureRunner } from '../../application/ports/scriptFixture'
-const parameterValuesSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
-function resolveArtifact(appHome: string, artifactRef: string): string | null {
-  const root = resolve(appHome)
-  const absolute = resolve(root, artifactRef)
-  if (absolute !== root && !absolute.startsWith(`${root}${sep}`)) return null
-  return absolute
-}
+import type {
+  ProgramToolSource,
+  ScriptFixtureProcess,
+  ScriptFixtureRunner,
+} from '../../application/ports/scriptFixture'
+import { createFileProgramToolSource } from '../local/fileProgramToolSource'
+import { createLocalScriptFixtureProcess } from '../local/localScriptFixtureProcess'
 
+/** The fixture's own run budget (the contract check is a single bounded run). */
+const FIXTURE_TIMEOUT_MS = 30_000
+
+/**
+ * RFC-370 §10 V19: the program comes from the program store the deployment
+ * selected and runs wherever the deployment runs scripts. A standalone daemon
+ * defaults to the application home and this host's interpreters; a hosted one
+ * reads platform objects and runs the fixture in the task image.
+ */
 export function createScriptFixtureRunner(input: {
-  readonly appHome: string
+  readonly appHome?: string
+  readonly programs?: ProgramToolSource
+  readonly process?: ScriptFixtureProcess
   readonly scriptInterpreterOverrides?: Partial<Record<'bash' | 'node' | 'python', string>>
 }): ScriptFixtureRunner {
+  const programs =
+    input.programs ??
+    (input.appHome === undefined ? undefined : createFileProgramToolSource(input.appHome))
+  if (programs === undefined)
+    throw new Error('script fixture runner requires a program source or the application home')
+  const process =
+    input.process ??
+    createLocalScriptFixtureProcess(
+      input.scriptInterpreterOverrides === undefined
+        ? {}
+        : { scriptInterpreterOverrides: input.scriptInterpreterOverrides },
+    )
   return {
     async run({ implementation, inputJson }) {
-      const artifactPath = resolveArtifact(input.appHome, implementation.executableArtifactRef)
-      if (artifactPath === null) {
-        return {
-          kind: 'failed',
-          checks: [
-            {
-              code: 'program-artifact-contained',
-              ok: false,
-              detail: implementation.executableArtifactRef,
-            },
-          ],
-        }
-      }
-      let source: string
-      try {
-        source = readFileSync(artifactPath, 'utf8')
-      } catch (error) {
-        return {
-          kind: 'failed',
-          checks: [
-            {
-              code: 'program-artifact-readable',
-              ok: false,
-              detail: error instanceof Error ? error.message : String(error),
-            },
-          ],
-        }
-      }
-      if (sha256Hex(source) !== implementation.executableDigest) {
-        return {
-          kind: 'failed',
-          checks: [
-            { code: 'program-artifact-digest', ok: false, detail: 'artifact digest mismatch' },
-          ],
-        }
-      }
-      let parameterValuesJson = '{}'
-      if (implementation.parameterValuesRef !== null) {
-        const parameterPath = resolveArtifact(input.appHome, implementation.parameterValuesRef)
-        if (parameterPath === null) {
-          return {
-            kind: 'failed',
-            checks: [
-              {
-                code: 'program-parameter-artifact-contained',
-                ok: false,
-                detail: implementation.parameterValuesRef,
-              },
-            ],
-          }
-        }
-        try {
-          parameterValuesJson = JSON.stringify(
-            parameterValuesSchema.parse(JSON.parse(readFileSync(parameterPath, 'utf8')) as unknown),
-          )
-        } catch (error) {
-          return {
-            kind: 'failed',
-            checks: [
-              {
-                code: 'program-parameter-artifact-readable',
-                ok: false,
-                detail: error instanceof Error ? error.message : String(error),
-              },
-            ],
-          }
-        }
-      }
-      const interpreter = await resolveScriptInterpreter(
-        implementation.runtimeKind,
-        input.scriptInterpreterOverrides ?? {},
-      )
-      if (interpreter === null) {
+      const program = await programs.read(implementation)
+      if (program.kind === 'failed') return { kind: 'failed', checks: [program.check] }
+      const outcome = await process.run({
+        runtimeKind: implementation.runtimeKind,
+        source: program.source,
+        parameterValuesJson: program.parameterValuesJson,
+        inputJson,
+        timeoutMs: FIXTURE_TIMEOUT_MS,
+      })
+      if (outcome.kind === 'interpreter-unavailable')
         return {
           kind: 'failed',
           checks: [
@@ -104,56 +55,18 @@ export function createScriptFixtureRunner(input: {
             },
           ],
         }
-      }
-
-      const root = mkdtempSync(join(tmpdir(), 'agent-workflow-execution-contract-'))
-      const runDir = join(root, 'run')
-      const worktreePath = join(root, 'worktree')
-      const node = {
-        id: 'execution-contract-fixture',
-        kind: 'script',
-        language: implementation.runtimeKind,
-        script: source,
-        env: {
-          DIGITAL_EMPLOYEE_TOOL_PARAMETERS_JSON: parameterValuesJson,
-        },
-      } as WorkflowNode
-      try {
-        mkdirSync(runDir, { recursive: true })
-        mkdirSync(worktreePath, { recursive: true })
-        const outcome = await runScriptProcess({
-          node,
-          inputs: { 'contract-input': inputJson },
-          runDir,
-          worktreePath,
-          repos: [{ name: 'fixture', path: worktreePath }],
-          taskId: 'execution-contract-fixture',
-          nodeId: 'execution-contract-fixture',
-          nodeRunId: ulid(),
-          iteration: 0,
-          retryIndex: 0,
-          shardKey: null,
-          envelopeNonce: ulid(),
-          interpreter,
-          depsEnv: null,
-          timeoutMs: 30_000,
-        })
-        if (outcome.failureCode !== null) {
-          return {
-            kind: 'failed',
-            checks: [
-              {
-                code: 'program-fixture-execution',
-                ok: false,
-                detail: `${outcome.failureCode}: ${outcome.result.stderrTail.slice(-1_000)}`,
-              },
-            ],
-          }
+      if (outcome.kind === 'failed')
+        return {
+          kind: 'failed',
+          checks: [
+            {
+              code: 'program-fixture-execution',
+              ok: false,
+              detail: `${outcome.failureCode}: ${outcome.stderrTail.slice(-1_000)}`,
+            },
+          ],
         }
-        return { kind: 'completed', rawStdout: outcome.result.rawStdout }
-      } finally {
-        rmSync(root, { recursive: true, force: true })
-      }
+      return { kind: 'completed', rawStdout: outcome.rawStdout }
     },
   }
 }

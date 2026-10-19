@@ -8,6 +8,9 @@
 //     `resolveCachedRepo` (RFC-024).
 //   - `retryBatchRow`: re-enqueue a terminated row, optionally with a new URL.
 //   - `gcBatches`: drop completed batches older than the retention TTL.
+//   - RFC-370 §10 V17: a hosted deployment registers each URL through
+//     `register` (the remote is verified, no mirror is cloned: tasks clone
+//     inside their own volumes); rows then report `verifiedOnly`.
 //   - All row state lives in this module's `batches` map; daemon restart
 //     wipes in-flight progress but never loses successfully cloned cache rows
 //     (those are committed by `resolveCachedRepo` before this module sees them).
@@ -37,6 +40,7 @@ import {
 import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
+import type { RepositoryRegistration } from '@/modules/source-control/public/types'
 import { REPO_IMPORT_CHANNEL, repoImportsBroadcaster } from '@/ws/broadcaster'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -58,6 +62,8 @@ interface MutableRow {
   status: BatchImportRowStatus
   cold: boolean | null
   fetchOk: boolean | null
+  /** RFC-370 §10 V17: registered from a verified remote, no mirror cloned. */
+  verifiedOnly: boolean
   cachedRepoId: string | null
   errorCode: string | null
   message: string | null
@@ -113,6 +119,8 @@ export interface RepoBatchImportDeps {
   secretBox?: SecretBox
   /** Override clone executor (tests). Defaults to `resolveCachedRepo`. */
   resolveCachedRepo?: typeof defaultResolveCachedRepo
+  /** RFC-370 §10 V17: registers a verified remote instead of cloning (hosted). */
+  register?: (url: string) => Promise<RepositoryRegistration>
   /** Concurrency cap shared across batches. Default 3 (1..8). */
   concurrency?: number
   /** TTL for completed batches before GC. Default 60 min. */
@@ -196,6 +204,7 @@ export function startBatchImport(
         status: 'failed',
         cold: null,
         fetchOk: null,
+        verifiedOnly: false,
         cachedRepoId: null,
         errorCode: 'repo-url-invalid',
         message: clipAndRedact('unsupported or malformed Git URL', url),
@@ -214,6 +223,7 @@ export function startBatchImport(
       status: 'queued',
       cold: null,
       fetchOk: null,
+      verifiedOnly: false,
       cachedRepoId: null,
       errorCode: null,
       message: null,
@@ -291,6 +301,7 @@ export function retryBatchRow(
   // Reset terminal state.
   row.cold = null
   row.fetchOk = null
+  row.verifiedOnly = false
   row.cachedRepoId = null
   row.errorCode = null
   row.message = null
@@ -467,6 +478,18 @@ async function runRow(
   emit(deps, record.batchId, { type: 'row.update', row: rowToWire(row) })
 
   try {
+    if (deps.register !== undefined) {
+      const registration = await deps.register(row.inputUrl)
+      row.status = 'done'
+      row.cold = registration.created
+      row.fetchOk = null
+      row.verifiedOnly = true
+      row.cachedRepoId = registration.cachedRepoId
+      row.message = registration.created
+        ? 'remote verified; registered'
+        : 'already registered; remote verified'
+      return
+    }
     const resolver = deps.resolveCachedRepo ?? defaultResolveCachedRepo
     const result = await resolver(
       {
@@ -524,6 +547,7 @@ function rowToWire(row: MutableRow): BatchImportRow {
     status: row.status,
     cold: row.cold,
     fetchOk: row.fetchOk,
+    ...(row.verifiedOnly ? { verifiedOnly: true } : {}),
     cachedRepoId: row.cachedRepoId,
     errorCode: row.errorCode,
     message: row.message,

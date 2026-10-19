@@ -1,7 +1,5 @@
 import { and, desc, eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve, sep } from 'node:path'
 import { z } from 'zod'
 
 import {
@@ -28,7 +26,8 @@ import { getTask } from '@/services/task'
 import { NotFoundError } from '@/util/errors'
 import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
 import { readTaskResourceUsage } from '@/services/limits'
-import { sha256Hex } from '@/util/hash'
+import { createFileProgramToolSource } from '../infrastructure/local/fileProgramToolSource'
+import type { ProgramToolSource } from '../application/ports/scriptFixture'
 import {
   DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
   DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,
@@ -168,11 +167,12 @@ function resultFailure(
   }
 }
 
-function containedArtifact(appHome: string, artifactRef: string): string | null {
-  const root = resolve(appHome)
-  const absolute = resolve(root, artifactRef)
-  if (absolute !== root && !absolute.startsWith(`${root}${sep}`)) return null
-  return absolute
+/** The execution's own failure text for each program source check. */
+function programSourceFailure(code: string): string {
+  if (code === 'program-artifact-digest') return 'program executable artifact digest mismatch'
+  if (code.startsWith('program-parameter-artifact-'))
+    return 'program parameter artifact is unavailable'
+  return 'program executable artifact is unavailable'
 }
 
 export function buildDigitalEmployeeFixedPrompt(
@@ -324,6 +324,9 @@ export function digitalEmployeeExecutionIsLive(input: {
 
 export interface DigitalEmployeeExecutionDependencies {
   readonly appHome: string
+  /** RFC-370 §10 V19: the selected program artifact store; standalone reads
+   * the application home when omitted. */
+  readonly programs?: ProgramToolSource
   /**
    * **惰性**取 actor：只有 `launch` 用得到它，而 SQLite 那个组合根
    * （`server.ts` 的 `composeSqliteApiRouteMounts`）是**同步**函数，
@@ -576,26 +579,16 @@ function buildDigitalEmployeeExecution(
           )
         }
       } else {
-        const artifactPath = containedArtifact(deps.appHome, implementation.executableArtifactRef)
-        if (artifactPath === null || !existsSync(artifactPath)) {
-          throw new Error('program executable artifact is unavailable')
-        }
-        const source = readFileSync(artifactPath, 'utf8')
-        if (sha256Hex(source) !== implementation.executableDigest) {
-          throw new Error('program executable artifact digest mismatch')
-        }
-        let parametersJson = '{}'
-        if (implementation.parameterValuesRef !== null) {
-          const parameterPath = containedArtifact(deps.appHome, implementation.parameterValuesRef)
-          if (parameterPath === null || !existsSync(parameterPath)) {
-            throw new Error('program parameter artifact is unavailable')
-          }
-          parametersJson = JSON.stringify(
-            programParametersSchema.parse(
-              JSON.parse(readFileSync(parameterPath, 'utf8')) as unknown,
-            ),
-          )
-        }
+        // RFC-370 §10 V19: the selected program store (platform objects when
+        // hosted); the application home only for a standalone daemon.
+        const program = await (deps.programs ?? createFileProgramToolSource(deps.appHome)).read(
+          implementation,
+        )
+        if (program.kind === 'failed') throw new Error(programSourceFailure(program.check.code))
+        const source = program.source
+        const parametersJson = JSON.stringify(
+          programParametersSchema.parse(JSON.parse(program.parameterValuesJson) as unknown),
+        )
         snapshot = WorkflowDefinitionSchema.parse(
           synthesizeDigitalEmployeeScriptHostSnapshot({
             inputPort: EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,

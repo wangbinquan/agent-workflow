@@ -7,7 +7,15 @@ import {
 } from '@/platform/crewstation/workspaceProtocol'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
 import { executeTaskImageWorkspaceOperation } from '@/modules/source-control/composition/taskImageWorkspace'
+import {
+  executeTaskImageCodeReview,
+  TASK_IMAGE_CODE_REVIEW_OPERATION,
+} from '@/modules/source-control/composition/taskImageCodeReview'
 import { taskImageGitEnvironment } from '@/modules/source-control/composition/crewstationGitCredentials'
+import {
+  executeTaskImageRepositoryRemote,
+  REPOSITORY_REMOTE_OPERATION,
+} from '@/modules/source-control/composition/taskImageRepositoryRemote'
 import {
   executeTaskImageExecutionOperation,
   TASK_IMAGE_EXECUTION_OPERATIONS,
@@ -21,6 +29,7 @@ import { executeTaskImageEvidence } from '@/modules/development-automation/compo
 import { executeTaskImageVerification } from '@/modules/development-automation/composition/taskImageVerification'
 import { executeTaskImageDevelopmentAdapter } from '@/modules/integration/composition/taskImageDevelopmentAdapter'
 import { executeTaskImageArchive } from '@/modules/task-execution/composition/taskImageArchive'
+import { executeTaskImageFusionWorkspace } from '@/modules/source-control/composition/taskImageFusionWorkspace'
 import { executeTaskImagePlugin } from '@/modules/resource-catalog/composition/taskImagePlugin'
 import { executeTaskImageMcpProbe } from '@/modules/resource-catalog/composition/taskImageMcpProbe'
 import {
@@ -105,8 +114,13 @@ export async function executeWorkspaceTaskImageOperation(
   volumeRoot = '/work',
 ): Promise<unknown> {
   if (operation === 'archive-task-files') return executeTaskImageArchive(value, volumeRoot)
+  if (operation === 'fusion-workspace') return executeTaskImageFusionWorkspace(value, volumeRoot)
   if (operation === 'plugin-installation') return executeTaskImagePlugin(value, signal, volumeRoot)
   if (operation === 'mcp-probe') return executeTaskImageMcpProbe(value)
+  if (operation === TASK_IMAGE_CODE_REVIEW_OPERATION)
+    return executeTaskImageCodeReview(value, volumeRoot)
+  if (operation === REPOSITORY_REMOTE_OPERATION)
+    return executeTaskImageRepositoryRemote(value, volumeRoot, signal)
   if (operation === 'evidence-files') return executeTaskImageEvidence(value, volumeRoot)
   if (operation === 'development-adapter')
     return executeTaskImageDevelopmentAdapter(value, signal, volumeRoot)

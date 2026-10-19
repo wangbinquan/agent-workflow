@@ -103,27 +103,30 @@ export function validateRepoUrl(input: string): 'empty' | 'invalid' | null {
 }
 
 /**
- * RFC-110 — resolve the local `repoPath` the launch-form pickers (FilesPicker /
- * GitPicker) should enumerate against: canonicalize `source.repoUrl` and find
- * the cached repo with the SAME canonical key; return its `localPath`. No
- * match / unparseable URL → '' (the picker falls back to a text input).
+ * RFC-110 — resolve the registered repository the launch-form pickers
+ * (FilesPicker / GitPicker) should enumerate: canonicalize `source.repoUrl` and
+ * find the cached repo with the SAME canonical key; return its id. No match /
+ * unparseable URL → '' (the picker falls back to a text input).
+ *
+ * RFC-370 §10 V17: the pickers name the repository by id rather than by its
+ * mirror's local path — a hosted deployment has no local mirror, and reads the
+ * remote itself.
  *
  * Pure: no hooks, no side effects. Matching reuses the backend cache-key
  * canonicalization (`canonicalRepoKey`), so a hit here means the backend would
- * reuse the same cache dir at launch (modulo the pre-existing 8-char sha1
+ * reuse the same registration at launch (modulo the pre-existing 8-char sha1
  * collision caveat). Folds within a protocol only — HTTPS and SSH URLs for the
  * same repo are different keys and will NOT cross-match (mirrors the backend's
- * separate cache dirs).
+ * separate registrations).
  */
-export function resolveUrlRepoPath(source: RepoSource, cached: CachedRepo[]): string {
+export function resolveUrlCachedRepoId(source: RepoSource, cached: CachedRepo[]): string {
   const key = canonicalRepoKey(source.repoUrl)
   if (key === null) return ''
   // RFC-204: `url` is gone from the wire. canonicalForHash drops userinfo, so
   // the redacted form canonicalizes identically for the userinfo shape (locked
-  // by rfc204-query-credential.test.ts) — this keeps the local-path preview
-  // working without the plaintext ever being served.
+  // by rfc204-query-credential.test.ts).
   const hit = cached.find((c) => canonicalRepoKey(c.urlRedacted) === key)
-  return hit?.localPath ?? ''
+  return hit?.id ?? ''
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   composeCrewStationReviewArtifacts,
   composeCrewStationReviewObjectSweep,
 } from '@/modules/collaboration/composition/crewstationReviewArtifacts'
+import { composeCrewStationCodeReviewObjectSweep } from '@/modules/code-capability/composition/crewstationCodeReviewArtifacts'
 import {
   composeCrewStationIntentArtifacts,
   composeCrewStationIntentPluginRetention,
@@ -166,6 +167,8 @@ export const createCrewStationMaintenanceEffects: MaintenanceWorkerEffectsFactor
       objectPublications: objectPublications.maintenance([
         composeCrewStationTaskObjectSweep({ db, fence, publications }),
         composeCrewStationReviewObjectSweep({ db, publications }),
+        // §10 V16: code-review artifacts of deleted tasks.
+        composeCrewStationCodeReviewObjectSweep({ db, publications }),
       ]),
       databaseBackups: composeCrewStationDatabaseBackups({
         db,

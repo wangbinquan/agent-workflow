@@ -20,6 +20,7 @@ import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
+import type { RepositoryMirrors } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import {
@@ -56,6 +57,7 @@ export function mountRepoGroupRoutes(
   app: Hono,
   deps: RepoGroupRouteDependencies,
   store: RepositoryWorkspaceStore,
+  mirrors: RepositoryMirrors,
 ): void {
   /** 建组 / 改组共用：URL→id 的现场导入要走缓存服务，超时沿用 git clone 配置。 */
   const cacheDeps = async () => {
@@ -65,6 +67,10 @@ export function mountRepoGroupRoutes(
       ...(cfg.gitCloneTimeoutMs ? { cloneTimeoutMs: cfg.gitCloneTimeoutMs } : {}),
     }
   }
+  // RFC-370 §10 V17：托管下 URL 挂载改为「校验远端后登记」，不在服务容器克隆。
+  const remote = mirrors.remoteRegistration
+  const registration =
+    remote === undefined ? {} : { register: (url: string) => remote.register(url) }
 
   registerRoute(
     app,
@@ -98,7 +104,7 @@ export function mountRepoGroupRoutes(
       }
       const actor = actorOf(c)
       const group = await createRepoGroup(
-        { store, cache: await cacheDeps() },
+        { store, cache: await cacheDeps(), ...registration },
         parsed.data,
         actor.user.id,
       )
@@ -182,7 +188,7 @@ export function mountRepoGroupRoutes(
       // 服务层那道 409 永远不会触发（实现门 P1）。
       const { expectedVersion, ...body } = parsed.data
       const group = await updateRepoGroup(
-        { store, cache: await cacheDeps() },
+        { store, cache: await cacheDeps(), ...registration },
         c.req.param('id'),
         body,
         expectedVersion,

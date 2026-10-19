@@ -1,12 +1,14 @@
 // RFC-359 W4-D5 —— 融合仓库：一份实现，两个 provider 共用。以 PG 版为底：多语句写走统一事务原语；
-// 跨聚合的两半（memory 的成员关系、resource-catalog 的版本提交）经 tx-bound participant 注入；技能操作锁撞库经能力矩阵归类。
+// 跨聚合的两半（memory 的成员关系、resource-catalog 的版本提交）经 tx-bound participant 注入。
+// RFC-370 §10 V20：技能的字节与版本操作日志归 resource-catalog——apply 把提案树交给它暂存、在本仓的
+// 事务里经它的 participant 提交、事务后由它发布；这里不再碰文件系统，也不再自己写技能操作锁。
 
 import { and, desc, eq, isNull } from 'drizzle-orm'
-import { cpSync, existsSync, rmSync } from 'node:fs'
-import { join, relative } from 'node:path'
-import { ulid } from 'ulid'
 import type { MemoryMembershipParticipantInTx } from '@/modules/memory/public/participants'
-import type { SkillVersionCommitParticipantInTx } from '@/modules/resource-catalog/public/participants'
+import type {
+  SkillTreeVersionOperations,
+  SkillVersionCommitParticipantInTx,
+} from '@/modules/resource-catalog/public/participants'
 import type { FusionStatus } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import {
@@ -14,8 +16,6 @@ import {
   fusions,
   memories,
   resourceGrants,
-  skillOperationLocks,
-  skillOperations,
   skills,
   skillVersions,
   workflows,
@@ -23,7 +23,6 @@ import {
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   databaseSessionFor,
-  engineOf,
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import type {
@@ -44,15 +43,11 @@ import type {
 } from '../public/participants'
 import {
   QUARANTINED_FUSION_SKILL_ID,
-  abortFusionSkillFilesystem,
   canEditFusionSkill,
   decodeFusionSkillToken,
   encodeFusionSkillToken,
-  prepareFusionSkillFilesystem,
-  publishFusionSkillFilesystem,
   repairFusionWorkflowDefinition,
   resolveFusionSkillAccess,
-  type FusionSkillFilesystemPlan,
 } from './fusionRepositorySupport'
 import { ConflictError, staleConflictError } from '@/util/errors'
 
@@ -151,116 +146,6 @@ async function assertClaimSkill(
   }
 }
 
-async function beginSkillOperation(
-  tx: DatabaseTransaction,
-  uniqueViolation: (error: unknown) => boolean,
-  input: {
-    readonly operationId: string
-    readonly skillId: string
-    readonly versionIndex: number
-    readonly stagingPath: string
-    readonly candidatePath: string
-  },
-): Promise<void> {
-  try {
-    await tx
-      .insert(skillOperationLocks)
-      .values({ lockedSkillId: input.skillId, opId: input.operationId })
-      .run()
-  } catch (error) {
-    if (uniqueViolation(error)) {
-      throw new ConflictError(
-        'skill-operation-busy',
-        `skill ${input.skillId} is busy under another operation`,
-      )
-    }
-    throw error
-  }
-  await tx
-    .insert(skillOperations)
-    .values({
-      opId: input.operationId,
-      skillId: input.skillId,
-      kind: 'version-write',
-      phase: 'intent',
-      active: 1,
-      stagingPath: input.stagingPath,
-      backupPath: null,
-      candidatePath: input.candidatePath,
-      candidateFingerprint: null,
-      backupFingerprint: null,
-      targetVersion: input.versionIndex,
-      generation: null,
-      ownerUserId: null,
-      preconditionJson: JSON.stringify({ skillId: input.skillId }),
-    })
-    .run()
-}
-
-async function advanceOperation(
-  tx: DatabaseTransaction,
-  operationId: string,
-  phase: string,
-): Promise<void> {
-  await tx.update(skillOperations).set({ phase }).where(eq(skillOperations.opId, operationId)).run()
-}
-
-async function finishOperation(tx: DatabaseTransaction, operationId: string): Promise<void> {
-  await tx
-    .update(skillOperations)
-    .set({ phase: 'done', active: 0 })
-    .where(eq(skillOperations.opId, operationId))
-    .run()
-  await tx.delete(skillOperationLocks).where(eq(skillOperationLocks.opId, operationId)).run()
-}
-
-async function abandonOperation(tx: DatabaseTransaction, operationId: string): Promise<void> {
-  await tx
-    .update(skillOperations)
-    .set({ active: 0 })
-    .where(eq(skillOperations.opId, operationId))
-    .run()
-  await tx.delete(skillOperationLocks).where(eq(skillOperationLocks.opId, operationId)).run()
-}
-
-function planPaths(appHome: string, skillId: string, versionIndex: number, operationId: string) {
-  const filesDir = join(appHome, 'skills', skillId, 'files')
-  return {
-    stagingPath: relative(appHome, `${filesDir}.op-${operationId}.staged`),
-    candidatePath: relative(
-      appHome,
-      join(appHome, 'skills', skillId, 'versions', `v${versionIndex}`, 'files'),
-    ),
-  }
-}
-
-function recoverPublishedPlan(
-  appHome: string,
-  operation: typeof skillOperations.$inferSelect,
-  contentHash: string,
-): FusionSkillFilesystemPlan | null {
-  if (
-    operation.targetVersion === null ||
-    operation.stagingPath === null ||
-    operation.candidatePath === null
-  ) {
-    return null
-  }
-  const filesDir = join(appHome, 'skills', operation.skillId, 'files')
-  return {
-    operationId: operation.opId,
-    skillId: operation.skillId,
-    versionIndex: operation.targetVersion,
-    filesDir,
-    stagingDir: join(appHome, operation.stagingPath),
-    backupDir: `${filesDir}.op-${operation.opId}.backup`,
-    versionDir: join(appHome, operation.candidatePath),
-    stagingPath: operation.stagingPath,
-    candidatePath: operation.candidatePath,
-    contentHash,
-  }
-}
-
 /**
  * RFC-353 T6 —— 融合提交时「把这批记忆标记为已融合」那一半，由 memory 注入：memory offered 的
  * tx-bound participant（带 brand、唯一 owner 工厂铸造），绑定调用方交来的统一事务句柄。
@@ -271,10 +156,16 @@ export interface FusionMemoryMembership {
 }
 
 /**
- * RFC-353 T6 —— 融合提交时「推进技能版本」那一半，由 resource-catalog 注入。
- * `skills` / `skill_versions` 归它单写；同样直接吃 offered 的 tx-bound participant。
+ * RFC-353 T6 / RFC-370 §10 V20 —— 融合提交时「推进技能版本」那一半，由 resource-catalog 注入。
+ * `skills` / `skill_versions` 与技能字节归它单写：bootstrap 交来与数据库无关的工厂，
+ * 由本仓的数据库句柄 `bind` 出绑在选定内容绑定上的 participant。
  */
 export interface FusionSkillVersionCommit {
+  bind(input: { readonly db: ProviderNeutralDatabase; readonly appHome: string }): FusionSkillTrees
+}
+
+/** The bound participant: tree operations plus the tx-bound version commit. */
+export interface FusionSkillTrees extends SkillTreeVersionOperations {
   inTransaction(transaction: DatabaseTransaction): SkillVersionCommitParticipantInTx
 }
 
@@ -290,16 +181,12 @@ export type PostgresqlFusedSkillReassignment = FusedSkillReassignment
 
 export function createFusionPersistence(input: {
   readonly db: ProviderNeutralDatabase
-  readonly appHome: string
   readonly memoryMembership: FusionMemoryMembership
   readonly fusedSkillReassignment: FusedSkillReassignment
-  readonly skillVersionCommit: FusionSkillVersionCommit
+  readonly skillVersionCommit: FusionSkillTrees
 }): FusionPersistence {
-  const { db, appHome, memoryMembership, fusedSkillReassignment, skillVersionCommit } = input
+  const { db, memoryMembership, fusedSkillReassignment, skillVersionCommit } = input
   const session = databaseSessionFor(db)
-  // 技能操作锁撞库经能力矩阵归类（SQLite 的 SQLITE_CONSTRAINT / PostgreSQL 的 23505 都归 'unique-violation'）。
-  const uniqueViolation = (error: unknown) =>
-    engineOf(db).classifyError(error) === 'unique-violation'
 
   async function seedResources(seed: FusionResourceSeed): Promise<void> {
     const now = Date.now()
@@ -520,94 +407,60 @@ export function createFusionPersistence(input: {
     if (token === null || token.skillId !== fusion.skillId) {
       throw staleConflictError('skill', 'fusion target skill changed; reload and retry')
     }
-    const versionIndex = token.contentVersion + 1
-    const operationId = ulid()
-    const paths = planPaths(appHome, fusion.skillId, versionIndex, operationId)
-    await session.transaction(async (tx) => {
-      await beginSkillOperation(tx, uniqueViolation, {
-        operationId,
-        skillId: fusion.skillId,
-        versionIndex,
-        ...paths,
-      })
+    // RFC-370 §10 V20：暂存经 resource-catalog——开带锁的 version-write 操作（另一操作占着这个技能 ⇒
+    // skill-operation-busy），提案树经选定的内容绑定暂存。复合栅栏在下面的事务里、`before` 之后判。
+    const staged = await skillVersionCommit.stage({
+      skillId: fusion.skillId,
+      source: { kind: 'tree', files: command.proposal },
+      versionSource: 'fusion',
+      summary: command.summary,
+      fusionId: command.fusionId,
+      authorUserId: command.actor.user.id,
+      now: command.now,
+      expectedSkillId: token.skillId,
+      expectedVersion: token.contentVersion,
+      expectedMetaRevision: token.metaRevision,
+      staleMessage: 'fusion target skill changed; reload and retry',
     })
-
-    let plan: FusionSkillFilesystemPlan | null = null
     let databaseCommitted = false
     try {
-      plan = prepareFusionSkillFilesystem({
-        appHome,
-        operationId,
-        skillId: fusion.skillId,
-        versionIndex,
-        proposedWorktreePath: command.proposedWorktreePath,
-      })
-      await session.transaction(
-        async (tx) => await advanceOperation(tx, operationId, 'fs-versioned'),
-      )
-      await session.transaction(async (tx) => {
-        const currentFusion = await tx
-          .select()
-          .from(fusions)
-          .where(eq(fusions.id, command.fusionId))
-          .get()
-        if (currentFusion === undefined || currentFusion.status !== 'applying') {
-          throw new ConflictError('fusion-not-applying', 'fusion is no longer applying')
-        }
-        await assertClaimSkill(tx, currentFusion, command.actor)
-        // RFC-353 T6：`skills` / `skill_versions` 归 resource-catalog 单写，这里只把事务交过去。
-        // `before` 空着——上面两道（还在 applying 吗 / 还有权吗）已经跑完，正是它们决定的
-        // 错误优先级：先答无权，再答技能被推进。
-        await skillVersionCommit.inTransaction(tx).commit(
-          {
-            skillId: fusion.skillId,
-            versionIndex,
-            contentHash: plan!.contentHash,
-            source: 'fusion',
-            summary: command.summary,
-            fusionId: command.fusionId,
-            restoredFromVersion: null,
-            authorUserId: command.actor.user.id,
-            now: command.now,
-            expectedSkillId: token.skillId,
-            expectedVersion: token.contentVersion,
-            expectedMetaRevision: token.metaRevision,
-            staleMessage: 'fusion target skill changed; reload and retry',
-          },
-          {
+      const versionIndex = await session.transaction(
+        async (tx) =>
+          // RFC-353 T6：`skills` / `skill_versions` 归 resource-catalog 单写，这里只把事务交过去。
+          await skillVersionCommit.inTransaction(tx).commit(staged, {
+            // 先答「还在 applying 吗 / 还有权吗」，再答「技能被推进」——这正是既有的错误优先级。
+            before: async () => {
+              const currentFusion = await tx
+                .select()
+                .from(fusions)
+                .where(eq(fusions.id, command.fusionId))
+                .get()
+              if (currentFusion === undefined || currentFusion.status !== 'applying') {
+                throw new ConflictError('fusion-not-applying', 'fusion is no longer applying')
+              }
+              await assertClaimSkill(tx, currentFusion, command.actor)
+            },
             // RFC-353 T6：记忆的成员关系由 memory 单写，与技能版本写入**同一事务**——
             // 不变式是 fused ⟺ 该知识在技能的当前版本里，中间态被读到就是一条幽灵行。
-            after: async () => {
+            after: async (version) => {
               await memoryMembership.inTransaction(tx).markFused({
                 memoryIds: command.incorporatedMemoryIds,
                 skillId: fusion.skillId,
                 skillName: fusion.skillName,
-                skillVersion: versionIndex,
+                skillVersion: version,
                 fusionId: command.fusionId,
                 actorUserId: command.actor.user.id,
                 now: command.now,
               })
             },
-          },
-        )
-        await advanceOperation(tx, operationId, 'db-committed')
-      })
+          }),
+      )
       databaseCommitted = true
-      publishFusionSkillFilesystem(plan)
-      await session.transaction(async (tx) => {
-        await advanceOperation(tx, operationId, 'fs-published')
-        await finishOperation(tx, operationId)
-      })
+      await skillVersionCommit.publish(staged)
       return { versionIndex }
     } catch (error) {
-      if (!databaseCommitted) {
-        if (plan !== null) abortFusionSkillFilesystem(plan)
-        else {
-          rmSync(join(appHome, paths.stagingPath), { recursive: true, force: true })
-          rmSync(join(appHome, paths.candidatePath), { recursive: true, force: true })
-        }
-        await session.transaction(async (tx) => await abandonOperation(tx, operationId))
-      }
+      // 版本已提交之后的失败（发布中断）留给 resource-catalog 的启动恢复前滚，不在这里回退。
+      if (!databaseCommitted) await skillVersionCommit.abort(staged)
       throw error
     }
   }
@@ -757,31 +610,6 @@ export function createFusionPersistence(input: {
         sole.skillId === fusion.skillId &&
         (fusion.appliedSkillVersion === null || fusion.appliedSkillVersion === sole.versionIndex)
       if (trustworthy && sole !== undefined) {
-        const operation = await db
-          .select()
-          .from(skillOperations)
-          .where(
-            and(
-              eq(skillOperations.skillId, fusion.skillId),
-              eq(skillOperations.active, 1),
-              eq(skillOperations.kind, 'version-write'),
-            ),
-          )
-          .get()
-        if (operation !== undefined && sole.contentHash !== null) {
-          const plan = recoverPublishedPlan(appHome, operation, sole.contentHash)
-          if (plan !== null && operation.phase === 'db-committed') {
-            if (!existsSync(plan.stagingDir) && existsSync(plan.versionDir)) {
-              rmSync(plan.stagingDir, { recursive: true, force: true })
-              cpSync(plan.versionDir, plan.stagingDir, { recursive: true })
-            }
-            publishFusionSkillFilesystem(plan)
-            await session.transaction(async (tx) => {
-              await advanceOperation(tx, operation.opId, 'fs-published')
-              await finishOperation(tx, operation.opId)
-            })
-          }
-        }
         if (
           await casStatus({
             id: fusion.id,

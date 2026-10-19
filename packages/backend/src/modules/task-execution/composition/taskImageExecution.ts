@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { rmSync } from 'node:fs'
 import type { ScriptLanguage } from '@agent-workflow/shared'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
@@ -10,6 +10,8 @@ import {
 import { ensureScriptDepsEnv } from '../infrastructure/local/scriptDepsEnv'
 import { createFilePortArtifactContent } from '../infrastructure/local/filePortArtifactContent'
 import { resolveNativePortContentDetailed } from './portOutputValidation'
+import { createLocalScriptFixtureProcess } from '../infrastructure/local/localScriptFixtureProcess'
+import type { ScriptFixtureRun } from '../application/ports/scriptFixture'
 
 export const TASK_IMAGE_EXECUTION_OPERATIONS = [
   'validate-output',
@@ -18,6 +20,7 @@ export const TASK_IMAGE_EXECUTION_OPERATIONS = [
   'script-dependencies',
   'run-script',
   'delete-task-content',
+  'execution-contract-fixture',
 ] as const
 
 export async function executeTaskImageExecutionOperation(
@@ -94,6 +97,12 @@ export async function executeTaskImageExecutionOperation(
         failureCode: result.failureCode,
       }
     }
+    case 'execution-contract-fixture':
+      // RFC-370 §10 V19: a program tool's contract fixture on this image's
+      // interpreters, in a throw-away directory of the volume.
+      return createLocalScriptFixtureProcess({ scratchRoot: workPath(join(root, 'tmp')) }).run(
+        value as ScriptFixtureRun,
+      )
     default:
       throw new Error(`workspace-helper-operation-unknown: ${operation}`)
   }

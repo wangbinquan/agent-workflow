@@ -21,7 +21,7 @@ function wrap(node: React.ReactElement, refs?: { branches: string[] }) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
-  if (refs !== undefined) qc.setQueryData(['repos', 'refs', '/repo'], refs)
+  if (refs !== undefined) qc.setQueryData(['repos', 'refs', 'repo-1'], refs)
   return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
 }
 
@@ -36,7 +36,12 @@ describe('GitPicker', () => {
   test('commit-range emits {kind, from, to} JSON', () => {
     const onChange = vi.fn()
     wrap(
-      <GitPicker def={def({ gitKind: 'commit-range' })} repoPath="" value="" onChange={onChange} />,
+      <GitPicker
+        def={def({ gitKind: 'commit-range' })}
+        cachedRepoId=""
+        value=""
+        onChange={onChange}
+      />,
     )
     fireEvent.change(screen.getByPlaceholderText('origin/main'), { target: { value: 'abc' } })
     expect(onChange).toHaveBeenLastCalledWith(
@@ -49,7 +54,7 @@ describe('GitPicker', () => {
     wrap(
       <GitPicker
         def={def({ gitKind: 'commit-range' })}
-        repoPath=""
+        cachedRepoId=""
         value={JSON.stringify({ kind: 'commit-range', from: 'x', to: 'y' })}
         onChange={onChange}
       />,
@@ -64,7 +69,7 @@ describe('GitPicker', () => {
 
   test('pr sub-kind emits {kind: pr, number}', () => {
     const onChange = vi.fn()
-    wrap(<GitPicker def={def({ gitKind: 'pr' })} repoPath="" value="" onChange={onChange} />)
+    wrap(<GitPicker def={def({ gitKind: 'pr' })} cachedRepoId="" value="" onChange={onChange} />)
     fireEvent.change(screen.getByPlaceholderText('123'), { target: { value: '42' } })
     expect(onChange).toHaveBeenLastCalledWith(JSON.stringify({ kind: 'pr', number: '42' }))
   })
@@ -73,7 +78,7 @@ describe('GitPicker', () => {
     const onChange = vi.fn()
     // No gitKind in def → defaults to 'branch'. Seed the refs cache so the
     // dropdown has real options to pick from.
-    wrap(<GitPicker def={def()} repoPath="/repo" value="" onChange={onChange} />, {
+    wrap(<GitPicker def={def()} cachedRepoId="repo-1" value="" onChange={onChange} />, {
       branches: ['main', 'dev'],
     })
     const trigger = screen.getByRole('combobox')
@@ -90,7 +95,7 @@ describe('GitPicker', () => {
     wrap(
       <GitPicker
         def={def({ gitKind: 'commit-range' })}
-        repoPath=""
+        cachedRepoId=""
         value="not-json"
         onChange={onChange}
       />,
@@ -104,19 +109,22 @@ describe('GitPicker', () => {
 // clone's branches; with no cache fall back to a free-text branch input; surface
 // a stored ref absent from the (cached) branch list as an explicit option.
 describe('GitPicker branch (RFC-110 url mode)', () => {
-  test('url mode + uncached (no repoPath) → text fallback emits {kind:branch,ref}', () => {
+  test('url mode + uncached (no cachedRepoId) → text fallback emits {kind:branch,ref}', () => {
     const onChange = vi.fn()
-    wrap(<GitPicker def={def()} repoPath="" sourceKind="url" value="" onChange={onChange} />)
+    wrap(<GitPicker def={def()} cachedRepoId="" sourceKind="url" value="" onChange={onChange} />)
     const input = screen.getByTestId('git-picker-branch-fallback') as HTMLInputElement
     expect(input).toBeTruthy()
     fireEvent.change(input, { target: { value: 'feature-x' } })
     expect(onChange).toHaveBeenLastCalledWith(JSON.stringify({ kind: 'branch', ref: 'feature-x' }))
   })
 
-  test('url mode + cache hit (repoPath set, refs loaded) → Select dropdown, not text fallback', () => {
-    wrap(<GitPicker def={def()} repoPath="/repo" sourceKind="url" value="" onChange={() => {}} />, {
-      branches: ['main', 'dev'],
-    })
+  test('url mode + cache hit (cachedRepoId set, refs loaded) → Select dropdown, not text fallback', () => {
+    wrap(
+      <GitPicker def={def()} cachedRepoId="repo-1" sourceKind="url" value="" onChange={() => {}} />,
+      {
+        branches: ['main', 'dev'],
+      },
+    )
     expect(screen.getByRole('combobox')).toBeTruthy()
     expect(screen.queryByTestId('git-picker-branch-fallback')).toBeNull()
   })
@@ -125,7 +133,7 @@ describe('GitPicker branch (RFC-110 url mode)', () => {
     wrap(
       <GitPicker
         def={def()}
-        repoPath="/repo"
+        cachedRepoId="repo-1"
         sourceKind="url"
         value={JSON.stringify({ kind: 'branch', ref: 'feature-x' })}
         onChange={() => {}}

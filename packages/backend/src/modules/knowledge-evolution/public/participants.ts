@@ -13,15 +13,19 @@ import type { FusionStatus, TaskStatus } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 
 import type { MemoryCatalogOperations } from '../../memory/public/catalog'
+import type { SkillTreeVersionOperations } from '../../resource-catalog/public/participants'
 import type {
   FusionBuiltinWorkflowSeed,
   FusionDecisionRecoveryReceipt,
+  FusionEngineTaskResult,
   FusionPersistencePatch,
   FusionPersistenceRecord,
   FusionProvenanceRepairReceipt,
   FusionResourceSeed,
   FusionSkillAccess,
   FusionSkillIdentity,
+  FusionTreeFile,
+  FusionWorkspaceSeed,
 } from './types'
 
 export interface FusionPersistence {
@@ -57,18 +61,24 @@ export interface FusionEngineTaskRecord {
   readonly status: TaskStatus
   readonly errorSummary: string | null
   readonly worktreePath: string
+  readonly baseCommit: string | null
 }
 
+/**
+ * RFC-370 §10 V20：KE 只交出种子树（技能字节），工作区由 task-execution 经 source-control 准备——
+ * 本地是 `fusions/<id>/iter<n>/work` 的 Git 仓，托管是引擎任务自己卷里的工作副本。
+ */
 export interface FusionEngineTaskLaunch {
   readonly taskId: string
+  readonly fusionId: string
+  readonly iteration: number
+  readonly seed: FusionWorkspaceSeed
   readonly workflowId: string
   readonly name: string
   readonly inputs: Readonly<Record<string, string>>
   readonly collaboratorUserIds?: readonly string[]
   readonly ownerUserId: string
   readonly initiator: 'manual' | 'api'
-  readonly worktreePath: string
-  readonly baseCommit: string
   readonly platformInputPaths: readonly string[]
   readonly binaryOverride?: readonly string[]
   readonly configPath?: string
@@ -82,6 +92,10 @@ export interface FusionEngineTaskLaunch {
 export interface FusionEngineTaskOperations {
   launch(command: FusionEngineTaskLaunch): Promise<void>
   load(taskId: string): Promise<FusionEngineTaskRecord | null>
+  /** The settled task's proposal; `null` when the task no longer exists. */
+  collect(taskId: string): Promise<FusionEngineTaskResult | null>
+  /** Gives the task's workspace back once its proposal is no longer needed there. */
+  release(taskId: string): Promise<void>
   cancel(taskId: string): Promise<void>
 }
 
@@ -89,6 +103,8 @@ export interface FusionOperations {
   readonly persistence: FusionPersistence
   readonly memories: MemoryCatalogOperations
   readonly tasks: FusionEngineTaskOperations
+  /** Seeds (strict version trees) and proposal candidates of the selected skill storage. */
+  readonly skillTrees: SkillTreeVersionOperations
 }
 
 // ---------------------------------------------------------------------------
@@ -122,8 +138,8 @@ export interface FusionStatusCas {
 export interface FusionApplyCommand {
   readonly fusionId: string
   readonly actor: Actor
-  readonly appHome: string
-  readonly proposedWorktreePath: string
+  /** The proposed skill tree that becomes the next version. */
+  readonly proposal: readonly FusionTreeFile[]
   readonly incorporatedMemoryIds: readonly string[]
   readonly summary: string
   readonly now: number

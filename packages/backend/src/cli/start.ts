@@ -12,6 +12,8 @@ import type { composeLocalRuntimeManagement } from '@/modules/task-execution/com
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/composition'
 import type { ScratchWorkspaceEffects } from '@/modules/source-control/composition'
+import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
+import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { runtimeConfigOpts } from '@/services/task'
@@ -438,6 +440,7 @@ import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintena
 import type { MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'
 import type {
   EmployeeCaseWorkspaceEffectsFactory,
+  RepositoryRemoteEffects,
   WorkspaceContentEffectsFactory,
 } from '@/modules/source-control/composition'
 import type {
@@ -474,6 +477,10 @@ import type {
   ProgramArtifactPort,
   EmployeeInputArtifactPort,
 } from '@/modules/digital-employee/composition'
+import type { ScriptFixtureProcess } from '@/modules/task-execution/composition/programTools'
+import type { ActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionRunners'
+import type { CodeReviewArtifactStore } from '@/modules/code-capability/public/participants'
+import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 import {
   selectDaemonHostLifecycle,
@@ -499,6 +506,14 @@ export interface StartOptions {
   taskArchive?: TaskArchiveContentBinding
   skillContent?: SkillContentBinding
   employeePrograms?: ProgramArtifactPort
+  /** RFC-370 §10 V19: where a program tool's contract fixture runs (hosted only). */
+  programFixtureProcess?: ScriptFixtureProcess
+  /** RFC-370 §10 V18: entry checks below a hosted action workspace (hosted only). */
+  actionWorkspaceEntries?: ActionWorkspaceEntries
+  /** RFC-370 §10 V16: code-review reads of hosted task volumes (hosted only). */
+  repositoryRevisionContent?: RepositoryRevisionContentFactory
+  /** RFC-370 §10 V16: code-review artifacts as object publications (hosted only). */
+  codeReviewArtifacts?: CodeReviewArtifactStore
   employeeInputArtifacts?: EmployeeInputArtifactPort
   missionInputBlobs?: MissionInputBlobPersistence
   pluginInstaller?: PluginInstallerPort
@@ -513,6 +528,8 @@ export interface StartOptions {
   resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
   resourcePackageSkillContent?: SkillPackageContentReader
   workspaceContent?: WorkspaceContentEffectsFactory
+  /** RFC-370 §10 V17: hosted repository remote reads; absent, local mirrors. */
+  repositoryRemote?: RepositoryRemoteEffects
   workspaceUploads?: WorkspaceUploadContentFactory
   isolationWorkspaces?: IsolationWorkspaceFactory
   repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
@@ -537,6 +554,8 @@ export interface StartOptions {
   taskInputFiles?: TaskInputFiles
   readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
   readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
+  /** RFC-370 §10 V20 — hosted only: the fusion engine task's volume workspace. */
+  readonly fusionWorkspaceEffects?: FusionWorkspaceEffects
   readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
   readonly workspacePresence?: WorkspacePresenceQueries
   readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
@@ -764,6 +783,7 @@ async function composePostgresqlProviderSession(
     taskInputFiles: input.taskInputFiles,
     repositoryPreparationEffects: input.repositoryPreparationEffects,
     scratchWorkspaceEffects: input.scratchWorkspaceEffects,
+    fusionWorkspaceEffects: input.fusionWorkspaceEffects,
     workspaceMaintenanceFilesystem: input.workspaceMaintenanceFilesystem,
     workspacePresence: input.workspacePresence,
     initializeExecution: input.initializeExecution,
@@ -788,6 +808,10 @@ async function composePostgresqlProviderSession(
     taskArchive: input.taskArchive,
     skillContent: input.skillContent,
     employeePrograms: input.employeePrograms,
+    programFixtureProcess: input.programFixtureProcess,
+    actionWorkspaceEntries: input.actionWorkspaceEntries,
+    repositoryRevisionContent: input.repositoryRevisionContent,
+    codeReviewArtifacts: input.codeReviewArtifacts,
     employeeInputArtifacts: input.employeeInputArtifacts,
     missionInputBlobs: input.missionInputBlobs,
     pluginInstaller: input.pluginInstaller,
@@ -801,6 +825,7 @@ async function composePostgresqlProviderSession(
     resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
     resourcePackageSkillContent: input.resourcePackageSkillContent,
     workspaceContent: input.workspaceContent,
+    repositoryRemote: input.repositoryRemote,
     workspaceUploads: input.workspaceUploads,
     isolationWorkspaces: input.isolationWorkspaces,
     repositoryGitWorkspaces: input.repositoryGitWorkspaces,
@@ -1146,7 +1171,7 @@ async function composePostgresqlProviderSession(
   const fusionRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'fusion-reconcile',
     intervalMs: DAEMON_CADENCE.fusionReconcile,
-    run: () => reconcileRunningFusions({ operations: runtime.fusion, appHome: Paths.root }),
+    run: () => reconcileRunningFusions({ operations: runtime.fusion }),
     onError() {},
   })
   const limitsRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
@@ -1215,6 +1240,11 @@ async function composePostgresqlProviderSession(
   const submoduleRefreshRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'submodule-refresh',
     async start() {
+      // RFC-370 §10 V17: a hosted deployment keeps no mirror to refresh — each
+      // task fetches the latest inside its own volume. The handle stays
+      // registered (both daemons freeze the same writers) but runs nothing.
+      if (input.repositoryRemote !== undefined)
+        return Object.freeze({ stop: () => undefined, drain: async () => undefined })
       const ticker = await startConfiguredSubmoduleRefreshLoop(
         application.core.repositoryWorkspaceStore,
         input.configuration,
@@ -1366,6 +1396,10 @@ interface DaemonProviderSessionComposeInput {
   readonly taskArchive?: TaskArchiveContentBinding
   readonly skillContent?: SkillContentBinding
   readonly employeePrograms?: ProgramArtifactPort
+  readonly programFixtureProcess?: ScriptFixtureProcess
+  readonly actionWorkspaceEntries?: ActionWorkspaceEntries
+  readonly repositoryRevisionContent?: RepositoryRevisionContentFactory
+  readonly codeReviewArtifacts?: CodeReviewArtifactStore
   readonly employeeInputArtifacts?: EmployeeInputArtifactPort
   readonly missionInputBlobs?: MissionInputBlobPersistence
   readonly pluginInstaller?: PluginInstallerPort
@@ -1380,6 +1414,7 @@ interface DaemonProviderSessionComposeInput {
   readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
   readonly resourcePackageSkillContent?: SkillPackageContentReader
   readonly workspaceContent?: WorkspaceContentEffectsFactory
+  readonly repositoryRemote?: RepositoryRemoteEffects
   readonly workspaceUploads: WorkspaceUploadContentFactory
   readonly isolationWorkspaces: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
@@ -1403,6 +1438,8 @@ interface DaemonProviderSessionComposeInput {
   readonly taskInputFiles?: TaskInputFiles
   readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
   readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
+  /** RFC-370 §10 V20 — hosted only: the fusion engine task's volume workspace. */
+  readonly fusionWorkspaceEffects?: FusionWorkspaceEffects
   readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
   readonly workspacePresence?: WorkspacePresenceQueries
   readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
@@ -1470,6 +1507,12 @@ export const HOSTED_ONLY_SELECTIONS = [
   'hostedBackgroundOwners',
   'taskRecovery',
   'repositoryPublicationTransport',
+  'programFixtureProcess',
+  'actionWorkspaceEntries',
+  'repositoryRemote',
+  'repositoryRevisionContent',
+  'codeReviewArtifacts',
+  'fusionWorkspaceEffects',
 ] as const satisfies readonly (keyof DaemonProviderSessionComposeInput)[]
 type HostedOnlySelection = (typeof HOSTED_ONLY_SELECTIONS)[number]
 type SqliteProviderSessionComposeInput = Omit<
@@ -1939,6 +1982,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       taskInputFiles: opts.taskInputFiles,
       repositoryPreparationEffects: opts.repositoryPreparationEffects,
       scratchWorkspaceEffects: opts.scratchWorkspaceEffects,
+      fusionWorkspaceEffects: opts.fusionWorkspaceEffects,
       workspaceMaintenanceFilesystem: opts.workspaceMaintenanceFilesystem,
       workspacePresence: opts.workspacePresence,
       initializeExecution: opts.initializeExecution,
@@ -1963,6 +2007,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       taskArchive: opts.taskArchive,
       skillContent: opts.skillContent,
       employeePrograms: opts.employeePrograms,
+      programFixtureProcess: opts.programFixtureProcess,
+      actionWorkspaceEntries: opts.actionWorkspaceEntries,
+      repositoryRevisionContent: opts.repositoryRevisionContent,
+      codeReviewArtifacts: opts.codeReviewArtifacts,
       employeeInputArtifacts: opts.employeeInputArtifacts,
       missionInputBlobs: opts.missionInputBlobs,
       pluginInstaller: opts.pluginInstaller,
@@ -1977,6 +2025,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       resourcePackagePluginArtifacts: opts.resourcePackagePluginArtifacts,
       resourcePackageSkillContent: opts.resourcePackageSkillContent,
       workspaceContent: opts.workspaceContent,
+      repositoryRemote: opts.repositoryRemote,
       workspaceUploads: selectWorkspaceUploadContentFactory(opts.workspaceUploads),
       isolationWorkspaces: selectIsolationWorkspaceFactory(opts.isolationWorkspaces),
       repositoryGitWorkspaces: selectRepositoryGitWorkspaceFactory(opts.repositoryGitWorkspaces),
@@ -2499,6 +2548,8 @@ async function composeSqliteProviderSession(
       fusion: {
         appHome: Paths.root,
         startDeps: fusionStartDeps,
+        // RFC-370 §10 V20: standalone engine workspaces under the app home.
+        workspaces: createFileFusionWorkspaceEffects({ appHome: Paths.root }),
       },
       rootResumeRuntime: () =>
         taskLaunchConfiguration.selectedQueries === undefined
@@ -2680,7 +2731,10 @@ async function composeSqliteProviderSession(
     // RFC-353 T6/T7：跨 context 的 provider 装配一律在 bootstrap 完成（RFC-317 R2 只许经
     // exact public 交换合同，RFC-349 又不许 public 面点名 provider 适配器）。
     memoryMembership: composeSkillMemoryFusionParticipantFactory(),
-    skillVersionCommit: composeSkillVersionCommitParticipantFactory(),
+    // RFC-370 §10 V20: the same selected skill content serves fusion seeds and versions.
+    skillVersionCommit: composeSkillVersionCommitParticipantFactory({
+      skillContent: input.skillContent,
+    }),
     db,
     appHome: Paths.root,
     memories: memoryCatalog,
@@ -4261,7 +4315,7 @@ async function composeSqliteProviderSession(
     id: 'fusion-reconcile',
     intervalMs: DAEMON_CADENCE.fusionReconcile,
     async run() {
-      await reconcileRunningFusions({ operations: fusionOperations, appHome: Paths.root })
+      await reconcileRunningFusions({ operations: fusionOperations })
     },
     onError() {
       // Reconciliation is best-effort; the next provider-owned tick retries.

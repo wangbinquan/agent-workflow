@@ -25,6 +25,7 @@ import type {
   SkillSnapshotInspector,
 } from '../application/skills/lifecycleContentStore'
 import type { SkillPackageContentReader } from '../application/skills/packageContentReader'
+import type { SkillTreeContentStore } from '../application/skills/treeContentStore'
 import type {
   SkillVersionContentReader,
   SkillVersionTreeEntry,
@@ -61,6 +62,7 @@ import {
   writeTree,
   type SkillTreeFile,
 } from './databaseSkillTrees'
+import { createDatabaseSkillTreeContent } from './databaseSkillTreeContent'
 
 const MAIN = 'SKILL.md'
 const OPERATION_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/
@@ -98,6 +100,8 @@ function withoutPath(files: readonly SkillTreeFile[], path: string): SkillTreeFi
 
 export interface DatabaseSkillContent extends SkillContentBinding {
   readonly packageContent: SkillPackageContentReader
+  /** RFC-370 §10 V20: fusion seeds and proposal candidates. */
+  readonly treeContent: SkillTreeContentStore
 }
 
 export function createDatabaseSkillContent(input: {
@@ -558,5 +562,6 @@ export function createDatabaseSkillContent(input: {
     identityContent,
     identityInspector,
     packageContent,
+    treeContent: createDatabaseSkillTreeContent({ db, now }),
   })
 }

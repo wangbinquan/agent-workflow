@@ -269,18 +269,31 @@ export interface TaskExecutionResourceSnapshotInTx {
 // 它们描述的是那条同步事务链「把七条臂 + events + audit 打包交给引擎」的形状，
 // 统一 apply 引擎不走这个形状（编排层持有事务、逐臂调用）。公共面不留没人跨的合同。
 // ---------------------------------------------------------------------------
-// RFC-353 T6（RFC-294 W4-E3）—— resource-catalog offered 的**技能版本提交**面。
+// RFC-353 T6（RFC-294 W4-E3）/ RFC-370 §10 V20 —— resource-catalog offered 的**技能版本提交**面。
 //
-// `skills` / `skill_versions` 两张表归 resource-catalog 单写。此前 knowledge-evolution 的
-// 融合 `apply()` 是跨 context 直写它们（两个 provider 各抄一份，复合前置条件还比对方少四项）。
-// 现在改由这个 tx-bound participant 代写：调用方开好事务交进来，版本行与调用方自己的
-// 状态推进、与 memory 的成员关系标记落在同一个事务里。
+// `skills` / `skill_versions` 两张表归 resource-catalog 单写，技能的字节归选定的内容绑定
+// （本地文件或数据库）。融合两边都不直接碰：它向 RC 读种子树（`readVersionTree`，严格读该版本的
+// 不可变快照，没有 live 兜底）、把提案存成候选树（`captureCandidate`），批准时把提案交给 RC 暂存
+// （`stage`：开带日志的 version-write 操作并暂存内容），在自己的事务里经 tx-bound participant 提交
+// （`before` 在栅栏前重验融合自身、`after` 让 memory 标记已融合），事务提交后再由 RC 发布
+// （`publish`）。版本写入与编辑器同一条带日志的漏斗，崩溃恢复也是同一份。
 //
 // 唯一 owner 工厂是 `application/skillVersionCommit.ts` 的
 // `createSkillVersionCommitParticipantInTx`。
 // ---------------------------------------------------------------------------
 
-/** 调用方在授权那一刻看到的技能形状；漂了就以 409 退回让它重新加载。 */
+/** One file of a skill tree (SKILL.md included), as exact bytes. */
+export interface SkillTreeVersionFile {
+  readonly path: string
+  readonly content: Uint8Array
+}
+
+/** What becomes the next version: a complete tree, or a captured candidate. */
+export type SkillTreeVersionSource =
+  | { readonly kind: 'tree'; readonly files: readonly SkillTreeVersionFile[] }
+  | { readonly kind: 'candidate'; readonly candidateId: string }
+
+/** 调用方在授权那一刻看到的技能形状；漂了就以 409 退回让它重新加载（在提交事务里判）。 */
 export interface SkillVersionCommitFence {
   readonly expectedSkillId?: string
   readonly expectedVersion?: number
@@ -295,22 +308,50 @@ export interface SkillVersionCommitFence {
   readonly staleMessage?: string
 }
 
-export interface SkillVersionCommitRequest extends SkillVersionCommitFence {
+export interface SkillTreeVersionStageRequest extends SkillVersionCommitFence {
   readonly skillId: string
-  readonly versionIndex: number
-  readonly contentHash: string
-  readonly source: SkillVersionSource
+  readonly source: SkillTreeVersionSource
+  readonly versionSource: Extract<SkillVersionSource, 'fusion' | 'import'>
   readonly summary: string | null
   readonly fusionId: string | null
-  readonly restoredFromVersion: number | null
   readonly authorUserId: string | null
   readonly now: number
+}
+
+/** Opaque handle: only the operations that staged it commit, publish or abort it. */
+export interface StagedSkillTreeVersion {
+  readonly skillId: string
+  readonly versionIndex: number
+}
+
+export interface SkillTreeVersionOperations {
+  /** The immutable tree of one version; `null` when that snapshot is not stored. */
+  readVersionTree(input: {
+    readonly skillId: string
+    readonly version: number
+  }): Promise<readonly SkillTreeVersionFile[] | null>
+  captureCandidate(input: {
+    readonly skillId: string
+    readonly candidateId: string
+    readonly files: readonly SkillTreeVersionFile[]
+  }): Promise<void>
+  readCandidate(input: {
+    readonly skillId: string
+    readonly candidateId: string
+  }): Promise<readonly SkillTreeVersionFile[] | null>
+  discardCandidate(input: { readonly skillId: string; readonly candidateId: string }): Promise<void>
+  /** Opens the skill's version-write operation (lock + journal) and stages the tree. */
+  stage(request: SkillTreeVersionStageRequest): Promise<StagedSkillTreeVersion>
+  /** After the committing transaction: publish the live tree and close the operation. */
+  publish(staged: StagedSkillTreeVersion): Promise<void>
+  /** Instead of a commit: discard the staged content and the operation. */
+  abort(staged: StagedSkillTreeVersion): Promise<void>
 }
 
 /**
  * 调用方折进同一事务的两段自有写入 / 检查。
  *
- * `before` 在版本行落下**之前**跑，这决定错误优先级：融合 approve 的既有语义是先答
+ * `before` 在栅栏与版本行**之前**跑，这决定错误优先级：融合 approve 的既有语义是先答
  * 「不在 applying / 无权」，再答「技能已被别人推进」。放到写入之后会让 409 抢在前面，
  * 那是用户可见的行为漂移。`after` 拿得到刚写下的版本号（融合在这里把记忆标记为已融合）。
  */
@@ -323,9 +364,9 @@ declare const skillVersionCommitParticipantInTxBrand: unique symbol
 
 export interface SkillVersionCommitParticipantInTx {
   readonly [skillVersionCommitParticipantInTxBrand]: 'skill-version-commit'
-  /** 返回刚写下的版本号（等于 `request.versionIndex`）。 */
+  /** `before` → 复合栅栏 → 版本行 → `after` → 操作日志推进到 db-committed；返回新版本号。 */
   commit(
-    request: SkillVersionCommitRequest,
+    staged: StagedSkillTreeVersion,
     hooks?: SkillVersionCommitHooks<Promise<void> | void>,
   ): Promise<number>
 }

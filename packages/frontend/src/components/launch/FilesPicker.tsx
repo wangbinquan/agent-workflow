@@ -1,12 +1,13 @@
 // Multi-file picker for kind=files inputs (P-2-10 stage 2).
 //
-// Backing endpoint: /api/repos/files?path=<repoPath> returns the full
-// `git ls-files` listing. We filter client-side by a substring filter so
-// users can navigate medium-sized repos without paginating.
+// Backing endpoint: /api/repos/files?cachedRepoId=<id> returns the full file
+// listing of the repository's default branch. We filter client-side by a
+// substring filter so users can navigate medium-sized repos without paginating.
 //
-// RFC-110: in URL launch mode the picker enumerates against the matched cached
-// clone's localPath (passed in via repoPath by the launcher). When url mode has
-// no cache (repoPath === '') or enumeration fails, it falls back to a free-text
+// RFC-110: in URL launch mode the picker enumerates the matched registered
+// repository (its id is passed in by the launcher; RFC-370 §10 V17 replaced the
+// mirror's local path). When url mode has no match (cachedRepoId === '') or
+// enumeration fails, it falls back to a free-text
 // TextArea so the form stays launchable. Selected paths not in the current
 // listing are surfaced as removable rows so a stale value can never submit
 // silently (Codex RFC-110 design gate P2).
@@ -21,12 +22,13 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 
 interface Props {
   def: WorkflowInput
-  repoPath: string
+  /** The registered repository to list files of ('' → none matched). */
+  cachedRepoId: string
   value: string
   onChange: (next: string) => void
   /**
    * RFC-110: which repo-source mode the launcher is in. In 'url' mode an empty
-   * repoPath (uncached URL) or an enumeration error falls back to a text input
+   * cachedRepoId (uncached URL) or an enumeration error falls back to a text input
    * instead of the path-mode "pick a repo first" / error-box behavior. Defaults
    * to 'path' so every existing caller stays byte-baseline.
    */
@@ -38,14 +40,14 @@ interface Props {
  * runner reads it via promptTemplate `{{port}}` and downstream nodes can
  * split as needed.
  */
-export function FilesPicker({ def, repoPath, value, onChange, sourceKind = 'path' }: Props) {
+export function FilesPicker({ def, cachedRepoId, value, onChange, sourceKind = 'path' }: Props) {
   const { t } = useTranslation()
   const [filter, setFilter] = useState('')
   const urlMode = sourceKind === 'url'
   const all = useQuery<RepoFilesResponse>({
-    queryKey: ['repos', 'files', repoPath],
-    queryFn: ({ signal }) => api.get('/api/repos/files', { path: repoPath }, signal),
-    enabled: repoPath !== '',
+    queryKey: ['repos', 'files', cachedRepoId],
+    queryFn: ({ signal }) => api.get('/api/repos/files', { cachedRepoId }, signal),
+    enabled: cachedRepoId !== '',
   })
 
   const selected = useMemo(
@@ -121,7 +123,7 @@ export function FilesPicker({ def, repoPath, value, onChange, sourceKind = 'path
     </div>
   )
 
-  if (repoPath === '') {
+  if (cachedRepoId === '') {
     if (urlMode) return fallback
     return <div className="muted">{t('launch.filesPicker.pickRepoFirst')}</div>
   }

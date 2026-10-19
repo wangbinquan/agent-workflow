@@ -22,7 +22,7 @@ function wrap(node: React.ReactElement, files: string[]) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
-  qc.setQueryData(['repos', 'files', '/repo'], { files })
+  qc.setQueryData(['repos', 'files', 'repo-1'], { files })
   return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
 }
 
@@ -31,26 +31,27 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-// RFC-110 — url launch mode: enumerate the matched cached clone (repoPath is the
-// cache localPath), fall back to a text input when uncached / errored, and never
-// hide a selected-but-unlisted path (it stays visible + removable).
+// RFC-110 — url launch mode: enumerate the matched registered repository
+// (cachedRepoId names it; RFC-370 §10 V17 replaced the mirror's local path), fall
+// back to a text input when uncached / errored, and never hide a
+// selected-but-unlisted path (it stays visible + removable).
 describe('FilesPicker (RFC-110 url mode)', () => {
-  function wrapUrl(node: React.ReactElement, repoPath: string, files: string[]) {
+  function wrapUrl(node: React.ReactElement, cachedRepoId: string, files: string[]) {
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
     })
-    qc.setQueryData(['repos', 'files', repoPath], { files })
+    qc.setQueryData(['repos', 'files', cachedRepoId], { files })
     return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
   }
 
-  test('uncached url (repoPath="") → text fallback, not "pick a repo first"', () => {
+  test('uncached url (cachedRepoId="") → text fallback, not "pick a repo first"', () => {
     const onChange = vi.fn()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={qc}>
         <FilesPicker
           def={def()}
-          repoPath=""
+          cachedRepoId=""
           sourceKind="url"
           value="src/x.ts"
           onChange={onChange}
@@ -66,8 +67,14 @@ describe('FilesPicker (RFC-110 url mode)', () => {
 
   test('cache hit → cache snapshot hint + checkbox list', () => {
     wrapUrl(
-      <FilesPicker def={def()} repoPath="/cache/x" sourceKind="url" value="" onChange={() => {}} />,
-      '/cache/x',
+      <FilesPicker
+        def={def()}
+        cachedRepoId="repo-x"
+        sourceKind="url"
+        value=""
+        onChange={() => {}}
+      />,
+      'repo-x',
       ['a.ts', 'b.ts'],
     )
     expect(screen.getByTestId('files-picker-cache-hint')).toBeTruthy()
@@ -79,12 +86,12 @@ describe('FilesPicker (RFC-110 url mode)', () => {
     wrapUrl(
       <FilesPicker
         def={def()}
-        repoPath="/cache/x"
+        cachedRepoId="repo-x"
         sourceKind="url"
         value={'a.ts\nb.ts'}
         onChange={onChange}
       />,
-      '/cache/x',
+      'repo-x',
       ['b.ts'],
     )
     const extra = screen.getByTestId('files-picker-extra-selected')
@@ -101,7 +108,7 @@ describe('FilesPicker (RFC-110 url mode)', () => {
       <QueryClientProvider client={qc}>
         <FilesPicker
           def={def()}
-          repoPath="/cache/x"
+          cachedRepoId="repo-x"
           sourceKind="url"
           value=""
           onChange={() => {}}
@@ -121,7 +128,7 @@ describe('FilesPicker (RFC-110 url mode)', () => {
       <QueryClientProvider client={qc}>
         <FilesPicker
           def={def()}
-          repoPath="/cache/x"
+          cachedRepoId="repo-x"
           sourceKind="url"
           value={'a.ts\nb.ts'}
           onChange={onChange}
@@ -136,11 +143,11 @@ describe('FilesPicker (RFC-110 url mode)', () => {
     expect(onChange).toHaveBeenLastCalledWith('b.ts')
   })
 
-  test('path mode (default) keeps "pick a repo first" for empty repoPath', () => {
+  test('path mode (default) keeps "pick a repo first" for empty cachedRepoId', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={qc}>
-        <FilesPicker def={def()} repoPath="" value="" onChange={() => {}} />
+        <FilesPicker def={def()} cachedRepoId="" value="" onChange={() => {}} />
       </QueryClientProvider>,
     )
     expect(screen.getByText(/Pick a repo first/i)).toBeTruthy()
@@ -151,7 +158,12 @@ describe('FilesPicker (RFC-110 url mode)', () => {
 describe('FilesPicker', () => {
   test('derives selected set from newline-joined value', () => {
     wrap(
-      <FilesPicker def={def()} repoPath="/repo" value={'src/a.ts\nsrc/b.ts'} onChange={() => {}} />,
+      <FilesPicker
+        def={def()}
+        cachedRepoId="repo-1"
+        value={'src/a.ts\nsrc/b.ts'}
+        onChange={() => {}}
+      />,
       ['src/a.ts', 'src/b.ts', 'src/c.ts'],
     )
     const cb = screen.getAllByRole('checkbox') as HTMLInputElement[]
@@ -161,7 +173,7 @@ describe('FilesPicker', () => {
 
   test('toggling a row emits a newline-joined string', () => {
     const onChange = vi.fn()
-    wrap(<FilesPicker def={def()} repoPath="/repo" value="" onChange={onChange} />, [
+    wrap(<FilesPicker def={def()} cachedRepoId="repo-1" value="" onChange={onChange} />, [
       'x.ts',
       'y.ts',
     ])
@@ -172,7 +184,12 @@ describe('FilesPicker', () => {
   test('respects maxCount — toggling past the cap is a no-op', () => {
     const onChange = vi.fn()
     wrap(
-      <FilesPicker def={def({ maxCount: 1 })} repoPath="/repo" value="x.ts" onChange={onChange} />,
+      <FilesPicker
+        def={def({ maxCount: 1 })}
+        cachedRepoId="repo-1"
+        value="x.ts"
+        onChange={onChange}
+      />,
       ['x.ts', 'y.ts'],
     )
     // Adding y.ts would push selected to 2 → ignored.
@@ -184,7 +201,7 @@ describe('FilesPicker', () => {
   })
 
   test('filter narrows the visible list', () => {
-    wrap(<FilesPicker def={def()} repoPath="/repo" value="" onChange={() => {}} />, [
+    wrap(<FilesPicker def={def()} cachedRepoId="repo-1" value="" onChange={() => {}} />, [
       'alpha.ts',
       'beta.ts',
       'gamma.ts',
@@ -194,8 +211,8 @@ describe('FilesPicker', () => {
     expect(labels).toEqual(['beta.ts'])
   })
 
-  test('repoPath="" shows the prompt instead of loading', () => {
-    wrap(<FilesPicker def={def()} repoPath="" value="" onChange={() => {}} />, [])
+  test('cachedRepoId="" shows the prompt instead of loading', () => {
+    wrap(<FilesPicker def={def()} cachedRepoId="" value="" onChange={() => {}} />, [])
     expect(screen.getByText(/Pick a repo first/i)).toBeTruthy()
   })
 })

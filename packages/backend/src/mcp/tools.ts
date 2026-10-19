@@ -213,10 +213,9 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
   {
     // RFC-329 A3 — `launch_task` takes a `ref`, and until now nothing on this
     // channel could tell the model which refs exist, so it had to guess a branch
-    // name. The REST route takes `?path=<absolute local mirror path>`
-    // (routes/repos.ts, guarded by requireKnownPath), which is not something a
-    // model should be handling or inventing — so this tool takes the repo id and
-    // resolves the path itself.
+    // name. RFC-370 §10 V17: the REST route now names the repo by
+    // `cachedRepoId` itself (a hosted deployment has no local mirror path to
+    // hand out), so the tool is one hop; an unknown id is the route's own 404.
     name: 'list_repo_refs',
     title: 'List the branches and tags of an imported repo',
     description:
@@ -232,30 +231,12 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
         .describe('Repo id from resource_read(kind="repos", method="list")'),
     },
     audit: (args) => ({ kind: 'repo-refs', id: String(args.cachedRepoId) }),
-    handler: async (args, ctx) => {
-      const listed = unwrap(await ctx.operations.cachedReposList()) as {
-        items?: ReadonlyArray<{ id?: unknown; localPath?: unknown }>
-      }
-      const row = (listed.items ?? []).find((item) => item.id === args.cachedRepoId)
-      // A miss is a business refusal shaped like the route's own 404, NOT a
-      // thrown TypeError on the next line. The failure mode has to match what a
-      // single-dispatch tool would have produced, or a two-hop tool becomes the
-      // one place where a bad id yields a 500.
-      if (row === undefined || typeof row.localPath !== 'string') {
-        throw new McpCallError({
-          status: 404,
-          body: {
-            code: 'cached-repo-not-found',
-            message: `no imported repo with id '${String(args.cachedRepoId)}'`,
-          },
-        })
-      }
-      return unwrap(
+    handler: async (args, ctx) =>
+      unwrap(
         await ctx.operations.repoRefsList({
-          query: { path: row.localPath },
+          query: { cachedRepoId: String(args.cachedRepoId) },
         }),
-      )
-    },
+      ),
   },
   {
     name: 'get_task',

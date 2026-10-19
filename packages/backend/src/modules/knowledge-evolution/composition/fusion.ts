@@ -3,6 +3,7 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   createFusionPersistence,
   type FusionMemoryMembership,
+  type FusionSkillTrees,
   type FusionSkillVersionCommit,
 } from '../infrastructure/fusionRepository'
 import type { MemoryCatalogOperations } from '../../memory/public/catalog'
@@ -18,7 +19,7 @@ interface FusionCompositionDependencies {
   readonly tasks: FusionEngineTaskOperations
 }
 
-/** 跨聚合的两半（memory 的成员关系、resource-catalog 的版本提交），两个 provider 同一份 tx-bound 工厂。 */
+/** 跨聚合的两半（memory 的成员关系、resource-catalog 的版本提交），两个 provider 同一份工厂。 */
 export interface FusionParticipants {
   readonly memoryMembership: FusionMemoryMembership
   readonly skillVersionCommit: FusionSkillVersionCommit
@@ -32,17 +33,19 @@ export interface FusionParticipants {
  * 两条约束叠起来只剩一个自洽解——**跨 context 的 provider 装配在 bootstrap /
  * system-operation 根上完成**，模块之间只传 provider 中性的端口。
  * RFC-359 W4-D5 起仓库实现只有一份，provider 只在交来的数据库客户端上体现；旧 provider 名保留为装配别名。
+ * RFC-370 §10 V20：版本提交工厂在这里绑上本仓的数据库句柄（与 appHome——本地文件存储的根），
+ * 绑出的同一个 participant 同时给仓库（暂存 / 提交 / 发布）与编排（种子树 / 候选树）。
  */
-export function composeFusionPersistenceFor(
-  input: {
-    readonly db: ProviderNeutralDatabase
-    readonly appHome: string
-  } & FusionParticipants,
+function persistenceOf(
+  input: { readonly db: ProviderNeutralDatabase } & Pick<FusionParticipants, 'memoryMembership'>,
+  skillTrees: FusionSkillTrees,
 ): FusionPersistence {
   const { memoryMembership } = input
   const session = databaseSessionFor(input.db)
   return createFusionPersistence({
-    ...input,
+    db: input.db,
+    memoryMembership,
+    skillVersionCommit: skillTrees,
     // RFC-353 T6/T7：provenance 修复也走 memory 的同一个 participant。逐条各自开事务——
     // 单条 UPDATE 与此前的裸写等价，但不再需要把 provider 的原始 client 泄漏到 public 面上。
     fusedSkillReassignment: Object.freeze({
@@ -54,20 +57,29 @@ export function composeFusionPersistenceFor(
   })
 }
 
+export function composeFusionPersistenceFor(
+  input: {
+    readonly db: ProviderNeutralDatabase
+    readonly appHome: string
+  } & FusionParticipants,
+): FusionPersistence {
+  return persistenceOf(
+    input,
+    input.skillVersionCommit.bind({ db: input.db, appHome: input.appHome }),
+  )
+}
+
 export function composeFusionOperationsFor(
   input: FusionCompositionDependencies & {
     readonly db: ProviderNeutralDatabase
   } & FusionParticipants,
 ): FusionOperations {
+  const skillTrees = input.skillVersionCommit.bind({ db: input.db, appHome: input.appHome })
   return Object.freeze({
-    persistence: composeFusionPersistenceFor({
-      db: input.db,
-      appHome: input.appHome,
-      memoryMembership: input.memoryMembership,
-      skillVersionCommit: input.skillVersionCommit,
-    }),
+    persistence: persistenceOf(input, skillTrees),
     memories: input.memories,
     tasks: input.tasks,
+    skillTrees,
   })
 }
 

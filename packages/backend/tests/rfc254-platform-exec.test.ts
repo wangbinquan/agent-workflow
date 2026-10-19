@@ -249,19 +249,23 @@ describe('RFC-254 — repo-relative paths in port data are portable, not host-fl
     // Windows the service emitted `src\A.java#A.run` while every caller and
     // fixture spells it with `/`, so a ref it produced could not be fed to it
     // on the platform that produced it.
-    const expandService = readFileSync(
+    // RFC-370 §10 V16: the class→file walk moved, unchanged, into Source
+    // Control's local revision content (a hosted volume runs the same walk in
+    // its task image), so that is where the index's paths become port data.
+    const classIndex = readFileSync(
       resolve(
         import.meta.dir,
         '..',
         'src',
-        'services',
-        'structuralDiff',
-        'callGraph',
-        'expandService.ts',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'repositoryRevisionContent.ts',
       ),
       'utf8',
     )
-    expect(expandService).toContain('toPortableRelativePath(relative(root, join(dir, e.name)))')
+    expect(classIndex).toContain('toPortableRelativePath(relative(root, join(dir, e.name)))')
   })
 })
 

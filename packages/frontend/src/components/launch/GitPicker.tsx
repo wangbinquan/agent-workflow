@@ -17,12 +17,13 @@ import { Select } from '@/components/Select'
 
 interface Props {
   def: WorkflowInput
-  repoPath: string
+  /** The registered repository to list refs of ('' → none matched). */
+  cachedRepoId: string
   value: string
   onChange: (next: string) => void
   /**
    * RFC-110: repo-source mode. In 'url' mode, a branch sub-kind with no cached
-   * repo (empty repoPath) or a failed ref listing falls back to a free-text
+   * repo (empty cachedRepoId) or a failed ref listing falls back to a free-text
    * branch input so the form stays launchable. Defaults to 'path' so existing
    * callers stay byte-baseline.
    */
@@ -47,14 +48,14 @@ interface PrValue {
 
 type GitValue = BranchValue | CommitRangeValue | PrValue
 
-export function GitPicker({ def, repoPath, value, onChange, sourceKind = 'path' }: Props) {
+export function GitPicker({ def, cachedRepoId, value, onChange, sourceKind = 'path' }: Props) {
   const { t } = useTranslation()
   const urlMode = sourceKind === 'url'
   const gitKind = ((def as Record<string, unknown>).gitKind as GitKind | undefined) ?? 'branch'
   const refs = useQuery<RepoRefsResponse>({
-    queryKey: ['repos', 'refs', repoPath],
-    queryFn: ({ signal }) => api.get('/api/repos/refs', { path: repoPath }, signal),
-    enabled: repoPath !== '' && gitKind === 'branch',
+    queryKey: ['repos', 'refs', cachedRepoId],
+    queryFn: ({ signal }) => api.get('/api/repos/refs', { cachedRepoId }, signal),
+    enabled: cachedRepoId !== '' && gitKind === 'branch',
   })
 
   const parsed = useMemo<GitValue | null>(() => {
@@ -74,9 +75,9 @@ export function GitPicker({ def, repoPath, value, onChange, sourceKind = 'path' 
 
   if (gitKind === 'branch') {
     const current = parsed?.kind === 'branch' ? parsed.ref : ''
-    // RFC-110: url mode without a cached repo (no repoPath) or a failed ref
+    // RFC-110: url mode without a cached repo (no cachedRepoId) or a failed ref
     // listing → free-text fallback so a branch can still be entered manually.
-    const noRefs = repoPath === '' || (refs.error !== null && refs.error !== undefined)
+    const noRefs = cachedRepoId === '' || (refs.error !== null && refs.error !== undefined)
     if (urlMode && noRefs) {
       return (
         <Field

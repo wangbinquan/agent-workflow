@@ -62,6 +62,7 @@ describe('RFC-329 AC-1 — repos has no single-repo read, and the table no longe
         },
       },
       {} as RepositoryWorkspaceStore,
+      {} as Parameters<typeof mountCachedRepoRoutes>[3],
     )
     const mounted = allRouteMeta().map((m) => `${m.method} ${m.path}`)
     resetRouteMetaRegistry()
@@ -92,6 +93,7 @@ describe('RFC-329 AC-1 — repos has no single-repo read, and the table no longe
         },
       },
       {} as RepositoryWorkspaceStore,
+      {} as Parameters<typeof mountCachedRepoRoutes>[3],
     )
     const mounted = new Set(allRouteMeta().map((m) => `${m.method} ${m.path}`))
     resetRouteMetaRegistry()
@@ -161,50 +163,21 @@ describe('RFC-329 AC-2 — the alert loop is closed on this channel', () => {
   })
 })
 
-describe('RFC-329 AC-3 — list_repo_refs resolves the mirror path itself', () => {
-  test('two hops: list the repos, then ask for that row’s refs by path', async () => {
-    const { ctx, calls } = recordingCtx('list_repo_refs', (path) =>
-      path === '/api/cached-repos'
-        ? {
-            items: [
-              { id: 'R1', localPath: '/mirrors/r1' },
-              { id: 'R2', localPath: '/mirrors/r2' },
-            ],
-          }
-        : {},
-    )
+describe('RFC-329 AC-3 — list_repo_refs names the repo by id', () => {
+  // RFC-370 §10 V17: the refs route itself takes `cachedRepoId` (a hosted
+  // deployment has no local mirror path), so the former two hops — list the
+  // repos, then ask by the row's mirror path — became one.
+  test('one hop: the refs route by cachedRepoId', async () => {
+    const { ctx, calls } = recordingCtx('list_repo_refs')
     await toolNamed('list_repo_refs').handler({ cachedRepoId: 'R2' }, ctx)
     expect(calls).toEqual([
-      {
-        operationId: MCP_OPERATIONS.cachedReposList.id,
-        method: 'GET',
-        path: '/api/cached-repos',
-      },
       {
         operationId: MCP_OPERATIONS.repoRefsList.id,
         method: 'GET',
         path: '/api/repos/refs',
-        query: { path: '/mirrors/r2' },
+        query: { cachedRepoId: 'R2' },
       },
     ])
-  })
-
-  test('an unknown id is a business refusal shaped like a 404, not a crash', async () => {
-    const { ctx, calls } = recordingCtx('list_repo_refs', (path) =>
-      path === '/api/cached-repos' ? { items: [{ id: 'R1', localPath: '/mirrors/r1' }] } : {},
-    )
-    const err = await toolNamed('list_repo_refs')
-      .handler({ cachedRepoId: 'NOPE' }, ctx)
-      .then(
-        () => null,
-        (e: unknown) => e,
-      )
-    expect((err as { name?: string })?.name).toBe('McpCallError')
-    expect((err as { status?: number })?.status).toBe(404)
-    expect((err as { code?: string })?.code).toBe('cached-repo-not-found')
-    // It must refuse BEFORE the second hop — otherwise a bad id reaches the
-    // refs route as `path=undefined`.
-    expect(calls).toHaveLength(1)
   })
 
   test('the model is never handed the absolute mirror path as an input', () => {

@@ -216,3 +216,34 @@ export interface HostedVolumeActivity {
 /** RFC-370 §9.2 V2 — every non-node task-image helper command on a hosted
  * volume runs through Source Control's journaled command client. */
 export type { HostedWorkspaceCommands } from '../infrastructure/crewstation/workspaceCommands'
+
+/** RFC-370 §10 V16 — the revision and worktree content the task "Changes"
+ * views read. Roots select the standalone or hosted factory; services bind it
+ * to a task's workspace reference. */
+export type {
+  RepositoryClassIndex,
+  RepositoryPresence,
+  RepositoryRevisionContent,
+  RepositoryRevisionContentFactory,
+  RevisionChangeEntry,
+  RevisionChanges,
+  RevisionFileRead,
+  RevisionLineStat,
+  WorktreeFileRead,
+} from '../application/ports/repositoryRevisionContent'
+export {
+  composeLocalRepositoryRevisionContent,
+  openContainedFileWithin,
+  type ContainedFileHooks,
+  type ContainedRead,
+} from '../composition/repositoryRevisionContent'
+
+/** RFC-370 §10 V20 — the fusion engine task's workspace (a skill tree as a Git
+ * baseline), prepared, collected and released for task-execution. */
+export type {
+  FusionWorkspaceEffects,
+  FusionWorkspaceFile,
+  FusionWorkspaceManifest,
+  FusionWorkspacePreparation,
+  FusionWorkspaceResult,
+} from '../application/ports/fusionWorkspaceEffects'

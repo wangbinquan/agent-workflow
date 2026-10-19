@@ -1,5 +1,7 @@
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
+import { isCrewStationApiError } from '@/platform/crewstation/platformApi'
+import { NotFoundError } from '@/util/errors'
 import type {
   RepositoryGitWorkspaceFactory,
   RepositoryGitWorkspaceScope,
@@ -151,9 +153,20 @@ export function createHostedWorkspaceEffects(input: {
           const workspace = await input.workspaces.open(root.taskId)
           if (workspace === null) throw new Error('hosted-workspace-not-found')
           const path = pathFor(request.relativeFile)
+          // A missing file is the same answer as in a standalone worktree
+          // (RFC-370 §10 V15: downloads and previews named it with a raw API error).
+          const readPage = (query: Parameters<typeof input.api.readFile>[1]) =>
+            input.api.readFile(workspace.businessTaskId, query).catch((error: unknown) => {
+              if (isCrewStationApiError(error) && error.status === 404)
+                throw new NotFoundError(
+                  'worktree-file-not-found',
+                  `file '${request.relativeFile}' not found`,
+                )
+              throw error
+            })
           // Acquire a version before resuming a bounded read: CS rejects a
           // continuation that could combine bytes from two file versions.
-          const first = await input.api.readFile(workspace.businessTaskId, {
+          const first = await readPage({
             path,
             offset: 0,
             limit: Math.max(1, Math.min(1024 * 1024, request.maxBytes)),
@@ -161,7 +174,7 @@ export function createHostedWorkspaceEffects(input: {
           const page =
             request.offset === 0
               ? first
-              : await input.api.readFile(workspace.businessTaskId, {
+              : await readPage({
                   path,
                   offset: request.offset,
                   limit: Math.max(1, Math.min(1024 * 1024, request.maxBytes)),

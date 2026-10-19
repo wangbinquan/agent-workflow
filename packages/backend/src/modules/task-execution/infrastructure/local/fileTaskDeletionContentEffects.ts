@@ -5,11 +5,14 @@ import type { TaskDeletionContentEffects } from '../../application/ports/taskDel
 
 export function createFileTaskDeletionContentEffects(): TaskDeletionContentEffects {
   return Object.freeze({
-    directories(taskId: string): readonly [string, string, string] {
+    directories(taskId: string): readonly string[] {
       return [
         join(Paths.runsDir, taskId),
         join(Paths.logsDir, taskId),
         join(Paths.root, 'scratch', taskId),
+        // RFC-370 §10 V16: the task's code-review artifacts (structural diffs,
+        // change narrative) were never removed with the task.
+        join(Paths.root, 'structural-diffs', taskId),
       ]
     },
     removeIfPresent(reference: string): void {

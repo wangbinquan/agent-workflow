@@ -65,6 +65,7 @@ import { composeIdentityAccess } from '../src/modules/identity-access/compositio
 import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
 import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
+import { createFileFusionWorkspaceEffects } from '../src/modules/source-control/composition'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -354,7 +355,6 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
     const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
     const deps: TestFusionDeps = {
       db,
-      appHome,
       operations: composeSqliteFusionOperations({
         ...TEST_SQLITE_FUSION_PARTICIPANTS,
         db,
@@ -364,7 +364,12 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
           contexts: composeIdentityAccess(db).contexts,
           authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
         }),
-        tasks: createSqliteFusionEngineTaskOperations({ db, appHome, schedulerDriver }),
+        tasks: createSqliteFusionEngineTaskOperations({
+          db,
+          appHome,
+          schedulerDriver,
+          workspaces: createFileFusionWorkspaceEffects({ appHome }),
+        }),
       }),
       binaryOverride: makeClarifyStub(root),
       awaitScheduler: true,

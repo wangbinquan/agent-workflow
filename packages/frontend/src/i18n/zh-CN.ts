@@ -2089,6 +2089,8 @@ export interface Resources {
       statusDoneCold: string
       statusDoneHit: string
       statusDoneHitFetchFail: string
+      statusDoneVerified: string
+      statusDoneVerifiedHit: string
       statusFailed: string
       retry: string
       retryWithEdit: string
@@ -9207,6 +9209,8 @@ export const zhCN: Resources = {
       statusDoneCold: '克隆成功',
       statusDoneHit: '已缓存（已 fetch）',
       statusDoneHitFetchFail: '已缓存（fetch 失败）',
+      statusDoneVerified: '已校验并登记',
+      statusDoneVerifiedHit: '已登记（已校验）',
       statusFailed: '失败',
       retry: '重试',
       retryWithEdit: '修改 URL 后重试',

@@ -41,6 +41,12 @@ export const BatchImportRowSchema = z.object({
   cold: z.boolean().nullable(),
   /** `fetchOk` is meaningful only on warm-path `done` rows. */
   fetchOk: z.boolean().nullable(),
+  /**
+   * RFC-370 §10 V17 — true when the row verified the remote and registered it
+   * without cloning a mirror (a hosted deployment clones only inside each
+   * task's own volume). `cold` then tells whether the registration is new.
+   */
+  verifiedOnly: z.boolean().optional(),
   /** cached_repos.id once the row finishes successfully. */
   cachedRepoId: z.string().nullable(),
   /** Stable error code on `failed` rows; null otherwise. */

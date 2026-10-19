@@ -48,12 +48,14 @@ function member(taskId: string): MaintenanceMemberSnapshot {
   }
 }
 
-/** 与 `services/taskDelete.ts` 的 v2 写入方逐字同形：每个成员三个根。 */
+/** 与 `services/taskDelete.ts` 的 v2 写入方逐字同形：每个成员的本地内容根
+ *  （RFC-370 §10 V16 起含代码评审产物目录 `structural-diffs/<id>`）。 */
 function expectedDirs(taskIds: readonly string[]): string[] {
   return taskIds.flatMap((id) => [
     join(Paths.runsDir, id),
     join(Paths.logsDir, id),
     join(Paths.root, 'scratch', id),
+    join(Paths.root, 'structural-diffs', id),
   ])
 }
 

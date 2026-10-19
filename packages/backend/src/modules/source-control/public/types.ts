@@ -279,3 +279,10 @@ export interface WorkspaceMaintenanceEffects {
   readonly preparation: RepositoryPreparationEffectFactory
   readonly scratch: ScratchWorkspaceEffects
 }
+
+// RFC-370 §10 V17 — registered repositories' reads, registration and refresh.
+export type {
+  RepositoryMirrors,
+  RepositoryRefresh,
+  RepositoryRegistration,
+} from '../application/ports/repositoryMirrors'

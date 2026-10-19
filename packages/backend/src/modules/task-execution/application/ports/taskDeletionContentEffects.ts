@@ -6,7 +6,7 @@ type Completion<T> = T | Promise<T>
 export interface TaskDeletionContentEffects {
   /** Freeze the owning workspace before task rows disappear; inherited
    * children may share a physical volume while retaining separate content. */
-  directories(taskId: string, workspaceReference?: string): readonly [string, string, string]
+  directories(taskId: string, workspaceReference?: string): readonly string[]
   removeIfPresent(reference: string): Completion<void>
 }
 

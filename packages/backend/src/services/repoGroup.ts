@@ -26,6 +26,7 @@ import type {
   RepositoryGroupSnapshot,
   RepositoryWorkspaceStore,
 } from '@/modules/source-control/public/operations'
+import type { RepositoryRegistration } from '@/modules/source-control/public/types'
 import { resolveCachedRepo, type GitRepoCacheDeps } from '@/services/gitRepoCache'
 import {
   ConflictError,
@@ -38,6 +39,8 @@ import {
 export interface RepoGroupDeps {
   store: RepositoryWorkspaceStore
   cache?: GitRepoCacheDeps
+  /** RFC-370 §10 V17: registers a verified remote instead of cloning (hosted). */
+  register?: (url: string) => Promise<RepositoryRegistration>
   now?: () => number
 }
 
@@ -344,7 +347,9 @@ async function materializeNodes(
     }
 
     let cachedRepoId = attachment.cachedRepoId ?? null
-    if (cachedRepoId === null) {
+    if (cachedRepoId === null && deps.register !== undefined) {
+      cachedRepoId = (await deps.register(attachment.repoUrl!)).cachedRepoId
+    } else if (cachedRepoId === null) {
       if (deps.cache === undefined) {
         throw new ValidationError(
           'repo-group-url-import-unavailable',
