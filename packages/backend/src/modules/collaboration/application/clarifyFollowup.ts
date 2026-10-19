@@ -3,6 +3,7 @@ import {
   CLARIFY_MINDMAP_QUESTION_GUIDANCE,
   clarifyContentKey,
   clarifyFollowupContext,
+  clarifyFormatExample,
   parseClarifyEnvelopeBody,
   type ClarifyFollowup,
   type ClarifyFollowupStart,
@@ -99,7 +100,8 @@ export function createClarifyFollowupOperations(
         .catch(() => null)
     const prompt = [
       'Ask 1–4 consequential follow-up questions about the selected branch, in the same language as the user. Do not repeat resolved questions. Do not execute the task or produce deliverables.',
-      'Return exactly one <workflow-clarify> envelope containing {"questions":[{"id":"q1","title":"...","kind":"single","options":["...","..."],"mindmap":{"categoryPath":["..."]}}]}. Every question needs 2–4 options; do not include a free-text option. The framework assigns attachment to the selected question or category. No text outside the envelope.',
+      'Return exactly one <workflow-clarify> envelope. Every question needs 2–4 options; do not include a free-text option. Choose single or multi according to whether the actual alternatives are mutually exclusive or compatible. The framework assigns attachment to the selected question or category. No text outside the envelope.',
+      clarifyFormatExample(undefined, true),
       typeof target === 'string'
         ? 'Deepen the selected question, respecting its ancestor answers.'
         : target.length

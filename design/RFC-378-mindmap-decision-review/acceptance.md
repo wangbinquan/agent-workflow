@@ -121,6 +121,14 @@
 
 旧任务清理提交 `bf99a2dfd9e989a018e0c74db9be51494b60e5f4` 的 [CI 39259525265](https://github.com/wangbinquan/agent-workflow/actions/runs/39259525265) 为 46 success / 3 failure：后台 shard 15/24 与 shard 20/24 复现父基线的两组断言，另一个失败为汇总门；该提交仅改五个文档/证据路径，未代改其他会话实现。后继共享基线 `0c266dbcce2711ee8f90ba79bb627f59478127ee` 的 [CI 39261747195](https://github.com/wangbinquan/agent-workflow/actions/runs/39261747195) 已终态 **49/49 success**；旧失败记录保留。同步检查 main 与 origin/main 为 0/0，RFC-378 生产候选内容未因这些文档更新而改变。 已通过原发布脚本将该已提交基线同步到独立项目 GitLab `93b4c6c1a4fc3b7b5a6623cebd6f1131cd3bb2f0`（162 个文件动作、2 个提交）；使用 `--no-release`，尚未申请新候选版本。
 
+### 2026-10-19：一周前旧 RFC 预览清理与镜像验证解阻
+
+用户进一步明确要求完整完成 RFC，并授权下线一周前的其他 RFC 资源、不再逐项询问。本轮通过平台 `slots/preview/offline` 下线 rfc011-role-home、rfc006-verify、rfc022-verify、rfc023-verify 和 rfc038-wizard-20261009 的旧预览；执行前核对 release 创建时间和 preview retention.since 均早于固定七天截止线，按 expectedReleaseId 防止错停新版本。五个旧 Pod 已物理消失，释放请求合计 625m / 1664Mi；rfc038 正式 blue、正式 AW 和 snake 父会话及已发布服务保持 Ready。
+
+新的项目专属 task 镜像验证 `01a154a9-2e3f-7000-93d7-e91285e50e5c` 在 `2026-10-19T14:55:45.068Z` passed。实际镜像 digest 为 `sha256:722194e94a5b65fb7fcbb94cdb4362be25dfa07ed79e39f282af1aae3ebe8133`；worker UID、agent-workflow、git、ssh、python-venv、node 六项检查全部通过。未修改共享资源请求或跳过验证。详见 [旧预览回收与项目镜像验证](evidence/week-old-previews-and-validation.json)。
+
+同时完成 AC09/AC10 失败样本对应的三项修复与用例：脑图续跑不再重复未选提案；分支追问复用含 single/multi 的结构化格式示例；共享提问指导与最终文档检查覆盖人为互斥、未知转否定和跨章节成熟度漂移。当前仅记录实现完成，须在新候选 CI 和实际单机/托管文档中集中复验，不把提示断言当作模型质量证明。
+
 ## 6. 完成边界
 
 原型、独立代码功能门、实际单机运行、模型内容、自动化、托管部署分别成立才记录相应完成状态。一次代理走查证明操作链路与可见内容，不证明真实使用者已经形成更深入的思考或责任习惯；后续试用应观察主动质疑、明确代价、保留未知和提出可执行复核安排，而不是统计填写字段或分支数量。

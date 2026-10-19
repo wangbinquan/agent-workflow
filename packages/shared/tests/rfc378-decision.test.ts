@@ -16,6 +16,7 @@ import {
   clarifyFollowupContext,
   isClarifyAnswerConfirmed,
   normalizeClarifyDecision,
+  renderFlatClarifyQueue,
   renderUserPrompt,
   summariseClarifyAnswer,
   summariseCrossAnswer,
@@ -74,6 +75,10 @@ describe('RFC-378 optional decision contract', () => {
             'Success criteria, rollout scope and validation ownership are separate axes',
           )
           expect(prompt).toContain('Separate evidence collection from enforcement')
+          expect(prompt).toContain('Do not manufacture exclusivity')
+          expect(prompt).toContain('Historical records and new observations can coexist')
+          expect(prompt).toContain('a calendar review and a loss-triggered review can coexist')
+          expect(prompt).toContain('An evidence-source option must say "if available"')
           expect(prompt).toContain(
             'Preserve explicit decided/provisional status and unmarked maturity',
           )
@@ -225,7 +230,75 @@ describe('RFC-378 optional decision contract', () => {
     expect(mindmap).toContain('model-inferred consequences separately')
     expect(mindmap).toContain('Maturity labels and validation arrangements are optional')
     expect(mindmap).toContain('Do not invent a requirement to mark every choice')
+    expect(mindmap).toContain(
+      'Missing, unselected and explicitly rejected are three different states',
+    )
+    expect(mindmap).toContain('Preserve that status in EVERY later reference')
+    expect(mindmap).toContain(
+      'A heading such as "model inference" does not permit inventing its premises',
+    )
+    expect(mindmap).toContain('"reminders are undecided" must not become "no reminders"')
+    expect(mindmap).toContain('Remove unsupported scope exclusions')
     expect(mindmap).not.toContain('Every question must include mindmap')
+  })
+  // Fourth real output imported calendar/reminder policies from rejected options
+  // despite preserving the custom answer verbatim. The authoritative flat Q&A
+  // must carry selected content without reintroducing those proposed packages.
+  test('mindmap continuation preserves selected and custom wording without rejected proposals', () => {
+    const question = ClarifyQuestionSchema.parse({
+      id: 'release',
+      title: 'Enable automatic release?',
+      kind: 'single',
+      options: [
+        { label: 'No release, with reminders', recommended: true },
+        { label: 'Release after sign-in timeout' },
+      ],
+      mindmap: { categoryPath: ['Policy'] },
+    })
+    const custom: ClarifyAnswer = {
+      questionId: question.id,
+      selectedOptionIndices: [],
+      selectedOptionLabels: [],
+      customText: '首版暂不自动释放；签到、记录和提醒均未决定。',
+      decision: {
+        status: 'provisional',
+        uncertainty: '没有使用基线；负责人尚未商定。',
+        revisitWhen: '两周后复核，具体日期待定。',
+      },
+    }
+    for (const kind of ['self', 'cross'] as const) {
+      const prompt = renderUserPrompt({
+        promptTemplate: 'Write the decision document',
+        inputs: {},
+        meta: { repoPath: '/r', baseBranch: 'main', taskId: 't' },
+        agentOutputs: ['result'],
+        clarifyChannel: { kind, directive: 'stopped', injectStopNotice: true },
+        clarifyMindmap: { categories: [], instructions: '' },
+        clarifyContext: {
+          flatBlock: renderFlatClarifyQueue([{ question, answer: custom }]),
+        },
+      })
+      expect(prompt).toContain(question.title)
+      expect(prompt).toContain(custom.customText)
+      for (const value of Object.values(custom.decision!)) expect(prompt).toContain(value)
+      for (const option of question.options) expect(prompt).not.toContain(option.label)
+      expect(prompt).not.toContain('[recommended]')
+    }
+    const selected = {
+      ...custom,
+      selectedOptionIndices: [1],
+      selectedOptionLabels: [question.options[1]!.label],
+      customText: '',
+    }
+    const block = renderFlatClarifyQueue([{ question, answer: selected }])!
+    expect(block).toContain(`User chose: "${question.options[1]!.label}"`)
+    expect(block).not.toContain(question.options[0]!.label)
+    const ordinary = renderFlatClarifyQueue([
+      { question: { ...question, mindmap: undefined }, answer: custom },
+    ])!
+    expect(ordinary).toContain(
+      'Options: No release, with reminders [recommended], Release after sign-in timeout',
+    )
   })
   // Real final output promoted confirmed, unmarked answers into "decided".
   // Both prompt paths must explicitly retain absence instead of asking the model to infer it.

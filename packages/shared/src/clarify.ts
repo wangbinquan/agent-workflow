@@ -482,7 +482,13 @@ function renderFlatQaItem(
   const safe = (value: string): string => (nonce.length > 0 ? sanitizeInlineField(value) : value)
   return [
     `- Q: ${safe(question.title)}`,
-    `  Type: ${kindLabel} / Options: ${safe(optionLabels)}`,
+    // Mindmap answers already carry every selected label and the original
+    // custom answer. Repeating rejected proposals here primed the final model
+    // to import their extra policies (RFC-378 actual fourth-round evidence).
+    // The original questions/options remain in the round and follow-up context.
+    question.mindmap
+      ? `  Type: ${kindLabel}`
+      : `  Type: ${kindLabel} / Options: ${safe(optionLabels)}`,
     `  Answer: ${safe(answerText)}`,
   ].join('\n')
 }

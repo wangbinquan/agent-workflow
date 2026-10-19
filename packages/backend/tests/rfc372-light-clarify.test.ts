@@ -200,6 +200,14 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       const operations = followups(store, {
         generate: async ({ prompt }) => {
           expect(prompt).toContain(CLARIFY_MINDMAP_QUESTION_GUIDANCE)
+          // RFC-378 real follow-ups incorrectly forced compatible review
+          // triggers into single-choice. The application used to exemplify
+          // only "kind":"single"; both kinds and structured tradeoffs must
+          // reach the actual generator, for both self and cross rounds.
+          expect(prompt).toContain('"kind": "single" | "multi"')
+          expect(prompt).toContain('"recommendationReason"')
+          expect(prompt).toContain('Do not manufacture exclusivity')
+          expect(prompt).toContain('Every question needs 2–4 options')
           expect(prompt).toContain(
             '"configuredCategoryPaths":[["Scope"],["Performance","Database","SQL"]]',
           )

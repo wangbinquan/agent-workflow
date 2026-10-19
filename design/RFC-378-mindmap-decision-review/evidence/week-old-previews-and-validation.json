@@ -1,0 +1,510 @@
+{
+  "authorization": "user goal permits taking other RFC resources older than one week offline without further questions",
+  "firstAction": {
+    "at": "2026-10-19T14:54:50.083Z",
+    "authorization": "user explicitly approved rfc011-role-home v0.1.0 preview offline",
+    "path": "/v1/services/01a0c12a-de0d-7009-8f27-2d3abc5eef59/slots/preview/offline",
+    "body": {
+      "expectedReleaseId": "01a0c12a-de27-7028-a0a3-b2f388671ed3"
+    },
+    "result": {
+      "items": [
+        {
+          "name": "prod",
+          "active": true,
+          "replicas": 0,
+          "readyReplicas": 0,
+          "state": "empty",
+          "host": "rfc011-role-home.cs.localhost"
+        },
+        {
+          "name": "preview",
+          "active": false,
+          "replicas": 0,
+          "readyReplicas": 0,
+          "state": "empty",
+          "host": "preview.rfc011-role-home.cs.localhost",
+          "offline": {
+            "releaseId": "01a0c12a-de27-7028-a0a3-b2f388671ed3",
+            "tag": "v0.1.0",
+            "at": "2026-10-19T14:54:47.148Z",
+            "reason": "manual",
+            "actorUserId": "01a0c12a-de09-7005-b0f9-d55a8676540b"
+          }
+        }
+      ]
+    }
+  },
+  "subsequentActions": {
+    "at": "2026-10-19T14:56:33.703Z",
+    "authorization": "user goal explicitly permits taking other RFC resources older than one week offline without further questions",
+    "cutoff": "2026-10-12T14:56:33.690Z",
+    "actions": [
+      {
+        "at": "2026-10-19T14:56:35.541Z",
+        "slug": "rfc006-verify",
+        "serviceId": "01a0c12a-de0d-7008-bea9-dee0477f9cf1",
+        "releaseId": "01a0c12a-de27-7013-90f0-a9c4f485555e",
+        "createdAt": "2026-09-18T09:29:29.292Z",
+        "retentionSince": "2026-09-23T05:14:23.590Z",
+        "path": "/v1/services/01a0c12a-de0d-7008-bea9-dee0477f9cf1/slots/preview/offline",
+        "before": [
+          {
+            "name": "prod",
+            "active": true,
+            "replicas": 0,
+            "readyReplicas": 0,
+            "state": "empty",
+            "host": "rfc006-verify.cs.localhost"
+          },
+          {
+            "name": "preview",
+            "targetRevision": "bdfc243ea2a52f615e64b278f43ff94de3c161b847cda22fbbb4eb05edbe6d2a",
+            "active": false,
+            "releaseId": "01a0c12a-de27-7013-90f0-a9c4f485555e",
+            "tag": "v0.1.2",
+            "commitSha": "3cb3768ea714f8a6a1754292ccf946bc39c08655",
+            "replicas": 1,
+            "readyReplicas": 1,
+            "state": "ready",
+            "host": "preview.rfc006-verify.cs.localhost",
+            "retention": {
+              "kind": "pending",
+              "since": "2026-09-23T05:14:23.590Z",
+              "deadline": "2026-10-19T18:02:48.014Z",
+              "remindedAt": "2026-10-18T18:03:38.199Z",
+              "postponable": true,
+              "postponements": 0,
+              "periodHours": 336
+            }
+          }
+        ],
+        "after": {
+          "items": [
+            {
+              "name": "prod",
+              "active": true,
+              "replicas": 0,
+              "readyReplicas": 0,
+              "state": "empty",
+              "host": "rfc006-verify.cs.localhost"
+            },
+            {
+              "name": "preview",
+              "active": false,
+              "replicas": 0,
+              "readyReplicas": 0,
+              "state": "empty",
+              "host": "preview.rfc006-verify.cs.localhost",
+              "offline": {
+                "releaseId": "01a0c12a-de27-7013-90f0-a9c4f485555e",
+                "tag": "v0.1.2",
+                "at": "2026-10-19T14:56:33.811Z",
+                "reason": "manual",
+                "actorUserId": "01a0c12a-de09-7005-b0f9-d55a8676540b"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "at": "2026-10-19T14:56:37.213Z",
+        "slug": "rfc022-verify",
+        "serviceId": "01a0ccdb-2ba7-7001-bbb0-d8c3f792935b",
+        "releaseId": "01a0ccdb-360d-7000-b0f7-85c6681ab193",
+        "createdAt": "2026-09-23T06:01:53.419Z",
+        "retentionSince": "2026-09-23T06:02:03.767Z",
+        "path": "/v1/services/01a0ccdb-2ba7-7001-bbb0-d8c3f792935b/slots/preview/offline",
+        "before": [
+          {
+            "name": "prod",
+            "active": true,
+            "replicas": 0,
+            "readyReplicas": 0,
+            "state": "empty",
+            "host": "rfc022-verify.cs.localhost"
+          },
+          {
+            "name": "preview",
+            "targetRevision": "285f4213c364bee9ce3a1860b894eb9756c7145af4517e08cceb6362907ed1b0",
+            "active": false,
+            "releaseId": "01a0ccdb-360d-7000-b0f7-85c6681ab193",
+            "tag": "v0.1.0",
+            "commitSha": "3620e7bdb6dbd5d824d79d4ccdaa4b4764e974f9",
+            "replicas": 1,
+            "readyReplicas": 1,
+            "state": "ready",
+            "host": "preview.rfc022-verify.cs.localhost",
+            "retention": {
+              "kind": "pending",
+              "since": "2026-09-23T06:02:03.767Z",
+              "deadline": "2026-10-19T18:02:48.125Z",
+              "remindedAt": "2026-10-18T18:03:38.199Z",
+              "postponable": true,
+              "postponements": 0,
+              "periodHours": 336
+            }
+          }
+        ],
+        "after": {
+          "items": [
+            {
+              "name": "prod",
+              "active": true,
+              "replicas": 0,
+              "readyReplicas": 0,
+              "state": "empty",
+              "host": "rfc022-verify.cs.localhost"
+            },
+            {
+              "name": "preview",
+              "active": false,
+              "replicas": 0,
+              "readyReplicas": 0,
+              "state": "empty",
+              "host": "preview.rfc022-verify.cs.localhost",
+              "offline": {
+                "releaseId": "01a0ccdb-360d-7000-b0f7-85c6681ab193",
+                "tag": "v0.1.0",
+                "at": "2026-10-19T14:56:35.643Z",
+                "reason": "manual",
+                "actorUserId": "01a0c12a-de09-7005-b0f9-d55a8676540b"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "at": "2026-10-19T14:56:38.876Z",
+        "slug": "rfc023-verify",
+        "serviceId": "01a0cdfd-d8d1-7001-999d-3b64c015946f",
+        "releaseId": "01a0cdfd-e5f1-7000-93fb-c31314b3997b",
+        "createdAt": "2026-09-23T11:19:23.884Z",
+        "retentionSince": "2026-09-23T11:19:39.464Z",
+        "path": "/v1/services/01a0cdfd-d8d1-7001-999d-3b64c015946f/slots/preview/offline",
+        "before": [
+          {
+            "name": "prod",
+            "active": true,
+            "replicas": 0,
+            "readyReplicas": 0,
+            "state": "empty",
+            "host": "rfc023-verify.cs.localhost"
+          },
+          {
+            "name": "preview",
+            "targetRevision": "5ca05168302a1aa234baad4ecc2111d98cbb7d7a072b5e703c10f6010cf8b557",
+            "active": false,
+            "releaseId": "01a0cdfd-e5f1-7000-93fb-c31314b3997b",
+            "tag": "v0.1.0",
+            "commitSha": "a0f98c8169e42917b126db7e3926ccc3c7b36347",
+            "replicas": 1,
+            "readyReplicas": 1,
+            "state": "ready",
+            "host": "preview.rfc023-verify.cs.localhost",
+            "retention": {
+              "kind": "pending",
+              "since": "2026-09-23T11:19:39.464Z",
+              "deadline": "2026-10-19T18:02:48.123Z",
+              "remindedAt": "2026-10-18T18:03:38.199Z",
+              "postponable": true,
+              "postponements": 0,
+              "periodHours": 336
+            }
+          }
+        ],
+        "after": {
+          "items": [
+            {
+              "name": "prod",
+              "active": true,
+              "replicas": 0,
+              "readyReplicas": 0,
+              "state": "empty",
+              "host": "rfc023-verify.cs.localhost"
+            },
+            {
+              "name": "preview",
+              "active": false,
+              "replicas": 0,
+              "readyReplicas": 0,
+              "state": "empty",
+              "host": "preview.rfc023-verify.cs.localhost",
+              "offline": {
+                "releaseId": "01a0cdfd-e5f1-7000-93fb-c31314b3997b",
+                "tag": "v0.1.0",
+                "at": "2026-10-19T14:56:37.291Z",
+                "reason": "manual",
+                "actorUserId": "01a0c12a-de09-7005-b0f9-d55a8676540b"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "at": "2026-10-19T14:56:40.547Z",
+        "slug": "rfc038-wizard-20261009",
+        "serviceId": "01a11ed2-d922-7001-ab24-5cafdd874e20",
+        "releaseId": "01a11f1b-9e42-7000-90a2-81b036df1148",
+        "createdAt": "2026-10-09T05:21:05.668Z",
+        "retentionSince": "2026-10-09T05:44:29.464Z",
+        "path": "/v1/services/01a11ed2-d922-7001-ab24-5cafdd874e20/slots/preview/offline",
+        "before": [
+          {
+            "name": "prod",
+            "targetRevision": "2ada2ac3de157d47cedf2f8b1df4c190aad01ec56e53d5a8f48ef3790c3f0d74",
+            "active": true,
+            "releaseId": "01a11f1e-624b-7000-9a1e-d0710c18c880",
+            "tag": "v0.1.1",
+            "commitSha": "4520ff2b9d7c2246c0881099f6036c20aa5e9a7a",
+            "replicas": 1,
+            "readyReplicas": 1,
+            "state": "ready",
+            "host": "rfc038-wizard-20261009.cs.localhost"
+          },
+          {
+            "name": "preview",
+            "targetRevision": "a4d629e1a5deed7531f4d45c318b39ccceef543db5ccd028263c3d0667d8443c",
+            "active": false,
+            "releaseId": "01a11f1b-9e42-7000-90a2-81b036df1148",
+            "tag": "v0.1.0",
+            "commitSha": "4520ff2b9d7c2246c0881099f6036c20aa5e9a7a",
+            "replicas": 1,
+            "readyReplicas": 1,
+            "state": "ready",
+            "host": "preview.rfc038-wizard-20261009.cs.localhost",
+            "retention": {
+              "kind": "pending",
+              "since": "2026-10-09T05:44:29.464Z",
+              "deadline": "2026-10-23T05:44:29.464Z",
+              "postponable": false,
+              "postponements": 0,
+              "periodHours": 336
+            }
+          }
+        ],
+        "after": {
+          "items": [
+            {
+              "name": "prod",
+              "targetRevision": "2ada2ac3de157d47cedf2f8b1df4c190aad01ec56e53d5a8f48ef3790c3f0d74",
+              "active": true,
+              "releaseId": "01a11f1e-624b-7000-9a1e-d0710c18c880",
+              "tag": "v0.1.1",
+              "commitSha": "4520ff2b9d7c2246c0881099f6036c20aa5e9a7a",
+              "replicas": 1,
+              "readyReplicas": 1,
+              "state": "ready",
+              "host": "rfc038-wizard-20261009.cs.localhost"
+            },
+            {
+              "name": "preview",
+              "active": false,
+              "replicas": 0,
+              "readyReplicas": 0,
+              "state": "empty",
+              "host": "preview.rfc038-wizard-20261009.cs.localhost",
+              "offline": {
+                "releaseId": "01a11f1b-9e42-7000-90a2-81b036df1148",
+                "tag": "v0.1.0",
+                "at": "2026-10-19T14:56:38.960Z",
+                "reason": "manual",
+                "actorUserId": "01a0c12a-de09-7005-b0f9-d55a8676540b"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "physicallyAbsentPods": [
+    {
+      "namespace": "cs-rfc006-verify",
+      "name": "rfc006-verify-green-67d88f7944-ctwxn",
+      "uid": "fe12417b-135c-4cf6-b5a4-f28dda82be27",
+      "phase": "Running",
+      "ready": true,
+      "requests": [
+        {
+          "cpu": "25m",
+          "memory": "384Mi"
+        }
+      ]
+    },
+    {
+      "namespace": "cs-rfc011-role-home",
+      "name": "rfc011-role-home-green-75d494bcc5-m99hv",
+      "uid": "4e19987d-dc9b-4c45-b331-1dfe43b79632",
+      "phase": "Running",
+      "ready": true,
+      "requests": [
+        {
+          "cpu": "500m",
+          "memory": "512Mi"
+        }
+      ]
+    },
+    {
+      "namespace": "cs-rfc022-verify",
+      "name": "rfc022-verify-green-68ffb77547-nw6v6",
+      "uid": "5c8a8485-d86b-47f4-bc05-ffbdd7e322b7",
+      "phase": "Running",
+      "ready": true,
+      "requests": [
+        {
+          "cpu": "25m",
+          "memory": "256Mi"
+        }
+      ]
+    },
+    {
+      "namespace": "cs-rfc023-verify",
+      "name": "rfc023-verify-green-6d76cb7dd5-l5xtx",
+      "uid": "04c0d499-e9cb-4cde-a3c2-57178052ebfc",
+      "phase": "Running",
+      "ready": true,
+      "requests": [
+        {
+          "cpu": "25m",
+          "memory": "256Mi"
+        }
+      ]
+    },
+    {
+      "namespace": "cs-rfc038-wizard-20261009",
+      "name": "rfc038-wizard-20261009-green-69c4476c6-p4sxt",
+      "uid": "cfe340ca-8600-48f8-92e0-251cb8cc7d4c",
+      "phase": "Running",
+      "ready": true,
+      "requests": [
+        {
+          "cpu": "50m",
+          "memory": "256Mi"
+        }
+      ]
+    }
+  ],
+  "preservedPods": [
+    {
+      "namespace": "cs-agent-workflow",
+      "name": "agent-workflow-blue-68f8bdcc4-q9q4w",
+      "uid": "a3e90f47-a84d-45b3-880d-6d8d92352949",
+      "phase": "Running",
+      "ready": true,
+      "requests": [
+        {
+          "cpu": "250m",
+          "memory": "512Mi"
+        }
+      ]
+    },
+    {
+      "namespace": "cs-agent-workflow",
+      "name": "agent-workflow-green-67d7674488-6jvjj",
+      "uid": "f0e90d22-8e1e-41a2-bbc3-dd4f8b0db5c2",
+      "phase": "Running",
+      "ready": true,
+      "requests": [
+        {
+          "cpu": "250m",
+          "memory": "512Mi"
+        }
+      ]
+    },
+    {
+      "namespace": "cs-rfc038-wizard-20261009",
+      "name": "rfc038-wizard-20261009-blue-6684ddbc86-fvwcs",
+      "uid": "453449f3-3772-4342-ba0c-02bfb4b3888a",
+      "phase": "Running",
+      "ready": true,
+      "requests": [
+        {
+          "cpu": "50m",
+          "memory": "256Mi"
+        }
+      ]
+    },
+    {
+      "namespace": "cs-snake-bot-20261014",
+      "name": "snake-bot-20261014-green-dc5494fcd-82h4w",
+      "uid": "c46b9412-3f4b-4b7e-bc42-439b03f372a5",
+      "phase": "Running",
+      "ready": true,
+      "requests": [
+        {
+          "cpu": "500m",
+          "memory": "512Mi"
+        }
+      ]
+    },
+    {
+      "namespace": "cs-snake-bot-20261014",
+      "name": "task-01a13edff8007000a46de38c341e2a1f",
+      "uid": "0ccaa08e-31f4-4081-8a68-225d41e1b3d8",
+      "phase": "Running",
+      "ready": true,
+      "requests": [
+        {
+          "cpu": "1",
+          "ephemeral-storage": "10Gi",
+          "memory": "2Gi"
+        }
+      ]
+    }
+  ],
+  "runtimeImageValidation": {
+    "at": "2026-10-19T14:58:19.038Z",
+    "state": {
+      "id": "01a154a9-2e3f-7000-93d7-e91285e50e5c",
+      "versionId": "01a14fc6-95a1-7000-b860-518323f4a121",
+      "projectId": "01a15233-d0b4-7000-ba3b-4a72cf7da7e4",
+      "target": {
+        "usage": "task"
+      },
+      "state": "passed",
+      "contractDigest": "sha256:056028c919bfdd1e25547e2c0dbff8cbe5458600a9a303fd727d6c72b8e247a5",
+      "createdBy": "01a0c12a-de09-7005-b0f9-d55a8676540b",
+      "createdAt": "2026-10-19T14:55:35.999Z",
+      "updatedAt": "2026-10-19T14:55:45.068Z",
+      "observedImageId": "registry.crewstation-system.svc.cluster.local:5000/runtime/agent-workflow/task@sha256:722194e94a5b65fb7fcbb94cdb4362be25dfa07ed79e39f282af1aae3ebe8133",
+      "checks": [
+        {
+          "key": "worker-uid",
+          "passed": true,
+          "output": "10001\n",
+          "exitCode": 0
+        },
+        {
+          "key": "agent-workflow",
+          "passed": true,
+          "output": "ready\n",
+          "exitCode": 0
+        },
+        {
+          "key": "git",
+          "passed": true,
+          "output": "ready\n",
+          "exitCode": 0
+        },
+        {
+          "key": "ssh",
+          "passed": true,
+          "output": "ready\n",
+          "exitCode": 0
+        },
+        {
+          "key": "python-venv",
+          "passed": true,
+          "output": "ready\n",
+          "exitCode": 0
+        },
+        {
+          "key": "node",
+          "passed": true,
+          "output": "ready\n",
+          "exitCode": 0
+        }
+      ]
+    }
+  }
+}
