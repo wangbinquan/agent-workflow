@@ -17,6 +17,7 @@ import { createHostedEmployeeCaseWorkspaceOperations } from '../infrastructure/c
 import { createHostedTaskDeletionRepositories } from '../infrastructure/crewstation/taskDeletionRepositories'
 import { createHostedDevelopmentRepositoryPreparation } from '../infrastructure/crewstation/developmentRepository'
 import {
+  createHostedMigrationDrain,
   createHostedWorkspaceLifecycle,
   hostedWorkspaceLifecycleOwner,
 } from '../infrastructure/crewstation/workspaceLifecycle'
@@ -106,6 +107,14 @@ export function composeCrewStationWorkspaceOwner(
         },
       )
     },
+    /** §9.2 V7: drains this installation's parents under a platform freeze's
+     * stop authority; the execution authority runs it while frozen. */
+    migrationDrain: (log?: Pick<Logger, 'warn'>) =>
+      createHostedMigrationDrain({
+        db: input.db,
+        api: input.api,
+        ...(log === undefined ? {} : { log }),
+      }),
     deletionRepositories: () => createHostedTaskDeletionRepositories({ helper, workspaces }),
     writeStream: (
       reference: string,

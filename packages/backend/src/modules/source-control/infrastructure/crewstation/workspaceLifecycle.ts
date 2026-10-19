@@ -28,7 +28,11 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { hostedTaskWorkspaces } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
-import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
+import type {
+  BusinessStopAuthority,
+  CrewStationBusinessExecution,
+} from '@/platform/crewstation/businessExecution'
+import { sha256Hex } from '@/util/hash'
 import type { Logger } from '@/util/log'
 import type { HostedVolumeActivity } from '../../public/participants'
 import {
@@ -213,5 +217,100 @@ export function hostedWorkspaceLifecycleOwner(
         })
       }
     },
+  }
+}
+
+const TERMINAL_SUBTASK: ReadonlySet<string> = new Set(['succeeded', 'failed', 'cancelled'])
+
+/** One drain pass; `remaining` counts the parents that still hold a container. */
+export type HostedMigrationDrain = (
+  stop: BusinessStopAuthority,
+  signal: AbortSignal,
+) => Promise<{ readonly remaining: number }>
+
+/**
+ * §9.2 V7 / CS RFC-027 — while the platform holds a migration or restore
+ * freeze, its barrier only proves that this installation's writers stopped:
+ * the release that acknowledged the freeze drains them itself. A parent's
+ * active subtasks are cancelled, then the parent is paused (its volume kept),
+ * both under the freeze's stop authority, since the lease fence is gone. A
+ * frozen instance's database write window is closed, so nothing is recorded:
+ * every call is keyed to the freeze and the parent's generation (or the
+ * subtask's attempt) and the next pass simply repeats it. Parents that are
+ * paused, closed or failed hold no running container and are left alone; an
+ * active owner's next use resumes a paused parent (`HostedTaskWorkspaces`).
+ */
+export function createHostedMigrationDrain(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly api: Pick<
+    CrewStationBusinessExecution,
+    'getTask' | 'listSubtasks' | 'cancelSubtask' | 'pauseTask'
+  >
+  readonly log?: Pick<Logger, 'warn'>
+}): HostedMigrationDrain {
+  const key = (
+    parentRequestKey: string,
+    action: 'cancel' | 'pause',
+    stop: BusinessStopAuthority,
+    ...parts: readonly (string | number)[]
+  ) => {
+    const value = [parentRequestKey, 'migration', stop.operationId, action, ...parts].join(':')
+    return value.length <= 128 ? value : `aw-task-op:${sha256Hex(value)}`
+  }
+  return async (stop, signal) => {
+    const rows = await input.db
+      .select({
+        taskId: hostedTaskWorkspaces.taskId,
+        requestKey: hostedTaskWorkspaces.requestKey,
+        businessTaskId: hostedTaskWorkspaces.businessTaskId,
+      })
+      .from(hostedTaskWorkspaces)
+      .where(
+        and(
+          inArray(hostedTaskWorkspaces.state, ['creating', 'ready', 'closing']),
+          isNotNull(hostedTaskWorkspaces.businessTaskId),
+        ),
+      )
+    let remaining = 0
+    for (const row of rows) {
+      if (signal.aborted) break
+      try {
+        const task = await input.api.getTask(row.businessTaskId!)
+        if (task.id !== row.businessTaskId) throw new Error('hosted-workspace-receipt-mismatch')
+        if (task.state !== 'running' && task.state !== 'creating') continue
+        remaining += 1
+        // A container that is still starting is paused once it runs.
+        if (task.state === 'creating') continue
+        const active = (await input.api.listSubtasks(task.id)).filter(
+          (subtask) => !TERMINAL_SUBTASK.has(subtask.state),
+        )
+        for (const subtask of active) {
+          if (subtask.state === 'cancelling') continue
+          try {
+            await input.api.cancelSubtask(task.id, subtask.id, {
+              requestKey: key(row.requestKey, 'cancel', stop, subtask.id, subtask.attempt),
+              stopAuthority: stop,
+              expectedAttempt: subtask.attempt,
+            })
+          } catch (error) {
+            if (!isLifecycleRace(error)) throw error
+          }
+        }
+        // The platform pauses a parent only once its subtasks have results.
+        if (active.length > 0) continue
+        await input.api.pauseTask(task.id, {
+          requestKey: key(row.requestKey, 'pause', stop, task.generation),
+          stopAuthority: stop,
+          expectedGeneration: task.generation,
+        })
+      } catch (error) {
+        if (isLifecycleRace(error)) continue
+        input.log?.warn('hosted migration drain step failed', {
+          owner: row.taskId,
+          reason: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+    return { remaining }
   }
 }

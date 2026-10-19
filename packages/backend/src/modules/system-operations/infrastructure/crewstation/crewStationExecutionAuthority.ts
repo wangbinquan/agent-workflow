@@ -17,7 +17,9 @@
 // that reports the freeze ready; only the platform's current release can
 // acknowledge it, so any other instance keeps waiting instead of failing.
 // A slow database never costs the lease: the platform's renewal is adopted
-// first and the database mirror follows.
+// first and the database mirror follows. The barrier only proves the
+// installation's writers stopped: the instance whose acknowledgement the
+// platform accepted drains them (`drainMigrationWith`, CS RFC-027).
 import {
   isCrewStationApiError,
   type CrewStationPlatformApi,
@@ -93,10 +95,20 @@ function standbyReasonOf(error: unknown): string {
   return CREWSTATION_STANDBY_REASONS.rejected
 }
 
+/** Stops this installation's platform writers under a freeze's stop authority;
+ * `remaining` counts the ones that still run after the pass. */
+export type MigrationWriterDrain = (
+  stop: { readonly operationId: string; readonly epoch: number },
+  signal: AbortSignal,
+) => Promise<{ readonly remaining: number }>
+
 export interface CrewStationExecutionAuthorityPort extends ExecutionAuthorityPort {
   /** Start competing for the lease; idempotent. */
   start(): void
   readonly instanceId: string
+  /** Bootstrap hands in the drain once the writers' owner is composed; it runs
+   * while the platform holds a freeze this instance acknowledged. */
+  drainMigrationWith(drain: MigrationWriterDrain): void
 }
 
 export function createCrewStationExecutionAuthority(input: {
@@ -108,11 +120,14 @@ export function createCrewStationExecutionAuthority(input: {
   readonly instanceId?: string
   readonly tickMs?: number
   readonly renewMs?: number
+  /** Minimum interval between two writer drain passes during a freeze. */
+  readonly drainMs?: number
   readonly now?: () => number
 }): CrewStationExecutionAuthorityPort {
   const instanceId = input.instanceId ?? Bun.randomUUIDv7()
   const tickMs = input.tickMs ?? 5_000
   const renewMs = input.renewMs ?? 10_000
+  const drainMs = input.drainMs ?? 15_000
   const now = input.now ?? Date.now
   const log = input.log
   let state: ExecutionAuthorityState = {
@@ -135,6 +150,34 @@ export function createCrewStationExecutionAuthority(input: {
   let lastRenewedAt = 0
   /** `${epoch}:${operationId}` of the freeze the platform has accepted as ready. */
   let acknowledgedMigration: string | undefined
+  let drain: MigrationWriterDrain | undefined
+  let draining = false
+  let lastDrainAt = Number.NEGATIVE_INFINITY
+  const drainAbort = new AbortController()
+
+  /** One pass at a time, at most every `drainMs`; a failed pass is retried by a later tick. */
+  const drainWriters = (stop: { readonly operationId: string; readonly epoch: number }): void => {
+    if (drain === undefined || draining || closed || now() - lastDrainAt < drainMs) return
+    draining = true
+    lastDrainAt = now()
+    drain(stop, drainAbort.signal)
+      .then(({ remaining }) => {
+        if (remaining > 0)
+          log.info('crewstation migration writers draining', {
+            operationId: stop.operationId,
+            remaining,
+          })
+      })
+      .catch((error: unknown) => {
+        log.warn('crewstation migration writer drain failed; retrying', {
+          operationId: stop.operationId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+      .finally(() => {
+        draining = false
+      })
+  }
 
   const lose = (next: ExecutionAuthorityState): void => {
     state = next
@@ -195,29 +238,36 @@ export function createCrewStationExecutionAuthority(input: {
       migrationOperationId: migration.operationId,
     })
     const acknowledgement = `${control.epoch}:${migration.operationId}`
-    if (closed || lost || acknowledgedMigration === acknowledgement) return
-    try {
-      await input.platform.post(`${CONTROL_ROOT}/migrations/${migration.operationId}/ready`, {
-        operationId: migration.operationId,
-        expectedEpoch: control.epoch,
-        preparationDigest: preparationDigest({
-          epoch: control.epoch,
-          phase: 'frozen',
-          migrationOperationId: migration.operationId,
-        }),
-      })
-      acknowledgedMigration = acknowledgement
-    } catch (error) {
-      // Another release (or this pod before it is ready) cannot acknowledge;
-      // the window stays closed and the next tick asks again.
-      if (isCrewStationApiError(error) && error.status === 403) {
-        log.info('crewstation migration ready not accepted from this instance', {
+    if (closed || lost) return
+    if (acknowledgedMigration !== acknowledgement) {
+      try {
+        await input.platform.post(`${CONTROL_ROOT}/migrations/${migration.operationId}/ready`, {
           operationId: migration.operationId,
+          expectedEpoch: control.epoch,
+          preparationDigest: preparationDigest({
+            epoch: control.epoch,
+            phase: 'frozen',
+            migrationOperationId: migration.operationId,
+          }),
         })
-        return
+        acknowledgedMigration = acknowledgement
+      } catch (error) {
+        // Another release (or this pod before it is ready) cannot acknowledge;
+        // the window stays closed and the next tick asks again.
+        if (isCrewStationApiError(error) && error.status === 403) {
+          log.info('crewstation migration ready not accepted from this instance', {
+            operationId: migration.operationId,
+          })
+          return
+        }
+        throw error
       }
-      throw error
     }
+    // Only the release whose acknowledgement the platform accepted holds the
+    // freeze's stop authority; its writers must stop before the barrier passes
+    // (RFC-370 hosted acceptance, 2026-10-19: a running parent held a
+    // database restore in `freezing` with nothing left to stop it).
+    drainWriters({ operationId: migration.operationId, epoch: control.epoch })
   }
 
   const acquire = async (): Promise<void> => {
@@ -440,8 +490,12 @@ export function createCrewStationExecutionAuthority(input: {
       started = true
       runStep()
     },
+    drainMigrationWith(next) {
+      drain = next
+    },
     async close() {
       closed = true
+      drainAbort.abort()
       if (timer !== undefined) clearTimeout(timer)
       if (expiryTimer !== undefined) clearTimeout(expiryTimer)
       const current = held

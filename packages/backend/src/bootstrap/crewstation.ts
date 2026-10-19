@@ -135,6 +135,12 @@ export async function composeCrewStationStartOptions(
       )),
     commandEnvironment: createHostedGitCommandEnvironment(env.AW_GIT_CREDENTIAL_BINDINGS),
   })
+  // §9.2 V7 (CS RFC-027): during a migration or restore freeze this release
+  // drains its own parents under the freeze's stop authority; the platform's
+  // barrier only proves them stopped.
+  system.executionAuthority.drainMigrationWith(
+    workspace.migrationDrain(createLogger('crewstation-migration-drain')),
+  )
   const materialObjects = composeCrewStationMaterialObjects({ api, publications })
   const execution = composeCrewStationExecutionOwner({
     commands: workspace.commands,

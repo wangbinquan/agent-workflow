@@ -18,6 +18,20 @@ export interface BusinessExecutionFence {
   readonly instanceId: string
 }
 
+/** A platform migration or restore freeze, as the release that acknowledged it
+ * names it when draining its writers (CS RFC-027). */
+export interface BusinessStopAuthority {
+  readonly operationId: string
+  readonly epoch: number
+}
+
+/** A stopping call is accepted under the execution lease's fence or, while the
+ * platform holds a freeze, under its stop authority: that allows cancelling a
+ * subtask and pausing, closing or finalizing a task, nothing else. */
+export type BusinessStoppingAuthority =
+  | { readonly fence: BusinessExecutionFence; readonly stopAuthority?: never }
+  | { readonly stopAuthority: BusinessStopAuthority; readonly fence?: never }
+
 export type BusinessTaskState = 'creating' | 'running' | 'paused' | 'closing' | 'closed' | 'failed'
 
 export interface BusinessTask {
@@ -253,9 +267,8 @@ export interface CrewStationBusinessExecution {
     taskId: string,
     input: {
       readonly requestKey: string
-      readonly fence: BusinessExecutionFence
       readonly expectedGeneration: number
-    },
+    } & BusinessStoppingAuthority,
   ): Promise<void>
   resumeTask(
     taskId: string,
@@ -275,9 +288,8 @@ export interface CrewStationBusinessExecution {
     subtaskId: string,
     input: {
       readonly requestKey: string
-      readonly fence: BusinessExecutionFence
       readonly expectedAttempt: number
-    },
+    } & BusinessStoppingAuthority,
   ): Promise<void>
   events(
     taskId: string,
