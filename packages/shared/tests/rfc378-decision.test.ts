@@ -94,6 +94,11 @@ describe('RFC-378 optional decision contract', () => {
           expect(prompt).toContain('Pilot size is rollout scope, not evidence')
           expect(prompt).toContain('or imply "only manual handling"')
           expect(prompt).toContain('避免误动作，但原风险可能仍在；其他处理方式未定。')
+          expect(prompt).toContain('具体判定来源、阈值另选。')
+          expect(prompt).toContain(
+            'Detection does not require sign-in: its signal is a separate choice',
+          )
+          expect(prompt).toContain('Start with 2–3 highest-impact unresolved decisions')
           expect(prompt).toContain('Allocation order and approval are separate')
           expect(prompt).toContain('otherwise use one category level')
           expect(prompt).not.toContain('"categoryPath":["Category","Subcategory"]')
@@ -108,8 +113,8 @@ describe('RFC-378 optional decision contract', () => {
           )
           expect(prompt).toContain('Separate evidence collection from enforcement')
           expect(prompt).toContain('Do not manufacture exclusivity')
-          expect(prompt).toContain('Historical records and new observations can coexist')
-          expect(prompt).toContain('a calendar review and a loss-triggered review can coexist')
+          expect(prompt).toContain('History and observations coexist')
+          expect(prompt).toContain('scheduled and event-triggered reviews coexist')
           expect(prompt).toContain('An evidence-source option must say "if available"')
           expect(prompt).toContain(
             'Preserve explicit decided/provisional status and unmarked maturity',

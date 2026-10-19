@@ -1,0 +1,192 @@
+{
+  "id": "01M5AJKAH8YWZQCPS8A5RSEYB4:round",
+  "taskId": "01M5AJ9573BDJZBH95XVBGFNJD",
+  "kind": "self",
+  "terminatedAs": null,
+  "askingNodeId": "starter_clarifier",
+  "askingNodeRunId": "01M5AJAP7XFGSWB29H5G3D8T7P",
+  "askingShardKey": null,
+  "intermediaryNodeId": "starter_clarify",
+  "intermediaryNodeRunId": "01M5AJKAH8YWZQCPS8A5RSEYB4",
+  "intermediaryNodeTitle": "复核决定",
+  "targetConsumerNodeId": null,
+  "loopIter": 0,
+  "iteration": 0,
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": ["交付形态"]
+      },
+      "id": "delivery-form",
+      "title": "第一版以什么形态落地？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "现成日历或办公套件（若已有）",
+          "description": "上线最快、沿用熟悉工具；但冲突规则与自动释放受产品能力限制，可能需要人工补位。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "轻量自建预约应用",
+          "description": "规则与数据完全可控；但两周内要完成开发、测试和上线，范围必须收紧。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "共享表格加人工规则",
+          "description": "零开发、透明易查；但并发写入冲突、校验和执行力弱，依赖值守。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "混合：日历或表格登记加脚本校验",
+          "description": "兼顾上线速度与规则一致性；但要维护脚本、数据同步和明确责任人。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "时间粒度"]
+      },
+      "id": "time-grid",
+      "title": "预约时间按哪种网格切分？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "30 分钟",
+          "description": "规则简单、兼顾灵活；但短会会占用整格，可能降低周转。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "60 分钟",
+          "description": "管理成本最低；但短会与临时沟通不够灵活，空档可能增多。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "15 分钟",
+          "description": "时间利用更精细；但界面和冲突判断更复杂，管理成本更高。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "按实际起止时间（任意分钟）",
+          "description": "最贴近真实需求；但碎片化空档和展示复杂度最高。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "冲突裁决"]
+      },
+      "id": "conflict-rule",
+      "title": "同一时段多人争抢同一间会议室时，按什么规则决定归属？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "先到先得",
+          "description": "规则透明、无需额外管理；但高峰时段可能被少数人长期占先。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "部门或团队配额",
+          "description": "公平性和可预期性更强；但需维护配额与例外，管理成本高。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "优先级或审批裁决",
+          "description": "重要会议更容易拿到资源；但优先级判定主观，审批负担重。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "轮流或抽签",
+          "description": "机会均等、避免固化占优；但紧急需求难保障，结果不可预期。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约管理", "释放机制"]
+      },
+      "id": "no-show-release",
+      "title": "是否启用“到点未签到或未使用即自动释放”？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "启用未使用自动释放",
+          "description": "提高周转、减少占而不用；但需要签到判定，可能误释放迟到或临时离开者。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "不启用自动释放",
+          "description": "避免误释放与争议；但空占风险仍在，其他处理方式未定。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["验证安排", "证据来源"]
+      },
+      "id": "evidence-sources",
+      "title": "第一版上线后，用哪些来源判断是否有效？（可多选，均以“若有”为前提）",
+      "kind": "multi",
+      "recommended": false,
+      "options": [
+        {
+          "label": "预订系统日志（提交、取消、释放、改期）",
+          "description": "若第一版记录这些事件，可量化行为；但不能证明会议室实际被使用。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "签到、门禁或传感器记录",
+          "description": "若已有或可接入，更接近真实占用；但依赖硬件、权限和数据质量。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "短期人工巡查或抽样",
+          "description": "若安排，可快速核对真实占用；但样本小，不能代表整段时间。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "团队问卷或访谈",
+          "description": "若开展，可了解公平感与不便；但主观且回收率不定。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "interactionMode": "mindmap",
+  "directive": null,
+  "status": "awaiting_human",
+  "sessionMode": null,
+  "designerRunTriggeredAt": null,
+  "abandonedAt": null,
+  "createdAt": 1792430156328,
+  "answeredAt": null,
+  "answeredBy": null,
+  "submittedByRole": null,
+  "answerAttributions": null,
+  "draftAnswers": null
+}

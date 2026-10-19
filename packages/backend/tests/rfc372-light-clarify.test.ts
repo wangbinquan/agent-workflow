@@ -210,6 +210,10 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
           expect(prompt).toContain('Neither option decides any other mechanism')
           expect(prompt).toContain('A negative choice does not prescribe a replacement process')
           expect(prompt).toContain('避免误动作，但原风险可能仍在；其他处理方式未定。')
+          expect(prompt).toContain('具体判定来源、阈值另选。')
+          expect(prompt).toContain(
+            'Detection does not require sign-in: its signal is a separate choice',
+          )
           expect(prompt).toContain('other mechanisms remain undecided')
           expect(prompt).toContain('specific assumption and accepted cost')
           expect(prompt).toContain('otherwise use one category level')
