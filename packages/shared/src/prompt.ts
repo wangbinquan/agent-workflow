@@ -803,7 +803,7 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     trailing +=
       '\n\n## Classified questions for the mindmap workspace\n' +
       'Keep the same workflow-clarify envelope, nonce, question fields and question/option limits. ' +
-      'Every question must include mindmap: {"categoryPath":["Category","Subcategory"]}. ' +
+      'Every question must include mindmap: {"categoryPath":["Category"]}. ' +
       CLARIFY_MINDMAP_QUESTION_GUIDANCE +
       '\n' +
       'For a dependent question include "parentQuestionId" inside mindmap; it must name another question in THIS envelope. IDs must be unique and parents must not form cycles. ' +
@@ -1021,9 +1021,9 @@ ${mindmap ? '      "mindmap": {"categoryPath": ["<meaningful category>"]},\n' : 
       "options": [
         {
           "label": "<picker text>",
-          "description": "<what this option does / expected outcome / trade-offs>",
+          "description": "${mindmap ? '<possible benefit and cost of only this choice; other mechanisms remain undecided>' : '<what this option does / expected outcome / trade-offs>'}",
           "recommended": true | false,
-          "recommendationReason": "<why the user should pick this one>"
+          "recommendationReason": "${mindmap ? '<specific assumption and accepted cost; omit when unsupported>' : '<why the user should pick this one>'}"
         }
       ]
     }

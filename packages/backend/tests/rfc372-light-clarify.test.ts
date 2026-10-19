@@ -209,6 +209,10 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
           expect(prompt).toContain('Do not manufacture exclusivity')
           expect(prompt).toContain('Neither option decides any other mechanism')
           expect(prompt).toContain('A negative choice does not prescribe a replacement process')
+          expect(prompt).toContain('避免误动作，但原风险可能仍在；其他处理方式未定。')
+          expect(prompt).toContain('other mechanisms remain undecided')
+          expect(prompt).toContain('specific assumption and accepted cost')
+          expect(prompt).toContain('otherwise use one category level')
           expect(prompt).toContain('who operates a channel is a separate question')
           expect(prompt).toContain('Time grid and minimum duration are separate')
           expect(prompt).toContain(

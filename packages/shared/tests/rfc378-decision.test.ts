@@ -93,6 +93,10 @@ describe('RFC-378 optional decision contract', () => {
           )
           expect(prompt).toContain('Pilot size is rollout scope, not evidence')
           expect(prompt).toContain('or imply "only manual handling"')
+          expect(prompt).toContain('避免误动作，但原风险可能仍在；其他处理方式未定。')
+          expect(prompt).toContain('Allocation order and approval are separate')
+          expect(prompt).toContain('otherwise use one category level')
+          expect(prompt).not.toContain('"categoryPath":["Category","Subcategory"]')
           expect(prompt).toContain(
             'never single-choice "basic / basic plus X / basic plus Y" packages',
           )
@@ -117,6 +121,9 @@ describe('RFC-378 optional decision contract', () => {
             )
             expect(example).toContain('<workflow-clarify nonce="test-nonce">')
             expect(example).toContain('"mindmap": {"categoryPath": ["<meaningful category>"]}')
+            expect(example).toContain('other mechanisms remain undecided')
+            expect(example).toContain('specific assumption and accepted cost')
+            expect(example).not.toContain('why the user should pick this one')
             expect(prompt).toContain('Confirmed answers may still be provisional or unmarked')
             if (directive === 'mandatory') {
               expect(prompt).toContain('never combine separate decisions to fit the limit')

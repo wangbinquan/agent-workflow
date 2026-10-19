@@ -1,0 +1,168 @@
+{
+  "id": "01M5AH5F762QW7ZQ1A466XBSVQ:round",
+  "taskId": "01M5AH41S9WTQENRVF83JJNK3N",
+  "kind": "self",
+  "terminatedAs": null,
+  "askingNodeId": "starter_clarifier",
+  "askingNodeRunId": "01M5AH422XPJM9T919SWEMBZY1",
+  "askingShardKey": null,
+  "intermediaryNodeId": "starter_clarify",
+  "intermediaryNodeRunId": "01M5AH5F762QW7ZQ1A466XBSVQ",
+  "intermediaryNodeTitle": "复核决定",
+  "targetConsumerNodeId": null,
+  "loopIter": 0,
+  "iteration": 0,
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "分配机制"]
+      },
+      "id": "allocation-rule",
+      "title": "3 间会议室在需求重叠时按什么规则分配？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "先到先得，无审批",
+          "description": "规则透明、当天即可执行；代价是重要会议可能抢不到房间，且没有优先级保障。",
+          "recommended": true,
+          "recommendationReason": "在两周交付且无历史基线的前提下，先到先得最易上线和回退；若后续观察到关键会议被挤占，再引入优先级。"
+        },
+        {
+          "label": "按部门或团队固定配额",
+          "description": "能保障各组的基本使用；代价是配额缺乏依据，某组不用时其他组也可能无法使用其空余名额。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "提交后由指定人审批",
+          "description": "可人工判断优先级；代价是增加审批负担与响应延迟，且两周内需先确定审批人。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "强制程度"]
+      },
+      "id": "booking-mandatory",
+      "title": "是否强制预约后才能使用会议室？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "强制预约后才可使用",
+          "description": "使房间占用有据可查；代价是临时讨论可能因未预约而被劝离，需要现场执行。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "预约仅作登记，不强制",
+          "description": "保留临时使用的弹性；代价是无法从记录判断真实占用，冲突仍可能发生。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "爽约治理"]
+      },
+      "id": "no-show-release",
+      "title": "是否启用未到场自动释放房间？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "启用未到场释放",
+          "description": "减少占而不用；代价是迟到或临时延后的会议可能失去房间，释放阈值需另行确定。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "不启用未到场释放",
+          "description": "避免误释放；代价是爽约占房会持续到会议结束，只能靠人工协调。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["交付", "载体"]
+      },
+      "id": "delivery-vehicle",
+      "title": "第一版用什么载体承载预约？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "现有共享日历（若可用）",
+          "description": "上线最快且成员可能已熟悉；代价是规则约束弱、冲突需靠人工发现。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "群内公告加在线表格登记",
+          "description": "几乎零开发、字段可自定义；代价是需人工核对，且没有自动冲突提示。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "轻量自建预约页面或脚本",
+          "description": "可自动校验冲突；代价是两周内需投入开发与维护，并确定托管和访问方式。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["验证", "成功判据"]
+      },
+      "id": "success-signals",
+      "title": "第一版用哪些观察项判断是否有效？",
+      "kind": "multi",
+      "recommended": false,
+      "options": [
+        {
+          "label": "预约流程可用（能完成预约与查询）",
+          "description": "确认基本流程跑通；代价是无法反映冲突是否真的减少。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "实际冲突次数（含口头协调）",
+          "description": "直接反映房间争抢；代价是需人工记录且可能漏记。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "预定后未使用（爽约）记录",
+          "description": "暴露占而不用；代价是需先定义“未使用”的判定方式。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "成员主观反馈（访谈或小问卷）",
+          "description": "捕捉规则接受度；代价是样本小、易受个别体验影响。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "interactionMode": "mindmap",
+  "directive": null,
+  "status": "awaiting_human",
+  "sessionMode": null,
+  "designerRunTriggeredAt": null,
+  "abandonedAt": null,
+  "createdAt": 1792428653798,
+  "answeredAt": null,
+  "answeredBy": null,
+  "submittedByRole": null,
+  "answerAttributions": null,
+  "draftAnswers": null
+}
