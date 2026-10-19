@@ -207,22 +207,17 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
           expect(prompt).toContain('"kind": "single"')
           expect(prompt).toContain('"kind": "multi"')
           expect(prompt).toContain('"recommendationReason"')
-          expect(prompt).toContain('Do not manufacture exclusivity')
+          expect(prompt).toContain(
+            'start with problem priority, observable success and feasible evidence',
+          )
+          expect(prompt).toContain('Honor a specific tradeoff requested by the user')
           expect(prompt).toContain('Neither option decides any other mechanism')
           expect(prompt).toContain('A negative choice does not prescribe a replacement process')
-          expect(prompt).toContain('Detection signal and threshold remain undecided')
           expect(prompt).toContain('渠道和时机另定')
           expect(prompt).toContain('其他措施未定')
           expect(prompt).toContain('已有记录（如有）')
-          expect(prompt).toContain('若遗漏会造成明显损失')
+          expect(prompt).toContain('按已约定的紧急程度')
           expect(prompt).toContain('otherwise use one category level')
-          expect(prompt).toContain('who operates a channel is a separate question')
-          expect(prompt).toContain('Time grid and minimum duration are separate')
-          expect(prompt).toContain(
-            'Compatible features, sources, criteria or review triggers: kind multi',
-          )
-          expect(prompt).toContain('no "only", "none" or "no extra collection" option')
-          expect(prompt).toContain('Pilot size is rollout scope, not evidence')
           expect(prompt).toContain('Every question needs 2–4 options')
           expect(prompt).toContain(
             '"configuredCategoryPaths":[["Scope"],["Performance","Database","SQL"]]',

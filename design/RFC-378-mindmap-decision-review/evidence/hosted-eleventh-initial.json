@@ -1,0 +1,104 @@
+{
+  "id": "01M5ANM0MBKS1NK6JSDVNNP9FR:round",
+  "taskId": "01M5ANA25J7VB5A5TK1PASVQ6K",
+  "kind": "self",
+  "terminatedAs": null,
+  "askingNodeId": "starter_clarifier",
+  "askingNodeRunId": "01M5ANBQZA038WZT95FH14F1W6",
+  "askingShardKey": null,
+  "intermediaryNodeId": "starter_clarify",
+  "intermediaryNodeRunId": "01M5ANM0MBKS1NK6JSDVNNP9FR",
+  "intermediaryNodeTitle": "复核决定",
+  "targetConsumerNodeId": null,
+  "loopIter": 0,
+  "iteration": 0,
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": ["冲突处理"]
+      },
+      "id": "conflict_rule",
+      "title": "预约冲突时的成交规则",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "先到先得，提交即确认",
+          "description": "协调成本最低，但热门时段可能被手快者占满。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "提交后由管理员审批",
+          "description": "可人工权衡轻重，但会增加审批等待与管理员负担。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "按预设优先级自动分配",
+          "description": "规则透明时可能更公平，但需要先定义并维护优先级。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约治理"]
+      },
+      "id": "no_show_release",
+      "title": "是否启用超时未签到自动释放",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "启用超时未签到自动释放",
+          "description": "可能减少占而不用，但需要签到动作并承担误释放的风险。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "不启用超时未签到自动释放",
+          "description": "避免签到负担与误释放，但空占可能持续到会议结束。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["系统边界"]
+      },
+      "id": "entry_channel",
+      "title": "第一版预约入口的承载方式",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "独立轻量页面，不依赖现有系统",
+          "description": "交付范围可控，但可能多一个入口和重复操作。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "接入现有办公平台或日历（若可用）",
+          "description": "可能减少重复操作，但依赖接口可用性与审批，交付风险更高。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "interactionMode": "mindmap",
+  "directive": null,
+  "status": "awaiting_human",
+  "sessionMode": null,
+  "designerRunTriggeredAt": null,
+  "abandonedAt": null,
+  "createdAt": 1792433324683,
+  "answeredAt": null,
+  "answeredBy": null,
+  "submittedByRole": null,
+  "answerAttributions": null,
+  "draftAnswers": null
+}

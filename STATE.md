@@ -1,6 +1,6 @@
 ## 2026-10-18 RFC-378：脑图澄清主动思考与决定复核（In Progress）
 
-进行中 RFC：[RFC-378](design/RFC-378-mindmap-decision-review/proposal.md)。完整实现与独立功能门已完成，已批准自主验收和上库。单机、独立托管完整旅程均实际 done，托管 task `01M5AC6EGVPWZXER0GY2QT6DDV` 的八个原话、决定状态、未知、代价及负责人/复核待定完整进入实际结果；控制面无 OpenCode，远程追问、冻结身份与观测归属通过。`3b4147483` 的 CI `39288504112` 已终态 49/49 success。最新独立托管 v0.1.7 / `56cc088c8` Ready；第十轮原始问题仍把签到捆入自动释放、配额/审批混入分配顺序，AC09 未通过。本轮将脑图占位格式改为两个可直接解析的完整独立选择示例，压缩重复指导并补组合长度预算和 parser 回归；普通问答保持。新候选的真实内容与确切 SHA CI 尚待闭合。旧任务/预览与五个旧 RFC-003 服务已按授权清理并留存物理回执，正式 AW 和 snake 保持运行。详见 [验收与原始证据](design/RFC-378-mindmap-decision-review/acceptance.md)。
+进行中 RFC：[RFC-378](design/RFC-378-mindmap-decision-review/proposal.md)。完整实现与独立功能门完成；单机、独立托管完整旅程均实际 done，原话、成熟度、未知、代价及责任安排完整进入结果，托管控制面无 OpenCode 的真实追问和冻结观测归属通过。3b4147483 CI 已 49/49 success；56cc088c8 终态 47/49，macOS 失败是 daemon 就绪 30 秒超时，确切归属未确认，保留日志未代改。e8993e6b2 已启用独立 v0.1.8，CI 待终态；第十一轮初始三题仍捆绑签到/自动释放、分配/审批，AC09 未签。当前修复让无基线且未明确请求具体机制时先问问题优先级、成功信号和可行证据，并补齐单一参数完整示例；显式请求和原提交能力保持，三类示例与全部模式/接线用例已写齐，组合预算未放宽。新候选真实内容与 CI 继续验收，正式 AW 与 snake 保持运行。详见 [验收与原始证据](design/RFC-378-mindmap-decision-review/acceptance.md)。
 
 ## 2026-10-17 RFC-294 后继 S3 / S4 / S8：RFC-375 / 376 / 377 Done
 

@@ -1027,6 +1027,16 @@ ${clarifyOpenTag(nonce)}
       ]
     },
     {
+      "id": "ordering",
+      "title": "已满足资格的请求按什么顺序处理？",
+      "mindmap": {"categoryPath": ["处理顺序"]},
+      "kind": "single",
+      "options": [
+        {"label": "按到达时间", "description": "顺序容易解释，但不能体现紧急程度。"},
+        {"label": "按已约定的紧急程度", "description": "可能优先解决急事，但须定义可核对的紧急标准。"}
+      ]
+    },
+    {
       "id": "evidence",
       "title": "用哪些信息检查效果？",
       "mindmap": {"categoryPath": ["验证"]},

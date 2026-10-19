@@ -1,0 +1,275 @@
+{
+  "at": "2026-10-19T18:08:02.190Z",
+  "sourceSha": "e8993e6b25138cff2886a3bdb5662dae8df1032e",
+  "gitlabSha": "986288e6f0cb6598c14bd3c7f199f791635b4b4f",
+  "journey": {
+    "id": "01a1554b-e4b3-7000-b8e2-9b13dad675df",
+    "status": "succeeded",
+    "release": {
+      "id": "01a1554b-e2d3-7000-8054-dbe6d1e2b145",
+      "journeyId": "01a1554b-e4b3-7000-b8e2-9b13dad675df",
+      "serviceId": "01a15233-d0b4-7001-bfa0-21f28bb515a4",
+      "tag": "v0.1.8",
+      "commitSha": "986288e6f0cb6598c14bd3c7f199f791635b4b4f",
+      "branch": "main",
+      "image": "registry.crewstation-system.svc.cluster.local:5000/rfc378-mindmap@sha256:44d0d74552de1463691d14fe7b4f818ea9e61e8f39c04a95fe868819ec044fc5",
+      "status": "ready",
+      "databaseRestoreSupported": true,
+      "slot": "prod",
+      "configVersion": 4,
+      "message": "agent-workflow e8993e6b25138cff2886a3bdb5662dae8df1032e",
+      "redeployable": false,
+      "createdBy": "01a0c12a-de09-7005-b0f9-d55a8676540b",
+      "createdAt": "2026-10-19T17:53:18.544Z",
+      "updatedAt": "2026-10-19T17:58:48.401Z"
+    },
+    "continuation": {
+      "canVerify": false,
+      "canLaunch": false,
+      "expectedActiveReleaseId": "01a1554b-e2d3-7000-8054-dbe6d1e2b145"
+    },
+    "slots": [
+      {
+        "name": "prod",
+        "targetRevision": "3bcef91d850f68115e0754c46edf20283d59205390005f85eae1e40b10380d83",
+        "active": true,
+        "releaseId": "01a1554b-e2d3-7000-8054-dbe6d1e2b145",
+        "tag": "v0.1.8",
+        "commitSha": "986288e6f0cb6598c14bd3c7f199f791635b4b4f",
+        "replicas": 1,
+        "readyReplicas": 1,
+        "state": "ready",
+        "host": "rfc378-mindmap.cs.localhost"
+      },
+      {
+        "name": "preview",
+        "active": false,
+        "replicas": 0,
+        "readyReplicas": 0,
+        "state": "empty",
+        "host": "preview.rfc378-mindmap.cs.localhost",
+        "offline": {
+          "releaseId": "01a15531-49a0-7000-b0a3-4bba3bc5e5de",
+          "tag": "v0.1.7",
+          "at": "2026-10-19T18:02:15.105Z",
+          "reason": "manual",
+          "actorUserId": "01a0c12a-de09-7005-b0f9-d55a8676540b"
+        }
+      }
+    ]
+  },
+  "controlPlane": {
+    "name": "rfc378-mindmap-green-57d5b9d5b-plgdd",
+    "namespace": "cs-rfc378-mindmap",
+    "uid": "494f140c-e897-40b8-a599-42be6b3944c8",
+    "phase": "Running",
+    "ready": true,
+    "images": [
+      {
+        "name": "rfc378-mindmap-green",
+        "imageID": "registry.crewstation-system.svc.cluster.local:5000/rfc378-mindmap@sha256:44d0d74552de1463691d14fe7b4f818ea9e61e8f39c04a95fe868819ec044fc5",
+        "restartCount": 0
+      }
+    ],
+    "opencodeExecutableFound": false
+  },
+  "protectedPods": [
+    {
+      "name": "agent-workflow-blue-68f8bdcc4-q9q4w",
+      "namespace": "cs-agent-workflow",
+      "uid": "a3e90f47-a84d-45b3-880d-6d8d92352949",
+      "phase": "Running",
+      "ready": true,
+      "images": [
+        {
+          "name": "agent-workflow-blue",
+          "imageID": "registry.crewstation-system.svc.cluster.local:5000/agent-workflow@sha256:0f94ec892f305b10032892fa092cc6e735b37d9df20f496c2ca66dc54c535949",
+          "restartCount": 2
+        }
+      ]
+    },
+    {
+      "name": "agent-workflow-green-6574fd68bc-t9fb8",
+      "namespace": "cs-agent-workflow",
+      "uid": "46ebc514-665b-41e0-b222-052752ab73e1",
+      "phase": "Running",
+      "ready": false,
+      "images": [
+        {
+          "name": "agent-workflow-green",
+          "imageID": "registry.crewstation-system.svc.cluster.local:5000/agent-workflow@sha256:54ff9cb0c2a2bc806de6b1318af4bba1f1629ca5f6dde36c10a20e5b7ae71390",
+          "restartCount": 0
+        }
+      ]
+    },
+    {
+      "name": "agent-workflow-green-67d7674488-6jvjj",
+      "namespace": "cs-agent-workflow",
+      "uid": "f0e90d22-8e1e-41a2-bbc3-dd4f8b0db5c2",
+      "phase": "Running",
+      "ready": true,
+      "images": [
+        {
+          "name": "agent-workflow-green",
+          "imageID": "registry.crewstation-system.svc.cluster.local:5000/agent-workflow@sha256:3ad2a4d8152261c816e48adfa3cb5e2f52650744faaa77e79b34b77aeb8fb7a0",
+          "restartCount": 4
+        }
+      ]
+    },
+    {
+      "name": "task-01a151b9e4cb7000bd9367caf841aa33-s2",
+      "namespace": "cs-agent-workflow",
+      "uid": "1753f7b6-f99a-489c-89b0-87febf9c4a47",
+      "phase": "Running",
+      "ready": true,
+      "images": [
+        {
+          "name": "task-01a151b9e4cb7000bd9367caf841aa33-s2",
+          "imageID": "registry.crewstation-system.svc.cluster.local:5000/runtime/agent-workflow/task@sha256:722194e94a5b65fb7fcbb94cdb4362be25dfa07ed79e39f282af1aae3ebe8133",
+          "restartCount": 0
+        }
+      ]
+    },
+    {
+      "name": "task-01a151e4249870009e5e374638a75e89-s2",
+      "namespace": "cs-agent-workflow",
+      "uid": "7f138a75-edfa-43be-a14a-0ce993bb7d37",
+      "phase": "Running",
+      "ready": true,
+      "images": [
+        {
+          "name": "task-01a151e4249870009e5e374638a75e89-s2",
+          "imageID": "registry.crewstation-system.svc.cluster.local:5000/runtime/agent-workflow/task@sha256:722194e94a5b65fb7fcbb94cdb4362be25dfa07ed79e39f282af1aae3ebe8133",
+          "restartCount": 0
+        }
+      ]
+    },
+    {
+      "name": "snake-bot-20261014-green-dc5494fcd-82h4w",
+      "namespace": "cs-snake-bot-20261014",
+      "uid": "c46b9412-3f4b-4b7e-bc42-439b03f372a5",
+      "phase": "Running",
+      "ready": true,
+      "images": [
+        {
+          "name": "snake-bot-20261014-green",
+          "imageID": "registry.crewstation-system.svc.cluster.local:5000/snake-bot-20261014@sha256:46f2bb97f53382baafe407c178b17e2e1b6f5eacfe454891fad4920cfb99f360",
+          "restartCount": 0
+        }
+      ]
+    },
+    {
+      "name": "task-01a13edff8007000a46de38c341e2a1f",
+      "namespace": "cs-snake-bot-20261014",
+      "uid": "0ccaa08e-31f4-4081-8a68-225d41e1b3d8",
+      "phase": "Running",
+      "ready": true,
+      "images": [
+        {
+          "name": "task-01a13edff8007000a46de38c341e2a1f",
+          "imageID": "docker.io/library/cs-task-runtime@sha256:469233f13c26c3871d61b4ac7c0c556d0824676503d01c2b0b9cc4bf09557823",
+          "restartCount": 0
+        }
+      ]
+    }
+  ],
+  "ownRetiredPreview": {
+    "at": "2026-10-19T18:02:17.313Z",
+    "before": [
+      {
+        "name": "prod",
+        "targetRevision": "3bcef91d850f68115e0754c46edf20283d59205390005f85eae1e40b10380d83",
+        "active": true,
+        "releaseId": "01a1554b-e2d3-7000-8054-dbe6d1e2b145",
+        "tag": "v0.1.8",
+        "commitSha": "986288e6f0cb6598c14bd3c7f199f791635b4b4f",
+        "replicas": 1,
+        "readyReplicas": 1,
+        "state": "ready",
+        "host": "rfc378-mindmap.cs.localhost"
+      },
+      {
+        "name": "preview",
+        "targetRevision": "cc3c75fe0de2df0e635d9c87a38d127f08d1ed95f517098fe9d5d1e82826208c",
+        "active": false,
+        "releaseId": "01a15531-49a0-7000-b0a3-4bba3bc5e5de",
+        "tag": "v0.1.7",
+        "commitSha": "52e2d1f537e1084627c51fb809db673ed47600b6",
+        "replicas": 1,
+        "readyReplicas": 1,
+        "state": "ready",
+        "host": "preview.rfc378-mindmap.cs.localhost",
+        "retention": {
+          "kind": "rollback-target",
+          "since": "2026-10-19T18:01:13.664Z",
+          "deadline": "2026-10-22T18:01:13.664Z",
+          "postponable": false,
+          "postponements": 0,
+          "periodHours": 72
+        }
+      }
+    ],
+    "result": {
+      "items": [
+        {
+          "name": "prod",
+          "targetRevision": "3bcef91d850f68115e0754c46edf20283d59205390005f85eae1e40b10380d83",
+          "active": true,
+          "releaseId": "01a1554b-e2d3-7000-8054-dbe6d1e2b145",
+          "tag": "v0.1.8",
+          "commitSha": "986288e6f0cb6598c14bd3c7f199f791635b4b4f",
+          "replicas": 1,
+          "readyReplicas": 1,
+          "state": "ready",
+          "host": "rfc378-mindmap.cs.localhost"
+        },
+        {
+          "name": "preview",
+          "active": false,
+          "replicas": 0,
+          "readyReplicas": 0,
+          "state": "empty",
+          "host": "preview.rfc378-mindmap.cs.localhost",
+          "offline": {
+            "releaseId": "01a15531-49a0-7000-b0a3-4bba3bc5e5de",
+            "tag": "v0.1.7",
+            "at": "2026-10-19T18:02:15.105Z",
+            "reason": "manual",
+            "actorUserId": "01a0c12a-de09-7005-b0f9-d55a8676540b"
+          }
+        }
+      ]
+    },
+    "after": {
+      "items": [
+        {
+          "name": "prod",
+          "targetRevision": "3bcef91d850f68115e0754c46edf20283d59205390005f85eae1e40b10380d83",
+          "active": true,
+          "releaseId": "01a1554b-e2d3-7000-8054-dbe6d1e2b145",
+          "tag": "v0.1.8",
+          "commitSha": "986288e6f0cb6598c14bd3c7f199f791635b4b4f",
+          "replicas": 1,
+          "readyReplicas": 1,
+          "state": "ready",
+          "host": "rfc378-mindmap.cs.localhost"
+        },
+        {
+          "name": "preview",
+          "active": false,
+          "replicas": 0,
+          "readyReplicas": 0,
+          "state": "empty",
+          "host": "preview.rfc378-mindmap.cs.localhost",
+          "offline": {
+            "releaseId": "01a15531-49a0-7000-b0a3-4bba3bc5e5de",
+            "tag": "v0.1.7",
+            "at": "2026-10-19T18:02:15.105Z",
+            "reason": "manual",
+            "actorUserId": "01a0c12a-de09-7005-b0f9-d55a8676540b"
+          }
+        }
+      ]
+    }
+  }
+}

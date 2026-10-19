@@ -59,7 +59,7 @@ describe('RFC-378 optional decision contract', () => {
   // abstract instructions. The production example now demonstrates actual valid
   // independent alternatives and a compatible multi-select, rather than a
   // one-option pseudo-JSON template. Validate the literal example we send.
-  test('mindmap examples parse as independent single and compatible multi questions', () => {
+  test('mindmap examples parse as independent mechanisms, parameter values and compatible multi questions', () => {
     for (const nonce of [undefined, 'test-nonce']) {
       const example = clarifyFormatExample(nonce, true)
       const body = example.slice(
@@ -70,8 +70,8 @@ describe('RFC-378 optional decision contract', () => {
       expect(result.errors).toEqual([])
       expect(result.warnings).toEqual([])
       const questions = result.body!.questions
-      expect(questions.map((question) => question.kind)).toEqual(['single', 'multi'])
-      expect(questions.map((question) => question.options.length)).toEqual([2, 2])
+      expect(questions.map((question) => question.kind)).toEqual(['single', 'single', 'multi'])
+      expect(questions.map((question) => question.options.length)).toEqual([2, 2, 2])
       expect(questions.every((question) => question.mindmap?.categoryPath.length === 1)).toBe(true)
       expect(questions[0]!.options.map((option) => option.label)).toEqual([
         '启用到期提醒',
@@ -79,8 +79,12 @@ describe('RFC-378 optional decision contract', () => {
       ])
       expect(questions[0]!.options[0]!.description).toContain('渠道和时机另定')
       expect(questions[0]!.options[1]!.description).toContain('其他措施未定')
-      expect(questions[1]!.options[0]!.label).toContain('如有')
-      expect(questions[1]!.options[1]!.description).toContain('不能代表整个时段')
+      expect(questions[2]!.options[0]!.label).toContain('如有')
+      expect(questions[2]!.options[1]!.description).toContain('不能代表整个时段')
+      expect(questions[1]!.options.map((option) => option.label)).toEqual([
+        '按到达时间',
+        '按已约定的紧急程度',
+      ])
       const added = CLARIFY_MINDMAP_QUESTION_GUIDANCE + example
       // Quotes also expand in the Windows command line; the concrete examples
       // must fit the old combined guidance/example budget, not merely each part.
@@ -109,43 +113,32 @@ describe('RFC-378 optional decision contract', () => {
           expect(prompt).not.toContain('Treat every unstated detail as a blocker')
           expect(prompt).not.toContain('each decision needed to do it correctly is settled')
           expect(prompt).not.toContain('The moment you catch yourself hedging')
-          expect(prompt).toContain('naming ONE variable in its title')
-          expect(prompt).toContain('Audit the full options, including descriptions')
-          expect(prompt).toContain('two opposite options: enable / do not enable')
-          expect(prompt).toContain('Neither option decides any other mechanism')
-          expect(prompt).toContain('A negative choice does not prescribe a replacement process')
-          expect(prompt).toContain('who operates a channel is a separate question')
-          expect(prompt).toContain('Each description is ONE short sentence')
-          expect(prompt).toContain('Time grid and minimum duration are separate')
-          expect(prompt).toContain(
-            'Compatible features, sources, criteria or review triggers: kind multi',
-          )
-          expect(prompt).toContain('no "only", "none" or "no extra collection" option')
-          expect(prompt).toContain(
-            'Each set concerns ONE axis: features OR data sources OR triggers',
-          )
-          expect(prompt).toContain('Pilot size is rollout scope, not evidence')
-          expect(prompt).toContain('Detection signal and threshold remain undecided')
-          expect(prompt).toContain('Ask ONLY 2–3 highest-impact unresolved decisions')
-          expect(prompt).toContain('Allocation order, quotas and approval are independent')
-          expect(prompt).toContain('does selecting one leave all other variables undecided?')
-          expect(prompt).toContain('otherwise use one category level')
-          expect(prompt).not.toContain('"categoryPath":["Category","Subcategory"]')
-          expect(prompt).toContain('Never exclusive feature bundles')
-          expect(prompt).toContain(
-            'Never invent a baseline, main pain point, existing system or automatic data collection',
-          )
-          expect(prompt).toContain(
-            'Success criteria, rollout scope and validation ownership are separate axes',
-          )
-          expect(prompt).toContain('Separate evidence collection from enforcement')
-          expect(prompt).toContain('Do not manufacture exclusivity')
-          expect(prompt).toContain('History and observations coexist')
-          expect(prompt).toContain('scheduled and event-triggered reviews coexist')
-          expect(prompt).toContain('An evidence-source option must say "if available"')
-          expect(prompt).toContain(
+          expect(prompt).toContain(CLARIFY_MINDMAP_QUESTION_GUIDANCE)
+          for (const rule of [
+            'values of ONE variable named in the title',
+            'Allocation order, quotas and approval are independent',
+            'time grid/minimum duration and channel/operator',
+            'Neither option decides any other mechanism',
+            'A negative choice does not prescribe a replacement process',
+            'Multi: compatible additions on ONE axis',
+            'Never exclusive feature bundles or a none/only/no-extra option',
+            'Pilot size is scope, not evidence',
+            'History and observations coexist; scheduled and event-triggered reviews coexist',
+            'Review is not automatic policy activation',
+            'no added commitments or positional references',
+            'Recommend only with a specific assumption and cost',
+            'Never invent a baseline, main pain point, existing system or automatic collection',
+            'Unknown source availability needs "if available"',
             'Preserve explicit decided/provisional status and unmarked maturity',
+            'Unknown is not no/disabled/rejected',
+          ])
+            expect(prompt).toContain(rule)
+          expect(prompt).toContain(
+            'start with problem priority, observable success and feasible evidence',
           )
+          expect(prompt).toContain('Honor a specific tradeoff requested by the user')
+          expect(prompt).toContain('Selecting an option must leave other variables undecided')
+          expect(prompt).not.toContain('"categoryPath":["Category","Subcategory"]')
           if (mode === 'isolated') {
             const example = prompt.slice(
               prompt.indexOf('Format:'),
@@ -211,9 +204,9 @@ describe('RFC-378 optional decision contract', () => {
         clarifyChannel: { kind, directive: 'mandatory', injectStopNotice: false },
         clarifyMindmap: { categories: [], instructions: '' },
       })
-      expect(prompt).toContain('release, sign-in, recording and reminders are independent')
-      expect(prompt).toContain('Options may be reordered: no positional references')
-      expect(prompt).toContain('Never invent a baseline, main pain point, existing system')
+      expect(prompt).toContain(CLARIFY_MINDMAP_QUESTION_GUIDANCE)
+      expect(prompt).toContain('Allocation order, quotas and approval are independent')
+      expect(prompt).toContain('Unknown source availability needs "if available"')
       expect(prompt).toContain('Every question requires a non-empty mindmap.categoryPath')
       expect(prompt).toContain('even with a parent')
     }

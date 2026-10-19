@@ -1,0 +1,21 @@
+{
+  "sourceSha": "56cc088c8f334c546a0d57389d32ebbf3f334505",
+  "runId": 39293600672,
+  "jobId": 118203591633,
+  "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39293600672/job/118203591633",
+  "failedTest": "e2e/rfc294-human-gate-restart.spec.ts:553 question dispatch recovers the committed continuation after SIGKILL before wake",
+  "terminalError": "e2e/harness: timed out after 30s waiting for daemon ready line",
+  "observedColdStart": {
+    "migrationsExtracted": "2026-10-19T17:40:59.936Z",
+    "configLoaded": "2026-10-19T17:41:20.435Z",
+    "gapMs": 20499,
+    "lastStartupMarker": "token ready"
+  },
+  "jobSummary": {
+    "failed": 1,
+    "flaky": 5,
+    "skipped": 9,
+    "passed": 159
+  },
+  "attribution": "The terminal failure occurred before daemon readiness, not while generating or parsing mindmap content. Between known-green 3b4147483 and 56cc088c8, e2e/harness.ts, this test, daemon and DB migration paths did not change. The RFC-378 production delta changes only clarify prompt rendering/guidance; exact causal ownership of the slow startup remains unconfirmed. No timeout increase, foreign-code edit or rerun was performed."
+}
