@@ -225,6 +225,22 @@ task `01M5ARC2998JZV9T3NWSC4QNJV`、初始 run `01M5ARDMRQ7JDV6HEHCYZ9HS4X`、cl
 
 窄范围修复明确证据来源、覆盖时段和登记时间分别决定，周期记录与即时上报可兼容，复核信号不证明因果或自动改变政策。完整参数示例改为观测时段，并在两项说明中都保留“记录时机另定”；去除模板 JSON 的多余缩进以维持原 3350 组合预算（当前含引号 3264），没有修改普通问答示例、schema 或解析规则。八种初始提示及双库 generator 的对应回归已写齐，继续集中静态核对、精确发布和同场景真实验收。
 
+### 2026-10-19：第十四轮内容通过、原工作区恢复与最终闭合
+
+生产候选 `393ecaea3480dcad194b270e249846606416d9a8` 的 [CI 39309459542](https://github.com/wangbinquan/agent-workflow/actions/runs/39309459542) 已终态 **49/49 success**，见 [完整 job 回执](evidence/ci-393ecaea3.json)。独立 v0.1.12 固定此源码，经 GitLab `0527b58c2bda8a22bc355c5a0926fe111a83bdf9`、release `01a15597-d675-7000-8b17-222e1c1650ed`、journey `01a15597-d76a-7000-8a52-1b494cc407e5` 正常构建和启用；实际镜像 `sha256:0a4bae8551376e20f9efc1e9b4a40187484370253747042ad99ddbab07f04965` Ready、零重启、控制面无 OpenCode。本项目旧 v0.1.11 预览正常下线，正式 AW 与 snake 的独立保护检查保留，见 [部署回执](evidence/hosted-validation-axes-deployment.json)。
+
+task `01M5ASX4NM3XQS5KG2JTMQ2FGH`、initial run `01M5ASYFZ53DQ7KBEENBGEAPRX`、clarify `01M5AT6VDP6E11BKGH265JKXF0` 使用原无基线场景和同一真实模型。初始题分别选择问题优先级、可并用的证据来源和复核责任，没有无依据推荐或假造基线。选择产品原有“检查依据”默认指引后，request `93c0dbed-38aa-44b2-b8a6-c4889963743a` 追加关键假设、最有力反例及低成本证据三题；两项 single 明确选择主要假设或最强反例，兼容证据使用 multi，缺失记录和抽样局限明确，没有再混合覆盖范围与登记时间，也没有把复核等同于政策变更。三个旧回答保留、三个新题挂在原分支。本样本 AC09 通过，见 [未改写的题目与逐项评价](evidence/hosted-fourteenth-questions.json)。
+
+分类原数据并非全部单层：两个二段路径由已实现的单链显示压缩合成一张卡片，目录仍保留完整路径，[实际全景](evidence/hosted-fourteenth-initial-map.jpg) 对此分别留证。初始某项将主观反馈写成“不能当作改善效果的证据”，表述偏绝对；主观反馈仍可支持体验判断。这一模型措辞局限保留，不据此承诺所有生成问题都可靠，也不把提示串断言当作语义保证。
+
+实际 UI 完成六题：1 暂定、1 已决定、4 未标注，负责人空值与具体日期 TBD 保留。[提交复核](evidence/hosted-fourteenth-review.jpg) 明示缺少验证负责人，并允许按原停止权提交。19:43:38Z 进入最终生成前，原父工作区报告 `hosted-workspace-unavailable` / `容器不存在`；六个答案已成功封存，模型尚未启动。平台评估确认原卷 `92f5ab20-5f15-498b-9137-f904c61d58f0` 完好，通过正常 `rebuild-workspace` 请求 `01a155b2-588c-7000-986f-ab79cee0fa1c` 恢复同一父任务，generation 2 → 3，19:45:40Z 成功；应用随后自动续跑。首次只读观察发生在平台成功后约 700ms，应用当时尚未消费回执，这个中间态保留；没有重复恢复或重建业务任务。最初容器消失的根因未确定，没有修改他人平台代码。
+
+恢复后首次模型返回缺少 `<workflow-output>` envelope，自动续会话又因“原会话执行资源尚未停止”被平台拒绝；原流程随后按配置进行 process-retry。这两条运行失败及 `envelope-missing` / `runtime-stream-interrupted` 原错误均保留，没有手动反复重跑挑选文档。
+
+同一 task 于 `2026-10-19T20:00:23.595000+00:00` done，output run `01M5AW0DYR7HATDWE2J2WFKA0H`。原问题与六个封存答案在恢复前后完全相同；[实际最终文档](evidence/hosted-fourteenth-output.md) 逐项核对原话、三种成熟度、未知、接受的代价、未定负责人及两周后复核。本会话阅读全文逐项复核通过；不把 task done 单独视为内容正确。见 [执行、封存与恢复证据](evidence/hosted-fourteenth-journey.json)、[任务完成](evidence/hosted-fourteenth-task.jpg)、[结果界面](evidence/hosted-fourteenth-output.jpg)。早先单机与托管 AC05/AC10/AC12 通过证据继续有效，本轮补齐最新候选的内容闭合。
+
+第十三轮含已确认答案，自动审批拒绝取消该任务，理由是可能影响非平凡应用状态；本会话保留原任务供审计，未改用其他渠道取消。所有历史失败、中断和取消的 CI 继续保留。当前 RFC 按 AC01～AC12 实现与验收范围关闭；这不是对真人思考深度或责任落实效果的研究结论。收口提交只更新文档及证据，远端提交的最终 CI 与同步状态在交接时另核对。
+
 ## 7. 验收逐项对账
 
 | 标准            | 当前证据与结论                                                                                                                                                              |
@@ -237,14 +253,16 @@ task `01M5ARC2998JZV9T3NWSC4QNJV`、初始 run `01M5ARDMRQ7JDV6HEHCYZ9HS4X`、cl
 | AC06 数据贯通   | 原始字段在实际编辑、刷新、封存及输出引用中逐字贯通；协作/归属/双数据库/部分锁定由自动化覆盖。生成内容的解释一致性见 AC10。                                                  |
 | AC07 提交复核   | 实际复核原答案、全部五类决定补充、成熟度与定位修改通过；第三、四轮缺少负责人实际显示警告并允许推进，失败提示另由自动化覆盖。                                                |
 | AC08 提交语义   | 实际 self + stop 单次提交与任务续跑通过；continue/cross、保存错误、部分锁定和在途阻断由自动化覆盖。                                                                         |
-| AC09 问题内容   | 第十三轮初始题通过；追加题仍混合观察范围与登记时机、过度推断复核信号，已补窄修复与回归，待新候选真实复验。                                                                  |
-| AC10 最终文档   | 第五轮单机和 v0.1.3 托管原文均通过：保留原话、三种成熟度、代价、未知、未定负责人/复核；早期失败样本保留，不概括为每次模型输出必然正确。                                     |
+| AC09 问题内容   | 第十四轮初始与追加实际内容通过；原子取舍、兼容多选、条件描述和分类显示分别对账。保留主观反馈措辞局限，不保证每次生成。                                                                  |
+| AC10 最终文档   | 第五轮单机、v0.1.3 托管与第十四轮最新原文均通过：保留原话、三种成熟度、代价、未知、未定负责人/复核；失败样本保留，不概括为每次模型输出必然正确。                                     |
 | AC11 可用界面   | 桌面、390/320px、浅/深色、键盘与文本选择实际检查通过；5000 节点/深度 100/300 同级规模由 E2E 覆盖。                                                                          |
 | AC12 完整旅程   | 单机和托管均已从起步完成真实追问、编辑/刷新/复核/最终输出及 task done；task/run/output 和真实界面分别留证。                                                                 |
 
-自动化覆盖的“通过”以相应候选确切 SHA 的终态为准。生产候选 `a550f5a3e` 和首批验收记录 `19347b3be` 已完整成功；后续 `54d485de4`、共享基线 `a6c05417b` 与清理提交 `bf99a2dfd` 的失败分别保留；后继 `0c266dbcce` 已为 49/49 success。RFC 保持 In Progress，直到 AC09 的最新真实问题与确切 SHA CI 分别闭合。
+自动化覆盖的“通过”以相应候选确切 SHA 的终态为准。生产候选 `a550f5a3e` 和首批验收记录 `19347b3be` 已完整成功；后续 `54d485de4`、共享基线 `a6c05417b` 与清理提交 `bf99a2dfd` 的失败分别保留；后继 `0c266dbcce` 已为 49/49 success。最新生产候选 393ecaea3 的 CI 已终态 49/49 success，AC09 及最新真实最终文档亦已闭合。RFC-378 Done；历史失败不改写为通过。
 
 ## 8. 实际界面证据
+
+- 第十四轮最新候选：[全景](evidence/hosted-fourteenth-initial-map.jpg)、[提交复核](evidence/hosted-fourteenth-review.jpg)、[任务完成](evidence/hosted-fourteenth-task.jpg)、[结果预览](evidence/hosted-fourteenth-output.jpg)。
 
 - [第三轮提交复核：缺失责任人明确提示](evidence/third-review-missing-owner.png)。
 - [第四轮最新候选：复核](evidence/fourth-review.png)、[任务完成](evidence/fourth-completed-task.png)、[实际文档](evidence/fourth-output-preview.png)。

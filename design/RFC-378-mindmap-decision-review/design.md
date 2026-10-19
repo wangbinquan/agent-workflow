@@ -1,6 +1,6 @@
 # RFC-378 技术设计
 
-> In Progress，用户已于 2026-10-18 批准实现与自主验收。设计基线 `293c1951fc1c56afcef9bb8ddb42d0d300b1308d`；RFC-294 2026-10-16 目标合同和 RFC-372 轻量合同为边界。实际候选与验收见 [acceptance.md](acceptance.md)。
+> Done（2026-10-19；实际证据见 acceptance.md），用户已于 2026-10-18 批准实现与自主验收。设计基线 `293c1951fc1c56afcef9bb8ddb42d0d300b1308d`；RFC-294 2026-10-16 目标合同和 RFC-372 轻量合同为边界。实际候选与验收见 [acceptance.md](acceptance.md)。
 
 ## 1. 落位与单写源
 
