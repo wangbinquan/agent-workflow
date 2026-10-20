@@ -106,7 +106,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 
 ### S1 NodeRun 每任务单调序号（W7-A）
 
-> 后继：[RFC-374](../RFC-374-node-run-sequence/proposal.md)（Draft）。2026-10-17 研究发现：PostgreSQL 迁移链今天不能给已有表加列，需新增升级种类 V8；`max+1` 与 tasks 计数器都会重开 RFC-369 的同任务冲突，分配改用 identity 分配表；迁移只能接在 RFC-370 未发布的 0259 / 0035 之后，执行时机待用户决定。
+> 后继：[RFC-374](../RFC-374-node-run-sequence/proposal.md)（In Progress，2026-10-19 派发；RFC-370 已冻结其迁移）。2026-10-17 研究发现：PostgreSQL 迁移链今天不能给已有表加列，需新增升级种类 V8；`max+1` 与 tasks 计数器都会重开 RFC-369 的同任务冲突，分配改用 identity 分配表；迁移只能接在 RFC-370 未发布的 0259 / 0035 之后，执行时机待用户决定。
 
 - **目标**：消除“ULID 字典序 = 先后”的判据（review F6）。
 - **范围**：两种 provider 的 `node_runs` 增加 `seq`；唯一铸造程序在同一事务内分配每任务单调值并保证 `UNIQUE(task_id, seq)`；

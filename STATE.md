@@ -1,3 +1,7 @@
+## 2026-10-19 RFC-294 后继 S1：RFC-374 In Progress
+
+RFC-370 于 2026-10-19 Done、其迁移 SQLite 0259 / PostgreSQL 0035 冻结后，[RFC-374](design/RFC-374-node-run-sequence/proposal.md)（NodeRun 每任务单调序号）在 HEAD `e569bb5c8` 复核设计前提（铸造程序、PostgreSQL 升级种类 V1～V7、启动恢复接线均未变）后派发 Codex 实施，本会话审核（免设计门与实现门）。本 RFC 占用迁移编号 SQLite `0260` / PostgreSQL `0036`。
+
 ## 2026-10-19 RFC-378：脑图澄清主动思考与决定复核（Done）
 
 [RFC-378](design/RFC-378-mindmap-decision-review/proposal.md) 已完整实现、收齐用例并通过功能门和集中验收。最新生产候选 `393ecaea3480dcad194b270e249846606416d9a8` 的 CI `39309459542` 终态 49/49 success；独立托管 v0.1.12 已启用。第十四轮同一无基线场景的初始和追加问题通过 AC09，六回答复核保留 1 暂定、1 已决定、4 未标注与未定负责人。原工作区容器中断后按平台正常恢复流程保留原卷和全部答案，同一任务完成、原始最终文档通过。单机与托管 AC01～AC12 证据、TreeLearn 参照、历史失败和模型措辞局限均见 [验收记录](design/RFC-378-mindmap-decision-review/acceptance.md)。正式 AW 与 snake 保持运行；本 RFC 未切正式服务，也不把代理验收当作真人思考/责任效果研究。收口仅更新文档与证据，最后远端同步和该提交 CI 在交接时核对。

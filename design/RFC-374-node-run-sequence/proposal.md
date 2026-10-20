@@ -1,10 +1,10 @@
 # RFC-374 NodeRun 每任务单调序号：先后判定与 ULID、主机时钟脱钩（RFC-294 S1 / W7-A）
 
-- **状态**：Draft（2026-10-17 落档；执行时机待用户决定——本 RFC 的迁移只能接在 RFC-370 未发布、仍可能整体重生成的
-  SQLite 0259 / PostgreSQL 0035 之后，见 design §8）
+- **状态**：In Progress（2026-10-17 落档；2026-10-19 派发 Codex 实施，本会话审核，免设计门与实现门。前置已满足：RFC-370 于
+  2026-10-19 Done，其 SQLite 0259 / PostgreSQL 0035 自 `166e918bd` 起未再改动且已应用于托管生产库，视为冻结，见 design §8）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S1、design §6.1；review-2026-10-16 F6；
   `docs/audit-backlog.md` 中「scheduler 与前端共用同一先后序」的系统级条目
-- **基线**：HEAD `b76a88e70`（行号仅作定位提示）
+- **基线**：HEAD `e569bb5c8`（2026-10-19 复核；行号仅作定位提示）
 - **落位**：task-execution（铸造分配、追平作业、读者切换）、shared（唯一比较器）、platform/persistence（PostgreSQL 加列迁移种类）、
   各 consumer 自身的读侧
 
@@ -60,9 +60,11 @@
 无产品能力变化。新旧判定只在原判据出错的情形下不同（这正是要修的缺陷）。`GET /api/tasks/:id/node-runs` 与 MCP
 `list_node_runs` 的 NodeRun DTO 增加可空字段 `seq`（加性，旧客户端忽略、旧服务端缺省为 null）。
 
-## 6. 需要用户决定
+## 6. 已作出的取舍
 
-1. **执行时机**：本 RFC 的迁移会成为 SQLite 0260 / PostgreSQL 0036，链接在 RFC-370 尚未发布的 0259 / 0035 之后；RFC-370
-   的惯例是把未发布迁移按最终 schema 整体重生成。若在 RFC-370 冻结前提交，RFC-370 之后若再改 schema 只能追加而不能重生成，
-   或需连同本 RFC 的迁移一起重生成。建议：等 RFC-370 冻结（或发布）其迁移后再派发实施。
-2. 是否接受设计中「追平失败则守护进程拒绝启动」（与启动恢复一致，建议接受）。
+用户授权本会话设计、交 Codex 实施并审核（免设计门与实现门），以下事项由本会话决定，可在执行期间推翻：
+
+1. **执行时机**：用户 2026-10-19 告知 RFC-370 已结束，随即派发。本 RFC 的迁移为 SQLite 0260 / PostgreSQL 0036，链接在 RFC-370
+   已冻结的 0259 / 0035 之后。
+2. **追平失败则守护进程拒绝启动**：采纳。追平是启动恢复的第 0 步，与其余四步同样 fail closed；托管下失败即把该实例的执行权
+   置为 `frozen`（`execution-initialization-failed`，`bootstrap/executionInitialization.ts`），与启动恢复失败的既有处理一致。

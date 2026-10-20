@@ -1,7 +1,7 @@
 # RFC-374 实施计划
 
-**前置**：RFC-370 冻结（或发布）其未发布迁移 SQLite 0259 / PostgreSQL 0035（design §8）。前置满足前本 RFC 保持 Draft，不派发实施。
-派发后单批次交付，先完成全部实现与用例，再集中验证一次（CLAUDE.md 文首硬规则）。
+**前置**：RFC-370 冻结其迁移 SQLite 0259 / PostgreSQL 0035（design §8）——2026-10-19 已满足（RFC-370 Done）。
+2026-10-19 派发 Codex 实施、本会话审核。单批次交付，先完成全部实现与用例，再集中验证一次（CLAUDE.md 文首硬规则）。
 
 ## 任务
 
@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | RFC-374-T1 | PostgreSQL 迁移种类 V8（已有表追加可空列 + 含新列的唯一索引），含生成器路由、历史加载校验、行桥折叠与恢复写入器列清单核实；V8 单测 | design §4.3 |
 | RFC-374-T2 | schema：`nodeRunSeqAllocations` 表、`nodeRuns.seq` 末列、`idx_node_runs_task_seq`；改写 `db/schema.ts` 中「Freshness is pure ULID」的注释；`RFC349_SOURCE_TABLES` 增加新表 | design §3、§4.1 |
-| RFC-374-T3 | 迁移：SQLite `0260_rfc374_node_run_seq`（drizzle-kit 生成）与 PG `0036_rfc374_node_run_seq`（`--append` 生成）；重新生成 RFC-349 schema-contract；`upgrade-rolling` 260、`rfc349-schema-contract` 217 / 211 | design §4.2 |
+| RFC-374-T3 | 迁移：SQLite `0260_rfc374_node_run_seq`（drizzle-kit 生成）与 PG `0036_rfc374_node_run_seq`（`--append` 生成）；重新生成 RFC-349 schema-contract；表数钉 217 / 211（design §1.2 所列测试） | design §4.2 |
 | RFC-374-T4 | 铸造程序加分配步骤（先分配后插入），改写文件头注释；更新 W47、rfc144、`rfc359-w6-node-run-insert-lineage-completeness` | design §3 |
 | RFC-374-T5 | shared `nodeRunOrder.ts` 比较器与助手、`NodeRunSchema.seq`、`RunLineageView.seq`、`resolveHandlerRun` | design §2、§6 |
 | RFC-374-T6 | 存量追平：规划器、端口、作业、store、persistence 接线、启动恢复第 0 步、报告计数；可选的逻辑目标不变量 | design §5 |
@@ -24,8 +24,8 @@
 ## 冲突面
 
 - 与 S6 共用 `nodeRunMint` / freshness / `nodeMechanics` / `wrapperMechanics`，二者串行。
-- RFC-375 会先改 `services/scheduler.ts`（不同片段）与删除部分死代码，本 RFC 以其落地后的源码为准。
-- 迁移编号以派发时为准；与 RFC-370 的时序见 design §8。
+- RFC-375 / RFC-376 / RFC-377 已落地，本 RFC 以 `e569bb5c8` 起的源码为准；结构门按 RFC-376 硬门格式编写。
+- 迁移编号为 SQLite 0260 / PostgreSQL 0036（RFC-370 已冻结 0259 / 0035，design §8）。
 
 ## 验收清单
 

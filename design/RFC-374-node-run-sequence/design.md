@@ -1,7 +1,10 @@
 # RFC-374 设计：NodeRun 每任务单调序号
 
-基线 HEAD `b76a88e70`。`TE/` = `packages/backend/src/modules/task-execution/`，`PP/` = `packages/backend/src/platform/persistence/`，
-`SH/` = `packages/shared/src/`，`FE/` = `packages/frontend/src/`，`T/` = `packages/backend/tests/`。行号仅作定位提示。
+基线 HEAD `b76a88e70` 落档，2026-10-19 在 `e569bb5c8` 复核：铸造程序自 RFC-369 `f78add93d` 未变；PostgreSQL 升级种类仍只有
+V1～V7；`ORDER BY nodeRuns.id` 仍为 16 处；启动恢复仍由两个 daemon 根经 `runTaskExecutionBootRecovery`
+（`TE/composition/bootRecovery.ts`）调用，托管经 `bootstrap/executionInitialization.ts` 在获得执行权后运行。
+`TE/` = `packages/backend/src/modules/task-execution/`，`PP/` = `packages/backend/src/platform/persistence/`，
+`SH/` = `packages/shared/src/`，`FE/` = `packages/frontend/src/`，`T/` = `packages/backend/tests/`。行号仅作定位提示，以实施时源码为准。
 
 ## 1. 现状
 
@@ -22,7 +25,9 @@
 ### 1.2 迁移机制
 
 - SQLite：drizzle-kit 生成，最新 `0259_rfc370_hosted_deployment`；admission 逐字节重放；携带比二进制更新回执的库会被拒绝
-  （所以旧二进制不会写已迁移的 SQLite 库）。`T/upgrade-rolling.test.ts` 钉 `HEAD_TOTAL_MIGRATIONS = 259`。
+  （所以旧二进制不会写已迁移的 SQLite 库）。`T/upgrade-rolling.test.ts` 的 `HEAD_TOTAL_MIGRATIONS` 由 journal 推导，无需改数。
+  表数钉：`T/architecture/rfc349-schema-contract.test.ts` 与 `T/rfc349-sqlite-logical-source.test.ts` 为 216，
+  `T/rfc349-postgresql-schema.test.ts` 为 210，`design/RFC-349-…/schema-contract.md` 同。
 - PostgreSQL：历史不可变，升级只能经 `bun run --filter @agent-workflow/backend db:rfc349-postgresql-schema --append <id>` 生成；
   每次升级必须对应至少一个 SQLite 迁移；头合同必须等于 `buildLogicalSchemaContract()`。升级种类只有 V1～V7
   （索引 / 新表 / CHECK 替换 / 表退役 / 源修订时钟 / 归属元数据 / 全唯一索引改部分），`logicalIndexAdditions` 拒绝任何行变更，
@@ -165,7 +170,9 @@ BINARY、JS 字符串比较同序。它们只用于追平，不用于迁移。�
 
 ## 7. 结构门
 
-新增 `T/architecture/rfc374-node-run-order-guard.test.ts`（在 RFC-376 已落地时按其硬门格式编写并登记）：基于后端 `tsconfig` 的
+新增 `T/architecture/rfc374-node-run-order-guard.test.ts`，按 RFC-376 硬门格式编写（纯检测函数导出；每个检测分支至少一个违规负例；
+每个豁免边界至少一个合规样例；例外清单「少一条 → 未登记」「多一条 → 过期」两个变异；语料下限），并登记到
+`architecture/guard-manifest.json`（参照 `T/architecture/rfc376-structural-guards.test.ts`）。基于后端 `tsconfig` 的
 `ts.Program` 扫 `packages/backend/src/**` 与 `SH/**`，前端对 import `NodeRun` 的文件做源码文本子规则；判定逻辑为导出的纯函数。
 「node-run 形」接收者：有 `id: string` 且至少有 `nodeId`、`parentNodeRunId`、`retryIndex`、`rerunCause`、`iteration`、`shardKey`、
 `wgRound`、`containerRunId` 中的两个。
@@ -183,18 +190,11 @@ BINARY、JS 字符串比较同序。它们只用于追平，不用于迁移。�
 负例用内存编译宿主的虚拟文件（AC-5 列出的形状）；合规样例：seq 优先的 `orderBy`、`compareNodeRunMintOrder(a, b)`、
 `asc(nodeRunEvents.id)`、消息类型 `{ id, round }`；外加语料下限。
 
-## 8. 与 RFC-370 的时序
+## 8. 与 RFC-370 的时序（已解除）
 
-RFC-370 的 0259 / 0035 是**未发布**的整体重生成产物（RFC-370 v3 V11：未发布迁移按最终 schema 重新生成为一组；正式 M0 库停在
-0034）。本 RFC 的 0036 链接到 0035 的摘要：
-
-- 若在 RFC-370 冻结其迁移之前提交，RFC-370 之后的 schema 改动只能追加在 0260 / 0036 之后，不能再重生成 0259 / 0035
-  （否则本 RFC 的迁移链要随之重生成）。
-- 本 RFC 还会改动 RFC-370 自 2026-10-14 以来改过的多个文件（`db/schema.ts`、迁移 journal、`postgresqlMigrationSequence.ts`、
-  `postgresqlMigrationHistory.ts`、`schemaContract.ts`、`scripts/rfc349-postgresql-schema.ts`、`bootExecutionRecovery.ts` 与端口、
-  `nodeMechanics.ts`、`wrapperMechanics.ts`、`taskRouteOperations.ts`、collaboration `review.ts`、`services/task.ts` 等）。
-
-因此建议在 RFC-370 冻结（或发布）其迁移之后再派发实施；届时以当时的迁移编号为准。
+落档时 RFC-370 的 0259 / 0035 是**未发布**的整体重生成产物（RFC-370 v3 V11），本 RFC 的 0036 要链接到 0035 的摘要，故等待其冻结。
+2026-10-19：RFC-370 Done（`e569bb5c8`）；0259 / 0035 自 `166e918bd` 起未再改动，且已应用于本机 CrewStation 上的托管生产库
+（v0.6.x），重生成将要求重建该库，视为冻结。本 RFC 的迁移为 SQLite `0260` / PostgreSQL `0036`。
 
 ## 9. 测试策略
 
@@ -213,8 +213,8 @@ RFC-370 的 0259 / 0035 是**未发布**的整体重生成产物（RFC-370 v3 V1
    按 `seq` 与按 id 排序一致。
 7. 迁移：SQLite fresh / `freezeAt(258)` upgrade + 种子遗留任务 + 追平；PG fresh / 历史重放到 0035 + 种子 + 全量迁移 + 追平；V8
    单测（重放等于头合同、篡改 SQL 被拒、列插在中间被拒、无默认 NOT NULL 被拒、不含新列的已有表唯一索引仍被拒、加性桥折叠列、
-   仅索引桥严格）；旧逻辑归档恢复到新 schema；SQLite → PG 逻辑迁移复制 `seq` 与分配表并通过 `nextval > max`；`upgrade-rolling`
-   260、`rfc349-schema-contract` 217 / 211。
+   仅索引桥严格）；旧逻辑归档恢复到新 schema；SQLite → PG 逻辑迁移复制 `seq` 与分配表并通过 `nextval > max`；表数钉 217 / 211
+   （§1.2 所列测试与重新生成的 schema-contract）。
 8. 在途任务 resume 兼容（AC-7 的五类形状）。
 9. 因果流行为不变：既有套件不改即通过（种子行为 NULL，回退 id 序）。
 10. 前端：导航、历史、注入记忆、工作组房间在 seq 与 id 相反时的夹具；DTO 带 / 不带 `seq` 的解析。
