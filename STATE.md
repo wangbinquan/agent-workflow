@@ -1,3 +1,7 @@
+## 2026-10-20 RFC-294 后继 S2b：RFC-380 In Progress
+
+用户 2026-10-20「按你推荐继续推进」。S2b（每模块每进程构造一次）拆为四个 RFC：[RFC-380](design/RFC-380-daemon-module-bundles/proposal.md)（同构模块组）→ RFC-381（集成、定时任务、融合）→ RFC-382（任务执行运行时与协调器、数字员工、开发自动化、意图）→ RFC-383（SQLite HTTP 装配并入中立挂载表、删除测试回退）。RFC-380 依据三路只读研究落档并派发 Codex，本会话审核：provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行时管理、记忆五组由 `cli/daemonModules/` 的中立构造函数每会话构造一次；本会话按推荐决定的取舍见 proposal §6（单机行为不变；PostgreSQL 补上资源权限变更的实时推送）。改动独占入口根 `cli/start.ts`、`cli/postgresqlDaemonApplication.ts`、`server.ts`。
+
 ## 2026-10-20 RFC-294 后继 S2a：RFC-379 Done
 
 [RFC-379](design/RFC-379-daemon-lifecycle-program/proposal.md)（守护进程唯一生命周期程序）由 Codex 实施、本会话审核：内容 `1faae97cd`，CI 修复 `24b91ba6e`，主 CI `39389525075` success（含 PostgreSQL 双引擎分片）。启动步骤（34 个，prepare → execution-recovery → post-ready）、运行时 / 后台作业与收尾参与者只在 `packages/backend/src/cli/daemonLifecycleProgram.ts` 声明一次，两个 provider 只按 id 提供实现（G12：单机 profile 下有序清单相同）；修复 PostgreSQL 启动顺序的四个缺陷（MR 终止对账先于孤儿收割、内置工具目录先于模板、托管升级结算早于执行权、运行时注册表与定向续跑竞争）；组合无副作用；底座有回执与有界关停（task-execution 30 秒、其余 10 秒）。行为变化：关停时节点以「daemon 关停」原因中止（本地 interrupted 可续跑，托管 detach 不发取消）；托管待命实例也执行幂等的 prepare 步骤。首个 CI 只红在新增的单机 PostgreSQL 守护进程用例（单机 PostgreSQL 需一键迁移建立数据库代），改在托管待命启动用例中断言同一顺序。**对其他会话的影响**：新启动步骤、后台作业、收尾参与者只能加在程序声明里，组合不得有副作用（`docs/dev-gotchas.md` 已记）。偏离项：程序暂放 `cli/`，S2c 迁入 `bootstrap/`。S2b / S2c 待立项。
