@@ -22,5 +22,7 @@
 
 ## 验收清单
 
-- [ ] proposal AC-1～AC-5
-- [ ] 推送后 exact SHA CI 全绿（含 PostgreSQL 分片）
+- [x] proposal AC-1～AC-4（结构锁、注入实例同一性、四处行为统一的双引擎用例、旧锁与账本）
+- [ ] 推送后 exact SHA CI 全绿（含 PostgreSQL 分片）：`682018fd4` 主 CI `39497282103` 的后端全部分片（含 PostgreSQL）与
+  ubuntu / windows e2e 绿；红在依赖审计门（外部新公告，非本 RFC）与 macOS e2e 既有的守护进程就绪超时偶发
+  （2026-10-19 `f777b875a` 起即有）。待后继全绿 CI 补证
