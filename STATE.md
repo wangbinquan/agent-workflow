@@ -1,6 +1,6 @@
-## 2026-10-20 RFC-294 后继 S2b：RFC-380 In Progress
+## 2026-10-20 RFC-294 后继 S2b：RFC-380 Done，RFC-381 In Progress
 
-用户 2026-10-20「按你推荐继续推进」。S2b（每模块每进程构造一次）拆为四个 RFC：[RFC-380](design/RFC-380-daemon-module-bundles/proposal.md)（同构模块组）→ RFC-381（集成、定时任务、融合）→ RFC-382（任务执行运行时与协调器、数字员工、开发自动化、意图）→ RFC-383（SQLite HTTP 装配并入中立挂载表、删除测试回退）。RFC-380 依据三路只读研究落档并派发 Codex，本会话审核：provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行时管理、记忆五组由 `cli/daemonModules/` 的中立构造函数每会话构造一次；本会话按推荐决定的取舍见 proposal §6（单机行为不变；PostgreSQL 补上资源权限变更的实时推送）。改动独占入口根 `cli/start.ts`、`cli/postgresqlDaemonApplication.ts`、`server.ts`。
+用户 2026-10-20「按你推荐继续推进」。S2b（每模块每进程构造一次）拆为四个 RFC：[RFC-380](design/RFC-380-daemon-module-bundles/proposal.md)（同构模块组）→ [RFC-381](design/RFC-381-daemon-integration-bundles/proposal.md)（集成、定时任务、融合）→ RFC-382（任务执行运行时与协调器、数字员工、开发自动化、意图）→ RFC-383（SQLite HTTP 装配并入中立挂载表、删除测试回退）。**RFC-380 Done**：内容 `99944c201`，CI 修复 `fc1527265`，主 CI `39456875642` success。provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行时管理、记忆五组由 `packages/backend/src/cli/daemonModules/` 的中立构造函数每会话构造一次，SQLite 进程内不再由 `server.ts` 重复构造；SQLite HTTP 认证与令牌审计改用核心实例；资源目录自有类型 ACL 写入统一带通知（PostgreSQL 补上实时推送）；`credentials` / `systemAgentRunFamily` / `workspacePresence` 列为仅托管。**对其他会话的影响**：这五组模块只在 `cli/daemonModules/` 构造，根与 `server.ts` 不再自建（`docs/dev-gotchas.md` 已记）。**RFC-381 In Progress**（Codex 实施中），按推荐决定的取舍见其 proposal §6（PostgreSQL 上 MR 关闭立即停止任务、清理失败不阻塞 MR 流、定时任务校验统一为 422、单机 PostgreSQL 融合遵守实时设置）。
 
 ## 2026-10-20 RFC-294 后继 S2a：RFC-379 Done
 

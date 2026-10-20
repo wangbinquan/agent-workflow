@@ -1,7 +1,6 @@
 # RFC-380 守护进程模块组：同构模块每会话构造一次（RFC-294 S2b 第一批）
 
-- **状态**：Draft（2026-10-20 落档。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与实现门；
-  设计中的规则取舍由本会话按推荐决定，见 §6）
+- **状态**：Done（2026-10-20）——内容 `99944c201`，CI 修复 `fc1527265`（gitleaks 把测试资源名常量误报为密钥），主 CI `39456875642` success。实现由 Codex 完成，本会话审核：本机后端 SQLite 全量 19423 pass / 0 fail；本地 PostgreSQL 17 上串行跑 206 个相关文件（本次改动的测试与全部双 provider HTTP 应用套件）的 PostgreSQL 一侧 1892 pass / 0 fail。实现中补的消费方：任务启动依赖改用会话的存储与租约；PostgreSQL 运行时改用已构造的记忆注入查询；资源包路径复用组内的 MCP 事务生命周期（无状态）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b）、design §10.2；review-2026-10-16 F2；
   前置 [RFC-379](../RFC-379-daemon-lifecycle-program/proposal.md)（S2a，生命周期程序）
 - **基线**：HEAD `8194c30dc`（行号仅作定位提示，以实施时源码为准）
