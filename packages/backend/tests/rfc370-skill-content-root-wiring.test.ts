@@ -42,6 +42,7 @@ const compact = (node: ts.Node, file: ts.SourceFile): string =>
 const start = source('cli/start.ts')
 const pg = source('cli/postgresqlDaemonApplication.ts')
 const server = source('server.ts')
+const bundle = source('cli/daemonModules/resourceCatalog.ts')
 
 function selectedCatalog(
   node: ts.Node,
@@ -53,9 +54,8 @@ function selectedCatalog(
   const selected = calls(node, file, name)
   expect(selected).toHaveLength(1)
   const input = compact(selected[0]!.arguments[0]!, file)
-  expect(input).toContain(
-    `...selectSkillContentDependencies(${receiver}.skillContent,${fallback}),`,
-  )
+  expect(input).toContain(`skillContent:${receiver}.skillContent,`)
+  expect(input).toContain(`skillContentRoot:${fallback},`)
 }
 
 test('daemon preserves the same complete skill content binding across provider sessions', () => {
@@ -73,8 +73,7 @@ test('daemon preserves the same complete skill content binding across provider s
     'skillContent:input.skillContent,',
   )
   const sqlite = declaration(start, 'composeSqliteProviderSession')
-  selectedCatalog(sqlite, start, 'composeClassicCatalogs', 'input', 'Paths.root')
-  selectedCatalog(sqlite, start, 'composeSkillCatalogBoot', 'input', 'Paths.root')
+  selectedCatalog(sqlite, start, 'composeDaemonResourceCatalogModules', 'input', 'Paths.root')
   const http = calls(sqlite, start, 'composeSqliteAppDeps')
   expect(http).toHaveLength(1)
   expect(compact(http[0]!.arguments[0]!, start)).toContain('skillContent:input.skillContent,')
@@ -82,16 +81,27 @@ test('daemon preserves the same complete skill content binding across provider s
 
 test('PostgreSQL HTTP and daemon boot choose the same store while retaining their database', () => {
   const root = declaration(pg, 'composePostgresqlApplication')
-  for (const name of ['composeClassicCatalogs', 'composeSkillCatalogBoot']) {
-    selectedCatalog(root, pg, name, 'input', 'input.appHome')
-    expect(compact(calls(root, pg, name)[0]!.arguments[0]!, pg)).toContain('db:input.db,')
-  }
+  selectedCatalog(root, pg, 'composeDaemonResourceCatalogModules', 'input', 'input.appHome')
+  expect(
+    compact(calls(root, pg, 'composeDaemonResourceCatalogModules')[0]!.arguments[0]!, pg),
+  ).toContain('db:input.db,')
 })
 
 test('SQLite standalone HTTP accepts the complete selected store', () => {
   const root = declaration(server, 'composeSqliteApplicationDeps')
-  selectedCatalog(root, server, 'composeClassicCatalogs', 'effectiveDeps', 'Paths.root')
+  selectedCatalog(root, server, 'composeDaemonResourceCatalogModules', 'deps', 'Paths.root')
   expect(
-    compact(calls(root, server, 'composeClassicCatalogs')[0]!.arguments[0]!, server),
-  ).toContain('db:effectiveDeps.db,')
+    compact(calls(root, server, 'composeDaemonResourceCatalogModules')[0]!.arguments[0]!, server),
+  ).toContain('db:deps.db,')
+})
+
+test('RFC-380 shared bundle passes the complete selection once to editing and once to boot', () => {
+  const root = declaration(bundle, 'composeDaemonResourceCatalogModules')
+  for (const name of ['composeClassicCatalogs', 'composeSkillCatalogBoot']) {
+    const selected = calls(root, bundle, name)
+    expect(selected).toHaveLength(1)
+    expect(compact(selected[0]!.arguments[0]!, bundle)).toContain(
+      '...selectSkillContentDependencies(input.skillContent,input.skillContentRoot),',
+    )
+  }
 })

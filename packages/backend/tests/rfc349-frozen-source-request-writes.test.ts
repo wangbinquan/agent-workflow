@@ -160,7 +160,7 @@ describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
     expect(nextSession).toBeGreaterThan(-1)
     expect(start.slice(nextSession, nextSession + 1600)).toContain('...bindings,')
     // SQLite daemon: the provider core must receive that window (destructured from the input).
-    const core = start.indexOf('composeSqliteDaemonProviderCore({')
+    const core = start.indexOf('composeDaemonProviderCore({')
     expect(core).toBeGreaterThan(-1)
     expect(
       start.slice(core, core + 300),

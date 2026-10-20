@@ -367,13 +367,26 @@ test('源码锁：Workflow 聚合没有 provider 命名的仓库 / 语义 / 校�
   expect(classicComposition).toContain(
     'return Object.freeze({ agent, skill, workflow, agentResourceIntegrity, skillContent })',
   )
-  for (const file of ['src/server.ts', 'src/cli/start.ts']) {
+  for (const file of [
+    'src/cli/daemonModules/resourceCatalog.ts',
+    'src/server.ts',
+    'src/cli/start.ts',
+  ]) {
     const source = readFileSync(join(import.meta.dir, '..', file), 'utf8')
-    expect(source, file).toContain(
+    expect(
+      readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
+      file,
+    ).toContain(
       "import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'",
     )
-    expect(source, file).toContain('const classicCatalogs = composeClassicCatalogs({')
-    expect(source, file).toContain('classicCatalogs.workflow')
+    expect(
+      readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
+      file,
+    ).toContain('const classicCatalogs = composeClassicCatalogs({')
+    expect(
+      readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
+      file,
+    ).toContain('classicCatalogs.workflow')
     expect(source, file).not.toContain('composeDatabaseWorkflowCatalog({')
     expect(source, file).not.toContain('resource-catalog/infrastructure/')
   }

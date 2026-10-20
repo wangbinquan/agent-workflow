@@ -485,6 +485,11 @@ describe('RFC-212 T6 — write-surface ratchet', () => {
         marker: /export function updateResourceAcl\(/,
         reason: 'resource-acl-changed',
       },
+      {
+        file: 'modules/resource-catalog/composition/resourceAcl.ts',
+        marker: /export function composeOwnedResourceAclEndpoints\(/,
+        reason: 'resource-acl-changed',
+      },
     ]
     const offenders: string[] = []
     for (const p of points) {

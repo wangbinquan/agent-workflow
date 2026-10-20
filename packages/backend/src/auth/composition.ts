@@ -39,15 +39,6 @@ export function createAuthRuntimeFor(input: CreateAuthRuntimeInput): AuthRuntime
   })
 }
 
-/** RFC-349 期的 PostgreSQL 入口名；与中立入口同一实现。 */
-export function createPostgresqlAuthRuntime(
-  input: CreateAuthRuntimeInput & {
-    readonly onCredentialRevoked: NonNullable<AuthRuntimeOptions['onCredentialRevoked']>
-  },
-): AuthRuntime {
-  return createAuthRuntimeFor(input)
-}
-
 export function createTokenCallAudit(db: ProviderNeutralDatabase): TokenCallAuditParticipant {
   return createTokenCallAuditParticipant(createTokenCallAuditPersistence(db))
 }
@@ -60,12 +51,6 @@ export function createTokenCallAudit(db: ProviderNeutralDatabase): TokenCallAudi
 export const legacyTokenCallAudit = Object.freeze({
   record(db: ProviderNeutralDatabase, record: TokenCallRecord, now?: number) {
     return createTokenCallAudit(db).record(record, now)
-  },
-  listForUser(db: ProviderNeutralDatabase, userId: string, limit?: number) {
-    return createTokenCallAudit(db).listForUser(userId, limit)
-  },
-  list(db: ProviderNeutralDatabase, limit?: number) {
-    return createTokenCallAudit(db).list(limit)
   },
   prune(db: ProviderNeutralDatabase, retentionDays: number, now?: number) {
     return createTokenCallAudit(db).prune(retentionDays, now)

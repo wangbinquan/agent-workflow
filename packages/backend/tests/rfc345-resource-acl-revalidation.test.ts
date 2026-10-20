@@ -16,7 +16,11 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { agents } from '../src/db/schema'
-import { updateResourceAcl } from '../src/modules/resource-catalog/composition/resourceAcl'
+import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
+import {
+  composeOwnedResourceAclEndpoints,
+  updateResourceAcl,
+} from '../src/modules/resource-catalog/composition/resourceAcl'
 import { createAgent } from '../src/services/agent'
 import { createUser } from '../src/services/users'
 import { registerRevalidationTrigger, type RevocationReason } from '../src/ws/revalidationHook'
@@ -110,6 +114,31 @@ describeEachProvider('RFC-345 resource ACL revalidation', (harness) => {
     let ownEffect = 0
     await updateResourceAcl(
       db,
+      admin,
+      'agent',
+      row,
+      {
+        visibility: 'private',
+        grants: [{ userId: bobId, level: 'write' }],
+        expectedResourceId: agent.id,
+        expectedAclRevision: row.aclRevision,
+      },
+      { afterCommit: () => void (ownEffect += 1) },
+    )
+    expect(ownEffect).toBe(1)
+    expect(reasons).toContain('resource-acl-changed')
+  })
+  test('RFC-380 owned writer preserves the caller post-commit effect', async () => {
+    const agent = await createAgent(
+      db,
+      { ...AGENT_FIELDS, name: 'acl-fixture-2' },
+      {
+        ownerUserId: admin.user.id,
+      },
+    )
+    const row = (await db.select().from(agents).where(eq(agents.id, agent.id)).limit(1))[0]!
+    let ownEffect = 0
+    await composeOwnedResourceAclEndpoints(composeResourceCatalogFor({ db })).updateResourceAcl(
       admin,
       'agent',
       row,

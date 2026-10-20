@@ -56,7 +56,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { createBoundOperationInvoker } from '../src/platform/operations/boundOperationInvoker'
 import type { OperationInvoker } from '../src/platform/operations/contracts'
-import { listTokenAuditForUser } from '../src/services/tokenAudit'
+import { createTokenCallAudit } from '@/auth/composition'
 import { eventually } from './helpers/eventually'
 import { createUser } from '../src/services/users'
 import {
@@ -782,7 +782,7 @@ describeEachProviderHttpApplication(
       // 审计行由 MCP 通道 fire-and-forget 写入（`void deps.tokenCallAudit.record(...)`）：
       // bun:sqlite 同 tick 落盘，PostgreSQL 是一次真实往返。四个工具各一行，读到为止。
       const rows = await eventually(
-        () => listTokenAuditForUser(h.db, h.userId),
+        () => createTokenCallAudit(h.db).listForUser(h.userId),
         (found) => found.filter((r) => r.channel === 'mcp').length >= 4,
         { what: 'the four MCP audit rows' },
       )

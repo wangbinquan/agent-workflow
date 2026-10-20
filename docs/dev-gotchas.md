@@ -8721,3 +8721,7 @@ RFC-370 生命周期清单曾混入并行未提交源码：只替换 `node:fs` �
 ## RFC-379: daemon lifecycle belongs to one program
 
 Add boot steps, background jobs and close participants to `packages/backend/src/cli/daemonLifecycleProgram.ts`; provider roots supply implementations keyed by id, never ordered lifecycle arrays. Keep construction passive: no timers, Workers, catalog writes or detached initialization until the declared phase or session resume. Seed employee templates before loading the tool catalog. Hosted execution recovery and its maintenance snapshot wait for execution authority; prepare finishes before authority starts. A `daemon-shutdown` timeout is recorded and permits final survivor cleanup, while pause and provider-switch must still prove quiescence without a timeout. Update the program order tests, both real-daemon order tests and the RFC-379 structural guard when extending the program.
+
+## RFC-380：同构守护进程模块按会话装配一次
+
+provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行时管理、记忆只在 `cli/daemonModules/` 的共享函数构造。两个 provider 的会话根各调用一次，SQLite 将同一实例注入 `server.ts`，HTTP 测试回退也调用同一函数。根与 `server.ts` 不再自行构造组内成员。粒度是 provider 会话，迁移目标必须有独立实例；构造不执行 SQL、不启动定时器，启动恢复与 MCP 诊断作业仍归 `daemonLifecycleProgram.ts`。

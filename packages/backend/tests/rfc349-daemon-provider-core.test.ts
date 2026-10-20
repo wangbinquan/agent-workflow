@@ -15,10 +15,10 @@ import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type { RealtimeCompositionPolicy } from '@/modules/runtime-management/public/participants'
 import type { LocalSystemOperationContext } from '@/modules/system-operations/public/types'
 import {
-  composePostgresqlDaemonProviderCore,
-  composeSqliteDaemonProviderCore,
+  composeDaemonProviderCore,
   type DaemonProviderCore,
-} from '@/server'
+} from '@/cli/daemonModules/providerCore'
+import { DAEMON_PROVIDER_CORE_ADAPTERS } from '@/cli/daemonModules/adapters'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -48,6 +48,24 @@ const presenceProjection = Object.freeze({
 
 function expectClosedCore(core: DaemonProviderCore, provider: DaemonProviderCore['provider']) {
   expect(Object.isFrozen(core)).toBeTrue()
+  expect(Object.keys(core).sort()).toEqual(
+    [
+      'provider',
+      'authRuntime',
+      'sourceWriteWindow',
+      'tokenCallAudit',
+      'identityAccess',
+      'httpAuthentication',
+      'healthDatabase',
+      'runtimeRegistry',
+      'repositoryWorkspaceStore',
+      'repositoryWorkspaceOperations',
+      'repositoryTransportCredentialRepository',
+      'realtime',
+      'systemOperations',
+      'maintenanceDisk',
+    ].sort(),
+  )
   expect(core.provider).toBe(provider)
   expect(core.authRuntime.provider).toBe(provider)
   expect(core.identityAccess).toBe(core.identityAccess)
@@ -136,12 +154,17 @@ describe('RFC-349 daemon provider core', () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc349-daemon-core-sqlite-'))
     roots.push(appHome)
     const db = createInMemoryDb(MIGRATIONS)
-    const core = composeSqliteDaemonProviderCore({
+    const core = composeDaemonProviderCore({
       daemonToken: 'fixture-daemon',
       db,
       appHome,
-      dbPath: join(appHome, 'db.sqlite'),
-      lockPath: join(appHome, '.daemon.lock'),
+      adapters: DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
+        db,
+        appHome,
+        dbPath: join(appHome, 'db.sqlite'),
+        lockPath: join(appHome, '.daemon.lock'),
+        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 1)),
+      }),
       secretBox: createSecretBoxFromKey(Buffer.alloc(32, 1)),
       realtimePolicy: policy(),
       onCredentialRevoked() {},
@@ -170,13 +193,17 @@ describe('RFC-349 daemon provider core', () => {
       statementTimeoutMs: 60_000,
       idleTimeoutMs: 30_000,
     } satisfies Extract<DatabaseConfig, { provider: 'postgresql' }>
-    const core = composePostgresqlDaemonProviderCore({
+    const core = composeDaemonProviderCore({
       daemonToken: 'fixture-daemon',
       db: fake.db,
-      runtime: fake.runtime,
-      databaseConfig,
+      adapters: DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
+        db: fake.db,
+        runtime: fake.runtime,
+        databaseConfig,
+        appHome,
+        lockPath: join(appHome, '.daemon.lock'),
+      }),
       appHome,
-      lockPath: join(appHome, '.daemon.lock'),
       secretBox: createSecretBoxFromKey(Buffer.alloc(32, 2)),
       realtimePolicy: policy(),
       onCredentialRevoked() {},
@@ -212,19 +239,25 @@ describe('RFC-349 daemon provider core', () => {
   })
 
   test('the PostgreSQL branch has no SQLite fallback or hidden client opener', () => {
-    const source = readFileSync(resolve(import.meta.dir, '../src/server.ts'), 'utf8')
-    const pgStart = source.indexOf('export function composePostgresqlDaemonProviderCore')
-    const pg = source.slice(pgStart, source.indexOf('\nexport interface AppDeps', pgStart))
-
+    const source = readFileSync(
+      resolve(import.meta.dir, '../src/cli/daemonModules/providerCore.ts'),
+      'utf8',
+    )
+    const adapters = readFileSync(
+      resolve(import.meta.dir, '../src/cli/daemonModules/adapters.ts'),
+      'utf8',
+    )
+    const pg = adapters.slice(adapters.indexOf('  postgresql: (input)'))
     expect(source).not.toMatch(/\bopenDb\b|createInMemoryDb|deasync/)
     expect(source).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient/)
-    expect(pg).toContain('createPostgresqlAuthRuntime')
-    expect(pg).toContain('createIdentityAccessRuntime')
-    expect(pg).toContain('composeRealtimeRuntimeFor')
+    for (const factory of [
+      'createAuthRuntimeFor',
+      'createIdentityAccessRuntime',
+      'composeRealtimeRuntimeFor',
+    ])
+      expect(source).toContain(factory)
     expect(pg).toContain('composePostgresqlSystemOperations')
-    expect(pg).toContain(
-      'repositoryBackupPreparation: repositoryWorkspaceOperations.backupPreparation',
-    )
+    expect(source).toContain('repositoryWorkspaceOperations.backupPreparation')
     expect(pg).not.toMatch(/(?:create|compose)Sqlite/)
     expect(pg).not.toContain('runtime.close')
   })

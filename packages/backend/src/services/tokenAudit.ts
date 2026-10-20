@@ -12,8 +12,8 @@ import type { Actor } from '@/auth/actor'
 import { legacyTokenCallAudit } from '@/auth/composition'
 
 export {
-  TOKEN_AUDIT_PRUNE_BATCH,
   redactSnapshot,
+  TOKEN_AUDIT_PRUNE_BATCH,
   type TokenAuditChannel,
   type TokenAuditPruneCursorV1,
   type TokenAuditPruneSliceResult,
@@ -45,18 +45,6 @@ export function recordTokenCall(
   ...args: Parameters<typeof legacyTokenCallAudit.record>
 ): ReturnType<typeof legacyTokenCallAudit.record> {
   return legacyTokenCallAudit.record(...args)
-}
-
-export function listTokenAuditForUser(
-  ...args: Parameters<typeof legacyTokenCallAudit.listForUser>
-): ReturnType<typeof legacyTokenCallAudit.listForUser> {
-  return legacyTokenCallAudit.listForUser(...args)
-}
-
-export function listTokenAudit(
-  ...args: Parameters<typeof legacyTokenCallAudit.list>
-): ReturnType<typeof legacyTokenCallAudit.list> {
-  return legacyTokenCallAudit.list(...args)
 }
 
 export function pruneTokenAudit(

@@ -248,9 +248,16 @@ test('源码锁：Agent 聚合没有 provider 命名的仓库 / 语义 / 快照�
     expect(source, neutral).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync|DbTxSync/)
     expect(source, neutral).toContain('ProviderNeutralDatabase')
   }
-  for (const file of ['src/server.ts', 'src/cli/start.ts']) {
+  for (const file of [
+    'src/cli/daemonModules/resourceCatalog.ts',
+    'src/server.ts',
+    'src/cli/start.ts',
+  ]) {
     const source = readFileSync(join(import.meta.dir, '..', file), 'utf8')
-    expect(source, file).toContain('composeClassicCatalogs({')
+    expect(
+      readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
+      file,
+    ).toContain('composeClassicCatalogs({')
     expect(source, file).not.toContain('resource-catalog/infrastructure/')
     expect(source, file).not.toMatch(
       /composeSqliteAgentImportQueries|composeSqliteAgentResourceIntegrity/,

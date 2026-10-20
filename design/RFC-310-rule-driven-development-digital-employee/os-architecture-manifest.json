@@ -14,6 +14,7 @@
       "publicEntries": ["commands.ts", "events.ts", "participants.ts", "types.ts"],
       "externalImports": [
         "bootstrap/crewstation.ts -> composition",
+        "cli/daemonModules/resourceCatalog.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> public/events",
         "cli/start.ts -> composition",

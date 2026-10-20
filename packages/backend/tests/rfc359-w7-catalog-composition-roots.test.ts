@@ -17,7 +17,7 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import { createPostgresqlAuthRuntime } from '@/auth/composition'
+import { createAuthRuntimeFor } from '@/auth/composition'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, users, workflows } from '@/db/schema'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
@@ -295,7 +295,7 @@ describeEachProvider('RFC-359 W7 —— Identity Access / Auth / Memory 组合�
 
   test('认证运行时：登录策略读写与用户查找落在真库上；provider 由引擎自报', async () => {
     const revoked: string[] = []
-    const runtime = createPostgresqlAuthRuntime({
+    const runtime = createAuthRuntimeFor({
       db: harness.db,
       onCredentialRevoked: (reason) => {
         revoked.push(reason)

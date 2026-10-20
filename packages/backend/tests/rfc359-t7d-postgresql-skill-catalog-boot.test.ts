@@ -39,7 +39,7 @@ test('PostgreSQL daemon：屏障紧跟 restore、fail-closed、闸在 HTTP 之�
     'utf8',
   )
   const restore = source.indexOf('await core.systemOperations.applyPendingRestore()')
-  const compose = source.indexOf('composeSkillCatalogBoot({', restore)
+  const compose = source.indexOf('composeDaemonResourceCatalogModules({', restore)
   expect(restore).toBeGreaterThan(-1)
   expect(compose).toBeGreaterThan(restore)
   expectBootOrder([

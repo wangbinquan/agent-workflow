@@ -90,11 +90,9 @@ describe('RFC-353 T7 装配面：resource-catalog 不认识 memory，也不认�
   // RFC-359 W4-D23b：legacy 回滚路径改吃中立事务后，三个 bootstrap 接的是**同一个**异步协调器
   // ——同步那条（`createSyncSkillRestoreMembership`）随之退役。
   test.each([
-    ['cli/start.ts', ['cli', 'start.ts'], 'createAsyncSkillRestoreMembership'],
-    ['server.ts', ['server.ts'], 'createAsyncSkillRestoreMembership'],
     [
-      'cli/postgresqlDaemonApplication.ts',
-      ['cli', 'postgresqlDaemonApplication.ts'],
+      'cli/daemonModules/resourceCatalog.ts',
+      ['cli', 'daemonModules', 'resourceCatalog.ts'],
       'createAsyncSkillRestoreMembership',
     ],
   ] as const)('%s 在 bootstrap 把 KE 的协调器交给 resource-catalog', (_name, parts, factory) => {

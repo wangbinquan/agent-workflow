@@ -325,3 +325,21 @@ export function composeForeignResourceAclFor(input: {
       }),
   })
 }
+
+/** RFC-380: notification belongs to a committed owned-resource ACL write. */
+export function composeOwnedResourceAclEndpoints(resourceCatalog: {
+  readonly acl: ResourceAclApplication
+}): ResourceAclApplication {
+  return Object.freeze({
+    ...resourceCatalog.acl,
+    updateResourceAcl(actor, type, row, body, options = {}) {
+      return resourceCatalog.acl.updateResourceAcl(actor, type, row, body, {
+        ...options,
+        afterCommit: async (changed) => {
+          await options.afterCommit?.(changed)
+          triggerRevalidation('resource-acl-changed')
+        },
+      })
+    },
+  })
+}

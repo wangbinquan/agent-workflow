@@ -461,6 +461,7 @@ export type PostgresqlTaskExecutionRuntimeDependencies = Omit<
     readonly finalizeWorkspace: (taskId: string) => Promise<void>
     /** 可选的预装实例，让一个 bootstrap 能共享同一批聚合。 */
     readonly persistence?: TaskExecutionPersistence
+    readonly memoryInjectionQueries?: TaskExecutionRuntimeParticipantsInput['memoryInjectionQueries']
     readonly runtimeSessionLeases?: RuntimeSessionLeaseOperations
     /** 让启动 / 取消装配共享同一道认领闸门与进程注册表。 */
     readonly executionModule?: ProviderTaskExecutionModule
@@ -535,7 +536,9 @@ export function composePostgresqlTaskExecutionProviderRuntime(
         persistence,
         runtimeSessionLeases:
           dependencies.runtime.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
-        memoryInjectionQueries: composePostgresqlMemoryInjectionQueries(db),
+        memoryInjectionQueries:
+          dependencies.runtime.memoryInjectionQueries ??
+          composePostgresqlMemoryInjectionQueries(db),
         childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
         lifecycle: createTaskDriverLifecyclePort({
           db,

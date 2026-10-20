@@ -42,13 +42,16 @@ export function buildStartTaskDeps(
   secretBox?: SecretBox,
   /** RFC-347: daemon/bootstrap-owned identity query; omitted only by legacy tests. */
   identityAccess?: StartTaskDeps['identityAccess'],
+  moduleMembers?: Pick<StartTaskDeps, 'repositoryWorkspace' | 'runtimeSessionLeases'>,
 ): StartTaskDeps {
   const subagentLiveCapture = resolveSubagentLiveCapture(configPath)
   return {
     db,
     schedulerDriver,
-    repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db),
-    runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
+    repositoryWorkspace:
+      moduleMembers?.repositoryWorkspace ?? composeSqliteRepositoryWorkspaceStore(db),
+    runtimeSessionLeases:
+      moduleMembers?.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
     actorUserId,
     ...(identityAccess === undefined ? {} : { identityAccess }),
     ...(secretBox !== undefined ? { secretBox } : {}),

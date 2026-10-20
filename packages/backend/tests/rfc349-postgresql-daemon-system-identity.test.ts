@@ -107,6 +107,8 @@ describeEachProvider('RFC-349 — PostgreSQL daemon 的系统身份', (harness) 
       'src/cli/postgresqlDaemonApplication.ts',
       'src/cli/start.ts',
       'src/server.ts',
+      'src/cli/daemonModules/observation.ts',
+      'src/cli/daemonModules/providerCore.ts',
     ] as const
     const offenders = roots.filter((root) =>
       readFileSync(resolve(import.meta.dir, '..', root), 'utf8').includes('buildActor('),

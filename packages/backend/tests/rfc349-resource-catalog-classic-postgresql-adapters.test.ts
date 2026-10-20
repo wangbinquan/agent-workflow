@@ -56,7 +56,10 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
       'src/cli/postgresqlDaemonApplication.ts',
       'src/server.ts',
     ]) {
-      expect(source(root), root).toContain('composeClassicCatalogs({')
+      expect(source(root), root).toContain('composeDaemonResourceCatalogModules({')
+      expect(source('src/cli/daemonModules/resourceCatalog.ts')).toContain(
+        'composeClassicCatalogs({',
+      )
     }
     expect(bundle).toContain('createAgentPersistenceSemantics({')
     // RFC-359 W4-D23c：技能这一格不再有 provider 私有的内容生命周期——bundle 装配的是中立目录，

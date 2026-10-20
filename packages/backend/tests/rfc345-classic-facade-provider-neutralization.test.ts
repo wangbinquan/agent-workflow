@@ -101,6 +101,7 @@ describe('RFC-345 classic facade provider neutralization', () => {
     )
     for (const bootstrap of [
       'src/server.ts',
+      'src/cli/daemonModules/resourceCatalog.ts',
       'src/cli/start.ts',
       'src/cli/postgresqlDaemonApplication.ts',
     ]) {

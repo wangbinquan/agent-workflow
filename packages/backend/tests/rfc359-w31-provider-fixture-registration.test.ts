@@ -228,7 +228,7 @@ describe('RFC-359 W31: provider fixture registration identity', () => {
     expect(fixtureRegistry.allowsLegacyDaemonTestAccess(failed)).toBe(false)
   })
 
-  test('the shared consumer and PostgreSQL wrapper retain the original input object', () => {
+  test('the shared consumer retains the original input and the redundant PostgreSQL wrapper is retired', () => {
     const source = parse(readFileSync(resolve(backendRoot, 'src/auth/composition.ts'), 'utf8'))
     const shared = declaration(source, 'createAuthRuntimeFor')
     const reads = collect(shared, ts.isCallExpression).filter(
@@ -237,16 +237,7 @@ describe('RFC-359 W31: provider fixture registration identity', () => {
     expect(reads.map((call) => call.arguments.map((argument) => argument.getText(source)))).toEqual(
       [['input.db']],
     )
-    const wrapper = declaration(source, 'createPostgresqlAuthRuntime')
-    expect(wrapper.body!.statements.map((statement) => compact(statement, source))).toEqual([
-      'returncreateAuthRuntimeFor(input)',
-    ])
-    const client = parse(clientText)
-    const calls = collect(declaration(client, 'openDb'), ts.isCallExpression).map((call) =>
-      call.expression.getText(client),
-    )
-    expect(calls).not.toContain('registerLegacyDaemonTestFixture')
-    expect(calls).not.toContain('createInMemoryDb')
+    expect(source.text).not.toContain('createPostgresqlAuthRuntime')
   })
 
   test('source controls reject wrong object, changed option and registration before reset', () => {

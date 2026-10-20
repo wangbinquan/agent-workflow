@@ -1,4 +1,5 @@
 import type { Hono } from 'hono'
+import type { DaemonProviderCore } from '@/cli/daemonModules/providerCore'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -135,6 +136,7 @@ export interface ProviderHttpApplication {
    * 钉死在 SQLite 上。交出它之后，helper 可以直接吃**已装配的应用**。
    */
   readonly identityAccess: IdentityAccessRuntime
+  readonly tokenCallAudit: DaemonProviderCore['tokenCallAudit']
   readonly taskExecution:
     | Readonly<{ provider: 'sqlite' }>
     | Readonly<{
@@ -239,6 +241,7 @@ export async function createProviderHttpApplication(
   let taskExecutionReadModels: TaskExecutionReadModels
   let collaborationContext: CollaborationRouteContext
   let identityAccess: IdentityAccessRuntime
+  let tokenCallAudit: DaemonProviderCore['tokenCallAudit']
   let taskExecution: ProviderHttpApplication['taskExecution']
   let processConcurrencyScope: object
   let disposal: Promise<void> | undefined
@@ -288,6 +291,7 @@ export async function createProviderHttpApplication(
       taskExecutionReadModels = sqliteApplication.taskExecutionReadModels
       collaborationContext = sqliteApplication.collaborationContext
       identityAccess = sqliteApplication.core.identityAccess
+      tokenCallAudit = sqliteApplication.core.tokenCallAudit
       taskExecution = Object.freeze({ provider: 'sqlite' })
       processConcurrencyScope = binding.db
     } else {
@@ -312,6 +316,7 @@ export async function createProviderHttpApplication(
       taskExecutionReadModels = postgresqlApplication.runtime.taskExecution.readModels
       collaborationContext = postgresqlApplication.runtime.collaborationContext
       identityAccess = postgresqlApplication.core.identityAccess
+      tokenCallAudit = postgresqlApplication.core.tokenCallAudit
       processConcurrencyScope = binding.runtime
       taskExecution = Object.freeze({
         provider: 'postgresql',
@@ -327,6 +332,7 @@ export async function createProviderHttpApplication(
       taskExecutionReadModels,
       collaborationContext,
       identityAccess,
+      tokenCallAudit,
       dispose,
       taskExecution,
     })

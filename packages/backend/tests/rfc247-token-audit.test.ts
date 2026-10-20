@@ -14,6 +14,7 @@ import { expect, test } from 'bun:test'
 import { eventually, eventuallyAtLeast } from './helpers/eventually'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
+import type { ProviderHttpApplication } from './helpers/providerHttpApplication'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { buildActor } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
@@ -23,13 +24,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import {
-  listTokenAudit,
-  listTokenAuditForUser,
-  pruneTokenAudit,
-  recordTokenCall,
-  redactSnapshot,
-} from '../src/services/tokenAudit'
+import { pruneTokenAudit, recordTokenCall, redactSnapshot } from '../src/services/tokenAudit'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { createUser } from '../src/services/users'
 
@@ -38,6 +33,7 @@ const DAEMON_TOKEN = 'a'.repeat(64)
 interface Harness {
   db: ProviderNeutralDatabase
   app: Hono
+  audit: ProviderHttpApplication['tokenCallAudit']
   userId: string
   ownedAgentId: string
   patId: string
@@ -60,7 +56,7 @@ async function harness(scope: ProviderHttpApplicationScope): Promise<Harness> {
     ownerUserId: user.id,
     visibility: 'private',
   })
-  const app = (await scope.open()).app
+  const { app, tokenCallAudit: audit } = await scope.open()
   const { token: patToken, meta } = await createPat({
     db,
     userId: user.id,
@@ -69,7 +65,7 @@ async function harness(scope: ProviderHttpApplicationScope): Promise<Harness> {
     purpose: 'general',
   })
   const { token: sessionToken } = await createSession({ db, userId: user.id })
-  return { db, app, userId: user.id, ownedAgentId, patId: meta.id, patToken, sessionToken }
+  return { db, app, audit, userId: user.id, ownedAgentId, patId: meta.id, patToken, sessionToken }
 }
 
 // RFC-359 AC-6：两个引擎各跑一遍。
@@ -92,7 +88,7 @@ describeEachProviderHttpApplication(
       // 审计行由 `/api/*` 中间件在应答**之后** fire-and-forget 写入：bun:sqlite 同 tick 落盘、
       // PostgreSQL 是一次真实往返。契约是「最终写一条」，所以这里读到为止（见 helpers/eventually）。
       const rows = await eventuallyAtLeast(
-        () => listTokenAuditForUser(h.db, h.userId),
+        () => h.audit.listForUser(h.userId),
         1,
         'the REST audit row',
       )
@@ -115,7 +111,7 @@ describeEachProviderHttpApplication(
       })
       expect(res.status).toBe(403)
       await eventually(
-        () => listTokenAuditForUser(h.db, h.userId),
+        () => h.audit.listForUser(h.userId),
         (rows) => rows.some((r) => r.statusCode === 403 && r.method === 'POST'),
         { what: 'the REFUSED audit row' },
       )
@@ -131,7 +127,7 @@ describeEachProviderHttpApplication(
       await h.app.request('/api/agents', {
         headers: { Authorization: `Bearer ${h.patToken}` },
       })
-      const rows = await eventuallyAtLeast(() => listTokenAudit(h.db), 1, 'the PAT barrier row')
+      const rows = await eventuallyAtLeast(() => h.audit.list(), 1, 'the PAT barrier row')
       expect(rows.map((r) => r.patId)).toEqual([h.patId])
     })
 
@@ -186,7 +182,7 @@ describeEachProviderHttpApplication(
       await res.text()
 
       const rows = await eventually(
-        () => listTokenAuditForUser(h.db, h.userId),
+        () => h.audit.listForUser(h.userId),
         (found) => found.some((r) => r.channel === 'mcp'),
         { what: 'the MCP audit row' },
       )
@@ -348,13 +344,13 @@ describeEachProviderHttpApplication(
         now - 95 * day,
       )
       await recordTokenCall(h.db, { actor, channel: 'rest', statusCode: 200 }, now - 10 * day)
-      expect((await listTokenAudit(h.db)).length).toBe(3)
+      expect((await h.audit.list()).length).toBe(3)
 
       const pruned = await pruneTokenAudit(h.db, 90, now)
       expect(pruned.audits).toBe(2)
       expect(pruned.snapshots).toBe(1)
 
-      const left = await listTokenAudit(h.db)
+      const left = await h.audit.list()
       expect(left.length).toBe(1)
       expect(left[0]?.createdAt).toBe(now - 10 * day)
       expect((await h.db.select().from(tokenDeleteSnapshot)).length).toBe(0)
@@ -433,20 +429,15 @@ describeEachProviderHttpApplication(
       await seed(h.db, h.userId, h.patId, 'alice', [t + 1, t + 3, t + 2])
       await seed(h.db, other.id, otherPat.meta.id, 'mallory', [t + 9])
 
-      const mine = await listTokenAuditForUser(h.db, h.userId)
+      const mine = await h.audit.listForUser(h.userId)
       expect(mine.map((r) => r.createdAt)).toEqual([t + 3, t + 2, t + 1])
       expect(mine.every((r) => r.userId === h.userId)).toBe(true)
 
       // The other user's newer row is visible to the admin listing and absent
       // from the per-user one — i.e. the WHERE really is a WHERE.
-      expect((await listTokenAudit(h.db)).map((r) => r.createdAt)).toEqual([
-        t + 9,
-        t + 3,
-        t + 2,
-        t + 1,
-      ])
-      expect(await listTokenAuditForUser(h.db, h.userId, 2)).toHaveLength(2)
-      expect((await listTokenAudit(h.db, 1)).map((r) => r.createdAt)).toEqual([t + 9])
+      expect((await h.audit.list()).map((r) => r.createdAt)).toEqual([t + 9, t + 3, t + 2, t + 1])
+      expect(await h.audit.listForUser(h.userId, 2)).toHaveLength(2)
+      expect((await h.audit.list(1)).map((r) => r.createdAt)).toEqual([t + 9])
     })
 
     test('same-millisecond rows keep insertion order, and keep it across calls', async () => {
@@ -454,12 +445,12 @@ describeEachProviderHttpApplication(
       const t = 1_800_000_000_000
       await seed(h.db, h.userId, h.patId, 'alice', [t, t, t])
 
-      const first = (await listTokenAudit(h.db)).map((r) => r.id)
+      const first = (await h.audit.list()).map((r) => r.id)
       expect(first).toHaveLength(3)
       // ULIDs are monotonic within a millisecond, so insertion order is id ASC.
       expect(first).toEqual([...first].sort())
-      expect((await listTokenAudit(h.db)).map((r) => r.id)).toEqual(first)
-      expect((await listTokenAuditForUser(h.db, h.userId)).map((r) => r.id)).toEqual(first)
+      expect((await h.audit.list()).map((r) => r.id)).toEqual(first)
+      expect((await h.audit.listForUser(h.userId)).map((r) => r.id)).toEqual(first)
     })
 
     test('the source keeps the work in SQL — no in-memory filter/sort survives', async () => {
@@ -567,7 +558,7 @@ describeEachProviderHttpApplication(
       expect(res.status).toBe(403)
 
       // …and Bob's token is still live.
-      const stillThere = await listTokenAudit(h.db)
+      const stillThere = await h.audit.list()
       expect(Array.isArray(stillThere)).toBe(true)
       const bobsPats = await (await import('./helpers/auth/patStore')).listPatsForUser(h.db, bob.id)
       expect(bobsPats[0]?.revokedAt).toBeNull()
@@ -708,7 +699,7 @@ describeEachProviderHttpApplication(
       expect(snaps[0]?.snapshotJson).toContain('about to be deleted')
       expect(snaps[0]?.snapshotJson).toContain('the body worth keeping a copy of')
 
-      const audits = await listTokenAudit(h.db)
+      const audits = await h.audit.list()
       expect(audits.some((a) => a.id === snaps[0]?.auditId)).toBe(true)
     })
 

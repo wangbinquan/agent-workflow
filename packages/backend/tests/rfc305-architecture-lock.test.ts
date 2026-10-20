@@ -317,6 +317,9 @@ describe('RFC-305 identity-access architecture', () => {
       // RFC-370 M0 / §9.2 V9：托管装配只在 bootstrap，装配 CrewStation 的 HTTP / WebSocket
       // 凭据适配器、来源令牌校验与恢复请求人解析。
       'packages/backend/src/bootstrap/crewstation.ts -> @/modules/identity-access/composition/authentication',
+      'packages/backend/src/cli/daemonModules/providerCore.ts -> @/modules/identity-access/composition',
+      'packages/backend/src/cli/daemonModules/providerCore.ts -> @/modules/identity-access/composition/authentication',
+      'packages/backend/src/cli/daemonModules/providerCore.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/authentication',

@@ -174,7 +174,9 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // 退役。**是合一不是删覆盖**。
       // RFC-370 内容 owner：最低门槛67 → 66，实际语料68 → 66。两个既有工厂
       // 改名为 `createFileIntent{Skill,Plugin}ArtifactOwner`；文件实现与覆盖保留。
-    ).toBeGreaterThanOrEqual(66)
+      // RFC-380: measured corpus 71 -> 65; the previous floor 66 follows it to 65.
+      // Two daemon cores, the auth wrapper and three SQLite-only helpers moved or retired.
+    ).toBeGreaterThanOrEqual(65)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

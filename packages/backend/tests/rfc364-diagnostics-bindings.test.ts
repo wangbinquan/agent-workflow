@@ -35,7 +35,7 @@ describe('RFC-364 production bindings', () => {
     )
   })
 
-  for (const path of ['server.ts', 'cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+  for (const path of ['cli/daemonModules/observation.ts']) {
     test(
       path + ' binds one cold diagnostics instance to the same coordinator and admitted catalog',
       () => {
@@ -44,7 +44,7 @@ describe('RFC-364 production bindings', () => {
           source,
           (node) =>
             ts.isCallExpression(node) &&
-            compact(node.expression, source).includes('composeLocalMcpDiagnostics'),
+            compact(node.expression, source) === 'input.adapters.mcpDiagnostics',
         )
         expect(calls).toHaveLength(1)
         const call = calls[0]!
@@ -63,19 +63,18 @@ describe('RFC-364 production bindings', () => {
         )
         expect(compact(property('requestBinding')!, source)).toBe(
           'requestBinding:{contexts:identityAccess.contexts,directAuthority:identityAccess.directAuthority,' +
-            'loadVisibleMcp:(authority,id)=>mcpCatalog.queries.get(authority,{id}),}',
+            'loadVisibleMcp:(authority,id)=>input.mcpCatalog().queries.get(authority,{id}),}',
         )
         expect(source.text).not.toContain('getMcpRuntimeTestService')
-        if (path === 'server.ts')
-          expect(compact(call, source)).toStartWith(
-            '(unstarted?.createMcpRuntimeTests??composeLocalMcpDiagnostics)(',
-          )
-        // RFC-370 M2: a hosted daemon selects the CrewStation diagnostics through
-        // bootstrap; every other daemon keeps the original local composition.
-        if (path === 'cli/postgresqlDaemonApplication.ts')
-          expect(compact(call, source)).toStartWith(
-            "(phase.kind==='daemon'?(input.mcpDiagnostics??composeLocalMcpDiagnostics):phase.scope.createMcpRuntimeTests)(",
-          )
+        expect(parse('cli/daemonModules/adapters.ts').text).toContain(
+          'mcpDiagnostics: composeLocalMcpDiagnostics',
+        )
+        expect(parse('server.ts').text).toContain(
+          'unstarted?.createMcpRuntimeTests ?? standalone.mcpDiagnostics',
+        )
+        expect(parse('cli/postgresqlDaemonApplication.ts').text).toContain(
+          'phase.scope.createMcpRuntimeTests',
+        )
       },
     )
   }
@@ -89,7 +88,6 @@ describe('RFC-364 production bindings', () => {
           (node) => ts.isPropertyAssignment(node) && node.name.getText(source) === 'runtimeTests',
         ).map((node) => compact(node, source))
         expect(bindings).toEqual([
-          'runtimeTests:mcpRuntimeTests.reconciliation',
           'runtimeTests:mcpRuntimeTests.reconciliation',
           'runtimeTests:{commands:mcpRuntimeTests.commands,queries:mcpRuntimeTests.queries}',
         ])
@@ -108,6 +106,10 @@ describe('RFC-364 production bindings', () => {
       },
     )
   }
+  test('shared runtime management consumes the same diagnostic reconciliation', () => {
+    const source = parse('cli/daemonModules/observation.ts')
+    expect(source.text).toContain('runtimeTests: mcpRuntimeTests.reconciliation')
+  })
   test('diagnostics HTTP handlers only decode, call and map; service facades are retired', () => {
     const source = parse('routes/mcps.ts')
     const calls = nodes(

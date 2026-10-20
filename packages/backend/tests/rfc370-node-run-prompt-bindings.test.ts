@@ -683,7 +683,7 @@ test('CLI initial and replacement sessions carry one prompt selection through SQ
   expect(calls(sf, sf, 'composeNodeRunPromptOperations')).toHaveLength(1)
   expect(
     compact(
-      properties(onlyCall(body, sf, 'composeSqliteMemoryOperations').arguments[0]!, sf).get(
+      properties(onlyCall(body, sf, 'composeDaemonMemoryModules').arguments[0]!, sf).get(
         'nodeRunPrompts',
       )!,
       sf,
@@ -745,7 +745,7 @@ test('PG application carries its one prompt receiver through memory, runtime and
   expect(calls(sf, sf, 'composeNodeRunPromptOperations')).toHaveLength(1)
   expect(
     compact(
-      properties(onlyCall(body, sf, 'composePostgresqlMemoryOperations').arguments[0]!, sf).get(
+      properties(onlyCall(body, sf, 'composeDaemonMemoryModules').arguments[0]!, sf).get(
         'nodeRunPrompts',
       )!,
       sf,
@@ -801,14 +801,22 @@ test('standalone HTTP chooses raw content only for absent operations and forward
       sf,
     ),
   ).toBe('taskRunRoot.drive')
-  const memory = binding(body, sf, 'memoryOperations')
+  const memory = binding(body, sf, 'memoryModules')
   if (!ts.isBinaryExpression(memory)) throw new Error('original memory receiver choice required')
   expect(memory.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
-  expect(compact(memory.left, sf)).toBe('deps.memoryOperations')
-  expect(memory.right).toBe(onlyCall(body, sf, 'composeSqliteMemoryOperations'))
+  expect(compact(memory.left, sf)).toBe('deps.memoryModules')
+  expect(memory.right).toBe(onlyCall(body, sf, 'composeDaemonMemoryModules'))
   expect(
     compact(
-      properties(onlyCall(body, sf, 'composeSqliteMemoryOperations').arguments[0]!, sf).get(
+      properties(onlyCall(body, sf, 'composeDaemonMemoryModules').arguments[0]!, sf).get(
+        'operations',
+      )!,
+      sf,
+    ),
+  ).toBe('deps.memoryOperations')
+  expect(
+    compact(
+      properties(onlyCall(body, sf, 'composeDaemonMemoryModules').arguments[0]!, sf).get(
         'nodeRunPrompts',
       )!,
       sf,

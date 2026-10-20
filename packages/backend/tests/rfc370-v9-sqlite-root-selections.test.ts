@@ -27,3 +27,8 @@ test('the SQLite composer body never reads a hosted-only selection', () => {
   const body = source.slice(start)
   for (const key of HOSTED_ONLY_SELECTIONS) expect(body).not.toContain(`input.${key}`)
 })
+
+test('RFC-380 treats credentials, run families and workspace presence as hosted-only', () => {
+  for (const key of ['credentials', 'systemAgentRunFamily', 'workspacePresence'] as const)
+    expect(HOSTED_ONLY_SELECTIONS).toContain(key)
+})

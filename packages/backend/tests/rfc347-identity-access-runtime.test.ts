@@ -258,10 +258,10 @@ describe('RFC-347 exact production source locks', () => {
       'src/modules/identity-access/composition.ts',
     ])
     expect(callPaths('createIdentityAccessRuntime(')).toEqual([
+      'src/cli/daemonModules/providerCore.ts',
       'src/main.ts',
       'src/modules/identity-access/composition.ts',
       'src/modules/identity-access/infrastructure/legacyUserService.ts',
-      'src/server.ts',
     ])
     expect(importPaths('identity-access/composition')).toEqual([
       // RFC-370: standalone compatibility facade binds through the module composition.
@@ -269,6 +269,7 @@ describe('RFC-347 exact production source locks', () => {
       // RFC-370 M0 / §9.2 V9: hosted assembly lives only in bootstrap, which
       // composes the CrewStation credential adapters.
       'src/bootstrap/crewstation.ts',
+      'src/cli/daemonModules/providerCore.ts',
       'src/cli/postgresqlDaemonApplication.ts',
       // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：`cli/start.ts` 是 SQLite 的第三个
       // 组合根，列表行的 owner 身份投影在这里装配后注入任务路由——与另外两个根同形

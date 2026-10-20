@@ -1,4 +1,13 @@
 import {
+  DAEMON_PROVIDER_CORE_ADAPTERS,
+  standaloneModuleAdapters,
+} from '@/cli/daemonModules/adapters'
+import { composeDaemonMemoryModules } from '@/cli/daemonModules/memory'
+import { composeDaemonObservationModules } from '@/cli/daemonModules/observation'
+import { composeDaemonProviderCore } from '@/cli/daemonModules/providerCore'
+import { composeDaemonRepositoryCredentials } from '@/cli/daemonModules/repositoryCredentials'
+import { composeDaemonResourceCatalogModules } from '@/cli/daemonModules/resourceCatalog'
+import {
   taskExecutionModule,
   createTaskExecutionShutdownController,
 } from '@/modules/task-execution/composition'
@@ -27,8 +36,7 @@ import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/co
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { runtimeConfigOpts } from '@/services/task'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
-import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
+import type { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import {
   composeLocalTaskRunRootSelection,
   composeTaskWorkspaceExcludeProfilesFor,
@@ -70,14 +78,12 @@ import type {
   VerificationCommandEffectsFactory,
 } from '@/modules/development-automation/composition'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
-import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
 } from '@/modules/system-operations/composition/applicationConfiguration'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
-import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
@@ -120,21 +126,16 @@ import {
   type EvidenceArtifactPort,
   type AttemptContextStorePort,
   composeDevelopmentAdmissionLookup,
-  createDevelopmentDeliveryProvider,
   createDevelopmentMissionExecutionTerminalObserver,
   createMissionCodeHostEventContinuation,
 } from '@/modules/development-automation/composition'
 import { composeSelectedRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
-import { composeSelectedPipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
   cleanupOrphanedGitCredentialLeases,
-  composeRepositoryTransportCredentials,
-  createRepositoryPublicationTransport,
-  createFileWorkspacePresenceQueries,
   reconcileRepositoryTransportConnectionProjections,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
@@ -152,14 +153,9 @@ import {
   type TaskExecutionBackgroundControl,
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
-import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { createTaskAutomationWorkStartProvider } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
-import {
-  composeSqliteMemoryOperations,
-  composeSqliteMemoryInjectionQueries,
-} from '@/modules/memory/composition'
 import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
 import {
   composeIntentQueuedNotifications,
@@ -169,23 +165,18 @@ import { composeSelectedApprovalGatewayRunnerFor } from '@/modules/integration/c
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
 import {
   buildDevelopmentDeliveryDeps,
   buildDevelopmentWorkspaceRepositoryPreparation,
   buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
-  createDevelopmentWorkspaceRepositoryPreparation,
   resolveDevelopmentRepoBinding,
 } from '@/services/developmentDeliveryDeps'
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
 import { IS_EMBEDDED } from '@/embed'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
-import {
-  composeSqliteAppDeps,
-  composeSqliteDaemonProviderCore,
-  createComposedApp,
-  type SqliteAppComposition,
-} from '@/server'
+import { composeSqliteAppDeps, createComposedApp, type SqliteAppComposition } from '@/server'
 import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/operations'
 import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import {
@@ -239,26 +230,9 @@ import {
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { startBatchImportGc } from '@/services/repoBatchImport'
-import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
+import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
-import {
-  composeMcpRuntimeTestProvider,
-  createMcpTransactionLifecycle,
-} from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
-import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
-import {
-  composePluginCatalog,
-  type PluginInstallerPort,
-} from '@/modules/resource-catalog/composition/pluginOperations'
-import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
-import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
-import { mcpAclRuntimeTestLifecycle } from '@/modules/resource-catalog/composition/mcpOperations'
-import type { McpCatalogModule } from '@/modules/resource-catalog/public/operations'
-import { getProbeByMcpId } from '@/services/mcpProbeStore'
-import { mcpRouteNow } from '@/routes/mcps'
-import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
-import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
+import { type PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
 import { setMemoryDistillPolicyProvider } from '@/modules/memory/composition'
 import {
@@ -271,7 +245,7 @@ import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { getRuntimeDriver, RUNTIME_KINDS } from '@/services/runtime'
 import { assertRuntimeDeclarations } from '@/services/runtime/selfCheck'
-import { Paths, appHome as systemAgentAppHome } from '@/util/paths'
+import { Paths } from '@/util/paths'
 import { buildWebSocketAdapter } from '@/ws/server'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -279,11 +253,9 @@ import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { createMaintenanceService } from '@/platform/background/maintenanceService'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
-import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
-import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import {
   composeEventCenter,
   createEventAutomationWorkIntentStore,
@@ -293,7 +265,6 @@ import {
 } from '@/modules/event-center/composition'
 import {
   composeDigitalEmployeeWriterCutoverFor,
-  composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployee,
   createEmployeeAutomationWorkStartProvider,
   createEmployeeInputArtifactStore,
@@ -311,7 +282,6 @@ import {
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
-import { composeCapabilityTemplateOperations } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
@@ -329,7 +299,6 @@ import {
 import {
   createCodeHostWebhookDeliveryConsumer,
   createCodeHostWebhookRoutingDirectory,
-  createRepositoryEndpointDiscovery,
 } from '@/modules/integration/composition'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import {
@@ -367,7 +336,6 @@ import { notifyChildBudgetTaskStatus } from '@/services/execution/childBudget'
 import { notifyTaskTerminal } from '@/services/execution/executionWatch'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
-import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import {
   requireDatabaseConfig,
@@ -377,9 +345,6 @@ import {
 } from '@/platform/persistence/databaseProviderRuntime'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
-import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
-import type { SkillCatalogBootParticipant } from '@/modules/resource-catalog/public/participants'
 import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
 import {
   createCollaborationCommandContext,
@@ -410,11 +375,6 @@ import {
 } from '@/modules/intent/composition/auxiliaryQueries'
 import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
 import { composeDigitalEmployeePlatformInventoryParticipant } from '@/modules/digital-employee/composition'
-import {
-  composeDevelopmentConfigOperations,
-  type DevelopmentConfigResourceAccess,
-} from '@/modules/development-automation/composition/configOperations'
-import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
 import {
@@ -468,7 +428,6 @@ import {
   composeFileRuntimeLegacyConfiguration,
   type RuntimeLegacyConfigurationPort,
 } from '@/modules/runtime-management/composition/runtimeRegistry'
-import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
@@ -476,10 +435,7 @@ import { composeIntentWorkflowGraphValidation } from '@/modules/intent/compositi
 import type { MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
-import {
-  selectSkillContentDependencies,
-  type SkillContentBinding,
-} from '@/modules/resource-catalog/composition/skillContentBinding'
+import { type SkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 import type {
   ProgramArtifactPort,
   EmployeeInputArtifactPort,
@@ -1517,6 +1473,9 @@ interface ComposedDaemonProviderSession {
  * deployment always runs on PostgreSQL, so the SQLite root never threads them:
  * it composes the standalone owners directly. */
 export const HOSTED_ONLY_SELECTIONS = [
+  'credentials',
+  'systemAgentRunFamily',
+  'workspacePresence',
   'reviewArtifacts',
   'reviewRollbackSnapshots',
   'taskInputFiles',
@@ -2241,14 +2200,18 @@ async function composeSqliteProviderSession(
     repoImportOwnerUserId: batchOwnerUserId,
     redactTaskEventPayload: redactEventPayload,
   })
-  const providerCore = composeSqliteDaemonProviderCore({
+  const providerCore = composeDaemonProviderCore({
     daemonToken: token,
     db,
-    ...(input.credentials === undefined ? {} : { credentials: input.credentials }),
     sourceWriteWindow: sourceWriteWindow,
     appHome: Paths.root,
-    dbPath: Paths.db,
-    lockPath: Paths.lock,
+    adapters: DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
+      db,
+      appHome: Paths.root,
+      dbPath: Paths.db,
+      lockPath: Paths.lock,
+      secretBox,
+    }),
     secretBox,
     realtimePolicy,
     onCredentialRevoked: triggerRevalidation,
@@ -2268,65 +2231,69 @@ async function composeSqliteProviderSession(
       },
     },
   })
-  const repositoryWorkspaceStore = providerCore.repositoryWorkspaceStore
-  const repositoryTransportRepository = providerCore.repositoryTransportCredentialRepository
-  const repositoryTransportModule = composeRepositoryTransportCredentials(
-    repositoryTransportRepository,
-    secretBox,
-  )
-  const repositoryMetadataConnections = createCodeHostConnectionsService({
-    secretBox,
-    repositoryTransport: repositoryTransportModule.adminConnections,
-  })
-  const developmentDeliveryProvider = createDevelopmentDeliveryProvider({
-    db,
-    secretBox,
-    connections: repositoryMetadataConnections,
-    pipeline: composeSelectedPipelineEvidenceRunnerFor(db, developmentPurposeRoot.pipeline),
-  })
-  const developmentWorkspaceRepositoryPreparation = createDevelopmentWorkspaceRepositoryPreparation(
-    {
-      store: repositoryWorkspaceStore,
-      appHome: Paths.root,
-      secretBox,
-    },
-  )
-  const repositoryEndpointDiscovery = createRepositoryEndpointDiscovery({
-    async resolveConnection(provider) {
-      const connection = await repositoryMetadataConnections.resolve(provider)
-      if (connection?.connectionGeneration === undefined) return null
-      return {
-        provider: connection.provider,
-        apiBaseUrl: connection.baseUrl,
-        connectionGeneration: connection.connectionGeneration,
-        token: connection.token,
-        rejectUnauthorized: connection.rejectUnauthorized,
-      }
-    },
-  })
-  const repositoryPublicationTransport = createRepositoryPublicationTransport({
-    repository: repositoryTransportRepository,
-    secretBox,
-    appHome: Paths.root,
-    endpointDiscovery: repositoryEndpointDiscovery,
-  })
   const identityAccess = providerCore.identityAccess
-  const resourceCatalog = composeResourceCatalogFor({
+  const runtimeRegistry = providerCore.runtimeRegistry
+  const observationModules = composeDaemonObservationModules({
     db,
-    lifecycle: mcpAclRuntimeTestLifecycle(),
+    appHome: Paths.root,
+    configuration,
+    notificationKey: applicationConfiguration.notificationKey,
+    identityAccess,
+    runtimeRegistry,
+    adapters: standaloneModuleAdapters(),
+    mcpCatalog: () => mcpCatalog,
   })
-  const classicCatalogs = composeClassicCatalogs({
+  const {
+    observationCalls,
+    memorySystemAgentBinding,
+    intentSystemAgentBinding,
+    workspacePresence,
+    runtimeSessionLeases,
+    mcpRuntimeTests,
+  } = observationModules
+  const resourceCatalogModules = composeDaemonResourceCatalogModules({
     db,
-    ...selectSkillContentDependencies(input.skillContent, Paths.root),
-    runtimeProfiles: { get: (name) => providerCore.runtimeRegistry.getRuntime(name) },
-    // The owner of memory membership supplies the same restore participant to
-    // both providers; constructing this bundle performs no database or file IO.
-    restoreMembership: createAsyncSkillRestoreMembership(
-      composeSkillMemoryFusionParticipantFactory(),
-    ),
+    skillContentRoot: Paths.root,
+    skillContent: input.skillContent,
+    pluginInstaller: input.pluginInstaller,
+    runtimeProfiles: { get: (name) => runtimeRegistry.getRuntime(name) },
+    mcpRuntime: {
+      prepareDelete: (id) => mcpRuntimeTests.prepareMcpDelete(id),
+      reconcileDurableIntents: () => mcpRuntimeTests.reconcileDurableIntents(),
+    },
+  })
+  const {
     resourceCatalog,
+    agentResourceIntegrity,
+    skillCatalogBoot,
+    digitalEmployeeAgentTemplates,
+    mcpCatalog,
+    agentCatalog,
+    skillCatalog,
+    pluginCatalog,
+    workflowCatalog,
+    workgroupCatalog,
+    capabilityTemplateOperations,
+    developmentConfigOperations,
+  } = resourceCatalogModules
+  const repositoryCredentials = composeDaemonRepositoryCredentials({
+    db,
+    appHome: Paths.root,
+    secretBox,
+    developmentPurposeRoot,
+    repositoryWorkspaceStore: providerCore.repositoryWorkspaceStore,
+    repositoryWorkspaceOperations: providerCore.repositoryWorkspaceOperations,
+    repositoryTransportCredentialRepository: providerCore.repositoryTransportCredentialRepository,
   })
-  const agentResourceIntegrity = classicCatalogs.agentResourceIntegrity
+  const {
+    repositoryWorkspaceStore,
+    repositoryTransport: repositoryTransportModule,
+    codeHostConnections: repositoryMetadataConnections,
+    developmentDeliveryProvider,
+    developmentWorkspaceRepositoryPreparation,
+    repositoryPublicationTransport,
+  } = repositoryCredentials
+  const repositoryTransportRepository = providerCore.repositoryTransportCredentialRepository
   const taskExecutionResourceSnapshots = composeTaskExecutionResourceBinding(
     taskExecutionResourceDependencies,
   )
@@ -2334,30 +2301,17 @@ async function composeSqliteProviderSession(
     db,
     taskExecutionResourceSnapshots,
   )
-  const memoryInjectionQueries = composeSqliteMemoryInjectionQueries(db)
-  const runtimeSessionLeases = createRuntimeSessionLeaseOperations(db)
-  const runtimeRegistry = providerCore.runtimeRegistry
-  const memorySystemAgentBinding = (input.systemAgentRunFamily ?? composeLocalSystemAgentRunFamily)(
-    {
-      appHome: systemAgentAppHome,
-      observations: () => systemAgentObservations,
-    },
-  )
-  const memoryOperations = composeSqliteMemoryOperations({
-    systemAgentBinding: memorySystemAgentBinding,
+  const memoryModules = composeDaemonMemoryModules({
     db,
     nodeRunPrompts,
-    injectionQueries: memoryInjectionQueries,
+    systemAgentBinding: memorySystemAgentBinding,
+    contexts: identityAccess.contexts,
     reviewedArtifacts: {
       read: async (finalPath) =>
         await readCommittedReviewArtifactBody(taskExecutionProvider.collaboration, finalPath),
     },
-    catalogBinding: {
-      contexts: identityAccess.contexts,
-      authorization: composeResourceScopeAccessParticipant(),
-    },
   })
-  const memoryCatalog = memoryOperations.catalog
+  const { memoryOperations, memoryCatalog, memoryInjectionQueries } = memoryModules
 
   const broadcastAlert = (
     row: { taskId: string; rule: string; severity: 'warning' | 'error' },
@@ -2395,6 +2349,7 @@ async function composeSqliteProviderSession(
           actorUserId,
           secretBox,
           identityAccess,
+          { repositoryWorkspace: providerCore.repositoryWorkspaceStore, runtimeSessionLeases },
         )
       : {
           db,
@@ -2430,9 +2385,6 @@ async function composeSqliteProviderSession(
       ? resolveLaunchRuntimeConfig(Paths.config)
       : {}),
   })
-  const workspacePresence = createFileWorkspacePresenceQueries()
-  const observationCalls = composeRunObservationCalls(db)
-  const systemAgentObservations = composeSystemAgentObservations({ calls: observationCalls })
   const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
       archive: input.taskArchive,
@@ -2752,137 +2704,6 @@ async function composeSqliteProviderSession(
     memories: memoryCatalog,
     tasks: taskExecutionProvider.fusion,
   })
-  const skillCatalogBoot: SkillCatalogBootParticipant = composeSkillCatalogBoot({
-    db,
-    ...selectSkillContentDependencies(input.skillContent, Paths.root),
-  })
-  const digitalEmployeeAgentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
-    db,
-    composeDigitalEmployeeAgentTemplateCatalogParticipant,
-  )
-
-  // RFC-238 — complete boot recovery before accepting a playground request.
-  // The routes receive this same explicit application-owned instance.
-  const mcpRuntimeTests = composeLocalMcpDiagnostics({
-    observe:
-      ({ session, turn, runtime, callId }) =>
-      (startedAt) =>
-        systemAgentObservations.open({
-          ...(callId === undefined ? {} : { callId }),
-          feature: 'mcp-runtime-test',
-          agentName: 'aw-mcp-runtime-test',
-          protocol: session.runtimeProtocol,
-          startedAt,
-          runtimeObservationIdentity: {
-            registrationId: runtime.row.id,
-            configurationRevision: runtime.row.probeFence,
-            acceptedName: runtime.row.name,
-          },
-          ...(turn.seq > 1 && session.runtimeSessionId !== null
-            ? { resumeSessionId: session.runtimeSessionId }
-            : {}),
-          demand: {
-            kind: 'mcp-runtime-test',
-            originalId: session.id,
-            originalAttempt: turn.id,
-            name: 'MCP 测试 · ' + session.runtimeName,
-            ownerUserId: session.ownerUserId,
-            purpose: 'playground',
-          },
-        }),
-    ...composeMcpRuntimeTestProvider(db),
-    isRuntimeEligible: isRuntimeMcpTestEligible,
-    coordinator: mcpOperationCoordinator,
-    requestBinding: {
-      contexts: identityAccess.contexts,
-      directAuthority: identityAccess.directAuthority,
-      loadVisibleMcp: (authority, id) => mcpCatalog.queries.get(authority, { id }),
-    },
-    async loadMcp(mcpId) {
-      const identity = await admitDaemonIdentity(identityAccess)
-      if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')
-      return mcpCatalog.queries.get(identity.actor, { id: mcpId })
-    },
-    loadRuntime: (name) => runtimeRegistry.getRuntime(name),
-    configuration,
-    appHome: Paths.root,
-  })
-  const mcpProbeStore = composeMcpProbeStore(db)
-  const mcpCatalog: McpCatalogModule = composeMcpCatalog({
-    db,
-    lifecycle: createMcpTransactionLifecycle(),
-    resourceCatalog,
-    coordinator: mcpOperationCoordinator,
-    nextMutationTimestamp: async (mcp) => {
-      const persisted = await getProbeByMcpId(mcpProbeStore, mcp.id)
-      return mcpOperationCoordinator.nextCausalTimestamp(mcp.id, mcpRouteNow(), [
-        mcp.updatedAt + 1,
-        (persisted?.startedAt ?? 0) + 1,
-        mcpOperationCoordinator.activeLastStartedAt(mcp.id) + 1,
-      ])
-    },
-    runtime: Object.freeze({
-      prepareDelete: (mcpId: string) => mcpRuntimeTests.prepareMcpDelete(mcpId),
-      reconcileDurableIntents: () => mcpRuntimeTests.reconcileDurableIntents(),
-    }),
-  })
-  const agentCatalog = classicCatalogs.agent
-  const skillCatalog = classicCatalogs.skill
-  const pluginCatalog = composePluginCatalog({
-    db,
-    resourceCatalog,
-    coordinator: pluginOperationCoordinator,
-    installer: input.pluginInstaller,
-  })
-  const workflowCatalog = classicCatalogs.workflow
-  const workgroupCatalog = composeWorkgroupCatalog({ db, resourceCatalog })
-  const capabilityTemplateAccess: Parameters<
-    typeof composeCapabilityTemplateOperations
-  >[0]['access'] = {
-    filterVisible(actor, rows) {
-      return resourceCatalog.authorization.filterVisibleRows(actor, 'capability_template', rows)
-    },
-    canView(actor, row) {
-      return resourceCatalog.authorization.canViewResource(actor, 'capability_template', row)
-    },
-    requireEdit(actor, row) {
-      return resourceCatalog.authorization.requireResourceEdit(actor, 'capability_template', row)
-    },
-    requireGovern(actor, row) {
-      return resourceCatalog.authorization.requireResourceGovern(actor, 'capability_template', row)
-    },
-    assertNameUnchangedForEditor: resourceCatalog.authorization.assertNameUnchangedForEditor,
-  }
-  const capabilityTemplateOperations = composeCapabilityTemplateOperations({
-    db,
-    access: capabilityTemplateAccess,
-  })
-  const developmentConfigAccess: DevelopmentConfigResourceAccess = {
-    filterVisible(actor, type, rows) {
-      return resourceCatalog.authorization.filterVisibleRows(actor, type, rows)
-    },
-    canView(actor, type, row) {
-      return resourceCatalog.authorization.canViewResource(actor, type, row)
-    },
-    requireEdit(actor, type, row) {
-      return resourceCatalog.authorization.requireResourceEdit(actor, type, row)
-    },
-    requireGovern(actor, type, row) {
-      return resourceCatalog.authorization.requireResourceGovern(actor, type, row)
-    },
-    assertNameUnchangedForEditor: resourceCatalog.authorization.assertNameUnchangedForEditor,
-  }
-  // RFC-359 W4-D6：development-adapter 配置一份装配，两个 provider 共用。
-  const developmentAdapterConfigOperations = composeDevelopmentAdapterConfigOperationsFor({
-    db,
-    access: developmentConfigAccess,
-    grants: resourceCatalog.persistence.grants,
-  })
-  const developmentConfigOperations = composeDevelopmentConfigOperations(
-    db,
-    developmentAdapterConfigOperations,
-    developmentConfigAccess,
-  )
   const mcpRuntimeTestBindings = createLazyPausableDaemonRuntimeServiceBindings({
     start: async () => {
       await mcpRuntimeTests.pause()
@@ -3003,6 +2824,7 @@ async function composeSqliteProviderSession(
             SYSTEM_USER_ID,
             secretBox,
             identityAccess,
+            { repositoryWorkspace: providerCore.repositoryWorkspaceStore, runtimeSessionLeases },
           )
         : {
             db,
@@ -3477,6 +3299,10 @@ async function composeSqliteProviderSession(
     ],
   })
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
+    repositoryCredentials,
+    resourceCatalogModules,
+    observationModules,
+    memoryModules,
     nodeRunPrompts,
     portArtifacts,
     taskRunSelection: input.taskRunSelection,
@@ -3962,10 +3788,6 @@ async function composeSqliteProviderSession(
         return { name: runtime.name, protocol: runtime.protocol }
       },
     }),
-  })
-  const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({
-    observations: () => systemAgentObservations,
-    appHome: () => intentDispatchDeps.appHome,
   })
   const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
     persistence: intentPersistence,

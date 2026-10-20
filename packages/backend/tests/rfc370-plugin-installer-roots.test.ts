@@ -29,21 +29,26 @@ test('the complete plugin installer receiver reaches the real startup and HTTP c
   for (const [path, receiver] of [
     ['cli/start.ts', 'input'],
     ['cli/postgresqlDaemonApplication.ts', 'input'],
-    ['server.ts', 'effectiveDeps'],
+    ['server.ts', 'deps'],
   ] as const) {
     const source = load(path)
-    const catalogs = calls(source, 'composePluginCatalog')
+    const catalogs = calls(source, 'composeDaemonResourceCatalogModules')
     expect(catalogs).toHaveLength(1)
     const argument = catalogs[0]!.arguments[0]!
     expect(ts.isObjectLiteralExpression(argument)).toBe(true)
     if (!ts.isObjectLiteralExpression(argument)) throw new Error('catalog root is missing')
     const bindings = argument.properties.filter(
       (p): p is ts.PropertyAssignment =>
-        ts.isPropertyAssignment(p) && p.name.getText(source) === 'installer',
+        ts.isPropertyAssignment(p) && p.name.getText(source) === 'pluginInstaller',
     )
     expect(bindings).toHaveLength(1)
     expect(bindings[0]!.initializer.getText(source)).toBe(`${receiver}.pluginInstaller`)
   }
+  const bundle = load('cli/daemonModules/resourceCatalog.ts')
+  expect(calls(bundle, 'composePluginCatalog')).toHaveLength(1)
+  expect(calls(bundle, 'composePluginCatalog')[0]!.getText(bundle)).toContain(
+    'installer: input.pluginInstaller',
+  )
   const composition = load('modules/resource-catalog/composition/pluginOperations.ts')
   const defaults = calls(composition, 'createLocalPluginInstaller')
   expect(defaults).toHaveLength(1)

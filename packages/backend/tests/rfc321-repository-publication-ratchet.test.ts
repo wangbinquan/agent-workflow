@@ -257,8 +257,8 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'packages/backend/src/modules/digital-employee/application/runtimeService.ts',
     )
     const composition = read('packages/backend/src/modules/source-control/composition.ts')
-    const cli = read('packages/backend/src/cli/start.ts')
     const server = read('packages/backend/src/server.ts')
+    const cli = read('packages/backend/src/cli/start.ts')
 
     expect(commitPush).toContain('subject: publicationSubject')
     expect(commitPush).toContain('session.runNetwork')
@@ -280,8 +280,12 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(
       cli.match(/publicationTransport: repositoryPublicationTransport/g)?.length,
     ).toBeGreaterThanOrEqual(4)
-    expect(cli).toContain('const repositoryTransportModule = composeRepositoryTransportCredentials')
-    expect(cli).toContain('repositoryTransport: repositoryTransportModule.adminConnections')
+    expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
+      'input.repositoryTransport ?? composeRepositoryTransportCredentials',
+    )
+    expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
+      'repositoryTransport: repositoryTransport.adminConnections',
+    )
     expect(bootDeclaration('transport-projections')).toMatchObject({
       phase: 'prepare',
       failure: 'fail-closed',
@@ -359,7 +363,6 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     const endpointDiscovery = read(
       'packages/backend/src/modules/integration/application/repositoryEndpointDiscovery.ts',
     )
-    const server = read('packages/backend/src/server.ts')
     const nodeMechanics = read(
       'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
     )
@@ -375,8 +378,12 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(publication).toContain('password: credential.token')
     expect(publication).not.toContain('token: credential.token')
     expect(publication).not.toContain('globalLookupToken')
-    expect(server).toContain('const connection = await codeHostConnections.resolve(provider)')
-    expect(server).toContain('token: connection.token')
+    expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
+      'const connection = await codeHostConnections.resolve(provider)',
+    )
+    expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
+      'token: connection.token',
+    )
     expect(endpointDiscovery).toContain(
       'const connection = await input.resolveConnection(request.provider)',
     )
@@ -391,11 +398,15 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(nodeMechanics).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')
     expect(developmentRest).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')
 
-    const cli = read('packages/backend/src/cli/start.ts')
-    expect(cli).toContain('const repositoryTransportModule = composeRepositoryTransportCredentials')
-    expect(cli).toContain('repositoryTransport: repositoryTransportModule.adminConnections')
-    expect(cli).toContain(
-      'const repositoryPublicationTransport = createRepositoryPublicationTransport',
+    const repository = read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')
+    expect(repository).toContain(
+      'input.repositoryTransport ?? composeRepositoryTransportCredentials',
+    )
+    expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
+      'repositoryTransport: repositoryTransport.adminConnections',
+    )
+    expect(repository).toMatch(
+      /const repositoryPublicationTransport\s*=\s*input.repositoryPublicationTransport \?\?\s*createRepositoryPublicationTransport/,
     )
   })
 

@@ -1,3 +1,15 @@
+import {
+  DAEMON_PROVIDER_CORE_ADAPTERS,
+  standaloneModuleAdapters,
+} from '@/cli/daemonModules/adapters'
+import { composeDaemonMemoryModules } from '@/cli/daemonModules/memory'
+import { composeDaemonObservationModules } from '@/cli/daemonModules/observation'
+import {
+  composeDaemonProviderCore,
+  type SelectedDaemonProviderCore,
+} from '@/cli/daemonModules/providerCore'
+import { composeDaemonRepositoryCredentials } from '@/cli/daemonModules/repositoryCredentials'
+import { composeDaemonResourceCatalogModules } from '@/cli/daemonModules/resourceCatalog'
 import { NotApplicable, type DaemonBootSteps } from './daemonLifecycleProgram'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { TaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
@@ -16,8 +28,7 @@ import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/co
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
-import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
+import type { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
 import {
   composeLocalTaskRunRootSelection,
@@ -67,10 +78,7 @@ import {
   type DaemonStartupLease,
 } from '@/modules/system-operations/composition'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
-import {
-  composeRunObservation,
-  composeRunObservationCalls,
-} from '@/modules/run-observability/composition/runObservation'
+import { composeRunObservation } from '@/modules/run-observability/composition/runObservation'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
@@ -85,7 +93,6 @@ import type {
 } from '@/modules/system-operations/public/queries'
 import { selectDaemonRuntimeQueries } from '@/modules/system-operations/composition/daemonHostLifecycle'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
-import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import {
   composeRepositoryMirrors,
@@ -118,7 +125,6 @@ import {
   createTaskDagCollaborationOperations,
 } from '@/modules/collaboration/composition/decisionCommands'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
-import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import {
   createDaemonLockProof,
@@ -127,7 +133,6 @@ import {
   type BootExecutionRecoveryFactory,
 } from '@/modules/task-execution/composition/bootRecovery'
 import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
-import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import type { Config } from '@agent-workflow/shared'
 import { join } from 'node:path'
@@ -140,7 +145,7 @@ import {
   composeRuntimeProbeConfigFence,
   type RuntimeDiagnosticDependencies,
 } from '@/modules/runtime-management/composition/runtimeManagement'
-import { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
+import type { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
 import {
   supportsEventCenterCodeHostDelivery,
   type WebhookDispatcher,
@@ -150,52 +155,23 @@ import { composeOidcIdentityOperations } from '@/modules/identity-access/composi
 import { DrizzleOidcProviderRepository } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
-import {
-  composePostgresqlRepositoryWorkspaceStore,
-  composeRepositoryTransportCredentials,
-  createRepositoryPublicationTransport,
-  PostgresqlRepositoryTransportCredentialRepository,
-  reconcileRepositoryTransportConnectionProjections,
-} from '@/modules/source-control/composition'
+import { reconcileRepositoryTransportConnectionProjections } from '@/modules/source-control/composition'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/composition/codeReviewArtifacts'
 import type { CodeReviewArtifactStore } from '@/modules/code-capability/public/participants'
 import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
 import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
-import {
-  composeCapabilityTemplateOperations,
-  createPostgresqlCapabilityTemplatePackageMutationOwner,
-  createCapabilityTemplatePersistence,
-} from '@/modules/code-capability/composition/capabilityTemplateOperations'
-import {
-  composePostgresqlMemoryOperations,
-  composeSkillMemoryFusionParticipantFactory,
-} from '@/modules/memory/composition'
-import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
-import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
+import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
+import type { composePostgresqlMemoryOperations } from '@/modules/memory/composition'
+import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
-import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
-import {
-  composeMcpRuntimeTestProvider,
-  createMcpTransactionLifecycle,
-} from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import {
-  composeMcpCatalog,
-  mcpAclRuntimeTestLifecycle,
-} from '@/modules/resource-catalog/composition/mcpOperations'
-import {
-  composePluginCatalog,
-  type PluginInstallerPort,
-} from '@/modules/resource-catalog/composition/pluginOperations'
-import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
+import { type PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
 import {
   composeWorkgroupTaskRoom,
   composeWorkgroupTaskRoomActiveUsers,
   composeWorkgroupTaskRoomDynamicWorkflow,
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
-import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
 import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
@@ -222,7 +198,6 @@ import {
   composeWorktreeResumePreflight,
   createGateContinuationDriver,
 } from '@/modules/task-execution/public/participants'
-import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import {
   selectRepositoryWorkspaceReadQueries,
   type RepositoryWorkspaceReadQueries,
@@ -254,13 +229,11 @@ import { composeExecutionContract } from '@/modules/execution-contract/compositi
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import {
   composeDigitalEmployeePlatformInventoryParticipant,
-  composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployeeTaskCatalogSource,
   composeDigitalEmployee,
   composeDigitalEmployeeBootstrapReadsFor,
   composeDigitalEmployeeWriterCutoverFor,
   createEmployeeAutomationWorkStartProvider,
-  createDigitalEmployeeResourceCatalogAclProviders,
   createEmployeeInputArtifactStore,
   createEmployeeReactionRoundQueries,
 } from '@/modules/digital-employee/composition'
@@ -297,10 +270,6 @@ import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/develo
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import {
-  composeDevelopmentConfigOperationsFor,
-  type DevelopmentConfigResourceAccess,
-} from '@/modules/development-automation/composition/configOperations'
-import {
   composeDevelopmentMissionOperations,
   createLegacyMissionAdmissionsEnabledQuery,
 } from '@/modules/development-automation/composition/missionOperations'
@@ -310,22 +279,18 @@ import {
 } from '@/modules/development-automation/composition/missionInputUploads'
 import { composeSelectedRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
-import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
-import { composeForeignResourceAclFor } from '@/modules/resource-catalog/composition/resourceAcl'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
 } from '@/modules/source-control/composition'
+import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
 import {
   buildDevelopmentDeliveryDeps,
   buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
-  createDevelopmentWorkspaceRepositoryPreparation,
 } from '@/services/developmentDeliveryDeps'
-import type { DigitalEmployeeAclResourceType } from '@/routes/digitalEmployees'
-import { mountAclEndpoints } from '@/routes/resourceAcl'
 import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
 import {
   composeIntentDumpAuxiliaryQueries,
@@ -347,7 +312,6 @@ import {
   composeWebhookLaunchAdmission,
   composeWebhookTriggerValidation,
 } from '@/modules/integration/composition/webhookAdmission'
-import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
 import {
   composeWebhookDispatchPersistenceFor,
   composeWebhookTriggerServiceDependenciesFor,
@@ -398,7 +362,7 @@ import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { cleanupOrphanedGitCredentialLeases } from '@/util/gitCredentialLease'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
-import { Paths, appHome as systemAgentAppHome } from '@/util/paths'
+import { Paths } from '@/util/paths'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { resizeAllNodePools } from '@/services/processNodeConcurrency'
@@ -419,35 +383,23 @@ import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { ResolvedDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
-import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
+import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { createOidcProvidersService } from '@/services/oidcProviders'
-import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
-import { createRepositoryEndpointDiscovery } from '@/modules/integration/composition'
-import { createDevelopmentDeliveryProvider } from '@/modules/development-automation/composition'
-import { composeSelectedPipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
 import { resolveDevelopmentRepoBinding } from '@/services/developmentDeliveryDeps'
-import { getProbeByMcpId } from '@/services/mcpProbeStore'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
-import {
-  mcpOperationCoordinator,
-  pluginOperationCoordinator,
-} from '@/services/resourceOperationCoordinator'
 import { batchOwnerUserId } from '@/services/repoBatchImport'
 import { redactEventPayload } from '@/services/tokenRedaction'
-import { mcpRouteNow } from '@/routes/mcps'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 import { installPlugin, plannedGenerationDir } from '@/services/pluginInstaller'
 import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
 import {
   composePostgresqlAppDeps,
-  composePostgresqlDaemonProviderCore,
   composeDigitalEmployeeRoutePersistence,
   createComposedApp,
   type UnstartedApplicationScope,
   type PostgresqlAppCompositionInput,
-  type SelectedDaemonProviderCore,
 } from '@/server'
 import { buildWebSocketAdapter } from '@/ws/server'
 import type { FusedIntoSkillMemory, MemoryScopeAuthority } from '@/modules/memory/public/catalog'
@@ -464,29 +416,20 @@ import {
 } from '@/modules/intent/application/dispatcher'
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
-const log = createLogger('postgresql-daemon-application')
-
-function isDigitalEmployeeAclType(type: string): type is DigitalEmployeeAclResourceType {
-  return (
-    type === 'employee_definition' || type === 'employee_tool' || type === 'employee_job_template'
-  )
-}
-
-type PostgresqlProviderRuntime = Extract<
-  ResolvedDatabaseProviderRuntime,
-  { readonly provider: 'postgresql' }
->
-
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
-import {
-  selectSkillContentDependencies,
-  type SkillContentBinding,
-} from '@/modules/resource-catalog/composition/skillContentBinding'
+import { type SkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 import type {
   ProgramArtifactPort,
   EmployeeInputArtifactPort,
 } from '@/modules/digital-employee/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
+
+const log = createLogger('postgresql-daemon-application')
+
+type PostgresqlProviderRuntime = Extract<
+  ResolvedDatabaseProviderRuntime,
+  { readonly provider: 'postgresql' }
+>
 
 export interface PostgresqlDaemonApplicationInput {
   readonly provider: PostgresqlProviderRuntime
@@ -730,13 +673,12 @@ export async function composePostgresqlApplication(
     input.workspaceExcludeProfiles,
   )
   const nodeRunPrompts =
-      selectedTaskRuns === undefined
-        ? composeNodeRunPromptOperations(
-            input.nodeRunPromptContentEffects,
-            join(input.appHome, 'runs'),
-          )
-        : selectedTaskRuns.nodeRunPrompts,
-    workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
+    selectedTaskRuns === undefined
+      ? composeNodeRunPromptOperations(
+          input.nodeRunPromptContentEffects,
+          join(input.appHome, 'runs'),
+        )
+      : selectedTaskRuns.nodeRunPrompts
   const workspaceUploads = selectWorkspaceUploadContentFactory(input.workspaceUploads)
   const isolationWorkspaces = selectIsolationWorkspaceFactory(input.isolationWorkspaces)
   const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(input.repositoryGitWorkspaces)
@@ -782,18 +724,22 @@ export async function composePostgresqlApplication(
     repoImportOwnerUserId: batchOwnerUserId,
     redactTaskEventPayload: redactEventPayload,
   })
-  const core = composePostgresqlDaemonProviderCore({
-    databaseBackup: input.databaseBackup,
+  const core = composeDaemonProviderCore({
     daemonToken: input.token,
     db: input.db,
     ...(input.credentials === undefined ? {} : { credentials: input.credentials }),
     ...(input.sourceWriteWindow === undefined
       ? {}
       : { sourceWriteWindow: input.sourceWriteWindow }),
-    runtime: input.provider.runtime,
-    databaseConfig: input.config.database,
+    adapters: DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
+      db: input.db,
+      runtime: input.provider.runtime,
+      databaseConfig: input.config.database,
+      backup: input.databaseBackup,
+      appHome: input.appHome,
+      lockPath: input.lockPath,
+    }),
     appHome: input.appHome,
-    lockPath: input.lockPath,
     secretBox: input.secretBox,
     realtimePolicy,
     onCredentialRevoked: triggerRevalidation,
@@ -821,156 +767,97 @@ export async function composePostgresqlApplication(
     await core.systemOperations.applyPendingRestore()
   }
 
-  // RFC-223 PR-5 / RFC-359 W1-T7d（P0-11）：技能身份屏障是 DB 就绪后的第一件事——恢复遗留结构操作、
-  // 清理崩溃残留的 skill_operation_locks / reserving 行、证明 DB/FS/FK 一致，然后才允许任何消费方
-  // 读技能。fail-closed：不包 try，屏障失败即 daemon 不起。此前 PG daemon 从未装配它。
-  const skillCatalogBoot = composeSkillCatalogBoot({
-    db: input.db,
-    ...selectSkillContentDependencies(input.skillContent, input.appHome),
-  })
-
   const identityAccess = core.identityAccess
-  // daemon 自用的系统身份也必须由注册表**铸**出来。授权句柄按对象引用从
-  // `AuthorityClaimRegistry` 的 WeakMap 里取（只有 `mintDirectAuthority` 会往里写），
-  // 手捏的投影会被 `authorityForLegacyProjection` 抛 `foreign-legacy-actor-projection`
-  // ——本文件下面四条 daemon 自用路径（动态工作流校验上下文、工作组启动的
-  // `loadExistingAgentIds`、数字员工执行的 `agents.get` / `workflows.get` 与
-  // `resourceAuthorityFor`）全都吃这一对句柄。`__system__` 由迁移 0018 播种且不可禁用，
-  // admit 不出来说明这个库根本没法用，宁可在启动时带名字失败。
   let systemActor: ReturnType<typeof actorOfDirectAuthority>
-  const resourceCatalog = composeResourceCatalogFor({
+  const standalone = standaloneModuleAdapters()
+  const observationModules = composeDaemonObservationModules({
     db: input.db,
-    lifecycle: mcpAclRuntimeTestLifecycle(),
-  })
-  const memorySystemAgentBinding = (input.systemAgentRunFamily ?? composeLocalSystemAgentRunFamily)(
-    {
-      appHome: systemAgentAppHome,
-      observations: () => systemAgentObservations,
+    appHome: input.appHome,
+    configuration,
+    notificationKey: applicationConfiguration.notificationKey,
+    identityAccess,
+    runtimeRegistry: core.runtimeRegistry,
+    mcpCatalog: () => mcpCatalog,
+    adapters: {
+      ...standalone,
+      systemAgentRunFamily: input.systemAgentRunFamily ?? standalone.systemAgentRunFamily,
+      mcpDiagnostics:
+        phase.kind === 'daemon'
+          ? (input.mcpDiagnostics ?? standalone.mcpDiagnostics)
+          : phase.scope.createMcpRuntimeTests,
+      runtimeManagement: input.runtimeManagement ?? standalone.runtimeManagement,
+      workspacePresence: () => input.workspacePresence ?? standalone.workspacePresence(),
     },
-  )
-  const memoryOperations = composePostgresqlMemoryOperations({
-    systemAgentBinding: memorySystemAgentBinding,
+    mcpRuntimeTestDependencies: input.mcpRuntimeTestDependencies,
+    runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies,
+  })
+  const {
+    observationCalls,
+    memorySystemAgentBinding,
+    intentSystemAgentBinding,
+    narrativeSystemAgentBinding,
+    intentHttpSystemAgentBinding,
+    workspacePresence,
+    runtimeSessionLeases,
+    mcpRuntimeTests,
+    runtimeManagement,
+  } = observationModules
+  const resourceCatalogModules = composeDaemonResourceCatalogModules({
+    db: input.db,
+    skillContentRoot: input.appHome,
+    skillContent: input.skillContent,
+    pluginInstaller: input.pluginInstaller,
+    runtimeProfiles: { get: (name) => core.runtimeRegistry.getRuntime(name) },
+    mcpRuntime: {
+      prepareDelete: (id) => mcpRuntimeTests.prepareMcpDelete(id),
+      reconcileDurableIntents: () => mcpRuntimeTests.reconcileDurableIntents(),
+    },
+  })
+  const {
+    resourceCatalog,
+    classicCatalogs,
+    skillCatalogBoot,
+    mcpProbeStore,
+    mcpCatalog,
+    pluginCatalog,
+    workgroupCatalog,
+    digitalEmployeeAgentTemplates,
+    capabilityTemplateOperations,
+    capabilityTemplateAcl,
+    developmentConfigOperations: developmentConfig,
+    digitalEmployeeAcl,
+    developmentAclRoutes,
+  } = resourceCatalogModules
+  const repositoryCredentials = composeDaemonRepositoryCredentials({
+    db: input.db,
+    appHome: input.appHome,
+    secretBox: input.secretBox,
+    developmentPurposeRoot,
+    repositoryWorkspaceStore: core.repositoryWorkspaceStore,
+    repositoryWorkspaceOperations: core.repositoryWorkspaceOperations,
+    repositoryTransportCredentialRepository: core.repositoryTransportCredentialRepository,
+    repositoryPublicationTransport: input.repositoryPublicationTransport,
+    developmentWorkspaceRepositoryPreparation: input.developmentWorkspaceRepositoryPreparation,
+  })
+  const {
+    repositoryTransport,
+    codeHostConnections,
+    repositoryPublicationTransport,
+    developmentDeliveryProvider,
+    developmentWorkspaceRepositoryPreparation,
+  } = repositoryCredentials
+  const repositoryTransportRepository = core.repositoryTransportCredentialRepository
+  const memoryModules = composeDaemonMemoryModules({
     db: input.db,
     nodeRunPrompts,
+    systemAgentBinding: memorySystemAgentBinding,
+    contexts: identityAccess.contexts,
     reviewedArtifacts: {
-      // RFC-359 W11：记忆要读已评审产物、评审上下文又要记忆的蒸馏命令面。环打在**词法作用域**
-      // 上，不再打在一个可空槽上：`boundCollaborationContext` 是同一作用域里的 `const`，
-      // 闭包只在运行期取值。忘了装配在这里不可表达——删掉那行 `const boundCollaborationContext = …`
-      // 就是一个 tsc 编译错误，而不是一个编译通过、跑到才炸的 daemon。
-      async read(finalPath) {
-        return await readCommittedReviewArtifactBody(boundCollaborationContext, finalPath)
-      },
-    },
-    catalogBinding: {
-      contexts: identityAccess.contexts,
-      authorization: composeResourceScopeAccessParticipant(),
+      read: async (finalPath) =>
+        await readCommittedReviewArtifactBody(boundCollaborationContext, finalPath),
     },
   })
-  const memoryCatalog = memoryOperations.catalog
-  const classicCatalogs = composeClassicCatalogs({
-    db: input.db,
-    ...selectSkillContentDependencies(input.skillContent, input.appHome),
-    runtimeProfiles: { get: (name) => core.runtimeRegistry.getRuntime(name) },
-    // RFC-353 T7：回滚该退回哪些记忆归 knowledge-evolution 裁定；它消费 memory 的
-    // participant，resource-catalog 只收到一个「给事务、还 id」的窄端口。
-    restoreMembership: createAsyncSkillRestoreMembership(
-      composeSkillMemoryFusionParticipantFactory(),
-    ),
-    resourceCatalog,
-  })
-  const mcpProbeStore = composeMcpProbeStore(input.db)
-  const mcpRuntimeTests = (
-    phase.kind === 'daemon'
-      ? (input.mcpDiagnostics ?? composeLocalMcpDiagnostics)
-      : phase.scope.createMcpRuntimeTests
-  )({
-    observe:
-      ({ session, turn, runtime, callId }) =>
-      (startedAt) =>
-        systemAgentObservations.open({
-          ...(callId === undefined ? {} : { callId }),
-          feature: 'mcp-runtime-test',
-          agentName: 'aw-mcp-runtime-test',
-          protocol: session.runtimeProtocol,
-          startedAt,
-          runtimeObservationIdentity: {
-            registrationId: runtime.row.id,
-            configurationRevision: runtime.row.probeFence,
-            acceptedName: runtime.row.name,
-          },
-          ...(turn.seq > 1 && session.runtimeSessionId !== null
-            ? { resumeSessionId: session.runtimeSessionId }
-            : {}),
-          demand: {
-            kind: 'mcp-runtime-test',
-            originalId: session.id,
-            originalAttempt: turn.id,
-            name: 'MCP 测试 · ' + session.runtimeName,
-            ownerUserId: session.ownerUserId,
-            purpose: 'playground',
-          },
-        }),
-    ...composeMcpRuntimeTestProvider(input.db),
-    isRuntimeEligible: isRuntimeMcpTestEligible,
-    coordinator: mcpOperationCoordinator,
-    requestBinding: {
-      contexts: identityAccess.contexts,
-      directAuthority: identityAccess.directAuthority,
-      loadVisibleMcp: (authority, id) => mcpCatalog.queries.get(authority, { id }),
-    },
-    // RFC-359 W11：运行时测试要查 MCP、MCP 目录的删除 / 对账又要运行时测试——同一作用域里的
-    // `const mcpCatalog`（下面几行）由词法闭包解析，两边都只在运行期取值，可空槽消失。
-    async loadMcp(mcpId) {
-      const identity = await admitDaemonIdentity(identityAccess)
-      if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')
-      return await mcpCatalog.queries.get(identity.actor, { id: mcpId })
-    },
-    loadRuntime: (name) => core.runtimeRegistry.getRuntime(name),
-    configuration,
-    appHome: input.appHome,
-    // RFC-359 AC-6：与 `server.ts` 同形的条件展开（生产不传，取服务自己的默认）。
-    ...(input.mcpRuntimeTestDependencies?.runFn === undefined
-      ? {}
-      : { runFn: input.mcpRuntimeTestDependencies.runFn }),
-    ...(input.mcpRuntimeTestDependencies?.now === undefined
-      ? {}
-      : { now: input.mcpRuntimeTestDependencies.now }),
-    ...(input.mcpRuntimeTestDependencies?.capacity === undefined
-      ? {}
-      : { capacity: input.mcpRuntimeTestDependencies.capacity }),
-  })
-  const mcpCatalog = composeMcpCatalog({
-    db: input.db,
-    lifecycle: createMcpTransactionLifecycle(),
-    resourceCatalog,
-    coordinator: mcpOperationCoordinator,
-    async nextMutationTimestamp(mcp) {
-      const persisted = await getProbeByMcpId(mcpProbeStore, mcp.id)
-      return mcpOperationCoordinator.nextCausalTimestamp(mcp.id, mcpRouteNow(), [
-        mcp.updatedAt + 1,
-        (persisted?.startedAt ?? 0) + 1,
-        mcpOperationCoordinator.activeLastStartedAt(mcp.id) + 1,
-      ])
-    },
-    runtime: Object.freeze({
-      prepareDelete: (mcpId: string) => mcpRuntimeTests.prepareMcpDelete(mcpId),
-      reconcileDurableIntents: () => mcpRuntimeTests.reconcileDurableIntents(),
-    }),
-  })
-  const pluginCatalog = composePluginCatalog({
-    db: input.db,
-    resourceCatalog,
-    coordinator: pluginOperationCoordinator,
-    installer: input.pluginInstaller,
-  })
-  const workgroupCatalog = composeWorkgroupCatalog({
-    db: input.db,
-    resourceCatalog,
-  })
-  const digitalEmployeeAgentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
-    input.db,
-    composeDigitalEmployeeAgentTemplateCatalogParticipant,
-  )
+  const { memoryOperations, memoryCatalog, memoryInjectionQueries } = memoryModules
   const authorityFor = (actor: Actor) =>
     directOperationAuthority(identityAccess.directAuthority, actor)
   const oidcIdentities = composeOidcIdentityOperations({
@@ -985,46 +872,6 @@ export async function composePostgresqlApplication(
     identityAccess,
     auth: core.authRuntime,
     afterDisabled: async () => await mcpRuntimeTests.reconcileDurableIntents(),
-  })
-
-  const repositoryWorkspaceStore = composePostgresqlRepositoryWorkspaceStore(input.db)
-  const repositoryTransportRepository = new PostgresqlRepositoryTransportCredentialRepository(
-    input.db,
-  )
-  const repositoryTransport = composeRepositoryTransportCredentials(
-    repositoryTransportRepository,
-    input.secretBox,
-  )
-  const codeHostConnections = createCodeHostConnectionsService({
-    secretBox: input.secretBox,
-    repositoryTransport: repositoryTransport.adminConnections,
-  })
-  const repositoryEndpointDiscovery = createRepositoryEndpointDiscovery({
-    async resolveConnection(provider) {
-      const connection = await codeHostConnections.resolve(provider)
-      if (connection?.connectionGeneration === undefined) return null
-      return {
-        provider: connection.provider,
-        apiBaseUrl: connection.baseUrl,
-        connectionGeneration: connection.connectionGeneration,
-        token: connection.token,
-        rejectUnauthorized: connection.rejectUnauthorized,
-      }
-    },
-  })
-  const repositoryPublicationTransport =
-    input.repositoryPublicationTransport ??
-    createRepositoryPublicationTransport({
-      repository: repositoryTransportRepository,
-      secretBox: input.secretBox,
-      appHome: input.appHome,
-      endpointDiscovery: repositoryEndpointDiscovery,
-    })
-  const developmentDeliveryProvider = createDevelopmentDeliveryProvider({
-    db: input.db,
-    secretBox: input.secretBox,
-    connections: codeHostConnections,
-    pipeline: composeSelectedPipelineEvidenceRunnerFor(input.db, developmentPurposeRoot.pipeline),
   })
 
   const codeHistoryQueries = composeCodeHistoryQueries(input.db)
@@ -1048,43 +895,6 @@ export async function composePostgresqlApplication(
         : { process: input.programFixtureProcess }),
     }),
   })
-  const capabilityTemplatePersistence = createCapabilityTemplatePersistence(input.db)
-  const capabilityTemplateOperations = composeCapabilityTemplateOperations({
-    db: input.db,
-    access: {
-      filterVisible: (actor, rows) =>
-        resourceCatalog.authorization.filterVisibleRows(actor, 'capability_template', rows),
-      canView: (actor, row) =>
-        resourceCatalog.authorization.canViewResource(actor, 'capability_template', row),
-      requireEdit: (actor, row) =>
-        resourceCatalog.authorization.requireResourceEdit(actor, 'capability_template', row),
-      requireGovern: (actor, row) =>
-        resourceCatalog.authorization.requireResourceGovern(actor, 'capability_template', row),
-      assertNameUnchangedForEditor: resourceCatalog.authorization.assertNameUnchangedForEditor,
-    },
-  })
-  type CapabilityTemplateAclRow = Readonly<{
-    id: string
-    ownerUserId: string | null
-    visibility: 'private' | 'public'
-  }>
-  const capabilityTemplateAcl = Object.freeze({
-    load: (id: string) => capabilityTemplatePersistence.load(id),
-    canView: (actor: Actor, row: CapabilityTemplateAclRow) =>
-      resourceCatalog.authorization.canViewResource(actor, 'capability_template', row),
-    read: (actor: Actor, row: CapabilityTemplateAclRow) =>
-      resourceCatalog.acl.getResourceAcl(actor, 'capability_template', row),
-    update: (
-      actor: Actor,
-      row: CapabilityTemplateAclRow,
-      body: Parameters<typeof resourceCatalog.acl.updateResourceAcl>[3],
-      updatedAt?: number,
-    ) =>
-      resourceCatalog.acl.updateResourceAcl(actor, 'capability_template', row, body, {
-        ...(updatedAt === undefined ? {} : { updatedAt }),
-      }),
-  })
-
   type PostgresqlResourcePackageProviderInput = Parameters<
     typeof composePostgresqlResourcePackageProvider
   >[0]
@@ -1102,7 +912,7 @@ export async function composePostgresqlApplication(
         return actor
       },
     }),
-    mcpLifecycle: createMcpTransactionLifecycle(),
+    mcpLifecycle: resourceCatalogModules.mcpTransactionLifecycle,
     capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db: input.db }),
     skillArtifacts: input.resourcePackageSkillArtifacts,
     skillPackageContent: input.resourcePackageSkillContent,
@@ -1162,8 +972,6 @@ export async function composePostgresqlApplication(
     input.db,
     taskExecutionResourceSnapshots,
   )
-  const observationCalls = composeRunObservationCalls(input.db)
-  const systemAgentObservations = composeSystemAgentObservations({ calls: observationCalls })
   const taskExecutionPersistence = createTaskExecutionPersistence(input.db, {
     workspacePresence,
   })
@@ -1292,6 +1100,8 @@ export async function composePostgresqlApplication(
       repositoryGitWorkspaces,
       workspacePresence,
       observationInvocations: observationCalls,
+      runtimeSessionLeases,
+      memoryInjectionQueries,
       runtimeRegistry: core.runtimeRegistry,
       nodeRunRuntime: composeNodeRunRuntimePersistence(
         input.db,
@@ -1481,12 +1291,6 @@ export async function composePostgresqlApplication(
   })
 
   const codeWorkspace = composeLegacyCodeReadProviders(input.db).workspace
-  const narrativeSystemAgentBinding = (
-    input.systemAgentRunFamily ?? composeLocalSystemAgentRunFamily
-  )({
-    observations: () => systemAgentObservations,
-    appHome: systemAgentAppHome,
-  })
   const collaborationTaskAccess = createPostgresqlCollaborationTaskAccessPort(input.db)
   const taskRoutes = Object.freeze({
     configuration,
@@ -1787,13 +1591,7 @@ export async function composePostgresqlApplication(
     appHome: input.appHome,
     reactionRounds: employeeReactionRounds,
     inputArtifacts: employeeInputArtifacts,
-    repositoryPreparation:
-      input.developmentWorkspaceRepositoryPreparation ??
-      createDevelopmentWorkspaceRepositoryPreparation({
-        store: repositoryWorkspaceStore,
-        appHome: input.appHome,
-        secretBox: input.secretBox,
-      }),
+    repositoryPreparation: developmentWorkspaceRepositoryPreparation,
     sourceControl: bindEmployeeCaseWorkspaceParticipant({
       publicationTransport: repositoryPublicationTransport,
       effects: input.employeeCaseWorkspaceEffects,
@@ -1933,31 +1731,6 @@ export async function composePostgresqlApplication(
   )
 
   const developmentAdmissionLookup = composeDevelopmentAdmissionLookup(input.db)
-  const developmentConfigAccess: DevelopmentConfigResourceAccess = {
-    filterVisible: (actor, type, rows) =>
-      resourceCatalog.authorization.filterVisibleRows(actor, type, rows),
-    canView: (actor, type, row) => resourceCatalog.authorization.canViewResource(actor, type, row),
-    requireEdit: (actor, type, row) =>
-      resourceCatalog.authorization.requireResourceEdit(actor, type, row),
-    requireGovern: (actor, type, row) =>
-      resourceCatalog.authorization.requireResourceGovern(actor, type, row),
-    assertNameUnchangedForEditor: resourceCatalog.authorization.assertNameUnchangedForEditor,
-  }
-  // RFC-359 W4-D6：development-adapter 配置与 SQLite 根同一份装配；它的 ACL 也改走目录的中立 foreign-owner 路径。
-  const developmentAdapter = composeDevelopmentAdapterConfigOperationsFor({
-    db: input.db,
-    access: developmentConfigAccess,
-    grants: resourceCatalog.persistence.grants,
-  })
-  const developmentAdapterAcl = composeForeignResourceAclFor({
-    db: input.db,
-    identity: developmentAdapter.resourceAclIdentity,
-  })
-  const developmentConfig = composeDevelopmentConfigOperationsFor({
-    db: input.db,
-    developmentAdapter,
-    access: developmentConfigAccess,
-  })
   // RFC-359 W1-T3（F-H2-2）：agent / script 动作 launcher 与执行终态观察者——与 cli/start.ts 同一份
   // 执行器（actionExecutionRunners.ts），只是宿主任务的启动 / 取消换成 PG 的根启动内核与取消命令。
   // 此前 PG daemon 一个都没接，development mission 的每个动作都被 `*-launcher-not-wired` 挡下。
@@ -2067,23 +1840,6 @@ export async function composePostgresqlApplication(
   })
   // RFC-359 W4-D6c：employee_* 的 ACL 与 SQLite 根同一条目录中立 foreign-owner 路径，identity 行由
   // digital-employee 在目录写事务里交出；PG 专属的 foreign ACL 适配器退役。
-  const digitalEmployeeAclIdentityProviders = createDigitalEmployeeResourceCatalogAclProviders(
-    input.db,
-  )
-  const digitalEmployeeAcl = Object.freeze({
-    employee_definition: composeForeignResourceAclFor({
-      db: input.db,
-      identity: digitalEmployeeAclIdentityProviders.employeeDefinition,
-    }),
-    employee_tool: composeForeignResourceAclFor({
-      db: input.db,
-      identity: digitalEmployeeAclIdentityProviders.employeeTool,
-    }),
-    employee_job_template: composeForeignResourceAclFor({
-      db: input.db,
-      identity: digitalEmployeeAclIdentityProviders.employeeJobTemplate,
-    }),
-  })
   const digitalEmployeePersistence = composeDigitalEmployeeRoutePersistence({
     identityAccess,
     resourceCatalog,
@@ -2096,50 +1852,6 @@ export async function composePostgresqlApplication(
         }),
     },
   })
-  const developmentAclRoutes: PostgresqlAppCompositionInput['digitalDevelopment']['developmentConfig']['aclRoutes'] =
-    Object.freeze({
-      mount(
-        request: Parameters<
-          PostgresqlAppCompositionInput['digitalDevelopment']['developmentConfig']['aclRoutes']['mount']
-        >[0],
-      ) {
-        mountAclEndpoints(request.app, {
-          type: request.type,
-          base: request.base,
-          param: 'id',
-          load: request.load,
-          canView: (actor, row) =>
-            request.type === 'development_adapter'
-              ? resourceCatalog.authorization.canViewResource(actor, request.type, row)
-              : resourceCatalog.authorization.canViewResource(actor, request.type, row),
-          read: (actor, row) =>
-            request.type === 'development_adapter'
-              ? developmentAdapterAcl.getResourceAcl(actor, request.type, row)
-              : isDigitalEmployeeAclType(request.type)
-                ? digitalEmployeeAcl[request.type].getResourceAcl(actor, request.type, row)
-                : resourceCatalog.acl.getResourceAcl(actor, request.type, row),
-          update: (actor, row, body, updatedAt) =>
-            request.type === 'development_adapter'
-              ? developmentAdapterAcl.updateResourceAcl(actor, request.type, row, body, {
-                  ...(updatedAt === undefined ? {} : { updatedAt }),
-                })
-              : isDigitalEmployeeAclType(request.type)
-                ? digitalEmployeeAcl[request.type].updateResourceAcl(
-                    actor,
-                    request.type,
-                    row,
-                    body,
-                    {
-                      ...(updatedAt === undefined ? {} : { updatedAt }),
-                    },
-                  )
-                : resourceCatalog.acl.updateResourceAcl(actor, request.type, row, body, {
-                    ...(updatedAt === undefined ? {} : { updatedAt }),
-                  }),
-          notFoundCode: request.notFoundCode,
-        })
-      },
-    })
   const digitalDevelopmentRoutes: PostgresqlAppCompositionInput['digitalDevelopment'] =
     Object.freeze({
       executionContracts,
@@ -2234,12 +1946,6 @@ export async function composePostgresqlApplication(
     platformInventory: intentPlatformInventory,
   })
   const intentSessionEvents = createIntentSessionWsPublisher()
-  const intentSystemAgentBinding = (input.systemAgentRunFamily ?? composeLocalSystemAgentRunFamily)(
-    {
-      observations: () => systemAgentObservations,
-      appHome: () => intentDispatchDeps.appHome,
-    },
-  )
   const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
     persistence: intentPersistence,
     events: intentSessionEvents,
@@ -2262,12 +1968,6 @@ export async function composePostgresqlApplication(
   const intentMaintenance = composeIntentMaintenanceSnapshotQueriesFor({
     db: input.db,
     activity: intentApplyOperations,
-  })
-  const intentHttpSystemAgentBinding = (
-    input.systemAgentRunFamily ?? composeLocalSystemAgentRunFamily
-  )({
-    observations: () => systemAgentObservations,
-    appHome: () => intentRouteInputs.appHome,
   })
   const intentRouteInputs: PostgresqlAppCompositionInput['intent'] = {
     appHome: input.appHome,
@@ -2347,21 +2047,6 @@ export async function composePostgresqlApplication(
       memories: memoryCatalog,
       tasks: taskExecutionProvider.overview,
     })
-  const runtimeManagement = (input.runtimeManagement ?? composeLocalRuntimeManagement)({
-    observations: () => systemAgentObservations,
-    configuration: {
-      current: () => configuration.read(),
-      withProbeReceiptFence: composeRuntimeProbeConfigFence(
-        applicationConfiguration.notificationKey,
-      ),
-    },
-    runtimeRegistry: core.runtimeRegistry,
-    runtimeTests: mcpRuntimeTests.reconciliation,
-    ...(input.runtimeDiagnosticTestDependencies === undefined
-      ? {}
-      : { runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies }),
-    appHome: () => Paths.root,
-  })
   const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({
     observability: composeRunObservation({
       db: input.db,
@@ -2770,7 +2455,7 @@ export async function composePostgresqlApplication(
       await runTaskExecutionBootRecovery({
         recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
         persistence: taskExecutionPersistence,
-        runtimeSessionLeases: createRuntimeSessionLeaseOperations(input.db),
+        runtimeSessionLeases,
         lockProof:
           input.daemonStartupLease === undefined
             ? createDaemonLockProof({
