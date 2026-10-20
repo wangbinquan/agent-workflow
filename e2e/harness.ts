@@ -259,9 +259,16 @@ const CHILD_EXIT_GRACE_MS = 1_000
 //
 // 注意这不是「把超时调大掩盖慢」：解包本身已经按 RFC-254 优化过（目录一次性建好 +
 // 有界并发），慢的是 Windows 的每文件 AV 扫描，产品侧没有更多可压的空间；而这段成本
-// **随每条新迁移线性增长**，预算不跟着走就是一枚定时炸弹。POSIX 上解包只要 1~2s，
-// 维持 30s 不变，好让真正的启动挂起仍然能被这条预算逮住。
-const READY_TIMEOUT_MS = process.platform === 'win32' ? 90_000 : 30_000
+// **随每条新迁移线性增长**，预算不跟着走就是一枚定时炸弹。POSIX 上解包只要 1~2s。
+//
+// macOS 也给 90s（2026-10-20）：托管 macOS runner 只有 3 核，4 个 worker 各起 daemon、
+// 各开浏览器，启动里纯 CPU 的 PostgreSQL 迁移历史回放（本机约 1s，见 docs/dev-gotchas.md
+// 「每次 daemon 启动都回放 PostgreSQL 迁移历史」）被拉长到 19~25s，SQLite 迁移再要约 5s，
+// 冷启动尾部越过 30s。2026-10-19～20 主干的 macOS 分片多次红在这里（例：39497282103 job
+// 118886772847，`extracted embedded migrations` 到 `config loaded` 24.5s），失败用例互不相干。
+// 让启动按需校验这份历史属于产品改动，另立 RFC。Linux 维持 30s，真正的启动挂起仍由它逮住。
+const READY_TIMEOUT_MS =
+  process.platform === 'win32' || process.platform === 'darwin' ? 90_000 : 30_000
 const OUTPUT_TAIL_BYTES = 32 * 1024
 
 type DaemonChild = ChildProcessByStdio<null, Readable, Readable>
