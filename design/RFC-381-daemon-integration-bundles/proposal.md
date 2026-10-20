@@ -1,7 +1,8 @@
 # RFC-381 守护进程模块组：集成、定时任务与融合（RFC-294 S2b 第二批）
 
 - **状态**：Done（2026-10-20：`682018fd4`。主 CI `39497282103` 的后端全部分片（含 PostgreSQL）与 ubuntu / windows e2e 绿；
-  红在依赖审计门（外部新公告，非本 RFC）与 macOS e2e 既有的守护进程就绪超时偶发，AC-5 待后继全绿 CI 补证。
+  红在依赖审计门（外部新公告，非本 RFC）与 macOS e2e 既有的守护进程就绪超时偶发。AC-5 由后继证据补足：后代 `45aa84adf`
+  只改依赖版本与 e2e 夹具、RFC-381 内容原样保留，其主 CI `39507770918` 全绿。
   用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b）、design §10.2；前置
   [RFC-380](../RFC-380-daemon-module-bundles/proposal.md)（S2b 第一批）

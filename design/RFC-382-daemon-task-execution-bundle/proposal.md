@@ -1,7 +1,8 @@
 # RFC-382 守护进程模块组第三批：任务执行（RFC-294 S2b）
 
-- **状态**：In Progress（2026-10-20 落档并派发。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与
-  实现门；规则取舍由本会话按推荐决定，见 §6。RFC-381 提交（`682018fd4`）后派发）
+- **状态**：Done（2026-10-20：`fddf8bf74`，主 CI `39514349029` success。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex
+  实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6。§1 两项「需用例确认」均经用例确认：PostgreSQL 会话此前确实
+  缺门控续跑前置步骤，旧 PostgreSQL 校验上下文确实以 `agent-not-found` 误拒内置 Agent）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b）、design §10.2；前置
   [RFC-380](../RFC-380-daemon-module-bundles/proposal.md)、[RFC-381](../RFC-381-daemon-integration-bundles/proposal.md)
 - **基线**：研究基线 HEAD `682d55904` 加 RFC-381 工作树（RFC-381 已原样提交为 `682018fd4`；行号仅作定位提示，以实施时源码为准）
