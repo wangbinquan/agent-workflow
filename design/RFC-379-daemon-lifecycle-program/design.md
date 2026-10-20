@@ -268,7 +268,8 @@ crewstation profile 只多出 profile 槽位与 `hosted-targeted-resume`。
 4. 组合无副作用：组合后、`resume` 前维护服务无定时器、无 Worker（计数 / 假定时器），MR 终止定时器未装，authoring 未初始化。
 5. §3.3 每个缺陷的回归用例（见表）。
 6. 关停：不响应中止的假 driver → 关停在宽限后继续，任务标为 interrupted；收尾作用于本 provider 模块（两个 provider 各一）。
-7. 真实守护进程：扩展 `T/daemon-start.test.ts`，断言 `lifecycle step` 日志按 §3.1 顺序出现；PostgreSQL 单机启动在 CI 上以同一断言
-   覆盖（缺 PostgreSQL 时按现有约定跳过）。
+7. 真实守护进程：扩展 `T/daemon-start.test.ts`，断言 `lifecycle step` 日志按 §3.1 顺序出现；PostgreSQL 的同一断言落在
+   `T/rfc370-v3-hosted-standby-boot.integration.test.ts`（CI 上真实启动 PostgreSQL 守护进程：待命期间 prepare 全部按序、
+   恢复阶段不执行，激活后恢复阶段按序）。单机 PostgreSQL 需经一键迁移建立数据库代指针，不放进每次提交都跑的用例。
 8. 新守卫 §8.1 与 `T/architecture` 全目录；§8.2 的旧锁改写。
 9. 既有行为套件不改即通过：启动恢复、MR 终止控制、维护服务、MCP 运行时测试、事件中心、数字员工、托管执行权的现有用例。

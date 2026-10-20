@@ -1,7 +1,6 @@
 # RFC-379 守护进程唯一生命周期程序（RFC-294 S2a）
 
-- **状态**：Draft（2026-10-19 落档。用户授权本会话设计、交 Codex 实施并审核，免设计门与实现门；与 RFC-374 共用启动恢复接线，
-  在 RFC-374 提交后派发）
+- **状态**：Done（2026-10-20）——内容 `1faae97cd`，CI 修复 `24b91ba6e`，主 CI `39389525075` success（含 PostgreSQL 双引擎分片）。实现由 Codex 完成，本会话审核（免设计门与实现门）。审核记录：本机后端 SQLite 全量 19410 pass / 0 fail；首个 CI 只红在新增的单机 PostgreSQL 守护进程用例——单机 PostgreSQL 必须经一键迁移建立数据库代指针，改为在已有的托管待命启动用例中断言同一程序顺序（AC-8，本地 PostgreSQL 17 通过）。实现与设计文字的差异：provider 专属关停控制器放在 task-execution composition（`createTaskExecutionShutdownController`，避免 `services/` 反向依赖模块内部）；维护服务内部启动函数保留原名，对外为被动的 `createMaintenanceService`；MR 终止控制的重试定时器也只在 worker 启动后安装
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2a）、design §10.3、§13.1 的生命周期
   清单一致门（G12，RFC-376 留给本 RFC）；review-2026-10-16 F2 与「后台生命周期并存六套机制」
 - **基线**：HEAD `f8d2d689f`（行号仅作定位提示，以实施时源码为准）
@@ -70,6 +69,10 @@
 4. 关停在 30 秒宽限后继续，届时仍在运行的任务标为 interrupted（以前会一直等待）。
 5. SQLite：部分启动步骤移到启动恢复之前（无数据依赖）；后台作业的启动与停止顺序改为统一顺序；MCP 运行时测试的启动恢复在会话
    恢复时执行（仍在监听之前）；bootstrap 管理员提示在就绪后输出。
+6. 关停时运行中的节点以「daemon 关停」原因中止（此前经会话暂停原因）：本地节点按 RFC-202 落为 interrupted，可续跑；托管执行
+   detach，不向 CrewStation 发取消（RFC-370 的优雅关停语义）。
+7. 托管：模板、定时任务载荷修复、融合与演示播种、技能活文件对账、运行时注册表这些幂等的 `prepare` 步骤在待命实例上也执行
+   （执行权开启之前，写屏障不拦截）；此前它们在 PostgreSQL 路径上要等取得执行权。
 
 ## 5. 验收标准
 
@@ -84,5 +87,5 @@
 - **AC-6** 关停：不响应中止的 driver 不会让关停无限等待，超时任务标为 interrupted；收尾作用于本 provider 的模块（两个 provider
   各有用例）。
 - **AC-7** G7 删除的符号无残留引用；design §6 列出的旧锁按表处置。
-- **AC-8** 真实守护进程：SQLite 启动日志按规范顺序记录全部步骤（本地与 CI）；PostgreSQL 单机启动在 CI 上有同一断言。
+- **AC-8** 真实守护进程：SQLite 启动日志按规范顺序记录全部步骤（本地与 CI）；PostgreSQL 真实守护进程在 CI 上有同一断言（落在托管待命启动用例：待命期间 prepare 全部按序、恢复阶段不执行，激活后恢复阶段按序；单机 PostgreSQL 需一键迁移建立数据库代，不适合每次提交都跑）。
 - **AC-9** 推送后 exact SHA 的 GitHub Actions 全绿。

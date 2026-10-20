@@ -119,7 +119,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 
 ### S2 唯一模块工厂图与生命周期程序（W9-A/B 提前）
 
-> 后继：S2a → [RFC-379](../RFC-379-daemon-lifecycle-program/proposal.md)（In Progress，2026-10-19 派发）。四路只读研究确认：两个 provider 的作业 id 集合相同而后台顺序不同；PostgreSQL 现行启动顺序有四个功能缺陷（MR 终止对账先于孤儿收割、内置工具目录先于模板、托管升级结算早于执行权、运行时注册表与定向续跑竞争）；关停 30 秒宽限从未生效。S2b / S2c 仍待立项。
+> 后继：S2a → [RFC-379](../RFC-379-daemon-lifecycle-program/proposal.md)（Done，2026-10-20，`1faae97cd` + `24b91ba6e`；G12 由程序与 `rfc379-daemon-lifecycle-guard` 落实）。四路只读研究确认：两个 provider 的作业 id 集合相同而后台顺序不同；PostgreSQL 现行启动顺序有四个功能缺陷（MR 终止对账先于孤儿收割、内置工具目录先于模板、托管升级结算早于执行权、运行时注册表与定向续跑竞争）；关停 30 秒宽限从未生效。S2b / S2c 仍待立项。
 
 - **目标**：止住装配根的复制与同进程重复构造（review F2、F4），并为托管 profile 提供唯一落点。
 - **建议拆分**：
