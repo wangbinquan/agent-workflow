@@ -21,7 +21,9 @@ describe('RFC-359 W12 —— WorkStart is complete at construction', () => {
   test('SQLite WorkStart resolves the completed HTTP owner while OS lifecycle keeps its instance', () => {
     const sqlite = source('cli/start.ts')
     const portAt = sqlite.indexOf('const digitalEmployeeWorkStart = Object.freeze<')
-    const dispatcherAt = sqlite.indexOf('const webhookDispatcher = createWebhookDispatcher(')
+    const dispatcherAt = sqlite.indexOf(
+      'const integrationModules = composeDaemonIntegrationModules(',
+    )
     const appAt = sqlite.indexOf('const appComposition: SqliteAppComposition<')
     const osAt = sqlite.indexOf('const employeeOs = composeDigitalEmployee(')
     const workerAt = sqlite.indexOf('const employeeOsRuntimeFactory =')
@@ -70,10 +72,7 @@ describe('RFC-359 W12 —— WorkStart is complete at construction', () => {
     const ownerAt = postgresql.indexOf('const digitalEmployee = composeDigitalEmployee(')
     expect(portAt).toBeGreaterThan(0)
     expect(ownerAt).toBeGreaterThan(portAt)
-    const port = postgresql.slice(
-      portAt,
-      postgresql.indexOf('const webhookDeliveryRuntime', portAt),
-    )
+    const port = postgresql.slice(portAt, postgresql.indexOf('const integrationModules', portAt))
     expect(port).toContain('await digitalEmployee.runtime.commands.launchWork({')
     expect(port).toContain('eventOrigin: request.origin')
     expect(port).toContain('return { caseId: result.caseRef.id }')

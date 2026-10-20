@@ -42,7 +42,7 @@ import { forcedPortPathsForTask } from '@/modules/task-execution/public/queries'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
-import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
+import { composeFusionOperationsFor } from '../src/modules/knowledge-evolution/composition/fusion'
 import {
   createManagedSkill,
   type SkillFsOptions,
@@ -138,7 +138,7 @@ async function build(): Promise<Harness> {
     appHome,
     deps: {
       db,
-      operations: composeSqliteFusionOperations({
+      operations: composeFusionOperationsFor({
         ...TEST_SQLITE_FUSION_PARTICIPANTS,
         db,
         appHome,

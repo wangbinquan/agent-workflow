@@ -31,7 +31,7 @@ import {
   rejectFusion,
   type FusionDeps,
 } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
-import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
+import { composeFusionOperationsFor } from '../src/modules/knowledge-evolution/composition/fusion'
 import type {
   FusionEngineTaskLaunch,
   FusionEngineTaskOperations,
@@ -142,7 +142,7 @@ describeEachProvider(
         version: 1,
       })
       const engine = fakeEngineTasks()
-      const operations = composeSqliteFusionOperations({
+      const operations = composeFusionOperationsFor({
         memoryMembership: composeSkillMemoryFusionParticipantFactory(),
         skillVersionCommit: composeSkillVersionCommitParticipantFactory({ skillContent: binding }),
         db,

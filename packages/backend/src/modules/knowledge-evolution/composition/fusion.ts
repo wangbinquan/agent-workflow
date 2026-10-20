@@ -83,10 +83,5 @@ export function composeFusionOperationsFor(
   })
 }
 
-/** 旧名保留为装配别名，PG 装配收敛后删除。 */
-export {
-  composeFusionOperationsFor as composePostgresqlFusionOperations,
-  composeFusionOperationsFor as composeSqliteFusionOperations,
-  composeFusionPersistenceFor as composePostgresqlFusionPersistence,
-  composeFusionPersistenceFor as composeSqliteFusionPersistence,
-}
+/** RFC-381 起两个 provider 的融合运营都经 `composeFusionOperationsFor`；持久化旧名仍由系统运维恢复使用。 */
+export { composeFusionPersistenceFor as composeSqliteFusionPersistence }

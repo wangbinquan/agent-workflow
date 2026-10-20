@@ -1,3 +1,16 @@
+import { materializingSpaces } from '@/services/gc'
+import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
+import {
+  composeDaemonScheduledTaskModules,
+  type DaemonScheduledTaskModules,
+} from '@/cli/daemonModules/scheduledTasks'
+import {
+  composeDaemonIntegrationModules,
+  type DaemonIntegrationModules,
+} from '@/cli/daemonModules/integration'
+import { composeDaemonFusionModules, type DaemonFusionModules } from '@/cli/daemonModules/fusion'
+import { taskExecutionModule } from '@/modules/task-execution/composition'
+import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import {
   DAEMON_PROVIDER_CORE_ADAPTERS,
   standaloneModuleAdapters,
@@ -174,16 +187,15 @@ import { mountDaemonRoutes } from '@/routes/daemon'
 import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
 import { mountWebhookIngressRoutes } from '@/routes/webhooks'
-import {
-  supportsEventCenterCodeHostDelivery,
-  type WebhookDispatcher,
-} from '@/services/webhook/dispatcherTypes'
+import { type WebhookDispatcher } from '@/services/webhook/dispatcherTypes'
+
 import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
 import {
   createEventAutomationDelegatedContextBinding,
   type IdentityAccessModule,
   type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
+
 import type { CommandContext } from '@/modules/identity-access/public/participants'
 import { type SkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 import type {
@@ -208,7 +220,7 @@ import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resourc
 import type { updateResourceAcl } from '@/modules/resource-catalog/composition/resourceAcl'
 import { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
 import { resourceAclAudienceAuthority } from '@/modules/resource-catalog/domain/resourceAccess'
-import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
+
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type {
@@ -240,7 +252,7 @@ import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
 import type { composeMemoryCatalogOperations } from '@/modules/memory/composition'
-import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
+
 import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
@@ -365,10 +377,9 @@ import {
   composeDigitalEmployeePlatformInventoryParticipant,
   composeDigitalEmployeeTaskCatalogSource,
   composeDigitalEmployeeWriterCutoverFor,
-  createEmployeeAutomationWorkStartProvider,
   createEmployeeInputArtifactStore,
 } from '@/modules/digital-employee/composition'
-import { assertNotBuiltin } from '@/services/systemResources'
+
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
 import type {
@@ -400,14 +411,10 @@ import type {
 } from '@/modules/development-automation/public/operations'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import {
-  composeEventCenter,
-  createEventAutomationWorkIntentStore,
-  deferEventCenterModule,
-  type EventCenterAutomationCapability,
   type EventCenterModule,
-  selectLocalCustomObserverProgramFactory,
   type CustomObserverProgramFactory,
 } from '@/modules/event-center/composition'
+
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeReactionExecutionProvider,
@@ -427,12 +434,12 @@ import {
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import {
-  createTaskAutomationWorkStartProvider,
   createSqliteTaskExecutionLaunchParticipant,
   createSqliteTaskRouteLaunchOperations,
   type TaskExecutionLaunchParticipant,
   type SqliteTaskRouteLaunchDependencies,
 } from '@/modules/task-execution/composition/taskRouteLaunch'
+
 import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { createTaskExecutionTriggerParticipant } from '@/modules/task-execution/composition/triggerExecution'
@@ -477,7 +484,7 @@ import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/comp
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { composeWorkgroupTaskRoomContinuationDriver } from '@/services/task'
-import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
+
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { createResourcePackagePluginInstaller } from '@/services/resourcePackage/pluginInstallerAdapter'
 import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
@@ -508,46 +515,22 @@ import {
   type AttemptContextStorePort,
   composeDevelopmentAdmissionLookup,
   createDevelopmentMissionExecutionTerminalObserver,
-  createMissionCodeHostEventContinuation,
   type DevelopmentAdmissionLookup,
   type DevelopmentAutomationModule,
 } from '@/modules/development-automation/composition'
+
 import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
 import {
   buildDevelopmentDeliveryDeps,
   buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
-  resolveDevelopmentRepoBinding,
-  type DevelopmentDeliveryProvider,
 } from '@/services/developmentDeliveryDeps'
-import {
-  composeDevelopmentApprovalEventObserver,
-  composeDevelopmentCodeHostEventObserver,
-  composeDevelopmentEmployeeEventObserver,
-} from '@/modules/integration/composition/digitalEmployeeEventObserver'
-import { composeSelectedApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
-import {
-  composeIntegrationTriggerResourceQueries,
-  composeScheduledTaskRuntimeFor,
-} from '@/modules/integration/composition/scheduledTasks'
-import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
-import { composeWebhookTriggerServiceDependenciesFor } from '@/modules/integration/composition/webhookDispatch'
-import { composeWebhookTriggerValidation } from '@/modules/integration/composition/webhookAdmission'
+
 import type { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeSelectedRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
-import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
-import {
-  createCodeHostWebhookDeliveryConsumer,
-  createCodeHostWebhookRoutingDirectory,
-} from '@/modules/integration/composition'
-import {
-  composeWebhookDeliveryRuntimeFor,
-  composeWebhookIngressPersistenceFor,
-  type WebhookIngressPersistence,
-} from '@/modules/integration/composition/webhookIngress'
-import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
-import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
-import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
+
+import { type WebhookIngressPersistence } from '@/modules/integration/composition/webhookIngress'
+
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
@@ -565,8 +548,7 @@ import {
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
-import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
-import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
+
 import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
@@ -600,6 +582,9 @@ export interface AppDeps {
   resourceCatalogModules?: DaemonResourceCatalogModules
   observationModules?: DaemonObservationModules
   memoryModules?: DaemonMemoryModules
+  scheduledTaskModules?: DaemonScheduledTaskModules
+  integrationModules?: DaemonIntegrationModules
+  fusionModules?: DaemonFusionModules
   /** The same complete store selection serves skill editing and boot recovery. */
   skillContent?: SkillContentBinding
   employeePrograms?: ProgramArtifactPort
@@ -870,6 +855,9 @@ export interface AppDeps {
 type SqliteAppDeps = AppDeps & { readonly db: DbClient }
 
 type RuntimeComposedAppDeps = SqliteAppDeps & {
+  readonly scheduledTaskModules: DaemonScheduledTaskModules
+  readonly integrationModules: DaemonIntegrationModules
+  readonly fusionModules: DaemonFusionModules
   readonly observationModules: DaemonObservationModules
   readonly resourceCatalogModules: DaemonResourceCatalogModules
   readonly repositoryCredentials: DaemonRepositoryCredentials
@@ -910,14 +898,12 @@ function hasIntegrationTriggerResources(
 function withIntegrationTriggerResources(
   db: DbClient,
   identityAccess: IdentityAccessRuntime,
+  integrationTriggerResources: IntegrationTriggerResourceBinding,
 ): IntegrationTriggerIdentityAccess {
   if (hasIntegrationTriggerResources(identityAccess)) return identityAccess
   return Object.freeze({
     ...identityAccess,
-    integrationTriggerResources: composeIntegrationTriggerResourceQueries(
-      db,
-      composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
-    ),
+    integrationTriggerResources,
     taskExecutionResources: createTaskExecutionResourceBinding(
       db,
       composeTaskExecutionResourceBinding(taskExecutionResourceDependencies),
@@ -1497,71 +1483,6 @@ function composeLegacyConfigConcurrencyHotApply(
   })
 }
 
-function composeApplicationEventCenter(
-  deps: SqliteAppDeps,
-  developmentDeliveryProvider: DevelopmentDeliveryProvider,
-  automation: EventCenterAutomationCapability,
-  configuration: ApplicationConfigurationQueries,
-  developmentPurposeRoot: SelectedDevelopmentPurposeRoot,
-  unstarted?: UnstartedApplicationScope,
-): EventCenterModule {
-  const approvalGateway = composeSelectedApprovalGatewayRunnerFor(
-    deps.db,
-    developmentPurposeRoot.approval,
-  )
-  const missionContinuation = createMissionCodeHostEventContinuation(deps.db)
-  const codeHostDeliveryDispatcher =
-    deps.webhookDispatcher !== undefined &&
-    supportsEventCenterCodeHostDelivery(deps.webhookDispatcher)
-      ? deps.webhookDispatcher
-      : null
-  const initialization = composeEventCenter({
-    beforeObservationWrite: deps.beforeEventObservationWrite,
-    db: deps.db,
-    customObserverPrograms: selectLocalCustomObserverProgramFactory(deps.customObserverPrograms),
-    typePackageDescriptorJsons: [
-      developmentEmployeeTypePackage.descriptorJson,
-      codeHostEventCatalogJson,
-      taskLifecycleEventCatalogJson,
-      digitalEmployeeLifecycleEventCatalogJson,
-    ],
-    observer: composeDevelopmentEmployeeEventObserver({
-      codeHost: composeDevelopmentCodeHostEventObserver({
-        binding: (repositoryId) =>
-          resolveDevelopmentRepoBinding(developmentDeliveryProvider, repositoryId),
-      }),
-      approval: composeDevelopmentApprovalEventObserver({ gateway: approvalGateway }),
-    }),
-    routingSubscriptions: createCodeHostWebhookRoutingDirectory(deps.db, missionContinuation),
-    automation,
-    deliveryConsumers:
-      codeHostDeliveryDispatcher === null
-        ? []
-        : [
-            createCodeHostWebhookDeliveryConsumer(
-              deps.db,
-              codeHostDeliveryDispatcher,
-              missionContinuation,
-            ),
-          ],
-    deliveryRetryLimits: {
-      async current() {
-        const config = await configuration.read()
-        return {
-          defaultNodeRetries: config.defaultNodeRetries,
-          sessionRestartBudget: config.sessionRestartBudget,
-        }
-      },
-    },
-  })
-  void unstarted?.trackReady(
-    initialization.then(async (module) => {
-      await module.initialize()
-    }),
-  )
-  return deferEventCenterModule(initialization)
-}
-
 function composeFallbackDevelopmentAutomation(
   deps: RuntimeComposedAppDeps &
     RepositoryBootstrap & { readonly workspacePresence: WorkspacePresenceQueries },
@@ -1734,10 +1655,7 @@ function composeFallbackDevelopmentAutomation(
       agents,
       onTerminal: terminalObserver.script,
     }),
-    approvalGateway: composeSelectedApprovalGatewayRunnerFor(
-      deps.db,
-      deps.developmentPurposeRoot.approval,
-    ),
+    approvalGateway: deps.integrationModules.developmentApprovalGateway,
   })
   return automation
 }
@@ -1835,9 +1753,17 @@ export function composeSqliteApplicationDeps(
       identityEvents: { authorityRevisionChanged() {} },
       presenceProjection: { publish() {} },
     })
+  const scheduledTaskModules: DaemonScheduledTaskModules =
+    deps.scheduledTaskModules ??
+    composeDaemonScheduledTaskModules({
+      db: deps.db,
+      assertAgentIntegrity: (agentIds) =>
+        agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
+    })
   const identityAccess = withIntegrationTriggerResources(
     deps.db,
     deps.identityAccess ?? providerCore.identityAccess,
+    scheduledTaskModules.scheduledTaskRuntime.integrationTriggerResources,
   )
   const authRuntime = deps.authRuntime ?? providerCore.authRuntime
   const tokenCallAudit = deps.tokenCallAudit ?? providerCore.tokenCallAudit
@@ -1923,8 +1849,6 @@ export function composeSqliteApplicationDeps(
       },
     })
   const { memoryOperations, memoryInjectionQueries, memoryCatalog } = memoryModules
-  const webhookIngressPersistence =
-    deps.webhookIngressPersistence ?? composeWebhookIngressPersistenceFor(deps.db)
   const configConcurrencyHotApply =
     deps.configConcurrencyHotApply ?? composeLegacyConfigConcurrencyHotApply(deps.db)
   const taskExecutionPersistence = createTaskExecutionPersistence(deps.db, {
@@ -2030,45 +1954,82 @@ export function composeSqliteApplicationDeps(
       questionDispatches: createQuestionDispatchCommand(deps.db),
       clarifyDecisions: createClarifyDecisionCommand(deps.db, memoryOperations.distillCommands),
     })
-  const eventAutomationWorkIntents = createEventAutomationWorkIntentStore(deps.db)
-  const eventAutomationContexts = createEventAutomationDelegatedContextBinding(
-    identityAccess.delegatedRequests,
-  )
-  const eventAutomation: EventCenterAutomationCapability = Object.freeze({
-    kind: 'automation',
-    workIntents: eventAutomationWorkIntents,
-    delegatedContexts: eventAutomationContexts.factory,
-    taskWorkStart: createTaskAutomationWorkStartProvider({
+  const fusionModules: DaemonFusionModules =
+    deps.fusionModules ??
+    composeDaemonFusionModules({
       db: deps.db,
-      origins: eventAutomationWorkIntents,
-      contexts: eventAutomationContexts,
-      resources: identityAccess.taskExecutionResources,
-      async launch(request) {
-        const task = await apiComposition.taskExecutionLaunches.launch(request)
-        return { taskId: task.id }
+      appHome,
+      memories: memoryCatalog,
+      skillContent: deps.skillContent,
+      taskLaunchConfiguration,
+      tasks: createSqliteFusionEngineTaskOperations({
+        db: deps.db,
+        appHome,
+        schedulerDriver,
+        workspaces: createFileFusionWorkspaceEffects({ appHome }),
+        startDeps: {
+          repositoryWorkspace: repositoryBootstrap.repositoryWorkspaceStore,
+          runtimeSessionLeases: observationModules.runtimeSessionLeases,
+          configPath: deps.configPath,
+          actorUserId: SYSTEM_USER_ID,
+          secretBox: deps.secretBox,
+          identityAccess,
+          launchConfiguration: taskLaunchConfiguration.continuationQueries,
+        },
+      }),
+    })
+  const integrationModules: DaemonIntegrationModules =
+    deps.integrationModules ??
+    composeDaemonIntegrationModules({
+      db: deps.db,
+      secretBox: deps.secretBox,
+      configuration,
+      scheduledTaskRuntime: scheduledTaskModules.scheduledTaskRuntime,
+      identityAccess,
+      bindEventAutomationContexts: createEventAutomationDelegatedContextBinding,
+      runtimeRegistry: taskExecutionModule.runtimeRegistry,
+      workspaceMaintenance: composeWorkspaceMaintenanceCommand({
+        db: deps.db,
+        appHome,
+        terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
+        isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
+        invalidateWorkspacePath: invalidateCallGraphIndex,
+      }),
+      taskExecutions: {
+        async launch(request) {
+          const task = await apiComposition.taskExecutionLaunches.launch(request)
+          return { taskId: task.id }
+        },
+        cancel: (taskId) => composeTaskCancellation(deps.db).cancel(taskId),
       },
-    }),
-    employeeWorkStart: createEmployeeAutomationWorkStartProvider({
-      db: deps.db,
-      origins: eventAutomationWorkIntents,
-      contexts: eventAutomationContexts,
-      launchWork: (request) => apiComposition.digitalEmployeeWorkStart.launch(request),
-    }),
-  })
+      digitalEmployeeWorkStart: {
+        launch: (request) => apiComposition.digitalEmployeeWorkStart.launch(request),
+      },
+      developmentDeliveryProvider: repositoryBootstrap.developmentDeliveryProvider,
+      developmentPurposeRoot,
+      adapters: {
+        beforeEventObservationWrite: deps.beforeEventObservationWrite,
+        customObserverPrograms: deps.customObserverPrograms,
+        webhookDispatcher: deps.webhookDispatcher,
+        webhookTerminalControl: deps.webhookTerminalControl,
+        eventCenter: deps.digitalEmployeeEventCenter,
+        webhookIngressPersistence: deps.webhookIngressPersistence,
+      },
+    })
+  if (deps.integrationModules === undefined && deps.digitalEmployeeEventCenter === undefined) {
+    void unstarted?.trackReady(integrationModules.eventCenter.initialize())
+  }
   const runtimeDeps: RuntimeComposedAppDeps = {
-    ...(deps.digitalEmployeeEventCenter === undefined
-      ? {
-          ...deps,
-          digitalEmployeeEventCenter: composeApplicationEventCenter(
-            deps,
-            repositoryBootstrap.developmentDeliveryProvider,
-            eventAutomation,
-            configuration,
-            developmentPurposeRoot,
-            unstarted,
-          ),
-        }
-      : deps),
+    ...deps,
+    scheduledTaskModules,
+    integrationModules,
+    fusionModules,
+    digitalEmployeeEventCenter: integrationModules.eventCenter,
+    // Direct HTTP tests may intentionally omit dispatch/terminal ports. Session bundles
+    // are always fully wired; retain the original optional seams for the unstarted fallback.
+    webhookDispatcher: deps.integrationModules?.webhookDispatcher ?? deps.webhookDispatcher,
+    webhookTerminalControl:
+      deps.integrationModules?.webhookTerminalControl ?? deps.webhookTerminalControl,
     ...selectDevelopmentWorkspaceEffectBinding({
       actionWorkspaceEffects: deps.actionWorkspaceEffects,
       automationWorkspaceEffects: deps.automationWorkspaceEffects,
@@ -2084,7 +2045,7 @@ export function composeSqliteApplicationDeps(
     healthDatabase,
     systemOperations,
     maintenanceDisk,
-    webhookIngressPersistence,
+    webhookIngressPersistence: integrationModules.webhookIngressPersistence,
     runtimeRegistry,
     configConcurrencyHotApply,
     identityAccess,
@@ -2255,7 +2216,6 @@ export function composeSqliteApplicationDeps(
     agentResourceIntegrity,
     intentApply,
     taskExecutionPersistence,
-    eventAutomation,
     applicationConfiguration,
     configuration,
     taskLaunchConfiguration,
@@ -2502,7 +2462,6 @@ function composeSqliteApiRouteMounts(
   agentResourceIntegrity: AgentResourceIntegrityComposition,
   intentApply: IntentApplyOperations,
   taskExecutionPersistence: ReturnType<typeof createTaskExecutionPersistence>,
-  eventAutomation: EventCenterAutomationCapability,
   applicationConfiguration: ApplicationConfigurationBinding,
   configuration: ApplicationConfigurationQueries,
   taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>,
@@ -2719,10 +2678,7 @@ function composeSqliteApiRouteMounts(
     },
     collaborationContext: deps.collaborationContext,
   }
-  const approvalGateway = composeSelectedApprovalGatewayRunnerFor(
-    deps.db,
-    deps.developmentPurposeRoot.approval,
-  )
+  const approvalGateway = deps.integrationModules.developmentApprovalGateway
   const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
     automationWorkspaceEffects: deps.automationWorkspaceEffects,
     db: deps.db,
@@ -2737,16 +2693,7 @@ function composeSqliteApiRouteMounts(
     conflictMerge: bindConflictMergeParticipant({ effects: deps.conflictMergeWorkspaceEffects }),
   })
   const executionContracts = deps.executionContracts
-  const eventCenter =
-    deps.digitalEmployeeEventCenter ??
-    composeApplicationEventCenter(
-      deps,
-      deps.developmentDeliveryProvider,
-      eventAutomation,
-      configuration,
-      deps.developmentPurposeRoot,
-      unstarted,
-    )
+  const eventCenter = deps.integrationModules.eventCenter
   const digitalEmployeeAgentTemplates =
     deps.digitalEmployeeAgentTemplates ?? deps.resourceCatalogModules.digitalEmployeeAgentTemplates
   const digitalEmployee = composeDigitalEmployee({
@@ -2769,7 +2716,7 @@ function composeSqliteApiRouteMounts(
       },
     },
     inputArtifacts,
-    connectionCatalog: composeDevelopmentToolConnectionCatalog(deps.db),
+    connectionCatalog: deps.integrationModules.developmentToolConnections,
     runtime: {
       eventCenter: eventCenter.participant,
       codecs: [developmentEmployeeRuntimeCodec],
@@ -3121,16 +3068,7 @@ function composeSqliteApiRouteMounts(
       taskBroadcaster.broadcast(TASK_CHANNEL(taskId), { id: -1, ...event })
     },
   })
-  const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
-    db: deps.db,
-    resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
-    validation: Object.freeze({
-      assertWorkflowLaunchable: (workflow) => assertWorkflowSnapshotLaunchable(deps.db, workflow),
-      assertAgentIntegrity: (agentIds) =>
-        agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
-    } satisfies Parameters<typeof composeScheduledTaskRuntimeFor>[0]['validation']),
-    resourceAclChanged: () => triggerRevalidation('resource-acl-changed'),
-  })
+  const { scheduledTaskRuntime } = deps.scheduledTaskModules
   // RFC-359 W57 —— `/api/overview` 两个 provider 共用这一份装配（PG 侧见
   // `cli/postgresqlDaemonApplication.ts`）。此前 SQLite 走
   // `platform/persistence/sqlite/systemOverviewReadModel.ts::buildOverview`、PG 走这一条，
@@ -3166,18 +3104,8 @@ function composeSqliteApiRouteMounts(
         }),
       }),
     )
-  const webhookEndpointService = composeWebhookEndpointServiceDependencies({
-    db: deps.db,
-    configuration,
-    secretBox: deps.secretBox,
-  })
-  // RFC-359 AC-1（plan §5gb）：触发器服务依赖的装配收成一份后，`validateSaveable` 由**调用方**
-  // 提供（PostgreSQL bootstrap 本来就是这个姿势）。这里自己造一次再传进去。
-  const webhookTriggerService = composeWebhookTriggerServiceDependenciesFor(
-    deps.db,
-    composeWebhookTriggerValidation(scheduledTaskRuntime.operations, configuration),
-  )
-  const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(deps.db)
+  const { webhookEndpointService, webhookTriggerService, webhookDeliveryRuntime } =
+    deps.integrationModules
   const capabilityTemplateRouteDeps = Object.freeze({
     codeHistoryQueries: deps.codeHistoryQueries,
     capabilityTemplates: deps.resourceCatalogModules.capabilityTemplateOperations,
@@ -3322,49 +3250,7 @@ function composeSqliteApiRouteMounts(
     content: (workspaceRef) =>
       deps.workspaceContent?.bind(workspaceRef) ?? createFileWorkspaceContentEffects(workspaceRef),
   } satisfies WorktreeFilesRouteDeps)
-  const fusionOperations = composeSqliteFusionOperations({
-    // RFC-353 T6/T7：跨 context 的 provider 装配一律在 bootstrap 完成（RFC-317 R2 只许经
-    // exact public 交换合同，RFC-349 又不许 public 面点名 provider 适配器）。
-    memoryMembership: composeSkillMemoryFusionParticipantFactory(),
-    skillVersionCommit: composeSkillVersionCommitParticipantFactory({
-      skillContent: deps.skillContent,
-    }),
-    db: deps.db,
-    appHome,
-    memories: memoryCatalog,
-    tasks: createSqliteFusionEngineTaskOperations({
-      db: deps.db,
-      appHome,
-      schedulerDriver,
-      // RFC-370 §10 V20: standalone engine workspaces under the app home.
-      workspaces: createFileFusionWorkspaceEffects({ appHome }),
-      startDeps:
-        taskLaunchConfiguration.selectedQueries === undefined
-          ? buildStartTaskDeps(
-              deps.db,
-              schedulerDriver,
-              deps.configPath,
-              SYSTEM_USER_ID,
-              deps.secretBox,
-              identityAccess,
-              {
-                repositoryWorkspace: deps.repositoryWorkspaceStore,
-                runtimeSessionLeases: deps.observationModules.runtimeSessionLeases,
-              },
-            )
-          : {
-              db: deps.db,
-              schedulerDriver,
-              repositoryWorkspace: deps.repositoryWorkspaceStore,
-              runtimeSessionLeases: deps.observationModules.runtimeSessionLeases,
-              configPath: deps.configPath,
-              actorUserId: SYSTEM_USER_ID,
-              secretBox: deps.secretBox,
-              identityAccess,
-              launchConfiguration: taskLaunchConfiguration.selectedQueries,
-            },
-    }),
-  })
+  const { fusionOperations, launchConfiguration: fusionLaunchConfiguration } = deps.fusionModules
   const apiRoutes = Object.freeze({
     config: (app) =>
       mountConfigRoutes(app, {
@@ -3575,9 +3461,7 @@ function composeSqliteApiRouteMounts(
     fusion: (app) =>
       mountFusionRoutes(app, {
         operations: fusionOperations,
-        ...(taskLaunchConfiguration.selectedQueries === undefined
-          ? {}
-          : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
+        launchConfiguration: fusionLaunchConfiguration,
         configPath: deps.configPath,
         directAuthority: identityAccess.directAuthority,
       }),

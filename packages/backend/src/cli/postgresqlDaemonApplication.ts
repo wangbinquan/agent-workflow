@@ -1,3 +1,13 @@
+import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
+import {
+  composeDaemonScheduledTaskModules,
+  type DaemonScheduledTaskModules,
+} from '@/cli/daemonModules/scheduledTasks'
+import {
+  composeDaemonIntegrationModules,
+  type DaemonIntegrationModules,
+} from '@/cli/daemonModules/integration'
+import { composeDaemonFusionModules, type DaemonFusionModules } from '@/cli/daemonModules/fusion'
 import {
   DAEMON_PROVIDER_CORE_ADAPTERS,
   standaloneModuleAdapters,
@@ -146,10 +156,8 @@ import {
   type RuntimeDiagnosticDependencies,
 } from '@/modules/runtime-management/composition/runtimeManagement'
 import type { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
-import {
-  supportsEventCenterCodeHostDelivery,
-  type WebhookDispatcher,
-} from '@/services/webhook/dispatcherTypes'
+import { type WebhookDispatcher } from '@/services/webhook/dispatcherTypes'
+
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
 import { DrizzleOidcProviderRepository } from '@/modules/identity-access/public/operations'
@@ -164,7 +172,7 @@ import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/
 import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import type { composePostgresqlMemoryOperations } from '@/modules/memory/composition'
-import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
+
 import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
 import { type PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
 import {
@@ -174,7 +182,7 @@ import {
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
-import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
+
 import {
   composePostgresqlResourcePackageCatalog,
   composePostgresqlResourcePackageProvider,
@@ -233,10 +241,10 @@ import {
   composeDigitalEmployee,
   composeDigitalEmployeeBootstrapReadsFor,
   composeDigitalEmployeeWriterCutoverFor,
-  createEmployeeAutomationWorkStartProvider,
   createEmployeeInputArtifactStore,
   createEmployeeReactionRoundQueries,
 } from '@/modules/digital-employee/composition'
+
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { ensureDigitalEmployeeHostWorkflow } from '@/modules/task-execution/composition/actionExecutionRunners'
 import {
@@ -278,7 +286,7 @@ import {
   type MissionInputBlobPersistence,
 } from '@/modules/development-automation/composition/missionInputUploads'
 import { composeSelectedRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
-import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
+
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
@@ -304,52 +312,17 @@ import {
 } from '@/modules/intent/composition/apply'
 import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
-import { composePostgresqlFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
+
 import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
-import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
-import { composeScheduledTaskRuntimeFor } from '@/modules/integration/composition/scheduledTasks'
-import {
-  composeWebhookLaunchAdmission,
-  composeWebhookTriggerValidation,
-} from '@/modules/integration/composition/webhookAdmission'
-import {
-  composeWebhookDispatchPersistenceFor,
-  composeWebhookTriggerServiceDependenciesFor,
-  createPostgresqlWebhookExecutionRuntime,
-} from '@/modules/integration/composition/webhookDispatch'
-import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
-import {
-  composeWebhookDeliveryRuntimeFor,
-  composeWebhookIngressPersistenceFor,
-} from '@/modules/integration/composition/webhookIngress'
-import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
-import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
-import { createWebhookRepositoryResolver } from '@/modules/integration/infrastructure/webhookRepositoryResolver'
-import {
-  createCodeHostWebhookDeliveryConsumer,
-  createCodeHostWebhookRoutingDirectory,
-} from '@/modules/integration/composition'
+
+import type { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
+
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
-import {
-  composeDevelopmentApprovalEventObserver,
-  composeDevelopmentCodeHostEventObserver,
-  composeDevelopmentEmployeeEventObserver,
-} from '@/modules/integration/composition/digitalEmployeeEventObserver'
-import { composeSelectedApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
-import {
-  composeEventCenter,
-  createEventAutomationWorkIntentStore,
-  selectLocalCustomObserverProgramFactory,
-  type CustomObserverProgramFactory,
-} from '@/modules/event-center/composition'
-import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
-import { createTaskAutomationWorkStartProvider } from '@/modules/task-execution/composition/taskRouteLaunch'
-import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
-import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
-import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
-import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
+
+import { type CustomObserverProgramFactory } from '@/modules/event-center/composition'
+
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
-import { createMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
+
 import { createDevelopmentMissionExecutionTerminalObserver } from '@/modules/development-automation/composition/executionTerminalObserver'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
@@ -372,10 +345,8 @@ import { materializingSpaces } from '@/services/gc'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { runtimeConfigOpts } from '@/services/task'
-import {
-  validateWorkflowDef,
-  type ValidatorContext,
-} from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+import { type ValidatorContext } from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
+
 import { createLogger } from '@/util/log'
 import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
@@ -386,8 +357,7 @@ import type { ResolvedDatabaseProviderRuntime } from '@/platform/persistence/dat
 import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { createOidcProvidersService } from '@/services/oidcProviders'
-import { resolveDevelopmentRepoBinding } from '@/services/developmentDeliveryDeps'
-import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
+
 import { batchOwnerUserId } from '@/services/repoBatchImport'
 import { redactEventPayload } from '@/services/tokenRedaction'
 import { directOperationAuthority } from '@/routes/operationAuthority'
@@ -407,9 +377,7 @@ import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
 import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
-import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
-import { ConflictError } from '@/util/errors'
-import { assertNotBuiltin } from '@/services/systemResources'
+
 import {
   resumeQueuedIntentWorkingSets,
   type IntentDispatchDeps,
@@ -619,7 +587,7 @@ export interface PostgresqlDaemonApplicationRuntime {
    * `AppDeps.collaborationContext` 塞回去——那个形状把用例钉死在 SQLite 上。
    */
   readonly collaborationContext: CollaborationRouteContext
-  readonly scheduledTasks: ReturnType<typeof composeScheduledTaskRuntimeFor>
+  readonly scheduledTasks: DaemonScheduledTaskModules['scheduledTaskRuntime']
   readonly scheduledTaskIdentityAccess: TaskExecutionBackgroundStartDependencies['scheduled']['identityAccess']
   readonly memory: ReturnType<typeof composePostgresqlMemoryOperations>
   readonly developmentAutomation: ReturnType<typeof composeDevelopmentAutomation>
@@ -627,8 +595,8 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly employeeWriterCutover: ReturnType<typeof composeDigitalEmployeeWriterCutoverFor>
   readonly archivedNodeEvents?: TaskArchivedEventsReader
   readonly crewStationEvents?: CrewStationEventIngress
-  readonly eventCenter: Awaited<ReturnType<typeof composeEventCenter>>
-  readonly fusion: ReturnType<typeof composePostgresqlFusionOperations>
+  readonly eventCenter: DaemonIntegrationModules['eventCenter']
+  readonly fusion: DaemonFusionModules['fusionOperations']
   readonly resourceLimits: ReturnType<typeof composePostgresqlResourceLimitOperations>
   /** RFC-350：不活跃超时收割（僵尸任务）的 provider-bound operations。 */
   readonly taskIdleTimeout: TaskIdleTimeoutOperations
@@ -1195,9 +1163,7 @@ export async function composePostgresqlApplication(
       workspaces:
         input.fusionWorkspaceEffects ??
         createFileFusionWorkspaceEffects({ appHome: input.appHome }),
-      ...(taskLaunchConfiguration.selectedQueries === undefined
-        ? {}
-        : { runConfiguration: selectedRunConfig }),
+      runConfiguration: () => fusionModules.runConfiguration(),
     },
     workgroupTaskRoom: { collaboration: workgroupClarify },
   })
@@ -1359,18 +1325,17 @@ export async function composePostgresqlApplication(
     db: input.db,
     context: boundCollaborationContext,
   })
-  const fusionOperations = composePostgresqlFusionOperations({
-    // RFC-353 T6/T7：同 SQLite 侧——provider 装配只在 bootstrap 根上完成。
-    memoryMembership: composeSkillMemoryFusionParticipantFactory(),
-    // RFC-370 §10 V20: hosted skills live in the database binding; seeds and versions follow it.
-    skillVersionCommit: composeSkillVersionCommitParticipantFactory({
-      skillContent: input.skillContent,
-    }),
+  const fusionModules: DaemonFusionModules = composeDaemonFusionModules({
     db: input.db,
     appHome: input.appHome,
+    skillContent: input.skillContent,
     memories: memoryCatalog,
     tasks: taskExecutionProvider.fusion,
+    taskLaunchConfiguration,
+    configPath: input.configPath,
+    daemonGeneration: input.provider.runtime.generationId,
   })
+  const { fusionOperations } = fusionModules
   // RFC-223 PR-4 / RFC-359 W3-T15：融合 provenance 修复必须在任何融合恢复 / 播种 / HTTP 观察到历史
   // name-only 行之前完成。fail-closed：不包 try，修复失败即 daemon 不起（与 cli/start.ts 同）。
   const taskExecutionCatalogSources = composeTaskExecutionCatalogSources(
@@ -1411,29 +1376,12 @@ export async function composePostgresqlApplication(
     },
   })
 
-  const integrationTriggerSnapshots = composeIntegrationTriggerResourceSnapshotFactory({
-    assertNotBuiltin,
-  })
-  const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
+  const scheduledTaskModules = composeDaemonScheduledTaskModules({
     db: input.db,
-    resourceSnapshots: integrationTriggerSnapshots,
-    validation: Object.freeze({
-      async assertWorkflowLaunchable(workflow) {
-        const result = validateWorkflowDef(workflow.definition, await validationContext.load())
-        const errors = result.issues.filter((issue) => (issue.severity ?? 'error') === 'error')
-        if (errors.length > 0) {
-          throw new ConflictError(
-            'workflow-invalid',
-            errors[0]?.message ?? 'workflow is not launchable',
-            { issues: errors },
-          )
-        }
-      },
-      assertAgentIntegrity: (agentIds) =>
-        classicCatalogs.agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
-    } satisfies Parameters<typeof composeScheduledTaskRuntimeFor>[0]['validation']),
-    resourceAclChanged: () => triggerRevalidation('resource-acl-changed'),
+    assertAgentIntegrity: (agentIds) =>
+      classicCatalogs.agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
   })
+  const { scheduledTaskRuntime } = scheduledTaskModules
   const integrationIdentityAccess = Object.freeze({
     ...identityAccess,
     integrationTriggerResources: scheduledTaskRuntime.integrationTriggerResources,
@@ -1450,109 +1398,34 @@ export async function composePostgresqlApplication(
       return { caseId: result.caseRef.id }
     },
   })
-  const eventAutomationWorkIntents = createEventAutomationWorkIntentStore(input.db)
-  const eventAutomationContexts = createEventAutomationDelegatedContextBinding(
-    identityAccess.delegatedRequests,
-  )
-  const taskAutomationWorkStart = createTaskAutomationWorkStartProvider({
+  const integrationModules = composeDaemonIntegrationModules({
     db: input.db,
-    origins: eventAutomationWorkIntents,
-    contexts: eventAutomationContexts,
-    resources: taskExecutionResources,
-    launch: (request) => taskExecutionProvider.trigger.taskExecutions.launch(request),
-  })
-  const employeeAutomationWorkStart = createEmployeeAutomationWorkStartProvider({
-    db: input.db,
-    origins: eventAutomationWorkIntents,
-    contexts: eventAutomationContexts,
-    launchWork: (request) => digitalEmployeeWorkStart.launch(request),
-  })
-  const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(input.db)
-  const webhookTerminalControl = composeMrTerminalControl({
-    db: input.db,
-    // RFC-359 AC-1（第 14 刀）：参与者与装配都合一了；这一支交的收尾是 source-control 的
-    // `finalizeClaimedWorkspace`（与本文件驱动生命周期端口用的同一个）。此前这一格是空的，
-    // 无 driver 的源终止只能靠 durable 消费者异步收尾，回执返回时工作区还没真收掉。
-    taskTermination: composeTaskSourceTermination({
-      db: input.db,
-      finalizeWithoutDriver: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
-    }),
-  })
-  const composedWebhookDispatcher = createWebhookDispatcher({
-    persistence: composeWebhookDispatchPersistenceFor(input.db),
-    deliveryPersistence: composeWebhookDeliveryPersistenceFor(input.db),
+    secretBox: input.secretBox,
+    configuration,
+    scheduledTaskRuntime,
     identityAccess: integrationIdentityAccess,
-    getDefaultRuntime: async () => (await configuration.read()).defaultRuntime,
-    ...createPostgresqlWebhookExecutionRuntime({
-      taskExecutions: taskExecutionProvider.trigger.taskExecutions,
-      digitalEmployeeWorkStart,
-    }),
-    resolveRepo: createWebhookRepositoryResolver(input.db, input.secretBox),
-    admitLaunch: composeWebhookLaunchAdmission(scheduledTaskRuntime.operations),
-    terminalControl: webhookTerminalControl,
-  })
-  /**
-   * RFC-359 AC-6 —— 生效的 dispatcher。生产不传覆盖件，取的就是上面构造的那个，逐字不变；
-   * 测试注入桩时两个引擎观察到的是同一件事（这正是本 RFC 的目的：别让同一条判据在两个
-   * provider 上测的不是一回事）。能力不全的桩由下面几处 `supports*` 探测兜住。
-   */
-  const webhookDispatcher = input.webhookDispatcher ?? composedWebhookDispatcher
-  const developmentApprovalGateway = composeSelectedApprovalGatewayRunnerFor(
-    input.db,
-    developmentPurposeRoot.approval,
-  )
-  const missionEventContinuation = createMissionCodeHostEventContinuation(input.db)
-  const eventCenter = await composeEventCenter({
-    beforeObservationWrite: input.beforeEventObservationWrite,
-    db: input.db,
-    customObserverPrograms: selectLocalCustomObserverProgramFactory(input.customObserverPrograms),
-    typePackageDescriptorJsons: [
-      developmentEmployeeTypePackage.descriptorJson,
-      codeHostEventCatalogJson,
-      taskLifecycleEventCatalogJson,
-      collaborationCommittedEventCatalogJson,
-      digitalEmployeeLifecycleEventCatalogJson,
-    ],
-    observer: composeDevelopmentEmployeeEventObserver({
-      codeHost: composeDevelopmentCodeHostEventObserver({
-        binding: (repositoryId) =>
-          resolveDevelopmentRepoBinding(developmentDeliveryProvider, repositoryId),
-      }),
-      approval: composeDevelopmentApprovalEventObserver({ gateway: developmentApprovalGateway }),
-    }),
-    routingSubscriptions: createCodeHostWebhookRoutingDirectory(input.db, missionEventContinuation),
-    automation: {
-      kind: 'automation',
-      workIntents: eventAutomationWorkIntents,
-      delegatedContexts: eventAutomationContexts.factory,
-      taskWorkStart: taskAutomationWorkStart,
-      employeeWorkStart: employeeAutomationWorkStart,
-    },
-    // 同上：能力探测不到就不接这个消费者，与 `server.ts` 的
-    // `codeHostDeliveryDispatcher === null ? [] : [...]` 逐字同构。
-    deliveryConsumers: supportsEventCenterCodeHostDelivery(webhookDispatcher)
-      ? [
-          createCodeHostWebhookDeliveryConsumer(
-            input.db,
-            webhookDispatcher,
-            missionEventContinuation,
-          ),
-        ]
-      : [],
-    deliveryRetryLimits: {
-      async current() {
-        const current = await configuration.read()
-        return {
-          defaultNodeRetries: current.defaultNodeRetries,
-          sessionRestartBudget: current.sessionRestartBudget,
-        }
-      },
+    bindEventAutomationContexts: createEventAutomationDelegatedContextBinding,
+    runtimeRegistry: taskExecutionProvider.executionModule.runtimeRegistry,
+    workspaceMaintenance,
+    taskExecutions: taskExecutionProvider.trigger.taskExecutions,
+    digitalEmployeeWorkStart,
+    developmentDeliveryProvider,
+    developmentPurposeRoot,
+    adapters: {
+      customObserverPrograms: input.customObserverPrograms,
+      beforeEventObservationWrite: input.beforeEventObservationWrite,
+      crewStationEvents: input.crewStationEvents,
+      webhookDispatcher: input.webhookDispatcher,
     },
   })
-  const webhookTriggerService = composeWebhookTriggerServiceDependenciesFor(
-    input.db,
-    composeWebhookTriggerValidation(scheduledTaskRuntime.operations, configuration),
-  )
+  const {
+    webhookTerminalControl,
+    webhookDispatcher,
+    webhookDeliveryRuntime,
+    webhookTriggerService,
+    developmentApprovalGateway,
+    eventCenter,
+  } = integrationModules
   const integrationRoutes: PostgresqlAppCompositionInput['integration'] = Object.freeze({
     scheduledTasks: Object.freeze({
       identityAccess: integrationIdentityAccess,
@@ -1562,11 +1435,7 @@ export async function composePostgresqlApplication(
       getDefaultRuntime: async () => (await configuration.read()).defaultRuntime ?? null,
     }),
     webhookEndpoints: Object.freeze({
-      webhookEndpointService: composeWebhookEndpointServiceDependencies({
-        db: input.db,
-        configuration,
-        secretBox: input.secretBox,
-      }),
+      webhookEndpointService: integrationModules.webhookEndpointService,
     }),
     eventCenter,
     webhookTriggers: Object.freeze({
@@ -1710,7 +1579,7 @@ export async function composePostgresqlApplication(
       },
     },
     inputArtifacts: employeeInputArtifacts,
-    connectionCatalog: composeDevelopmentToolConnectionCatalog(input.db),
+    connectionCatalog: integrationModules.developmentToolConnections,
     runtime: {
       eventCenter: eventCenter.participant,
       codecs: [developmentEmployeeRuntimeCodec],
@@ -2025,8 +1894,8 @@ export async function composePostgresqlApplication(
     }),
     documentation: Object.freeze({ configuration }),
     webhookIngress: composeWebhookIngressTransport({
-      crewStationEvents: input.crewStationEvents,
-      webhookIngressPersistence: composeWebhookIngressPersistenceFor(input.db),
+      crewStationEvents: integrationModules.crewStationEvents,
+      webhookIngressPersistence: integrationModules.webhookIngressPersistence,
       secretBox: input.secretBox,
       digitalEmployeeEventCenter: eventCenter,
       webhookDispatcher,
@@ -2211,9 +2080,7 @@ export async function composePostgresqlApplication(
     fusion: Object.freeze({
       operations: fusionOperations,
       appHome: input.appHome,
-      ...(taskLaunchConfiguration.selectedQueries === undefined
-        ? {}
-        : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
+      launchConfiguration: fusionModules.launchConfiguration,
       configPath: input.configPath,
       directAuthority: identityAccess.directAuthority,
     }),
@@ -2487,7 +2354,7 @@ export async function composePostgresqlApplication(
     },
     'webhook-delivery-recovery': async () => {
       const recoveredDeliveries = await recoverInterruptedDeliveries(
-        composeWebhookDeliveryPersistenceFor(input.db),
+        integrationModules.webhookDeliveryPersistence,
       )
       if (recoveredDeliveries > 0) {
         log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
@@ -2546,7 +2413,7 @@ export async function composePostgresqlApplication(
     digitalEmployee,
     employeeWriterCutover,
     archivedNodeEvents: input.archivedNodeEvents,
-    crewStationEvents: input.crewStationEvents,
+    crewStationEvents: integrationModules.crewStationEvents,
     eventCenter,
     fusion: fusionOperations,
     resourceLimits: resourceLimitOperations,

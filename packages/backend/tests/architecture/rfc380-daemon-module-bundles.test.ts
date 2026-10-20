@@ -1,4 +1,4 @@
-// RFC-380 / RFC-376 hard gate: bundles are session-scoped, and HTTP only composes fallbacks.
+// RFC-380 / RFC-381 / RFC-376 hard gate: bundles are session-scoped, and HTTP only composes fallbacks.
 import { describe, expect, test } from 'bun:test'
 import ts from 'typescript'
 import { resolve } from 'node:path'
@@ -11,6 +11,9 @@ const BUNDLES = [
   'composeDaemonResourceCatalogModules',
   'composeDaemonObservationModules',
   'composeDaemonMemoryModules',
+  'composeDaemonScheduledTaskModules',
+  'composeDaemonIntegrationModules',
+  'composeDaemonFusionModules',
 ] as const
 const ROOTS = [
   ['cli/start.ts', 'composeSqliteProviderSession'],
@@ -77,6 +80,32 @@ const FACTORIES = new Set([
   'composeSqliteMemoryInjectionQueries',
   'composePostgresqlMemoryInjectionQueries',
   'composeMemoryCatalogOperations',
+  'composeScheduledTaskRuntimeFor',
+  'composeIntegrationTriggerResourceSnapshotFactory',
+  'composeTaskSourceTermination',
+  'composeMrTerminalControl',
+  'composeWebhookDispatchCore',
+  'composeWebhookDispatchPersistenceFor',
+  'composeWebhookDeliveryPersistenceFor',
+  'createWebhookDispatcher',
+  'createWebhookRepositoryResolver',
+  'composeWebhookLaunchAdmission',
+  'createWebhookDispatchExecutionRuntime',
+  'composeWebhookEndpointServiceDependencies',
+  'composeWebhookTriggerServiceDependenciesFor',
+  'composeWebhookTriggerValidation',
+  'composeWebhookDeliveryRuntimeFor',
+  'composeWebhookIngressPersistenceFor',
+  'createEventAutomationWorkIntentStore',
+  'createEventAutomationDelegatedContextBinding',
+  'createTaskAutomationWorkStartProvider',
+  'createEmployeeAutomationWorkStartProvider',
+  'composeEventCenter',
+  'composeSelectedApprovalGatewayRunnerFor',
+  'composeDevelopmentToolConnectionCatalog',
+  'composeFusionOperationsFor',
+  'composeSkillMemoryFusionParticipantFactory',
+  'composeSkillVersionCommitParticipantFactory',
 ])
 const RETIRED = [
   'composeSqliteDaemonProviderCore',
@@ -162,6 +191,13 @@ export function daemonBundleViolations(units: readonly SourceUnit[]): string[] {
       if (ts.isFunctionDeclaration(node) && /Sqlite|Postgresql/.test(node.name?.text ?? ''))
         errors.push(`${unit.path}: provider-named function`)
       if (
+        unit.path !== PREFIX + 'cli/daemonModules/providerCore.ts' &&
+        ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text.startsWith('@/modules/identity-access/')
+      )
+        errors.push(`${unit.path}: identity-access import outside provider core`)
+      if (
         ts.isImportDeclaration(node) &&
         valueImport(node) &&
         ts.isStringLiteral(node.moduleSpecifier) &&
@@ -184,23 +220,23 @@ function valid() {
   )
 }
 describe('RFC-380 daemon module bundles', () => {
-  test('complete source corpus keeps the five session bundles and the HTTP fallbacks', () => {
+  test('complete source corpus keeps the eight session bundles and the HTTP fallbacks', () => {
     const units = backendUnits(resolve(import.meta.dir, '../../../..'))
     expect(units.length).toBeGreaterThanOrEqual(2000)
-    expect(units.filter((u) => u.path.startsWith(PREFIX + 'cli/daemonModules/'))).toHaveLength(6)
+    expect(units.filter((u) => u.path.startsWith(PREFIX + 'cli/daemonModules/'))).toHaveLength(9)
     expect(daemonBundleViolations(units)).toEqual([])
   })
   test('accepts one bundle per session and nullish HTTP fallbacks', () => {
     expect(daemonBundleViolations(valid())).toEqual([])
   })
   test('rejects missing and duplicated session calls', () => {
-    expect(daemonBundleViolations([])).toHaveLength(15)
+    expect(daemonBundleViolations([])).toHaveLength(24)
     const units = valid()
     units[0] = unit(
       ROOTS[0][0],
       `function composeSqliteProviderSession() { ${BUNDLES.map((b) => `${b}({}); ${b}({});`).join(' ')} }`,
     )
-    expect(daemonBundleViolations(units).filter((e) => e.includes('got 2'))).toHaveLength(5)
+    expect(daemonBundleViolations(units).filter((e) => e.includes('got 2'))).toHaveLength(8)
   })
   test('rejects process-level construction and unconditional HTTP construction', () => {
     const units = valid()
@@ -237,5 +273,12 @@ describe('RFC-380 daemon module bundles', () => {
       "import type { X } from '@/server'; import { type Y } from '@/cli/start'; function composeGood() {}",
     )
     expect(daemonBundleViolations([...valid(), good])).toEqual([])
+    const identity = unit(
+      'cli/daemonModules/integration.ts',
+      "import { binding } from '@/modules/identity-access/composition';",
+    )
+    expect(daemonBundleViolations([...valid(), identity])).toEqual([
+      'packages/backend/src/cli/daemonModules/integration.ts: identity-access import outside provider core',
+    ])
   })
 })

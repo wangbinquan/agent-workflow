@@ -63,7 +63,7 @@ import {
 import { getSkillVersionContent } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
-import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
+import { composeFusionOperationsFor } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createFileFusionWorkspaceEffects } from '../src/modules/source-control/composition'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -210,7 +210,7 @@ async function build(): Promise<H> {
     git?: Parameters<typeof createFileFusionWorkspaceEffects>[0]['git'],
   ): TestFusionDeps => ({
     db,
-    operations: composeSqliteFusionOperations({
+    operations: composeFusionOperationsFor({
       ...TEST_SQLITE_FUSION_PARTICIPANTS,
       db,
       appHome,

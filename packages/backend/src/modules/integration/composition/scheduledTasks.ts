@@ -64,11 +64,3 @@ export function composeScheduledTaskRuntimeFor(
     resourceAclChanged: input.resourceAclChanged,
   })
 }
-
-/** 只要资源查询面（webhook 路径的 identity access 用）：同一份中立实现，不带持久化。 */
-export function composeIntegrationTriggerResourceQueries(
-  db: ProviderNeutralDatabase,
-  resourceSnapshots: IntegrationTriggerResourceSnapshotFactory,
-): IntegrationTriggerResourceQueries {
-  return createIntegrationTriggerResources(db, resourceSnapshots)
-}

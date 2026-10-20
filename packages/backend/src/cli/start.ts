@@ -1,3 +1,7 @@
+import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
+import { composeDaemonScheduledTaskModules } from '@/cli/daemonModules/scheduledTasks'
+import { composeDaemonIntegrationModules } from '@/cli/daemonModules/integration'
+import { composeDaemonFusionModules } from '@/cli/daemonModules/fusion'
 import {
   DAEMON_PROVIDER_CORE_ADAPTERS,
   standaloneModuleAdapters,
@@ -114,11 +118,7 @@ import {
   resolveDistillPolicy,
   resolveSourceContextBudget,
 } from '@agent-workflow/shared'
-import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
-import {
-  composeWebhookDispatchCore,
-  createSqliteWebhookExecutionRuntime,
-} from '@/modules/integration/composition/webhookDispatch'
+
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import {
   composeDevelopmentAutomation,
@@ -127,8 +127,8 @@ import {
   type AttemptContextStorePort,
   composeDevelopmentAdmissionLookup,
   createDevelopmentMissionExecutionTerminalObserver,
-  createMissionCodeHostEventContinuation,
 } from '@/modules/development-automation/composition'
+
 import { composeSelectedRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
 import {
   bindCandidateDeliveryParticipant,
@@ -154,15 +154,13 @@ import {
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
-import { createTaskAutomationWorkStartProvider } from '@/modules/task-execution/composition/taskRouteLaunch'
-import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
+
 import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
 import {
   composeIntentQueuedNotifications,
   composeIntentQueuedResumption,
 } from '@/modules/intent/composition/queuedResumption'
-import { composeSelectedApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
-import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
+
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
@@ -171,8 +169,8 @@ import {
   buildDevelopmentWorkspaceRepositoryPreparation,
   buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
-  resolveDevelopmentRepoBinding,
 } from '@/services/developmentDeliveryDeps'
+
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
 import { IS_EMBEDDED } from '@/embed'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
@@ -208,7 +206,7 @@ import {
 } from '@/modules/task-execution/composition/taskIdleTimeout'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import { startConfiguredSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
-import { finishClaimedWebhookWorkspacePrune } from '@/services/gc'
+import { finishClaimedWebhookWorkspacePrune, materializingSpaces } from '@/services/gc'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
@@ -251,27 +249,22 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { createMaintenanceService } from '@/platform/background/maintenanceService'
-import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
-import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
-import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
+
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import {
-  composeEventCenter,
-  createEventAutomationWorkIntentStore,
   runEventCenterCycle,
-  selectLocalCustomObserverProgramFactory,
   type CustomObserverProgramFactory,
 } from '@/modules/event-center/composition'
+
 import {
   composeDigitalEmployeeWriterCutoverFor,
   composeDigitalEmployee,
-  createEmployeeAutomationWorkStartProvider,
   createEmployeeInputArtifactStore,
   readPersistedDigitalEmployeeTypePackageDescriptorJsons,
   runDigitalEmployeeOsCycle,
 } from '@/modules/digital-employee/composition'
-import { assertNotBuiltin } from '@/services/systemResources'
+
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import {
@@ -284,30 +277,20 @@ import { composeExecutionContract } from '@/modules/execution-contract/compositi
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
-import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
+
 import {
   composeDevelopmentEmployeeWorkspace,
   createDevelopmentEmployeeCaseWorkspaceDetailReader,
 } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
-import {
-  composeDevelopmentApprovalEventObserver,
-  composeDevelopmentCodeHostEventObserver,
-  composeDevelopmentEmployeeEventObserver,
-} from '@/modules/integration/composition/digitalEmployeeEventObserver'
-import {
-  createCodeHostWebhookDeliveryConsumer,
-  createCodeHostWebhookRoutingDirectory,
-} from '@/modules/integration/composition'
-import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
+
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeReactionExecutionProvider,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
-import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
-import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
+
 import {
   createTaskLifecycleDurableConsumerDefinitions,
   createSqliteTaskLifecycleWsProjector,
@@ -334,7 +317,7 @@ import {
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { notifyChildBudgetTaskStatus } from '@/services/execution/childBudget'
 import { notifyTaskTerminal } from '@/services/execution/executionWatch'
-import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
+
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import {
@@ -345,7 +328,7 @@ import {
 } from '@/platform/persistence/databaseProviderRuntime'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
-import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
+
 import {
   createCollaborationCommandContext,
   createSqliteHumanGateContinuationRecoveryQueries,
@@ -357,8 +340,7 @@ import {
   createReviewDecisionCommand,
 } from '@/modules/collaboration/composition/decisionCommands'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
-import { composeScheduledTaskRuntimeFor } from '@/modules/integration/composition/scheduledTasks'
-import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
+
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { batchOwnerUserId } from '@/services/repoBatchImport'
 import { redactEventPayload } from '@/services/tokenRedaction'
@@ -428,8 +410,7 @@ import {
   composeFileRuntimeLegacyConfiguration,
   type RuntimeLegacyConfigurationPort,
 } from '@/modules/runtime-management/composition/runtimeRegistry'
-import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
-import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
+
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
 import type { MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
@@ -2368,22 +2349,13 @@ async function composeSqliteProviderSession(
     }),
   })
   const fusionStartDeps = Object.freeze({
-    ...(taskLaunchConfiguration.selectedQueries === undefined
-      ? {}
-      : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
+    launchConfiguration: taskLaunchConfiguration.continuationQueries,
     actorUserId: SYSTEM_USER_ID,
     secretBox,
     identityAccess,
     repositoryWorkspace: providerCore.repositoryWorkspaceStore,
     runtimeSessionLeases,
     configPath: Paths.config,
-    ...(taskLaunchConfiguration.selectedQueries !== undefined ||
-    config.subagentLiveCapture === undefined
-      ? {}
-      : { subagentLiveCapture: config.subagentLiveCapture }),
-    ...(taskLaunchConfiguration.selectedQueries === undefined
-      ? resolveLaunchRuntimeConfig(Paths.config)
-      : {}),
   })
   const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
@@ -2674,36 +2646,26 @@ async function composeSqliteProviderSession(
     },
   })
   const collaborationContext = taskExecutionProvider.collaboration
-  const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
+  const scheduledTaskModules = composeDaemonScheduledTaskModules({
     db,
-    resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
-    validation: Object.freeze({
-      assertWorkflowLaunchable: (
-        workflow: Parameters<typeof assertWorkflowSnapshotLaunchable>[1],
-      ) => assertWorkflowSnapshotLaunchable(db, workflow),
-      assertAgentIntegrity: (agentIds: readonly string[]) =>
-        agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
-    }),
-    resourceAclChanged: () => triggerRevalidation('resource-acl-changed'),
+    assertAgentIntegrity: (agentIds) =>
+      agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
   })
+  const { scheduledTaskRuntime } = scheduledTaskModules
   const integrationIdentityAccess = Object.freeze({
     ...identityAccess,
     integrationTriggerResources: scheduledTaskRuntime.integrationTriggerResources,
     taskExecutionResources,
   })
-  const fusionOperations = composeSqliteFusionOperations({
-    // RFC-353 T6/T7：跨 context 的 provider 装配一律在 bootstrap 完成（RFC-317 R2 只许经
-    // exact public 交换合同，RFC-349 又不许 public 面点名 provider 适配器）。
-    memoryMembership: composeSkillMemoryFusionParticipantFactory(),
-    // RFC-370 §10 V20: the same selected skill content serves fusion seeds and versions.
-    skillVersionCommit: composeSkillVersionCommitParticipantFactory({
-      skillContent: input.skillContent,
-    }),
+  const fusionModules = composeDaemonFusionModules({
     db,
     appHome: Paths.root,
+    skillContent: input.skillContent,
     memories: memoryCatalog,
     tasks: taskExecutionProvider.fusion,
+    taskLaunchConfiguration,
   })
+  const { fusionOperations } = fusionModules
   const mcpRuntimeTestBindings = createLazyPausableDaemonRuntimeServiceBindings({
     start: async () => {
       await mcpRuntimeTests.pause()
@@ -2718,66 +2680,40 @@ async function composeSqliteProviderSession(
     },
   })
 
-  // RFC-257 — webhook 分流器 + 三段式重启恢复：上个进程遗留的 received/
-  // processing 投递标 failed/interrupted（GitLab 对失败投递不自动重试，恢复
-  // 路径 = 投递历史页手动 replay——design §1.3/D23）。
-  // RFC-303: orphan process/session repair above is the release proof for the
-  // previous daemon. Reconcile durable launch barriers/effects before HTTP or
-  // auto-resume can attach a new task driver.
-  // RFC-359 AC-1（plan §5fy）：终端控制的装配收成一份后，`taskTermination` 由**调用方**提供
-  // （PostgreSQL bootstrap 本来就是这个姿势）。这里自己造一次再传进去。
-  const webhookTerminalControl = composeMrTerminalControl({
+  const workspaceMaintenance = composeWorkspaceMaintenanceCommand({
+    filesystem: input.workspaceMaintenanceFilesystem,
     db,
-    // RFC-359 AC-1（第 14 刀）：无 driver 时的工作区收尾由**装配方**交——这一支交的是它
-    // 自己那份 GC 收尾（与本文件 durable 消费者 `nudgeWorkspacePrune` 用的同一个）。
-    taskTermination: composeTaskSourceTermination({
-      db,
-      finalizeWithoutDriver: async (taskId) => {
-        await finishClaimedWebhookWorkspacePrune(db, taskId)
-      },
-    }),
+    appHome: Paths.root,
+    terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
+    isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
+    invalidateWorkspacePath: invalidateCallGraphIndex,
   })
-  const webhookDeliveryPersistence = composeWebhookDeliveryPersistenceFor(db)
-  // RFC-310 PR-10 T104：legacy code-capability 的四个启动恢复钩子（lease 回收/
-  // publish section 清理/publish intent 对账/supersede 续跑）随 writer 一并
-  // 移除——Mission 面的恢复由 development-automation 的 recover sweep 承担。
-  // The completed HTTP composition owns WorkStart; the OS worker keeps its separate instance.
+  // HTTP and webhook work-start share the completed employee instance; the OS worker is separate.
   const digitalEmployeeWorkStart = Object.freeze<DigitalEmployeeWorkStartPort>({
     launch: (request) => appComposition.digitalEmployeeWorkStart.launch(request),
   })
-  const webhookTaskExecutions = taskExecutionProvider.trigger.taskExecutions
-  const eventAutomationWorkIntents = createEventAutomationWorkIntentStore(db)
-  const eventAutomationContexts = createEventAutomationDelegatedContextBinding(
-    identityAccess.delegatedRequests,
-  )
-  const taskAutomationWorkStart = createTaskAutomationWorkStartProvider({
+  const integrationModules = composeDaemonIntegrationModules({
     db,
-    origins: eventAutomationWorkIntents,
-    contexts: eventAutomationContexts,
-    resources: taskExecutionResources,
-    launch: (request) => webhookTaskExecutions.launch(request),
-  })
-  const employeeAutomationWorkStart = createEmployeeAutomationWorkStartProvider({
-    db,
-    origins: eventAutomationWorkIntents,
-    contexts: eventAutomationContexts,
-    launchWork: (request) => digitalEmployeeWorkStart.launch(request),
-  })
-  const webhookDispatcher = createWebhookDispatcher({
-    ...composeWebhookDispatchCore(db, secretBox, scheduledTaskRuntime.operations),
+    secretBox,
+    configuration,
+    scheduledTaskRuntime,
     identityAccess: integrationIdentityAccess,
-    getDefaultRuntime: async () => (await configuration.read()).defaultRuntime,
-    terminalControl: webhookTerminalControl,
-    ...createSqliteWebhookExecutionRuntime({
-      taskExecutions: webhookTaskExecutions,
-      digitalEmployeeWorkStart,
-    }),
+    bindEventAutomationContexts: createEventAutomationDelegatedContextBinding,
+    runtimeRegistry: taskExecutionProvider.executionModule.runtimeRegistry,
+    workspaceMaintenance,
+    taskExecutions: taskExecutionProvider.trigger.taskExecutions,
+    digitalEmployeeWorkStart,
+    developmentDeliveryProvider,
+    developmentPurposeRoot,
+    adapters: { customObserverPrograms: input.customObserverPrograms },
   })
-  const developmentApprovalGateway = composeSelectedApprovalGatewayRunnerFor(
-    db,
-    developmentPurposeRoot.approval,
-  )
-  const missionEventContinuation = createMissionCodeHostEventContinuation(db)
+  const {
+    webhookTerminalControl,
+    webhookDeliveryPersistence,
+    webhookDispatcher,
+    developmentApprovalGateway,
+    eventCenter: employeeHttpEventCenter,
+  } = integrationModules
   const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(db)
   let employeeWriterState: Awaited<ReturnType<typeof employeeWriterCutover.activate>> | undefined
 
@@ -2982,46 +2918,6 @@ async function composeSqliteProviderSession(
       },
     }),
     approvalGateway: developmentApprovalGateway,
-  })
-  const employeeHttpEventCenter = await composeEventCenter({
-    db,
-    customObserverPrograms: selectLocalCustomObserverProgramFactory(input.customObserverPrograms),
-    typePackageDescriptorJsons: [
-      developmentEmployeeTypePackage.descriptorJson,
-      codeHostEventCatalogJson,
-      taskLifecycleEventCatalogJson,
-      collaborationCommittedEventCatalogJson,
-      digitalEmployeeLifecycleEventCatalogJson,
-    ],
-    observer: composeDevelopmentEmployeeEventObserver({
-      codeHost: composeDevelopmentCodeHostEventObserver({
-        binding: (repositoryId) =>
-          resolveDevelopmentRepoBinding(developmentDeliveryProvider, repositoryId),
-      }),
-      approval: composeDevelopmentApprovalEventObserver({
-        gateway: developmentApprovalGateway,
-      }),
-    }),
-    routingSubscriptions: createCodeHostWebhookRoutingDirectory(db, missionEventContinuation),
-    automation: {
-      kind: 'automation',
-      workIntents: eventAutomationWorkIntents,
-      delegatedContexts: eventAutomationContexts.factory,
-      taskWorkStart: taskAutomationWorkStart,
-      employeeWorkStart: employeeAutomationWorkStart,
-    },
-    deliveryConsumers: [
-      createCodeHostWebhookDeliveryConsumer(db, webhookDispatcher, missionEventContinuation),
-    ],
-    deliveryRetryLimits: {
-      async current() {
-        const current = await configuration.read()
-        return {
-          defaultNodeRetries: current.defaultNodeRetries,
-          sessionRestartBudget: current.sessionRestartBudget,
-        }
-      },
-    },
   })
   const employeeCaseDetailProjection = composeDevelopmentEmployeeCaseDetailProjection(
     createDevelopmentEmployeeCaseWorkspaceDetailReader(db),
@@ -3303,6 +3199,9 @@ async function composeSqliteProviderSession(
     resourceCatalogModules,
     observationModules,
     memoryModules,
+    scheduledTaskModules,
+    integrationModules,
+    fusionModules,
     nodeRunPrompts,
     portArtifacts,
     taskRunSelection: input.taskRunSelection,
@@ -3662,7 +3561,7 @@ async function composeSqliteProviderSession(
       },
     },
     inputArtifacts: employeeInputArtifacts,
-    connectionCatalog: composeDevelopmentToolConnectionCatalog(db),
+    connectionCatalog: integrationModules.developmentToolConnections,
     runtime: {
       eventCenter: employeeEventCenter.participant,
       codecs: [developmentEmployeeRuntimeCodec],
@@ -4119,15 +4018,7 @@ async function composeSqliteProviderSession(
           log.info('observation calls interrupted', { count: interruptedCalls })
       },
       'workspace-maintenance-recovery': async () => {
-        const bootWorkspaceMaintenance = composeWorkspaceMaintenanceCommand({
-          filesystem: input.workspaceMaintenanceFilesystem,
-          db,
-          appHome: Paths.root,
-          terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
-          isMaterializingTask: () => false,
-          invalidateWorkspacePath: invalidateCallGraphIndex,
-        })
-        const workspaceRecovery = await bootWorkspaceMaintenance.recover({
+        const workspaceRecovery = await workspaceMaintenance.recover({
           activeTaskIds: [],
           webhookClaims: 'all',
         })

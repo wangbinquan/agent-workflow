@@ -63,7 +63,7 @@ import {
 } from './helpers/resourceScopeAuthority'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
-import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
+import { composeFusionOperationsFor } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createFileFusionWorkspaceEffects } from '../src/modules/source-control/composition'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
@@ -355,7 +355,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
     const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
     const deps: TestFusionDeps = {
       db,
-      operations: composeSqliteFusionOperations({
+      operations: composeFusionOperationsFor({
         ...TEST_SQLITE_FUSION_PARTICIPANTS,
         db,
         appHome,

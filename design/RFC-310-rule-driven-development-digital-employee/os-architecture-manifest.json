@@ -14,11 +14,11 @@
       "publicEntries": ["commands.ts", "events.ts", "participants.ts", "types.ts"],
       "externalImports": [
         "bootstrap/crewstation.ts -> composition",
+        "cli/daemonModules/integration.ts -> composition",
+        "cli/daemonModules/integration.ts -> public/events",
         "cli/daemonModules/resourceCatalog.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> composition",
-        "cli/postgresqlDaemonApplication.ts -> public/events",
         "cli/start.ts -> composition",
-        "cli/start.ts -> public/events",
         "modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts -> public/types",
         "modules/development-automation/composition/digitalEmployeeWorkspace.ts -> public/types",
         "modules/development-automation/composition/employeeCaseDetailProjection.ts -> public/types",
@@ -36,7 +36,6 @@
         "platform/background/maintenanceWorker.ts -> composition",
         "routes/digitalEmployees.ts -> composition",
         "server.ts -> composition",
-        "server.ts -> public/events",
         "server.ts -> public/participants",
         "server.ts -> public/types",
         "services/digitalEmployeeAgentTemplates.ts -> public/participants"
@@ -56,6 +55,7 @@
       "externalImports": [
         "bootstrap/crewstation.ts -> composition",
         "bootstrap/workspaceTaskImage.ts -> composition",
+        "cli/daemonModules/integration.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> composition",
         "cli/start.ts -> composition",
         "modules/digital-employee/application/adapters/event-automation-adapter.ts -> composition/required-ports",

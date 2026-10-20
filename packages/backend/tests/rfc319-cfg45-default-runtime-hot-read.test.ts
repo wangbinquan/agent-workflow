@@ -1,3 +1,23 @@
+import { execFileSync } from 'node:child_process'
+import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
+import { ulid } from 'ulid'
+import { workflows, users } from '@/db/schema'
+import { composeDaemonFusionModules, type DaemonFusionModules } from '@/cli/daemonModules/fusion'
+import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
+import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
+import { createPostgresqlFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import { composeIdentityAccess } from '@/modules/identity-access/composition'
+import { composeMemoryCatalogOperations } from '@/modules/memory/composition'
+import type {
+  TaskDriveRequest,
+  SchedulerDriverPort,
+} from '@/modules/task-execution/application/ports/taskExecutionTopology'
+import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
+import { createLogger } from '@/util/log'
+import { describeEachProvider } from './helpers/eachProvider'
+import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
 // RFC-319 CFG-45 —— 设置页把默认运行时改到另一行之后，**新任务**必须按新那一行派发。
 //
 // 由来：`POST /api/tasks` 的启动走一台在 daemon boot 时建好、之后一直服务每一次请求的长驻
@@ -152,4 +172,189 @@ describe('RFC-319 CFG-45 —— 默认运行时的热读', () => {
     expect(postgresql).toContain('return resolveTaskDriveConfig(currentRunConfig())')
     expect(postgresql).not.toContain('runtime: resolveTaskDriveConfig(runConfig)')
   })
+})
+
+// RFC-381: the selected fusion adapters must read settings after composition on every launch.
+describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
+  for (const mode of ['local-sync', 'selected'] as const) {
+    test(`${mode}: both real fusion adapters carry changed settings into the next scheduler drive`, async () => {
+      const appHome = mkdtempSync(join(tmpdir(), 'rfc381-fusion-hot-'))
+      try {
+        const git = (...args: string[]) =>
+          execFileSync('git', ['-C', appHome, ...args], { encoding: 'utf8' }).trim()
+        git('init', '-q', '-b', 'fusion')
+        git(
+          '-c',
+          'user.name=Fixture',
+          '-c',
+          'user.email=fixture@example.test',
+          '-c',
+          'commit.gpgsign=false',
+          'commit',
+          '--allow-empty',
+          '-qm',
+          'fusion fixture',
+        )
+        const configPath = join(appHome, 'config.json')
+        writeFileSync(configPath, '{}')
+        const ownerUserId = ulid(),
+          workflowId = ulid()
+        await harness.db.insert(users).values({
+          id: ownerUserId,
+          username: ownerUserId,
+          displayName: 'Fusion',
+          gitName: 'Fusion',
+          email: 'fixture@example.test',
+          role: 'admin',
+          status: 'active',
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        await harness.db.insert(workflows).values({
+          id: workflowId,
+          name: workflowId,
+          definition: JSON.stringify({ $schema_version: 5, inputs: [], nodes: [], edges: [] }),
+        })
+        let current: Config = { ...DEFAULT_CONFIG, defaultRuntime: 'before', maxConcurrentNodes: 1 }
+        const taskLaunchConfiguration = composeTaskLaunchConfiguration(
+          mode === 'local-sync'
+            ? { kind: 'local-sync', queries: { read: () => current } }
+            : { kind: 'selected', queries: { read: async () => current } },
+        )
+        const driven: TaskDriveRequest[] = []
+        const schedulerDriver: SchedulerDriverPort = {
+          drive: async (request) => {
+            driven.push(request)
+          },
+          cancelChild: async () => {},
+          resumeChild: async () => {},
+          isTaskActive: () => false,
+        }
+        const persistence = createTaskExecutionPersistence(harness.db)
+        const binding = harness.applicationBinding
+        const workspaces: FusionWorkspaceEffects = {
+          prepare: async () => ({ worktreePath: appHome, baseCommit: git('rev-parse', 'HEAD') }),
+          collect: async () => {
+            throw new Error('unused fusion collection')
+          },
+          release: async () => {},
+        }
+        const tasks =
+          binding.provider === 'sqlite'
+            ? createSqliteFusionEngineTaskOperations({
+                db: binding.db,
+                appHome,
+                schedulerDriver,
+                workspaces,
+                startDeps: {
+                  configPath,
+                  launchConfiguration: taskLaunchConfiguration.continuationQueries,
+                },
+              })
+            : createPostgresqlFusionEngineTaskOperations({
+                db: binding.db,
+                appHome,
+                schedulerDriver,
+                workspaces,
+                persistence,
+                executionModule: createProviderTaskExecutionModule({
+                  daemonGeneration: 'rfc381-fusion',
+                  persistence,
+                }),
+                finalizeWorkspace: async () => {},
+                log: createLogger('rfc381-fusion'),
+                runConfiguration: () => fusionModules.runConfiguration(),
+              })
+        const fusionModules: DaemonFusionModules = composeDaemonFusionModules({
+          db: harness.db,
+          appHome,
+          configPath,
+          taskLaunchConfiguration,
+          tasks,
+          memories: composeMemoryCatalogOperations({
+            db: harness.db,
+            contexts: composeIdentityAccess(harness.db).contexts,
+            authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
+          }),
+        })
+        for (const index of [1, 2]) {
+          current = {
+            ...current,
+            defaultRuntime: `live-${index}`,
+            defaultNodeRetries: index,
+            sessionRestartBudget: index + 1,
+            defaultPerNodeTimeoutMs: 9000 + index,
+            maxConcurrentNodes: 3 + index,
+            maxConcurrentScriptNodes: 4 + index,
+            maxConcurrentCodeHostCalls: 5 + index,
+            multiProcessSubprocessConcurrency: 6 + index,
+            mergeAgentModel: `model-${index}`,
+            mergeAgentRuntime: `merge-${index}`,
+            subagentLiveCapture: { pollMs: 100 + index, consecutiveFailureLimit: index + 2 },
+          }
+          expect((await fusionModules.launchConfiguration.read()).defaultRuntime).toBe(
+            `live-${index}`,
+          )
+          await fusionModules.fusionOperations.tasks.launch({
+            taskId: ulid(),
+            workflowId,
+            name: `fusion ${index}`,
+            inputs: {},
+            ownerUserId,
+            initiator: 'manual',
+            fusionId: ulid(),
+            iteration: index,
+            seed: { base: [], overlay: null },
+            platformInputPaths: [],
+            awaitScheduler: true,
+          })
+          expect(driven).toHaveLength(index)
+          expect(driven[index - 1]).toMatchObject({
+            defaultRuntime: `live-${index}`,
+            defaultNodeRetries: index,
+            sessionRestartBudget: index + 1,
+            defaultPerNodeTimeoutMs: 9000 + index,
+            maxConcurrentNodes: 3 + index,
+            maxConcurrentScriptNodes: 4 + index,
+            maxConcurrentCodeHostCalls: 5 + index,
+            multiProcessSubprocessConcurrency: 6 + index,
+            mergeAgentModel: `model-${index}`,
+            mergeAgentRuntime: `merge-${index}`,
+            subagentLiveCapture: { pollMs: 100 + index, consecutiveFailureLimit: index + 2 },
+          })
+        }
+      } finally {
+        rmSync(appHome, { recursive: true, force: true })
+      }
+    }, 60_000)
+  }
+})
+
+test('RFC-381 roots connect fusion adapters and routes to the same live session configuration', () => {
+  const source = (file: string) =>
+    readFileSync(resolve(ROOT, 'packages/backend/src', file), 'utf8').replace(
+      /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
+      '',
+    )
+  const sqlite = source('cli/start.ts')
+  const start = sqlite.slice(
+    sqlite.indexOf('const fusionStartDeps'),
+    sqlite.indexOf('const taskExecutionProvider:', sqlite.indexOf('const fusionStartDeps')),
+  )
+  expect(start).toContain('launchConfiguration: taskLaunchConfiguration.continuationQueries')
+  expect(start).not.toContain('resolveLaunchRuntimeConfig')
+  const pg = source('cli/postgresqlDaemonApplication.ts')
+  const adapter = pg.slice(
+    pg.indexOf('    fusion: {'),
+    pg.indexOf('    workgroupTaskRoom:', pg.indexOf('    fusion: {')),
+  )
+  expect(adapter).toContain('runConfiguration: () => fusionModules.runConfiguration()')
+  expect(adapter).not.toContain('selectedQueries')
+  expect(pg).toContain('launchConfiguration: fusionModules.launchConfiguration')
+  const http = source('server.ts')
+  expect(http).toContain('launchConfiguration: taskLaunchConfiguration.continuationQueries')
+  expect(http).toContain('launchConfiguration: fusionLaunchConfiguration')
+  expect(source('cli/daemonModules/fusion.ts')).toContain(
+    'await input.taskLaunchConfiguration.start()',
+  )
 })

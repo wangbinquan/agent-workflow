@@ -11,14 +11,10 @@ import { createWebhookLaunchAdmission } from '../infrastructure/webhookDispatchR
 import { createWebhookRepositoryResolver } from '../infrastructure/webhookRepositoryResolver'
 
 export type { WebhookTaskExecutionParticipant } from '../application/ports/webhookExecution'
-// RFC-359 W4-B4：执行运行时只有一份；两个 bootstrap 仍经各自的具名绑定装配。
+// RFC-359 W4-B4 / RFC-381：执行运行时只有一份，两个 provider 会话经 `cli/daemonModules/integration.ts` 装配。
 export {
   createWebhookDispatchExecutionRuntime,
   createWebhookDispatchOrchestrationRuntime,
-  createWebhookDispatchExecutionRuntime as createSqliteWebhookExecutionRuntime,
-  createWebhookDispatchOrchestrationRuntime as createSqliteWebhookOrchestrationRuntime,
-  createWebhookDispatchExecutionRuntime as createPostgresqlWebhookExecutionRuntime,
-  createWebhookDispatchOrchestrationRuntime as createPostgresqlWebhookOrchestrationRuntime,
 } from '../infrastructure/webhookDispatchRuntime'
 
 export function composeWebhookDispatchPersistence(

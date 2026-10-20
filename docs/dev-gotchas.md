@@ -54,6 +54,10 @@
 >
 > **push 后按确切 SHA 跟踪并归因**：本 session 引入的问题自己修；其他 session 引入的问题保留证据并等待其自行修复，不代改、不发消息、不回退对方代码。共同提交不会把他人的缺陷自动变成本 session 的修复任务。`bun run gate:local` / `bun run test:backend:serial` 仍是集中验证阶段复现本人 CI 问题、排查顺序依赖的诊断入口，不得借此提前或反复验证半成品。
 
+## 会话装配的运行对象与实时配置（RFC-381）
+
+MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionModule.runtimeRegistry`，否则 PostgreSQL 的私有驱动无法立即收到停机请求。工作区收尾用同一会话的 `finalizeClaimedWorkspace`，交给 MR worker 的包装只记 warn、不抛出；失败保留认领，由维护恢复重试，不能让已经终止的 MR 无限重试并挡住同流后续事件。融合栈共享后也不能共享启动配置快照：SQLite 的 `startDeps.launchConfiguration` 与融合路由用 `taskLaunchConfiguration.continuationQueries`，PostgreSQL 每次启动用 `taskLaunchConfiguration.start()` 投影完整 `runConfiguration`，包括子 Agent 实时捕获、合并 Agent 与并发池设置。事件中心初始化与 MR 启停仍由生命周期步骤负责，bundle 构造不得执行 SQL 或启动定时器。
+
 ## 测试 / CI
 
 - **改了共享 union / schema / 导出类型之后，本地自查必须覆盖「爆炸半径」而不是「我改的那几个文件」**（2026-09-21 实撞两次，RFC-366 + RFC-367 各中一次，方向相反）：两次都是「绿」的口径比改动的影响面窄，于是人declare done 之后才由对方查出来。
@@ -3036,6 +3040,13 @@ bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=N/M …
 - 看到「合跑红、单跑绿」先加 `--isolate` 重跑**再**下任何结论——那不是 flaky，也不是别人留的债，
   多半就是这条。这和「绝不允许『重跑就过了』作为通过依据」不冲突：这里换的是**命令**，
   不是碰运气再来一遍。
+
+**不带它还可能无限挂起**（2026-10-20 RFC-381 实撞）：本地 PostgreSQL 补跑 288 个文件时漏了
+`--isolate`，前面文件没释放的守护进程心跳计时器、全局 WS 重校验钩子留在进程里，先让
+`rfc212-revalidation-behavior` 的一条用例超时（单跑 15 pass），随后某个文件的 Promise 再也没有
+resolve：进程 0% CPU 挂了 2.5 小时，日志只剩心跳 WARN。加上 `--isolate` 后同一份清单正常跑完。
+长时间的本地命令给一个墙钟上限，挂起时能自己退出（macOS 没有 `timeout`，可用
+`perl -e 'alarm 3000; exec @ARGV' bun test --isolate …`）。
 
 ## `GIT_DIR` 会**盖过 `git -C`**：一轮带它的 `bun test` 把测试夹具的提交打进了真仓库（2026-09-10 实撞）
 
