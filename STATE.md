@@ -1,3 +1,7 @@
+## 2026-10-19 RFC-294 后继 S2a：RFC-379 In Progress
+
+[RFC-379](design/RFC-379-daemon-lifecycle-program/proposal.md)（守护进程唯一生命周期程序）落档并派发 Codex 实施，本会话审核（免设计门与实现门）。依据四路只读研究：两个 provider 的作业 id 集合相同、后台顺序不同；约 40 个启动步骤的真实依赖给出规范阶段顺序，并修复 PostgreSQL 现行顺序的四个缺陷；组合期副作用移到程序阶段；关停宽限有界。偏离项：程序暂放 `cli/`（RFC-376 部署分支门的口径），S2c 迁入 `bootstrap/`。改动独占入口根 `cli/start.ts`、`cli/postgresqlDaemonApplication.ts`、`server.ts` 与 `cli/daemonProvider*`。
+
 ## 2026-10-19 RFC-294 后继 S1：RFC-374 In Progress
 
 RFC-370 于 2026-10-19 Done、其迁移 SQLite 0259 / PostgreSQL 0035 冻结后，[RFC-374](design/RFC-374-node-run-sequence/proposal.md)（NodeRun 每任务单调序号）在 HEAD `e569bb5c8` 复核设计前提（铸造程序、PostgreSQL 升级种类 V1～V7、启动恢复接线均未变）后派发 Codex 实施，本会话审核（免设计门与实现门）。本 RFC 占用迁移编号 SQLite `0260` / PostgreSQL `0036`。
