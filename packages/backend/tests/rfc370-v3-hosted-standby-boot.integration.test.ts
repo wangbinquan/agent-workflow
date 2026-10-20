@@ -12,6 +12,11 @@
 // was never registered: a deadlock no unit case saw, because every hosted
 // fixture starts active. This spawns the real daemon against the harness
 // PostgreSQL and an in-test platform that first refuses and then grants it.
+//
+// RFC-379 also locks the real PostgreSQL daemon to the one lifecycle program:
+// every prepare step runs (in canonical order) before the lease, no
+// execution-recovery step runs on standby, and after activation the
+// execution-recovery steps (including the hosted targeted resume) run in order.
 import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -19,6 +24,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
+import { DAEMON_BOOT_STEPS } from '@/cli/daemonLifecycleProgram'
 import { migrateForDeployment } from '@/cli/deployment'
 import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { hostedExecutionControl } from '@/db/schema'
@@ -28,6 +34,10 @@ import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eac
 
 const PROJECT = 'agent-workflow'
 const providers = resolveTestProviders(process.env)
+const stepIds = (text: string): string[] =>
+  [...text.matchAll(/lifecycle step id=([^ ]+)/g)].map((match) => match[1]!)
+const declaredIds = (phase: 'prepare' | 'execution-recovery'): string[] =>
+  DAEMON_BOOT_STEPS.filter((step) => step.phase === phase).map(({ id }) => id)
 
 if (providers.includes('postgresql')) {
   const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
@@ -222,10 +232,30 @@ if (providers.includes('postgresql')) {
         .from(hostedExecutionControl)
         .where(eq(hostedExecutionControl.id, 'global'))
       expect(before.filter((row) => row.phase === 'active')).toEqual([])
+      const standbySteps = stepIds(output)
+      expect(
+        standbySteps.filter((id) => declaredIds('prepare').includes(id)),
+        output,
+      ).toEqual(declaredIds('prepare'))
+      expect(
+        standbySteps.filter((id) => declaredIds('execution-recovery').includes(id)),
+        output,
+      ).toEqual([])
 
       platform.grant()
       await until(() => output.includes('crewstation execution lease active'), 30_000, 'activation')
       expect(platform.requests).toContain('POST /v3/business-execution/control/activate')
+      await until(
+        () => output.includes('lifecycle step id=hosted-targeted-resume'),
+        30_000,
+        'execution recovery after activation',
+      )
+      const steps = stepIds(output)
+      expect(
+        steps.filter((id) => declaredIds('execution-recovery').includes(id)),
+        output,
+      ).toEqual(declaredIds('execution-recovery'))
+      expect(steps.indexOf('task-execution-recovery')).toBeGreaterThan(steps.indexOf('demo-seed'))
       // Background owners started on activation; the instance keeps serving.
       await Bun.sleep(3_000)
       expect(daemon.exitCode, output).toBeNull()

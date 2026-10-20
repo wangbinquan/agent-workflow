@@ -42,8 +42,6 @@ const FORBIDDEN_ALIASES = new Set(['fit', 'fdescribe', 'ftest', 'xit', 'xdescrib
 // or opt-in visual/chaos environment. Any addition/removal changes this exact
 // inventory and therefore requires an intentional review of this policy.
 const ALLOWED_SKIP_COUNTS: Record<string, number> = {
-  // RFC-379 user-approved real PostgreSQL daemon check: requires AW_TEST_POSTGRESQL_URL.
-  'packages/backend/tests/rfc379-postgresql-daemon-order.integration.test.ts#skip': 1,
   // RFC-319 R1/R2 —— 覆盖账本的**逐条对账**只在跑过全量 e2e、且拿得到 route journal
   // 时才有意义（`AW_E2E_ROUTE_JOURNAL` 由 e2e-full-nightly 提供）。PR 腿只跑 PR 档，
   // 它的命中集合天然小于全量，拿它比账本会把账本「修」成一个更宽松的值。
