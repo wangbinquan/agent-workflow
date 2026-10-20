@@ -2,9 +2,9 @@
 
 [RFC-379](design/RFC-379-daemon-lifecycle-program/proposal.md)（守护进程唯一生命周期程序）落档并派发 Codex 实施，本会话审核（免设计门与实现门）。依据四路只读研究：两个 provider 的作业 id 集合相同、后台顺序不同；约 40 个启动步骤的真实依赖给出规范阶段顺序，并修复 PostgreSQL 现行顺序的四个缺陷；组合期副作用移到程序阶段；关停宽限有界。偏离项：程序暂放 `cli/`（RFC-376 部署分支门的口径），S2c 迁入 `bootstrap/`。改动独占入口根 `cli/start.ts`、`cli/postgresqlDaemonApplication.ts`、`server.ts` 与 `cli/daemonProvider*`。
 
-## 2026-10-19 RFC-294 后继 S1：RFC-374 In Progress
+## 2026-10-19 RFC-294 后继 S1：RFC-374 Done
 
-RFC-370 于 2026-10-19 Done、其迁移 SQLite 0259 / PostgreSQL 0035 冻结后，[RFC-374](design/RFC-374-node-run-sequence/proposal.md)（NodeRun 每任务单调序号）在 HEAD `e569bb5c8` 复核设计前提（铸造程序、PostgreSQL 升级种类 V1～V7、启动恢复接线均未变）后派发 Codex 实施，本会话审核（免设计门与实现门）。本 RFC 占用迁移编号 SQLite `0260` / PostgreSQL `0036`。
+[RFC-374](design/RFC-374-node-run-sequence/proposal.md)（NodeRun 每任务单调序号）由 Codex 实施、本会话审核后提交 `291a5c3f3`，主 CI `39377617276` success（含 PostgreSQL 双引擎分片）。「哪条 node_run 更新」改按每任务单调 `seq` 判定：唯一铸造程序在同一事务内向 identity 表 `node_run_seq_allocations` 取号；shared `compareNodeRunMintOrder`（没有 `seq` 的行更旧，都没有才按 id）替换全部按 ULID 判先后的读者；启动恢复第 0 步追平存量 NULL 行；迁移 SQLite `0260` / PostgreSQL `0036`，PostgreSQL 迁移链新增「已有表追加列」升级种类 V8；结构门 `rfc374-node-run-order-guard` 锁住遗漏站点。**对其他会话的影响**：测试里直接 `insert(nodeRuns)` 代表「更新一代」的行必须带 `seq`（用 `tests/helpers/rfc374Fixtures.ts` 的 `allocateNodeRunSeq` 取号），否则按新规则是最旧的行（`docs/dev-gotchas.md` 已记）。S1b（删除 id 回退、统一 `startedAt` 优先的前端选择器）另行立项。
 
 ## 2026-10-19 RFC-378：脑图澄清主动思考与决定复核（Done）
 

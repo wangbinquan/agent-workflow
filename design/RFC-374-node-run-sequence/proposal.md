@@ -1,7 +1,6 @@
 # RFC-374 NodeRun 每任务单调序号：先后判定与 ULID、主机时钟脱钩（RFC-294 S1 / W7-A）
 
-- **状态**：In Progress（2026-10-17 落档；2026-10-19 派发 Codex 实施，本会话审核，免设计门与实现门。前置已满足：RFC-370 于
-  2026-10-19 Done，其 SQLite 0259 / PostgreSQL 0035 自 `166e918bd` 起未再改动且已应用于托管生产库，视为冻结，见 design §8）
+- **状态**：Done（2026-10-19）——`291a5c3f3`，主 CI `39377617276` success（含 PostgreSQL 双引擎分片）。实现由 Codex 完成，本会话审核：铸造值里 `seq` 移到 record 展开之后；追平作业加「整批无进展即失败」；W8 唯一键账本与 PostgreSQL 聚合解码各登记一处假阳性；随新规则更新迁移头 260、RFC-187 驱动入口锁、W26 参与者原文哈希、两处 PostgreSQL 假驱动夹具，以及两处直接插入「更新代」行的测试（改经 `allocateNodeRunSeq` 取号——没有 `seq` 的行按新规则是旧行）。前置：RFC-370 于 2026-10-19 Done，0259 / 0035 冻结（design §8）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S1、design §6.1；review-2026-10-16 F6；
   `docs/audit-backlog.md` 中「scheduler 与前端共用同一先后序」的系统级条目
 - **基线**：HEAD `e569bb5c8`（2026-10-19 复核；行号仅作定位提示）
