@@ -1,6 +1,6 @@
 # RFC-381 守护进程模块组：集成、定时任务与融合（RFC-294 S2b 第二批）
 
-- **状态**：Draft（2026-10-20 落档。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与实现门；
+- **状态**：In Progress（2026-10-20 落档并派发。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与实现门；
   规则取舍由本会话按推荐决定，见 §6。在 RFC-380 提交后派发）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b）、design §10.2；前置
   [RFC-380](../RFC-380-daemon-module-bundles/proposal.md)（S2b 第一批）
