@@ -496,10 +496,14 @@ test('源码锁：回合只有一份实现与一份装配，legacy 薄壳与 pro
     expect(() => read(retired)).toThrow()
   }
 
-  // 两个 bootstrap 装的是同一条；SQLite 侧不再经 legacy engine。
+  // RFC-382: all roots share the one neutral bundle assembly; no root rebuilds it.
   for (const bootstrap of ['server.ts', 'cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
-    expect(read(bootstrap)).toContain('composeWorkgroupTurnsOperations(')
+    expect(read(bootstrap)).toContain('composeDaemonTaskExecutionModules({')
+    expect(read(bootstrap)).not.toContain('composeWorkgroupTurnsOperations(')
   }
+  expect(
+    read('cli/daemonModules/taskExecution.ts').match(/composeWorkgroupTurnsOperations\(/g),
+  ).toHaveLength(1)
   expect(
     read('modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts'),
   ).not.toContain('runWorkgroupEngine')

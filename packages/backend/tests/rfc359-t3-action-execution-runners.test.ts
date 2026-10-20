@@ -6,7 +6,6 @@
 // provider 只提供「在借用工作区上启动 / 取消宿主任务」两件私有能力（`actionExecutionEnvironment.ts`）。
 // 这里用一个可观测的假环境把执行器在两个引擎上各跑一遍（宿主工作流播种、脚本定义读取走真库），
 // 再用源码锁钉住 PG daemon 的接线与两个 composer 的「薄」形态。
-
 import { requirementBundlePath } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -534,7 +533,10 @@ test('源码锁：三个组合根接上同一对 launcher 与终态观察者；�
   // 那条只服务 SQLite 的老路，这条就红。
   for (const file of ['cli/start.ts', 'server.ts'] as const) {
     // 两个 SQLite 根都从模块的**组合入口**取内核（RFC-331：组合根不深挖 infrastructure/）。
-    const kernelAnchor = 'composeHostTaskLaunchKernel({'
+    const kernelAnchor =
+      file === 'cli/start.ts'
+        ? 'launch: taskExecutionProvider.routeLaunch.workflow'
+        : 'launch: deps.taskExecutionModules.routeLaunch.workflow'
     const source = readFileSync(join(root, ...file.split('/')), 'utf8')
     expect(source, `${file} 必须接合并后的 agent launcher`).toContain(
       'agentLauncher: composeAgentActionExecution({',

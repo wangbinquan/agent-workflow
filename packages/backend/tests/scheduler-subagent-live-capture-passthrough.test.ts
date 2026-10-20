@@ -96,12 +96,12 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     const deps = read('packages/backend/src/services/startTaskDeps.ts')
     expect(deps).toContain('function resolveSubagentLiveCapture(')
     expect(deps).toContain('...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {})')
-    // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除；
-    // 两个组合根仍各自 `buildStartTaskDeps(...)`，本条判据面不变。
-    const assembly = ['packages/backend/src/server.ts', 'packages/backend/src/cli/start.ts']
-      .map(read)
-      .join('\n')
-    expect(assembly).toContain('buildStartTaskDeps(')
+    // RFC-382: each session gets capture from the bundle's live configuration.
+    for (const path of ['packages/backend/src/server.ts', 'packages/backend/src/cli/start.ts'])
+      expect(read(path)).toContain('composeDaemonTaskExecutionModules({')
+    const assembly = read('packages/backend/src/cli/daemonModules/taskExecution.ts')
+    expect(assembly).toContain('const fresh = await taskLaunchConfiguration.start()')
+    expect(assembly).toContain('{ subagentLiveCapture: fresh.subagentLiveCapture }')
 
     // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）改锚：multipart 那条路原本自己
     // `resolveSubagentLiveCapture(deps.configPath)` 一次、喂给两条交接

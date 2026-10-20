@@ -247,7 +247,10 @@ describe('RFC-349 daemon provider core', () => {
       resolve(import.meta.dir, '../src/cli/daemonModules/adapters.ts'),
       'utf8',
     )
-    const pg = adapters.slice(adapters.indexOf('  postgresql: (input)'))
+    const pg = adapters.slice(
+      adapters.indexOf('  postgresql: (input)'),
+      adapters.indexOf('} satisfies {'),
+    )
     expect(source).not.toMatch(/\bopenDb\b|createInMemoryDb|deasync/)
     expect(source).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient/)
     for (const factory of [

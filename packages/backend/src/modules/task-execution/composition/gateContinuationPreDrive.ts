@@ -8,11 +8,12 @@ import { createTaskExecutionPersistence } from './taskExecutionPersistence'
 
 /** Both providers bind the same continuation, operation and convergence participants. */
 export function composeGateContinuationPreDrive(input: {
+  readonly persistence?: ReturnType<typeof createTaskExecutionPersistence>
   readonly db: ProviderNeutralDatabase
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
 }) {
   return createGateContinuationPreDriveStep({
-    persistence: createTaskExecutionPersistence(input.db),
+    persistence: input.persistence ?? createTaskExecutionPersistence(input.db),
     humanGateOperations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
     clarifyConvergence: createClarifyContinuationConvergence(input),
   })

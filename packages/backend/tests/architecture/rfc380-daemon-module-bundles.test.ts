@@ -1,4 +1,4 @@
-// RFC-380 / RFC-381 / RFC-376 hard gate: bundles are session-scoped, and HTTP only composes fallbacks.
+// RFC-380 / RFC-381 / RFC-382 / RFC-376 hard gate: bundles are session-scoped, and HTTP only composes fallbacks.
 import { describe, expect, test } from 'bun:test'
 import ts from 'typescript'
 import { resolve } from 'node:path'
@@ -14,6 +14,7 @@ const BUNDLES = [
   'composeDaemonScheduledTaskModules',
   'composeDaemonIntegrationModules',
   'composeDaemonFusionModules',
+  'composeDaemonTaskExecutionModules',
 ] as const
 const ROOTS = [
   ['cli/start.ts', 'composeSqliteProviderSession'],
@@ -21,6 +22,30 @@ const ROOTS = [
   ['server.ts', 'composeSqliteApplicationDeps'],
 ] as const
 const FACTORIES = new Set([
+  'createTaskDriveCoordinator',
+  'DefaultTaskDriveCoordinator',
+  'composeSqliteTaskExecutionProviderRuntime',
+  'composePostgresqlTaskExecutionProviderRuntime',
+  'createTaskRouteOperations',
+  'createTaskExecutionPersistence',
+  'createTaskExecutionResourceBinding',
+  'composeTaskExecutionResourceBinding',
+  'createTaskExecutionRuntimeParticipants',
+  'composeTaskExecutionRuntime',
+  'createTaskDriverLifecyclePort',
+  'createDatabaseTaskDriverLifecyclePort',
+  'createSqliteTaskExecutionLaunchParticipant',
+  'createSqliteTaskRouteLaunchOperations',
+  'createBuildScheduleLaunch',
+  'createTaskExecutionTriggerParticipant',
+  'createTaskOverviewQuery',
+  'createDatabaseTaskLifecycleWsProjector',
+  'createSqliteTaskLifecycleWsProjector',
+  'composeTaskClarifyDirectiveRouteOperations',
+  'composeWorkgroupTaskRoomTaskParticipantFactory',
+  'composeTaskExecutionCatalogSources',
+  'createDatabaseTaskExecutionCatalogSourceFactory',
+  'composeHostTaskLaunchKernel',
   'composeRepositoryWorkspaceStore',
   'composeSqliteRepositoryWorkspaceStore',
   'composePostgresqlRepositoryWorkspaceStore',
@@ -220,23 +245,23 @@ function valid() {
   )
 }
 describe('RFC-380 daemon module bundles', () => {
-  test('complete source corpus keeps the eight session bundles and the HTTP fallbacks', () => {
+  test('complete source corpus keeps the nine session bundles and the HTTP fallbacks', () => {
     const units = backendUnits(resolve(import.meta.dir, '../../../..'))
     expect(units.length).toBeGreaterThanOrEqual(2000)
-    expect(units.filter((u) => u.path.startsWith(PREFIX + 'cli/daemonModules/'))).toHaveLength(9)
+    expect(units.filter((u) => u.path.startsWith(PREFIX + 'cli/daemonModules/'))).toHaveLength(10)
     expect(daemonBundleViolations(units)).toEqual([])
   })
   test('accepts one bundle per session and nullish HTTP fallbacks', () => {
     expect(daemonBundleViolations(valid())).toEqual([])
   })
   test('rejects missing and duplicated session calls', () => {
-    expect(daemonBundleViolations([])).toHaveLength(24)
+    expect(daemonBundleViolations([])).toHaveLength(27)
     const units = valid()
     units[0] = unit(
       ROOTS[0][0],
       `function composeSqliteProviderSession() { ${BUNDLES.map((b) => `${b}({}); ${b}({});`).join(' ')} }`,
     )
-    expect(daemonBundleViolations(units).filter((e) => e.includes('got 2'))).toHaveLength(8)
+    expect(daemonBundleViolations(units).filter((e) => e.includes('got 2'))).toHaveLength(9)
   })
   test('rejects process-level construction and unconditional HTTP construction', () => {
     const units = valid()

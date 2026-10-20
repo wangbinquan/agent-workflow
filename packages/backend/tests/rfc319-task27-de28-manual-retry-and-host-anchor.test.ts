@@ -37,10 +37,8 @@ import { SYSTEM_USER_ID } from '@/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
-const RETRY_WIRING_ROOTS = [
-  'packages/backend/src/server.ts',
-  'packages/backend/src/cli/start.ts',
-] as const
+// RFC-382 moves both SQLite roots' unchanged retry command into the provider adapter.
+const RETRY_WIRING_ROOTS = ['packages/backend/src/cli/daemonModules/adapters.ts'] as const
 
 describe('RFC-319 TASK-27 —— 演员发起的仓库准备重试必须带着发起人', () => {
   test('前提：这条 kind 本来就在演员重放命令集里，只差 source / actor', () => {
@@ -63,7 +61,13 @@ describe('RFC-319 TASK-27 —— 演员发起的仓库准备重试必须带着�
     ).toBe(true)
   })
 
-  test('两个组合根都把 authorization.actorUserId 原样传下去（写死 SYSTEM 就红）', () => {
+  test('两个组合根共用的适配器把 authorization.actorUserId 原样传下去（写死 SYSTEM 就红）', () => {
+    for (const path of ['cli/start.ts', 'server.ts']) {
+      const root = readFileSync(resolve(ROOT, 'packages/backend/src', path), 'utf8')
+      expect(root).toContain('composeDaemonTaskExecutionModules({')
+      expect(root).toContain('DAEMON_TASK_EXECUTION_ADAPTERS.sqlite({')
+      expect(root).not.toContain('async retry(taskId: string')
+    }
     for (const relative of RETRY_WIRING_ROOTS) {
       const source = readFileSync(resolve(ROOT, relative), 'utf-8')
       // 端口签名收下授权。

@@ -690,15 +690,15 @@ test('CLI initial and replacement sessions carry one prompt selection through SQ
     ),
   ).toBe('nodeRunPrompts')
   const provider = properties(
-    onlyCall(body, sf, 'composeSqliteTaskExecutionProviderRuntime').arguments[1]!,
+    onlyCall(body, sf, 'composeDaemonTaskExecutionModules').arguments[0]!,
     sf,
   )
-  expect(compact(properties(provider.get('runtime')!, sf).get('taskRunBinding')!, sf)).toBe(
+  expect(compact(properties(provider.get('selection')!, sf).get('taskRunBinding')!, sf)).toBe(
     'taskRunRoot.drive',
   )
-  expect(
-    compact(properties(factoryResult(provider.get('routes')!), sf).get('nodeRunPrompts')!, sf),
-  ).toBe('nodeRunPrompts')
+  expect(compact(properties(provider.get('selection')!, sf).get('nodeRunPrompts')!, sf)).toBe(
+    'nodeRunPrompts',
+  )
   expect(
     compact(
       properties(onlyCall(body, sf, 'composeSqliteAppDeps').arguments[0]!, sf).get(
@@ -752,15 +752,15 @@ test('PG application carries its one prompt receiver through memory, runtime and
     ),
   ).toBe('nodeRunPrompts')
   const provider = properties(
-    onlyCall(body, sf, 'composePostgresqlTaskExecutionProviderRuntime').arguments[1]!,
+    onlyCall(body, sf, 'composeDaemonTaskExecutionModules').arguments[0]!,
     sf,
   )
-  expect(compact(properties(provider.get('runtime')!, sf).get('taskRunBinding')!, sf)).toBe(
+  expect(compact(properties(provider.get('selection')!, sf).get('taskRunBinding')!, sf)).toBe(
     'taskRunRoot.drive',
   )
-  expect(
-    compact(properties(factoryResult(provider.get('routes')!), sf).get('nodeRunPrompts')!, sf),
-  ).toBe('nodeRunPrompts')
+  expect(compact(properties(provider.get('selection')!, sf).get('nodeRunPrompts')!, sf)).toBe(
+    'nodeRunPrompts',
+  )
   expect(compact(properties(binding(body, sf, 'taskRoutes'), sf).get('operations')!, sf)).toBe(
     'taskExecutionProvider.routes.tasks',
   )
@@ -795,7 +795,9 @@ test('standalone HTTP chooses raw content only for absent operations and forward
   expect(
     compact(
       properties(
-        onlyCall(body, sf, 'createTaskExecutionRuntimeParticipants').arguments[0]!,
+        properties(onlyCall(body, sf, 'composeDaemonTaskExecutionModules').arguments[0]!, sf).get(
+          'selection',
+        )!,
         sf,
       ).get('taskRunBinding')!,
       sf,
@@ -829,14 +831,35 @@ test('standalone HTTP chooses raw content only for absent operations and forward
     'effectiveDeps',
   )
   const mount = compositionBody(sf, 'composeSqliteApiRouteMounts')
-  expect(
-    compact(
-      properties(onlyCall(mount, sf, 'createTaskRouteOperations').arguments[0]!, sf).get(
-        'nodeRunPrompts',
-      )!,
-      sf,
-    ),
-  ).toBe('deps.nodeRunPrompts')
+  expect(compact(binding(mount, sf, 'taskRouteOperations'), sf)).toBe(
+    'deps.taskExecutionModules.routes.tasks',
+  )
+  expect(calls(mount, sf, 'createTaskRouteOperations')).toHaveLength(0)
+  const selected = properties(
+    onlyCall(body, sf, 'composeDaemonTaskExecutionModules').arguments[0]!,
+    sf,
+  )
+  expect(compact(properties(selected.get('selection')!, sf).get('nodeRunPrompts')!, sf)).toBe(
+    'nodeRunPrompts',
+  )
   expect(calls(mount, sf, 'composeNodeRunPromptOperations')).toHaveLength(0)
   expect(calls(mount, sf, 'selectNodeRunPromptOperations')).toHaveLength(0)
+})
+
+// RFC-382: the selected prompt receiver must survive the newly shared bundle boundary.
+test('the bundle forwards selected prompts to both unchanged provider route factories', () => {
+  const sf = source('cli/daemonModules/taskExecution.ts')
+  const selected = onlyCall(sf, sf, 'input.adapters.compose')
+  const routes = properties(selected.arguments[0]!, sf).get('routes')!
+  expect(compact(properties(factoryResult(routes), sf).get('nodeRunPrompts')!, sf)).toBe(
+    'selection.nodeRunPrompts',
+  )
+  const adapters = source('cli/daemonModules/adapters.ts')
+  for (const name of [
+    'composeSqliteTaskExecutionProviderRuntime',
+    'composePostgresqlTaskExecutionProviderRuntime',
+  ]) {
+    const call = onlyCall(adapters, adapters, name)
+    expect(compact(call.arguments[1]!, adapters)).toContain('...input,')
+  }
 })

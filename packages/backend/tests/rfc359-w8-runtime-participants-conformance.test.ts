@@ -597,7 +597,32 @@ test('第 12 刀 · 引擎差异只剩三个端口：认领策略 / 活跃度 / 
   expect(participants).toContain('stop: input.stop')
 
   // 两条绑定都在组合根里，且各绑各的。
-  expect(provider).toContain('lifecycle: createDatabaseTaskDriverLifecyclePort({')
+  expect(provider).toContain('dependencies.driverLifecycle ??')
+  expect(provider).toContain('createDatabaseTaskDriverLifecyclePort({')
+  expect(provider).toContain('lifecycle: driverLifecycle,')
+  // RFC-382 retains each provider's original release finalizer at the bundle boundary.
+  for (const [path, db] of [
+    ['cli/start.ts', 'db'],
+    ['server.ts', 'deps.db'],
+  ]) {
+    const root = readFileSync(resolve(import.meta.dir, '../src', path!), 'utf8')
+    expect(root).toContain(
+      `finalizeWorkspace: async (taskId) => {\n        await finishClaimedWebhookWorkspacePrune(${db}, taskId)\n      }`,
+    )
+  }
+  const pg = readFileSync(
+    resolve(import.meta.dir, '../src/cli/postgresqlDaemonApplication.ts'),
+    'utf8',
+  )
+  expect(pg).toContain(
+    'finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId)',
+  )
+  const adapters = readFileSync(
+    resolve(import.meta.dir, '../src/cli/daemonModules/adapters.ts'),
+    'utf8',
+  )
+  expect(adapters).toContain('claim: (intentId) => taskExecutionModule.claim({ db, intentId })')
+  expect(adapters).toContain('claim: (intentId) => executionModule.claimPersisted({ intentId })')
   expect(provider).toContain('claim: (intentId) => executionModule.claimPersisted({ intentId })')
   expect(provider).toContain('activity: composeLegacyTaskActivityParticipant()')
   expect(provider).toContain('stop: composeLegacyTaskStopRegistry()')

@@ -195,18 +195,23 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // RFC-370 permits a selected asynchronous reader; the original runtime is
     // awaited before children.resume receives it, including the native value.
     expect(routeOperations).toContain('runtime: await dependencies.resumeRuntimeFor(actor, taskId)')
-    const serverSrc = readFileSync(join(import.meta.dir, '../src/server.ts'), 'utf8')
-    // RFC-359 AC-1（第 13 刀）改锚：`/api/tasks` 合成一个中立工厂之后，这条**不装配完整
-    // runtime** 的回退路改成自己装一份子任务生命周期参与者 + 一个 `resumeRuntimeFor`。
-    // 判据不变——**这条路上的复活必须带着本机的启动配置**，只是锚跟着实现走：启动配置从
-    // `resumeRuntimeFor` 的 `runConfig` 那一格进去。
-    const boundChildren = serverSrc.indexOf('children: createChildTaskLifecycleParticipant({')
-    expect(boundChildren, '回退路必须绑一份真的子任务生命周期参与者').toBeGreaterThan(-1)
-    const boundResumeBlock = serverSrc.slice(boundChildren, boundChildren + 1400)
-    expect(boundResumeBlock).toContain('createDatabaseTaskDriverLifecyclePort({')
-    expect(boundResumeBlock).toContain('resolveLaunchRuntimeConfig(deps.configPath)')
-    expect(boundResumeBlock).toContain('const fresh = await taskLaunchConfiguration.drive()')
-    expect(boundResumeBlock).toContain('...runtimeConfigOpts(fresh)')
+    // RFC-382 fixes the raw local-sync spread: every resume now goes through the same projection.
+    const bundle = readFileSync(
+      join(import.meta.dir, '../src/cli/daemonModules/taskExecution.ts'),
+      'utf8',
+    )
+    const provider = readFileSync(
+      join(import.meta.dir, '../src/modules/task-execution/composition/providerRuntime.ts'),
+      'utf8',
+    )
+    expect(
+      provider.match(/runConfig:|dependencies.rootResumeRuntime\(taskId\)/g)!.length,
+    ).toBeGreaterThanOrEqual(4)
+    expect(bundle).toContain(
+      'rootResumeRuntime: async () => ({ runConfig: await runConfiguration() })',
+    )
+    expect(bundle).toMatch(/runtimeConfigOpts\(\{\s*\.\.\.fresh,\s*memoryDistillEnqueuer:/)
+    expect(bundle).toContain('await taskLaunchConfiguration.start()')
   })
 
   test('routes 不再保留旧的「只 start 传 commitPush」单点写法', () => {

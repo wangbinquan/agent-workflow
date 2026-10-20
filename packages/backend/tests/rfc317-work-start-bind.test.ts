@@ -56,10 +56,11 @@ describe('RFC-359 W12 —— WorkStart is complete at construction', () => {
       'digitalEmployee.runtime.commands.launchWork({',
     )
     expect(server).toContain('digitalEmployeeWorkStart: apiComposition.digitalEmployeeWorkStart')
-    // RFC-365 adds `taskExecutionLaunches` to the same frozen API composition return.
+    // RFC-382 keeps the same completed employee while task launches come from the session bundle.
     expect(server).toContain(
-      'return Object.freeze({\n    apiRoutes,\n    digitalEmployeeWorkStart,\n    taskExecutionLaunches: sqliteTaskExecutionLaunches,\n  })',
+      'return Object.freeze({\n    apiRoutes,\n    digitalEmployeeWorkStart,\n  })',
     )
+    expect(server).toContain('launch: deps.taskExecutionModules.routeLaunch.workflow')
     expect(server.slice(portAt)).toMatch(
       /mountDigitalEmployeeRoutes\(\s*app,\s*digitalEmployeePersistence,\s*digitalEmployee,/,
     )

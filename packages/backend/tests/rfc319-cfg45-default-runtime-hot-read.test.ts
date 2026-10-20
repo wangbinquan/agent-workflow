@@ -118,59 +118,22 @@ describe('RFC-319 CFG-45 —— 默认运行时的热读', () => {
     }
   })
 
-  // **这一格是本轮教训的落点**：第一版只检查了 `cli/start.ts` 与 `postgresqlDaemonApplication.ts`
-  // 两个组合根，于是漏掉了 `server.ts` 里那两台——而 e2e 的单二进制 daemon 走的正是 `server.ts`，
-  // CFG-45 修完照旧红（实测：不给 refresher 时每次 drive 拿到的 `defaultRuntime` 恒为
-  // `undefined`，任务一律退回内置 opencode，连「改之前」的对照组都只是碰巧对上了内置 model）。
-  // 所以判据改成**枚举**：三个组合根文件里每一个 `createTaskDriveCoordinator(` 都必须带 refresher，
-  // 新增一台忘了接就当场红，不必等某个晚上某条 e2e 红一次。
+  // RFC-382: all former root sites now share this one live getter.
   test('三个组合根里的每一台长驻协调器都接上了热读（枚举，不是点名）', () => {
-    const roots = [
-      'packages/backend/src/server.ts',
-      'packages/backend/src/cli/start.ts',
-      'packages/backend/src/cli/postgresqlDaemonApplication.ts',
-    ]
-    const missing: string[] = []
-    let sites = 0
-    for (const relative of roots) {
-      const source = readFileSync(resolve(ROOT, relative), 'utf-8')
-      for (const match of source.matchAll(/createTaskDriveCoordinator\(\{/gu)) {
-        sites += 1
-        // 取这次调用的完整实参对象（花括号配平），只在它自己的范围内找 refresher。
-        let depth = 0
-        let index = match.index + match[0].length - 1
-        let end = source.length
-        while (index < source.length) {
-          const ch = source[index]
-          if (ch === '{') depth += 1
-          else if (ch === '}') {
-            depth -= 1
-            if (depth === 0) {
-              end = index + 1
-              break
-            }
-          }
-          index += 1
-        }
-        const body = source.slice(match.index, end)
-        if (!body.includes('refreshLaunchConfig')) {
-          const line = source.slice(0, match.index).split(/\r?\n/).length
-          missing.push(`${relative}:${line}`)
-        }
-      }
+    for (const relative of ['server.ts', 'cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+      const source = readFileSync(resolve(ROOT, 'packages/backend/src', relative), 'utf8')
+      expect(source).not.toMatch(/(?:createTaskDriveCoordinator|new DefaultTaskDriveCoordinator)\(/)
+      expect(source.match(/composeDaemonTaskExecutionModules\(/g)).toHaveLength(1)
     }
-    // 语料非空：扫不到站点等于假绿。
-    expect(sites).toBeGreaterThanOrEqual(5)
-    expect(missing).toEqual([])
-    // PostgreSQL 那台是直接 `new` 的，用 getter + 单一的 `currentRunConfig()`；
-    // boot 那一刻的快照不许再被交给它。
-    const postgresql = readFileSync(
-      resolve(ROOT, 'packages/backend/src/cli/postgresqlDaemonApplication.ts'),
-      'utf-8',
+    const bundle = readFileSync(
+      resolve(ROOT, 'packages/backend/src/cli/daemonModules/taskExecution.ts'),
+      'utf8',
     )
-    expect(postgresql).toContain('const currentRunConfig = () =>')
-    expect(postgresql).toContain('return resolveTaskDriveConfig(currentRunConfig())')
-    expect(postgresql).not.toContain('runtime: resolveTaskDriveConfig(runConfig)')
+    expect(bundle.match(/new DefaultTaskDriveCoordinator\(/g)).toHaveLength(1)
+    expect(bundle).toMatch(
+      /get runtime\(\)\s*\{\s*return runConfiguration\(\).then\(resolveTaskDriveConfig\)/,
+    )
+    expect(bundle).toContain('await taskLaunchConfiguration.start()')
   })
 })
 
@@ -336,23 +299,15 @@ test('RFC-381 roots connect fusion adapters and routes to the same live session 
       /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
       '',
     )
-  const sqlite = source('cli/start.ts')
-  const start = sqlite.slice(
-    sqlite.indexOf('const fusionStartDeps'),
-    sqlite.indexOf('const taskExecutionProvider:', sqlite.indexOf('const fusionStartDeps')),
-  )
-  expect(start).toContain('launchConfiguration: taskLaunchConfiguration.continuationQueries')
-  expect(start).not.toContain('resolveLaunchRuntimeConfig')
+  const bundle = source('cli/daemonModules/taskExecution.ts')
+  expect(bundle).toContain('launchConfiguration: taskLaunchConfiguration.continuationQueries')
+  expect(bundle).not.toContain('resolveLaunchRuntimeConfig')
   const pg = source('cli/postgresqlDaemonApplication.ts')
-  const adapter = pg.slice(
-    pg.indexOf('    fusion: {'),
-    pg.indexOf('    workgroupTaskRoom:', pg.indexOf('    fusion: {')),
-  )
-  expect(adapter).toContain('runConfiguration: () => fusionModules.runConfiguration()')
-  expect(adapter).not.toContain('selectedQueries')
+  expect(pg).toContain('fusionRunConfiguration: () => fusionModules.runConfiguration()')
+  expect(bundle).toContain('runConfiguration: input.fusionRunConfiguration')
   expect(pg).toContain('launchConfiguration: fusionModules.launchConfiguration')
   const http = source('server.ts')
-  expect(http).toContain('launchConfiguration: taskLaunchConfiguration.continuationQueries')
+  expect(http).toContain('tasks: taskExecutionModules.fusion')
   expect(http).toContain('launchConfiguration: fusionLaunchConfiguration')
   expect(source('cli/daemonModules/fusion.ts')).toContain(
     'await input.taskLaunchConfiguration.start()',

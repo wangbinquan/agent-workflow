@@ -13,7 +13,6 @@
 // 直接调 service 层。这里显式用一个普通用户走完整 HTTP 面。
 // 对应 e2e：rfc319-agent-delete-and-refs (AGENT-11) /
 // rfc319-workgroup-launch-and-config (WG-41) 等 @nightly 用例。
-
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { readFileSync } from 'node:fs'
@@ -116,8 +115,11 @@ describeEachProviderHttpApplication(
     // ref 不再当场 422 带服务端原话与可用引用，而是先铸一行注定失败的任务
     //（e2e `rfc319-task-wizard` TASK-06 两条断言同时红）。
     test('the Agent/Workgroup route launch keeps its synchronous repo-preparation contract', () => {
-      const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
-      const routeLaunch = /routeLaunch: \{[\s\S]*?\n {6}\},/.exec(source)?.[0]
+      const source = readFileSync(
+        resolve(import.meta.dir, '..', 'src', 'cli', 'daemonModules', 'taskExecution.ts'),
+        'utf8',
+      )
+      const routeLaunch = /routeLaunch: \{[\s\S]*?\n {4}\},/.exec(source)?.[0]
       expect(routeLaunch, 'routeLaunch 组装块没找到（结构变了？）').toBeDefined()
       // 结构锚点：正则抓到的必须**真是**代理 / 工作组那格启动装配，否则下面那条
       // `not.toMatch` 会在一个空串上轻松变绿。锚点原本是 `executionFor`——RFC-359

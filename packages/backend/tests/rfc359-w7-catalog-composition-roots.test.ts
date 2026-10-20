@@ -8,7 +8,6 @@
 //
 // 每条断言都落到真库上；纯闭包型组合根（技能工件补偿）驱动的是它交出来的真实原语，不是
 // `toBeDefined()`。
-
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -33,7 +32,7 @@ import {
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
 import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
-import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
+import { composeDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import { composeSqlitePostRestoreRecovery } from '@/modules/system-operations/composition'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -377,7 +376,7 @@ test('技能工件原语：现行机制交出真路径与真哈希，旧词汇�
   }
 })
 
-// `composeSqliteDynamicWorkflowValidationContext` 与 `composeSqlitePostRestoreRecovery` 都只在
+// `composeDynamicWorkflowValidationContext` 与 `composeSqlitePostRestoreRecovery` 都只在
 // SQLite 装配面上存在（前者装的是 legacy 同步 loader，后者的 recover 签名点名 `DbClient`），
 // 所以这一条不进 describeEachProvider，而是自己开一棵刚迁移完的内存库。
 test('动态工作流校验上下文 + restore 后置恢复：都在一棵真 SQLite 库上驱动', async () => {
@@ -387,7 +386,7 @@ test('动态工作流校验上下文 + restore 后置恢复：都在一棵真 SQ
   const restore = selectDatabaseSchemaProvider('sqlite')
   try {
     const db = createInMemoryDb(MIGRATIONS, {})
-    const context = composeSqliteDynamicWorkflowValidationContext(db)
+    const context = composeDynamicWorkflowValidationContext(db)
     expect((await context.load()).agents).toEqual([])
     // 装载的是当下的库存，不是快照：写一行 agent 之后再 load 必须看得见它。
     const agentId = `a_${ulid()}`

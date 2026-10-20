@@ -63,31 +63,44 @@ function arrowObject(node: ts.Node): ts.ObjectLiteralExpression {
 }
 
 test('both actual provider route closures and standalone HTTP bind the same whole record', () => {
-  for (const [path, name, fn] of [
-    ['cli/start.ts', 'composeSqliteTaskExecutionProviderRuntime', 'composeSqliteProviderSession'],
+  for (const [path, fn, selected] of [
+    ['cli/start.ts', 'composeSqliteProviderSession', 'input.taskDeletionEffects'],
     [
       'cli/postgresqlDaemonApplication.ts',
-      'composePostgresqlTaskExecutionProviderRuntime',
       'composePostgresqlApplication',
+      'input.taskDeletionEffects',
     ],
+    ['server.ts', 'composeSqliteApplicationDeps', 'deps.taskDeletionEffects'],
   ]) {
     const source = load(path!),
-      call = oneCall(source, name!)
+      call = oneCall(source, 'composeDaemonTaskExecutionModules')
     expect(owner(call).name!.text).toBe(fn!)
-    const dependencies = object(call.arguments[1]!)
+    const dependencies = object(call.arguments[0]!)
     expect(
       text(
-        property(arrowObject(property(dependencies, source, 'routes')), source, 'effects'),
+        property(object(property(dependencies, source, 'selection')), source, 'effects'),
         source,
       ),
-    ).toBe('input.taskDeletionEffects')
+    ).toBe(selected!)
+    expect(calls(source, source, 'createTaskRouteOperations')).toHaveLength(0)
   }
-  const source = load('server.ts'),
-    call = oneCall(source, 'createTaskRouteOperations')
-  expect(owner(call).name!.text).toBe('composeSqliteApiRouteMounts')
-  expect(text(property(object(call.arguments[0]!), source, 'effects'), source)).toBe(
-    'deps.taskDeletionEffects',
-  )
+  const source = load('cli/daemonModules/taskExecution.ts')
+  const call = oneCall(source, 'input.adapters.compose')
+  const dependencies = object(call.arguments[0]!)
+  expect(
+    text(
+      property(arrowObject(property(dependencies, source, 'routes')), source, 'effects'),
+      source,
+    ),
+  ).toBe('selection.effects')
+  const adapters = load('cli/daemonModules/adapters.ts')
+  for (const name of [
+    'composeSqliteTaskExecutionProviderRuntime',
+    'composePostgresqlTaskExecutionProviderRuntime',
+  ]) {
+    const call = oneCall(adapters, name)
+    expect(text(call.arguments[1]!, adapters)).toContain('...input,')
+  }
 })
 
 test('both real boot recovery calls retain db and default store before the whole selected record', () => {

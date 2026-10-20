@@ -11,7 +11,6 @@
 //
 // 本模块**不含断言**，纯函数 + 文件系统读取，root 由调用方传入（不读 env，
 // 避免再造一个 env 型 test seam）。
-
 import { readdirSync, readFileSync, statSync, type Dirent } from 'node:fs'
 import { posix, relative, resolve } from 'node:path'
 
@@ -82,6 +81,7 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/cli/daemonModules/scheduledTasks.ts',
   'packages/backend/src/cli/daemonModules/integration.ts',
   'packages/backend/src/cli/daemonModules/fusion.ts',
+  'packages/backend/src/cli/daemonModules/taskExecution.ts',
 
   'packages/backend/src/main.ts',
   // RFC-370 v2 §3.1: the single deployment selection point composes the hosted adapters.

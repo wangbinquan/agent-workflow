@@ -12,9 +12,9 @@ import type {
  * RFC-359 W9：类型面从 `DbClient`（bun:sqlite 同步客户端）改成 `ProviderNeutralDatabase`。
  * 这里从来只做一件事——把请求转给早已中立的 `finishCommittedClarifyAutoDispatch`
  * （它的 `db` 就是 `ProviderNeutralDatabase`）；`DbClient` 是这条链上唯一残留的引擎断言，
- * 而它在 PostgreSQL 上照样跑：`services/task.ts` 的 `createTaskDriveCoordinator` 把
- * `gateContinuationPreDrive` 默认成 `composeGateContinuationPreDrive(...)`，
- * 五个 drive 入口没有一个注入替代品，PG daemon 走的也是这一份。
+ * RFC-382 核对发现：PostgreSQL 会话原来直接构造协调器，并未经过 services/task 的默认
+ * pre-drive 绑定。现在两边会话都由 daemon task-execution 模块组显式绑定此端口；每次调用的
+ * 旧协调器保持原有默认绑定。提交边中断后的收敛由 RFC-382 双引擎回归覆盖。
  * RFC-359 W12：实现与调用方统一改为中立名称。
  */
 export function createClarifyContinuationConvergence(input: {

@@ -176,7 +176,8 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // 改名为 `createFileIntent{Skill,Plugin}ArtifactOwner`；文件实现与覆盖保留。
       // RFC-380: measured corpus 71 -> 65; the previous floor 66 follows it to 65.
       // Two daemon cores, the auth wrapper and three SQLite-only helpers moved or retired.
-    ).toBeGreaterThanOrEqual(65)
+      // RFC-382: composeSqliteDynamicWorkflowValidationContext becomes neutral; 65 -> 64.
+    ).toBeGreaterThanOrEqual(64)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

@@ -1,5 +1,4 @@
 import type { Workflow } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 import { composeProviderResourceAclOperationApplication } from './resourceAcl'
@@ -205,14 +204,8 @@ export function composeDatabaseWorkflowCatalog(input: {
   })
 }
 
-/**
- * RFC-345 T9 — the dynamic-workflow validation context is Resource Catalog's
- * own legacy loader. Bootstrap used to import it through the `@/services`
- * compatibility facade only to hand it straight back into the task engine; the
- * PostgreSQL daemon already builds its source from the public catalog queries,
- * so the SQLite side owns its loader here instead of borrowing the facade.
- */
-export function composeSqliteDynamicWorkflowValidationContext(db: DbClient): Readonly<{
+/** RFC-382: both providers load the complete database-backed validation context. */
+export function composeDynamicWorkflowValidationContext(db: ProviderNeutralDatabase): Readonly<{
   load(): Promise<ValidatorContext>
 }> {
   return Object.freeze({

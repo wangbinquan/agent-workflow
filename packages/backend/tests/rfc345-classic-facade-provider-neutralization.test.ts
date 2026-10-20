@@ -94,7 +94,7 @@ describe('RFC-345 classic facade provider neutralization', () => {
   // module itself, so no composition root imports a classic facade.
   test('bootstrap composes Resource Catalog seams from the module, not from the facades', () => {
     expect(source('src/modules/resource-catalog/composition/workflowOperations.ts')).toContain(
-      'export function composeSqliteDynamicWorkflowValidationContext',
+      'export function composeDynamicWorkflowValidationContext',
     )
     expect(source('src/modules/resource-catalog/application/resourceAuthorization.ts')).toContain(
       'assertNameUnchangedForEditor,',

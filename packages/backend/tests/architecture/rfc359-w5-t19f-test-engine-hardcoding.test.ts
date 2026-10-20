@@ -383,7 +383,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-t19h-generation-upgrade.test.ts: 4',
   'rfc359-t19h-logical-backup-restore.test.ts: 1',
   'rfc359-t19h-postgresql-upgrade.integration.test.ts: 1',
-  'rfc359-task-execution-read-models.test.ts: 1',
   'rfc359-w14-agent-commit-sequence.test.ts: 1',
   'rfc359-w16-task-lifecycle-write-sequence.test.ts: 1',
   'rfc359-w25-task-page-bounded-prefix.test.ts: 1',

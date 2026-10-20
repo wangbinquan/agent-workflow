@@ -95,7 +95,9 @@ describe('RFC-349 collaboration route operations', () => {
   })
 
   test('SQLite daemon composition wires every collaboration decision port without a root cycle', () => {
-    const start = source('src/cli/start.ts')
+    const daemon = source('src/cli/start.ts')
+    expect(daemon).toContain('composeDaemonTaskExecutionModules({')
+    const start = source('src/cli/daemonModules/taskExecution.ts')
     const root = source('src/modules/collaboration/composition.ts')
     const composition = source('src/modules/collaboration/composition/decisionCommands.ts')
 

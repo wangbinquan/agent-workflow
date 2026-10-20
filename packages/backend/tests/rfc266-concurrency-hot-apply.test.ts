@@ -225,7 +225,14 @@ describeEachProviderHttpApplication(
         resolve(import.meta.dir, '..', 'src', 'cli', 'postgresqlDaemonApplication.ts'),
         'utf8',
       )
-      expect(postgresqlSrc).toContain('processConcurrencyScope: input.provider.runtime')
+      const adapters = readFileSync(
+        resolve(import.meta.dir, '..', 'src', 'cli', 'daemonModules', 'adapters.ts'),
+        'utf8',
+      )
+      expect(postgresqlSrc).toMatch(
+        /DAEMON_TASK_EXECUTION_ADAPTERS\.postgresql\(\{\s*db: input\.db,\s*runtime: input\.provider\.runtime,/,
+      )
+      expect(adapters).toContain('processConcurrencyScope: runtime')
       expect(postgresqlSrc).toContain('resizeAllNodePools(input.provider.runtime, {')
     })
   },

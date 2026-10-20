@@ -166,9 +166,13 @@ describe('RFC-349 runtime registry provider operations', () => {
       'src/cli/postgresqlDaemonApplication.ts',
     ]) {
       const root = source(path)
-      expect(root).toContain('nodeRunRuntime: composeNodeRunRuntimePersistence(')
-      expect(root).toContain('composeRuntimeSelectionParticipantInTx')
+      expect(root).toContain('composeDaemonTaskExecutionModules({')
+      expect(root).not.toContain('nodeRunRuntime: composeNodeRunRuntimePersistence(')
     }
+    const bundle = source('src/cli/daemonModules/taskExecution.ts')
+    expect(bundle).toContain(
+      'nodeRunRuntime: composeNodeRunRuntimePersistence(db, composeRuntimeSelectionParticipantInTx)',
+    )
     expect(source('src/services/nodeRunMint.ts')).not.toContain(
       'export async function resolveFrozenRuntime(',
     )

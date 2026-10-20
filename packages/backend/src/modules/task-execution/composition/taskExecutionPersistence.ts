@@ -177,3 +177,5 @@ export function createTaskExecutionPersistence(
  * 保留这个名字是为了两个 bootstrap 与既有测试的 import 不变。
  */
 export { createRuntimeSessionLeaseOperations } from '../infrastructure/runtimeSessionLeaseOperations'
+
+export { createTaskExecutionResourceBinding } from '../infrastructure/taskExecutionResourceSnapshots'

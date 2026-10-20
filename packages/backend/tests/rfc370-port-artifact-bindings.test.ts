@@ -552,7 +552,10 @@ test('PG and HTTP roots share one selected service between runtime, review and t
     'input.appHome',
   ])
   expect(pg.text).toContain('taskRunBinding: taskRunRoot.drive')
-  expect(pg.text).toContain('portArtifactReaderFor: () => portArtifacts')
+  const bundle = source('cli/daemonModules/taskExecution.ts')
+  const pgBundle = calls(pg, pg, 'composeDaemonTaskExecutionModules')
+  expect(pgBundle).toHaveLength(1)
+  expect(pgBundle[0]!.arguments[0]!.getText(pg)).toMatch(/selection:\s*\{[\s\S]*?\bportArtifacts,/)
   expect(pg.text).toMatch(
     /portArtifacts:\s*Object\.freeze\(\{\s*taskExecutionReadModels: [^,]+,\s*portArtifacts,\s*\}\)/,
   )
@@ -565,10 +568,16 @@ test('PG and HTTP roots share one selected service between runtime, review and t
   expect(server.text).toContain('deps.portArtifacts === undefined')
   expect(server.text).toContain('selectPortArtifactOperations(deps.portArtifacts, appHome)')
   expect(server.text).toContain('taskRunBinding: taskRunRoot.drive')
-  expect(server.text).toContain('portArtifactReaderFor: () => portArtifacts')
-  expect(server.text).toContain(
-    'portArtifactReaderFor: () => selectPortArtifactReader(deps.portArtifacts, appHome)',
+  const httpBundle = calls(server, server, 'composeDaemonTaskExecutionModules')
+  expect(httpBundle).toHaveLength(1)
+  expect(httpBundle[0]!.arguments[0]!.getText(server)).toMatch(
+    /selection:\s*\{[\s\S]*?\bportArtifacts,/,
   )
+  expect(
+    bundle.text.match(/portArtifactReaderFor: \(\) => selection\.portArtifacts/g),
+  ).toHaveLength(1)
+  expect(bundle.text).toContain('collaborationRuntime: createCollaborationRuntimeMechanics(db, {')
+  expect(bundle.text).toContain('reviewArtifacts: selection.reviewArtifacts,')
   expect(
     calls(server, server, 'mountPortArtifactRoutes').map((call) =>
       call.arguments[1]!.getText(server),

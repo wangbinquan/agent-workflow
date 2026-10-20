@@ -1,3 +1,8 @@
+import {
+  composeDaemonTaskExecutionModules,
+  type DaemonTaskExecutionModules,
+} from './daemonModules/taskExecution'
+import { DAEMON_TASK_EXECUTION_ADAPTERS } from './daemonModules/adapters'
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import { composeDaemonScheduledTaskModules } from '@/cli/daemonModules/scheduledTasks'
 import { composeDaemonIntegrationModules } from '@/cli/daemonModules/integration'
@@ -38,7 +43,6 @@ import { createFileFusionWorkspaceEffects } from '@/modules/source-control/compo
 import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
-import { runtimeConfigOpts } from '@/services/task'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
 import type { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import {
@@ -87,20 +91,12 @@ import {
   type ApplicationConfigurationBinding,
 } from '@/modules/system-operations/composition/applicationConfiguration'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
-import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
-import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
-import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 // `agent-workflow start` — daemon foreground entry.
 
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
-import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
-import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
-import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
-import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
-import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createSecretBox, type SecretBox } from '@/auth/secretBox'
@@ -139,21 +135,12 @@ import {
   reconcileRepositoryTransportConnectionProjections,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
-import { composeHostTaskLaunchKernel } from '@/modules/task-execution/composition/hostTaskLaunch'
-import type { TaskDriveCoordinator } from '@/modules/task-execution/public/commands'
 import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
-import { createTaskDriveCoordinator } from '@/services/task'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
-import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
-import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
-import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
-  composeSqliteTaskExecutionProviderRuntime,
-  type SelectedSqliteTaskExecutionProviderRuntime,
   type TaskExecutionBackgroundControl,
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
-import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 
 import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
 import {
@@ -161,8 +148,6 @@ import {
   composeIntentQueuedResumption,
 } from '@/modules/intent/composition/queuedResumption'
 
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
 import {
   buildDevelopmentDeliveryDeps,
@@ -195,10 +180,8 @@ import {
   composeHumanGateContinuationDriver,
   activeTaskIdsSnapshot,
   isTaskActive,
-  retryRepositoryPreparation,
 } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
 import {
   composeTaskIdleTimeoutOperations,
   createSqliteTaskIdleTimeoutPersistence,
@@ -250,8 +233,6 @@ import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { createMaintenanceService } from '@/platform/background/maintenanceService'
 
-import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
-import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import {
   runEventCenterCycle,
   type CustomObserverProgramFactory,
@@ -265,7 +246,6 @@ import {
   runDigitalEmployeeOsCycle,
 } from '@/modules/digital-employee/composition'
 
-import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import {
   developmentExecutionContractRegistrations,
@@ -293,7 +273,6 @@ import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-executi
 
 import {
   createTaskLifecycleDurableConsumerDefinitions,
-  createSqliteTaskLifecycleWsProjector,
   taskLifecycleCommittedEventCodec,
 } from '@/modules/task-execution/composition/committedEvents'
 import {
@@ -330,16 +309,9 @@ import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContrac
 import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
 
 import {
-  createCollaborationCommandContext,
   createSqliteHumanGateContinuationRecoveryQueries,
   createSqliteHumanGateTerminalSweepCommand,
 } from '@/modules/collaboration/composition'
-import {
-  createClarifyDecisionCommand,
-  createQuestionDispatchCommand,
-  createReviewDecisionCommand,
-} from '@/modules/collaboration/composition/decisionCommands'
-import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { batchOwnerUserId } from '@/services/repoBatchImport'
@@ -347,7 +319,6 @@ import { redactEventPayload } from '@/services/tokenRedaction'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { directOperationAuthority, directRequestAuthority } from '@/routes/operationAuthority'
 import type { Actor } from '@/auth/actor'
-import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
 import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
@@ -822,7 +793,7 @@ async function composePostgresqlProviderSession(
     configPath: input.applicationConfiguration.notificationKey,
     loadConfig: () => maintenanceConfiguration,
     payloadSources: Object.freeze({
-      activeTaskIds: activeTaskIdsSnapshot,
+      activeTaskIds: runtime.taskExecutionModules.activeTaskIds,
       activeIntentApplyJournalIds: runtime.intentMaintenance.activeApplyJournalIds,
       activeResourceBundleApplyIds: runtime.resourcePackageActivity.activeApplyIds,
       bootIntentTurnIds: runtime.intentMaintenance.bootTurnIds,
@@ -937,7 +908,7 @@ async function composePostgresqlProviderSession(
           notifyTaskTerminal(taskId, status)
         },
         async nudgeWorkspacePrune(taskId) {
-          if (isTaskActive(taskId)) return
+          if (runtime.taskExecutionModules.isTaskActive(taskId)) return
           await runtime.workspaceMaintenance.finalizeClaimedWorkspace(taskId)
         },
         async enqueueTaskRunDistill(taskId) {
@@ -2275,13 +2246,6 @@ async function composeSqliteProviderSession(
     repositoryPublicationTransport,
   } = repositoryCredentials
   const repositoryTransportRepository = providerCore.repositoryTransportCredentialRepository
-  const taskExecutionResourceSnapshots = composeTaskExecutionResourceBinding(
-    taskExecutionResourceDependencies,
-  )
-  const taskExecutionResources = createTaskExecutionResourceBinding(
-    db,
-    taskExecutionResourceSnapshots,
-  )
   const memoryModules = composeDaemonMemoryModules({
     db,
     nodeRunPrompts,
@@ -2292,7 +2256,7 @@ async function composeSqliteProviderSession(
         await readCommittedReviewArtifactBody(taskExecutionProvider.collaboration, finalPath),
     },
   })
-  const { memoryOperations, memoryCatalog, memoryInjectionQueries } = memoryModules
+  const { memoryOperations, memoryCatalog } = memoryModules
 
   const broadcastAlert = (
     row: { taskId: string; rule: string; severity: 'warning' | 'error' },
@@ -2313,338 +2277,43 @@ async function composeSqliteProviderSession(
     })
   }
 
-  // The provider graph captures these methods without evaluating its later runtime.
-  // No post-construction bind can be forgotten in one provider's bootstrap.
-  const schedulerDriver = Object.freeze<SchedulerDriverPort>({
-    drive: (request) => taskExecutionProvider.runtime.schedulerDriver.drive(request),
-    cancelChild: (request) => taskExecutionProvider.runtime.schedulerDriver.cancelChild(request),
-    resumeChild: (request) => taskExecutionProvider.runtime.schedulerDriver.resumeChild(request),
-    isTaskActive: (taskId) => taskExecutionProvider.runtime.schedulerDriver.isTaskActive(taskId),
-  })
-  const taskStartDepsFor = (actorUserId: string) => ({
-    ...(taskLaunchConfiguration.selectedQueries === undefined
-      ? buildStartTaskDeps(
-          db,
-          schedulerDriver,
-          Paths.config,
-          actorUserId,
-          secretBox,
-          identityAccess,
-          { repositoryWorkspace: providerCore.repositoryWorkspaceStore, runtimeSessionLeases },
-        )
-      : {
-          db,
-          schedulerDriver,
-          repositoryWorkspace: providerCore.repositoryWorkspaceStore,
-          runtimeSessionLeases,
-          actorUserId,
-          secretBox,
-          identityAccess,
-          configPath: Paths.config,
-          launchConfiguration: taskLaunchConfiguration.selectedQueries,
-        }),
-    agentLaunchResources: Object.freeze({
-      resources: composeAgentLaunchResourceOperations({ db }),
-      integrity: agentResourceIntegrity.launch,
-    }),
-  })
-  const fusionStartDeps = Object.freeze({
-    launchConfiguration: taskLaunchConfiguration.continuationQueries,
-    actorUserId: SYSTEM_USER_ID,
-    secretBox,
-    identityAccess,
-    repositoryWorkspace: providerCore.repositoryWorkspaceStore,
-    runtimeSessionLeases,
-    configPath: Paths.config,
-  })
-  const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
-    composeSqliteTaskExecutionProviderRuntime(db, {
-      archive: input.taskArchive,
-      workspaceReads: input.workspaceReads,
-      runtime: {
-        taskRunBinding: taskRunRoot.drive,
-        workspaceExcludeProfilesFor,
-        isolationWorkspaces: input.isolationWorkspaces,
-        repositoryGitWorkspaces: input.repositoryGitWorkspaces,
-        workspacePresence,
-        observationInvocations: observationCalls,
-        memoryInjectionQueries,
-        collaborationRuntime: createCollaborationRuntimeMechanics(db, {
-          portArtifactReaderFor: () => portArtifacts,
-        }),
-        workgroupTurns: composeWorkgroupTurnsOperations(
-          db,
-          composeWorkgroupHostLedgerParticipantFactory({
-            collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
-          }),
-          createWorkgroupClarifyAskGate(db),
-        ),
-        runtimeSessionLeases,
-        runtimeRegistry,
-        nodeRunRuntime: composeNodeRunRuntimePersistence(
-          db,
-          composeRuntimeSelectionParticipantInTx,
-        ),
-        identityAccess: Object.freeze({
-          delegatedRequests: identityAccess.delegatedRequests,
-          taskExecutionResources,
-        }),
-        dynamicWorkflow: Object.freeze({
-          persistence: composeDynamicWorkflowPersistence(db),
-          validationContext: composeSqliteDynamicWorkflowValidationContext(db),
-        }),
-        codeHostConnections: repositoryMetadataConnections,
-        repositoryPublicationTransport,
-      },
-      routeLaunch: {
-        workspaceUploads: input.workspaceUploads,
-        configPath: Paths.config,
-        // RFC-359 AC-1（plan §5hn 批次一）：单代理启动改走与 PostgreSQL **同一份**编排
-        // （`createAgentRouteLaunch`，终端是根启动内核）。下面这几格就是那份编排要的依赖。
-        gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-        agent: Object.freeze({
-          resources: composeAgentLaunchResourceOperations({ db }),
-          integrity: agentResourceIntegrity.launch,
-        }),
-        routeWorkspace: {
-          sourceContexts: identityAccess.taskPreparationContext,
-          appHome: Paths.root,
-          secretBox,
-          repositoryPreparation: composeRepositoryPreparation({
-            preparationEffects: input.repositoryPreparationEffects,
-            scratchEffects: input.scratchWorkspaceEffects,
-            ...(taskLaunchConfiguration.preparationConfiguration === undefined
-              ? {}
-              : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
-            db,
-            appHome: Paths.root,
-            secretBox,
-            cloneTimeoutMs: (taskLaunchConfiguration.selectedQueries === undefined
-              ? resolveLaunchRuntimeConfig(Paths.config)
-              : {}
-            ).cloneTimeoutMs,
-          }),
-        },
-        resourceAuthorityFor: (actor) =>
-          Object.freeze({
-            actor,
-            authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
-            resources: taskExecutionResources,
-          }),
-        // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组臂的资源面，两个根共用**同一份**
-        // （`composeWorkgroupLaunchResourceOperations`）。它读库 + `canViewResource`，
-        // 因此定时 / webhook 的**委派** actor 也能用——把 actor 投影成 direct authority
-        // 再查资源目录的那种写法认不出委派 actor（`foreign-legacy-actor-projection`）。
-        workgroup: composeWorkgroupLaunchResourceOperations({
-          db,
-          integrity: agentResourceIntegrity.launch,
-        }),
-        // 协调器↔`schedulerDriver` 的环打在**词法作用域**上，与 PostgreSQL daemon
-        // 那份（`postgresqlDaemonApplication.ts` 的 `taskDriveCoordinator`）同形：
-        // 这个转发面只在运行期取值，真协调器是同一作用域里后面那个 `const`。
-        coordinator: Object.freeze({
-          submit: (request: Parameters<TaskDriveCoordinator['submit']>[0]) =>
-            routeLaunchDriveCoordinator.submit(request),
-        }),
-      },
-      routes: ({ readModels }) => {
-        const routeCollaborationContext: CollaborationRouteContext =
-          createCollaborationCommandContext({
-            db,
-            appHome: Paths.root,
-            taskExecutionReadModels: readModels,
-            reviewDecisions: createReviewDecisionCommand({
-              db,
-              appHome: Paths.root,
-            }),
-            questionDispatches: createQuestionDispatchCommand(db),
-            clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
-          })
-        return {
-          effects: input.taskDeletionEffects,
-          nodeRunPrompts,
-          collaboration: routeCollaborationContext,
-          // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
-          // 最后一个要 legacy `StartTaskDeps` 的路由动词，合一之后路由层不再持有它。
-          resourceAuthorityFor: (actor: Actor) =>
-            Object.freeze({
-              actor,
-              authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
-              resources: taskExecutionResources,
-            }),
-          // RFC-359 AC-1（第 3 刀）：列表行的 owner 身份投影由组合根装配，与 PostgreSQL 同形。
-          owners: composeOwnerIdentityQueries(db),
-          appHome: Paths.root,
-        }
-      },
-      lifecycleRepair: {
-        onAlert: broadcastAlert,
-        onResolved: broadcastResolved,
-      },
-      fusion: {
-        appHome: Paths.root,
-        startDeps: fusionStartDeps,
-        // RFC-370 §10 V20: standalone engine workspaces under the app home.
-        workspaces: createFileFusionWorkspaceEffects({ appHome: Paths.root }),
-      },
-      rootResumeRuntime: () =>
-        taskLaunchConfiguration.selectedQueries === undefined
-          ? {
-              runConfig: {
-                appHome: Paths.root,
-                ...(taskLaunchConfiguration.selectedQueries !== undefined ||
-                config.subagentLiveCapture === undefined
-                  ? {}
-                  : { subagentLiveCapture: config.subagentLiveCapture }),
-                ...(taskLaunchConfiguration.selectedQueries === undefined
-                  ? resolveLaunchRuntimeConfig(Paths.config)
-                  : {}),
-              },
-            }
-          : (async () => {
-              const fresh = await taskLaunchConfiguration.drive()
-              return {
-                runConfig: {
-                  appHome: Paths.root,
-                  subagentLiveCapture: fresh.subagentLiveCapture,
-                  ...runtimeConfigOpts(fresh),
-                },
-              }
-            })(),
-      repositoryPreparationRetry: Object.freeze({
-        // 2026-09-19：**发起人必须原样传下去**。`continuationSource` 只有在
-        // `actorUserId !== SYSTEM_USER_ID` 时才返回 `'rest'`，而 `mayAuthorizeReplay` 只授权
-        // `rest`/`mcp` 的演员命令。这里把它写死成 SYSTEM_USER_ID，于是用户点「重试准备」提交的
-        // 续跑拿不到重放授权，血缘上留着的 `requires-actor` 决定把这次重试判成
-        // `task-execution-outcome-unknown`（提示「use a manual resume/retry/sync command」——
-        // 而他用的就是那条命令）：卡在仓库准备的任务从界面上永远重试不了（e2e TASK-27）。
-        // 缺席授权 = boot 自动恢复那条路，它继续以 SYSTEM_USER_ID 走 `auto`。
-        async retry(taskId: string, authorization?: { readonly actorUserId: string }) {
-          await retryRepositoryPreparation(db, taskId, {
-            ...taskStartDepsFor(authorization?.actorUserId ?? SYSTEM_USER_ID),
-            ...(taskLaunchConfiguration.selectedQueries === undefined
-              ? {}
-              : await taskLaunchConfiguration.start()),
-            repositoryPreparation: composeRepositoryPreparation({
-              preparationEffects: input.repositoryPreparationEffects,
-              scratchEffects: input.scratchWorkspaceEffects,
-              ...(taskLaunchConfiguration.preparationConfiguration === undefined
-                ? {}
-                : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
-              db,
-              appHome: Paths.root,
-              secretBox,
-              cloneTimeoutMs: (taskLaunchConfiguration.selectedQueries === undefined
-                ? resolveLaunchRuntimeConfig(Paths.config)
-                : {}
-              ).cloneTimeoutMs,
-            }),
-          })
-        },
-      }),
-    })
-  const taskExecutionPersistence = taskExecutionProvider.persistence
-  const taskExecutionRuntime = taskExecutionProvider.runtime
-  // RFC-359 AC-1（plan §5hn 批次一）：单代理启动内核用的真协调器。上面 `routeLaunch.coordinator`
-  // 那个转发面闭包引用它——环打在词法作用域上，删掉这一行 tsc 立刻报「Cannot find name」，
-  // 而不是留下一个编译通过、运行期才炸的空槽（同 PostgreSQL daemon 的 `boundTaskDriveCoordinator`）。
-  const launchRuntimeConfig =
-    taskLaunchConfiguration.selectedQueries === undefined
-      ? resolveLaunchRuntimeConfig(Paths.config)
-      : {}
-  const routeLaunchDriveCoordinator = createTaskDriveCoordinator({
-    ...(taskLaunchConfiguration.selectedQueries === undefined
-      ? {}
-      : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
-    persistence: taskExecutionPersistence,
-    deps: {
-      db,
-      schedulerDriver: taskExecutionRuntime.schedulerDriver,
-      configPath: Paths.config,
-      // RFC-366：绑上 memory 的蒸馏入队 participant。
-      // 两个用处，都靠它：`runtimeConfigOpts` 据此组出 agent 运行结束的观察者
-      // （每个 agent node_run 结算一次），`gateContinuationPreDrive` 据此拿到真正的
-      // 入队器而不是那个 fail-closed 的占位（`missingMemoryDistillEnqueuer`，
-      // `StartTaskDeps.memoryDistillEnqueuer` 的注释本来就写明「bootstrap 必须绑」）。
-      memoryDistillEnqueuer: memoryOperations.distillCommands,
-      // RFC-359 AC-1（plan §5hn 批次二 ①②，**修 20d4a6ce5 推的 e2e 红**）：
-      // 这台协调器的运行期配置必须和 `buildStartTaskDeps` 取自同一处。
-      // `createTaskDriveCoordinator` 里的 `runtimeConfigOpts(input.deps)` 从 `deps` 上读
-      // 十七个旋钮（`defaultNodeRetries` / `defaultPerNodeTimeoutMs` / `commitPush` /
-      // `mergeAgent` / 各类并发上限…）；只给 `{db, schedulerDriver, configPath}` 时它们**全是
-      // undefined**，驱动于是退回编译期缺省。webhook 启动改走这台协调器之后当场照出来：
-      // `webhook-mr-runtime-races` 里那个故意崩溃的 runtime 节点被重试到 **8 次**
-      //（判据要 1 次），因为 `defaultNodeRetries` 丢了。
-      ...launchRuntimeConfig,
-    },
-    // 2026-09-19：这台协调器**长驻**（boot 建好、之后服务每一次 `POST /api/tasks`），所以那
-    // 17 个旋钮不能冻在 boot 那一刻——设置页把默认运行时改到另一行之后，新任务必须按新那一行
-    // 派发（e2e CFG-45）。给了 refresher 之后配置在每次 submit 现读一次。
-    refreshLaunchConfig: () =>
-      taskLaunchConfiguration.selectedQueries === undefined
-        ? resolveLaunchRuntimeConfig(Paths.config)
-        : {},
-    appHome: Paths.root,
-    // RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：这台协调器同时驱动**定时 / webhook
-    // 触发**（触发器参与者收的就是它），所以必须带上延后仓库准备的第 0 步——缺了它，
-    // 占位行会永远停在 `pending`。直启路由不延后，那一步只会看到 `worktreePath !== ''`
-    // 并直接返回 ready。两个旋钮从配置取（此前经 `buildStartTaskDeps` 隐式带过来）。
-    repositoryPreparation: composeDeferredRepositoryPreparation({
-      ...(taskLaunchConfiguration.selectedQueries === undefined
-        ? {}
-        : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
-      repositoryPreparation: composeRepositoryPreparation({
-        preparationEffects: input.repositoryPreparationEffects,
-        scratchEffects: input.scratchWorkspaceEffects,
-        ...(taskLaunchConfiguration.preparationConfiguration === undefined
-          ? {}
-          : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
-        db: db,
-        appHome: Paths.root,
-        secretBox: secretBox,
-        cloneTimeoutMs: (taskLaunchConfiguration.selectedQueries === undefined
-          ? resolveLaunchRuntimeConfig(Paths.config)
-          : {}
-        ).cloneTimeoutMs,
-      }),
+  const taskExecutionModules: DaemonTaskExecutionModules<'sqlite'> =
+    composeDaemonTaskExecutionModules({
       db,
       appHome: Paths.root,
-
+      configPath: Paths.config,
       secretBox,
-      ...(launchRuntimeConfig.cloneTimeoutMs === undefined
-        ? {}
-        : { cloneTimeoutMs: launchRuntimeConfig.cloneTimeoutMs }),
-      ...(launchRuntimeConfig.gitBaselineSyncWindowMs === undefined
-        ? {}
-        : { gitBaselineSyncWindowMs: launchRuntimeConfig.gitBaselineSyncWindowMs }),
-    }),
-    engineFailureMessage: 'agent route task drive threw',
-    failureReporter: {
-      async report({ taskId, error, execution }) {
-        const now = Date.now()
-        await taskExecutionProvider.persistence.runtimeLifecycle.trySet({
-          taskId,
-          to: 'failed',
-          allowedFrom: ['pending', 'running'],
-          extra: {
-            finishedAt: now,
-            errorSummary: 'task drive failed',
-            errorMessage: error instanceof Error ? error.message : String(error),
-          },
-          executionContext: execution,
-          now,
-          reason: 'task-drive',
-        })
-        await taskExecutionProvider.persistence.intentTerminalization.terminalize({
-          taskId,
-          state: 'failed',
-          failureCode: 'task-drive-failed',
-          now,
-          claimedOwnerEpoch: execution.token.epoch,
-        })
+      taskLaunchConfiguration,
+      adapters: DAEMON_TASK_EXECUTION_ADAPTERS.sqlite({ db }),
+      core: providerCore,
+      observation: observationModules,
+      resources: { agentResourceIntegrity, owners: composeOwnerIdentityQueries(db) },
+      repository: repositoryCredentials,
+      memory: memoryModules,
+      selection: {
+        taskRunBinding: taskRunRoot.drive,
+        workspaceExcludeProfilesFor,
+        nodeRunPrompts,
+        portArtifacts,
+        isolationWorkspaces: input.isolationWorkspaces,
+        repositoryGitWorkspaces: input.repositoryGitWorkspaces,
+        archive: input.taskArchive,
+        workspaceReads: input.workspaceReads,
+        effects: input.taskDeletionEffects,
+        workspaceUploads: input.workspaceUploads,
+        preparationEffects: input.repositoryPreparationEffects,
+        scratchEffects: input.scratchWorkspaceEffects,
+        fusionWorkspaces: createFileFusionWorkspaceEffects({ appHome: Paths.root }),
       },
-    },
-  })
+      alerts: { onAlert: broadcastAlert, onResolved: broadcastResolved },
+      finalizeWorkspace: async (taskId) => {
+        await finishClaimedWebhookWorkspacePrune(db, taskId)
+      },
+    })
+  const taskExecutionProvider = taskExecutionModules
+  const taskExecutionResources = taskExecutionModules.resources
+  const taskExecutionPersistence = taskExecutionProvider.persistence
+  const taskExecutionRuntime = taskExecutionProvider.runtime
   const collaborationContext = taskExecutionProvider.collaboration
   const scheduledTaskModules = composeDaemonScheduledTaskModules({
     db,
@@ -2742,116 +2411,23 @@ async function composeSqliteProviderSession(
       }
     },
   })
-  // RFC-359 AC-1（plan §5hi）：数字员工的宿主任务改走**启动内核**，与 PostgreSQL 同一条路。
-  // 此前 SQLite 侧走 `startTask` + `preCreatedWorktree`，PG 侧走内核 + 借用工作区租约——
-  // 两份 action 执行装配面因此长期是一对。内核在两个引擎上都真启动过（plan §5hh 的用例），
-  // 所以这里换的是「走哪条机制」，不是「赌它能不能跑」。
-  //
-  // 失败上报逐条对齐 PostgreSQL daemon 那份（`postgresqlDaemonApplication.ts` 的
-  // `boundTaskDriveCoordinator.failureReporter`）：驱动崩了要把任务落成 failed 并终结意图，
-  // 否则失败会表现成「动作卡住不失败」。
-  const hostActionEnvironment = (() => {
-    const hostLaunchStartDeps =
-      taskLaunchConfiguration.selectedQueries === undefined
-        ? buildStartTaskDeps(
-            db,
-            taskExecutionRuntime.schedulerDriver,
-            Paths.config,
-            SYSTEM_USER_ID,
-            secretBox,
-            identityAccess,
-            { repositoryWorkspace: providerCore.repositoryWorkspaceStore, runtimeSessionLeases },
-          )
-        : {
-            db,
-            schedulerDriver: taskExecutionRuntime.schedulerDriver,
-            repositoryWorkspace: providerCore.repositoryWorkspaceStore,
-            runtimeSessionLeases,
-            actorUserId: SYSTEM_USER_ID,
-            secretBox,
-            identityAccess,
-            configPath: Paths.config,
-            launchConfiguration: taskLaunchConfiguration.selectedQueries,
-          }
-    const hostTaskLaunch = composeHostTaskLaunchKernel({
-      sourceContexts: identityAccess.taskPreparationContext,
-      repositoryPreparation: composeRepositoryPreparation({
-        preparationEffects: input.repositoryPreparationEffects,
-        scratchEffects: input.scratchWorkspaceEffects,
-        ...(taskLaunchConfiguration.preparationConfiguration === undefined
-          ? {}
-          : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
-        db: db,
-        appHome: Paths.root,
-        secretBox: secretBox,
-        cloneTimeoutMs: (taskLaunchConfiguration.selectedQueries === undefined
-          ? resolveLaunchRuntimeConfig(Paths.config)
-          : {}
-        ).cloneTimeoutMs,
-      }),
-      db,
-      appHome: Paths.root,
-      secretBox,
-      gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-      coordinator: createTaskDriveCoordinator({
-        ...(taskLaunchConfiguration.selectedQueries === undefined
-          ? {}
-          : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
-        deps: hostLaunchStartDeps,
-        persistence: taskExecutionPersistence,
-        // 2026-09-19：组合根装配一次、之后长驻——17 个运行期旋钮必须每次 drive 现读，
-        // 否则设置页改完配置对新任务不生效（e2e CFG-45 实撞，判据在
-        // `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`）。
-        refreshLaunchConfig: () =>
-          taskLaunchConfiguration.selectedQueries === undefined
-            ? resolveLaunchRuntimeConfig(Paths.config)
-            : {},
-        appHome: Paths.root,
-        engineFailureMessage: 'digital employee host task drive threw',
-        failureReporter: {
-          async report({ taskId, error, execution }) {
-            const now = Date.now()
-            await taskExecutionProvider.persistence.runtimeLifecycle.trySet({
-              taskId,
-              to: 'failed',
-              allowedFrom: ['pending', 'running'],
-              extra: {
-                finishedAt: now,
-                errorSummary: 'task drive failed',
-                errorMessage: error instanceof Error ? error.message : String(error),
-              },
-              executionContext: execution,
-              now,
-              reason: 'task-drive',
-            })
-            await taskExecutionProvider.persistence.intentTerminalization.terminalize({
-              taskId,
-              state: 'failed',
-              failureCode: 'task-drive-failed',
-              now,
-              claimedOwnerEpoch: execution.token.epoch,
-            })
-          },
-        },
-      }),
-    })
-    return {
-      db,
-      launch: hostTaskLaunch,
-      resolveActor: async () => {
-        const identity = await admitDaemonIdentity(identityAccess)
-        if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')
-        return actorOfDirectAuthority(identity)
-      },
-      resourceAuthorityFor: (actor: Actor) => ({
-        actor,
-        authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
-        resources: taskExecutionResources,
-      }),
-      cancelTask: (taskId: string) => composeTaskCancellation(db).cancel(taskId),
-      readModels: taskExecutionProvider.readModels,
-    }
-  })()
+  // RFC-382: host tasks use the session workflow kernel and its live configuration.
+  const hostActionEnvironment = {
+    db,
+    launch: taskExecutionProvider.routeLaunch.workflow,
+    resolveActor: async () => {
+      const identity = await admitDaemonIdentity(identityAccess)
+      if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')
+      return actorOfDirectAuthority(identity)
+    },
+    resourceAuthorityFor: (actor: Actor) => ({
+      actor,
+      authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+      resources: taskExecutionResources,
+    }),
+    cancelTask: (taskId: string) => composeTaskCancellation(db).cancel(taskId),
+    readModels: taskExecutionProvider.readModels,
+  }
   const developmentAutomation = composeDevelopmentAutomation({
     verificationCommands:
       input.verificationCommands === undefined
@@ -2958,7 +2534,7 @@ async function composeSqliteProviderSession(
     collaborationCommittedEventCodec,
   )
   const committedEventProjectors = [
-    createSqliteTaskLifecycleWsProjector(db),
+    taskExecutionProvider.lifecycleProjector,
     createCollaborationWsProjector(createCollaborationCommittedEventProjection(db)),
   ]
   const committedEventProjectionLedger = createCommittedEventProjectionLedger()
@@ -3238,6 +2814,7 @@ async function composeSqliteProviderSession(
     workspacePresence,
     schedulerDriver: taskExecutionRuntime.schedulerDriver,
     taskExecutionReadModels: taskExecutionRuntime.readModels,
+    taskExecutionModules,
     taskRouteLaunch: taskExecutionProvider.routeLaunch,
     taskArchiveMaintenance: taskExecutionProvider.archive,
     skillContent: input.skillContent,

@@ -2,20 +2,18 @@ import { createIdentityAccessRuntime } from '@/modules/identity-access/compositi
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-359 AC-1（plan §5hi）—— 测试侧的「宿主任务启动内核」装配，和生产同形。
 //
-// 生产两个 SQLite 组合根（`cli/start.ts` 的 `composeSqliteProviderSession`、
-// `server.ts` 的 `composeFallbackDevelopmentAutomation`）都用
-// 启动内核 + `createTaskDriveCoordinator` 驱动数字员工的宿主任务；PG 侧用的是
-// 同一个内核（`providerRuntime.ts` 的 `routeLaunch.workflow`）。测试要证的是
-// 这条链在 SQLite 上真的跑得动，所以这里复刻生产的装配，而不是另造一份桩。
+// RFC-382 后生产从会话模块组取得 routeLaunch.workflow；这份既有 fixture 保留
+// 调用方指定的完成模式，仍驱动相同的根启动内核与工作区参与者。
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   TaskDriveCompletionMode,
   TaskDriveCoordinator,
 } from '@/modules/task-execution/application/drive/taskDriveTypes'
+import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
 import {
-  composeHostTaskLaunchKernel,
-  type HostTaskLaunchKernelDependencies,
-} from '@/modules/task-execution/composition/hostTaskLaunch'
+  createRootTaskLaunchKernel,
+  type RootTaskLaunchDependencies,
+} from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type { RootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 import { createTaskDriveCoordinator, type TaskDriveCoordinatorDependencies } from '@/services/task'
@@ -23,7 +21,7 @@ import { createTaskDriveCoordinator, type TaskDriveCoordinatorDependencies } fro
 export function createTestHostTaskLaunchKernel(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
-  readonly gitCommitIdentity: HostTaskLaunchKernelDependencies['gitCommitIdentity']
+  readonly gitCommitIdentity: RootTaskLaunchDependencies['gitCommitIdentity']
   readonly coordinatorDeps: TaskDriveCoordinatorDependencies
   readonly persistence: Pick<TaskExecutionPersistence, 'runtimeLifecycle'>
   readonly completionMode: TaskDriveCompletionMode
@@ -54,14 +52,17 @@ export function createTestHostTaskLaunchKernel(input: {
   const coordinator: TaskDriveCoordinator = {
     submit: (request) => drive.submit({ ...request, completionMode: input.completionMode }),
   }
-  // 走的是生产那一个装配入口（两个 SQLite 组合根用的也是它），
-  // 所以「测试装出来的内核」与「生产装出来的内核」按构造就是同一台。
-  return composeHostTaskLaunchKernel({
-    sourceContexts: createIdentityAccessRuntime({ db: input.db }).taskPreparationContext,
-    repositoryPreparation: composeRepositoryPreparation({ db: input.db, appHome: input.appHome }),
+  // RFC-382: the session bundle supplies this primitive in production; this legacy
+  // fixture retains its explicit completion mode without a test-only production wrapper.
+  return createRootTaskLaunchKernel({
     db: input.db,
-    appHome: input.appHome,
     gitCommitIdentity: input.gitCommitIdentity,
     coordinator,
+    workspace: createTaskRouteWorkspaceParticipant({
+      db: input.db,
+      appHome: input.appHome,
+      sourceContexts: createIdentityAccessRuntime({ db: input.db }).taskPreparationContext,
+      repositoryPreparation: composeRepositoryPreparation({ db: input.db, appHome: input.appHome }),
+    }),
   })
 }

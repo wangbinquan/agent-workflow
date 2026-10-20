@@ -1,3 +1,4 @@
+import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoordinator'
 import type { TaskRecoveryProviderSelection } from './taskRecoverySelection'
 import {
   selectRepositoryWorkspaceReadQueries,
@@ -10,6 +11,7 @@ import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
 import {
+  composeWorkgroupTaskRoomClarifyParticipantFactory,
   createPostgresqlClarifyRepairParticipant,
   createPostgresqlReviewRepairParticipant,
 } from '@/modules/collaboration/composition'
@@ -28,7 +30,10 @@ import type { TaskExecutionRuntimeParticipants } from '../application/ports/task
 import type { TaskLifecycleAutoRepairCommand } from '../application/ports/taskLifecycleAutoRepairCommand'
 import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
 import type { TaskExecutionShutdownOperations } from '../application/ports/taskExecutionShutdownOperations'
-import type { ChildResumeRuntime } from '../application/ports/taskExecutionTopology'
+import type {
+  ChildResumeRuntime,
+  SchedulerDriverPort,
+} from '../application/ports/taskExecutionTopology'
 import type {
   AgentRouteTaskLaunchOperations,
   TaskCancellationCommand,
@@ -71,7 +76,7 @@ import {
 import type { AutomaticTaskRepairOptions } from '../infrastructure/taskRouteRepairOperations'
 import { createTaskLifecycleAutoRepairCommand } from './taskLifecycleRepair'
 import { createDatabaseTaskLifecycleWsProjector } from '../infrastructure/taskLifecycleWsProjection'
-import { createTaskOverviewQuery } from '../infrastructure/taskOverviewQuery'
+import { createTaskOverviewQuery } from './taskOverview'
 import { createPostgresqlFusionEngineTaskOperations } from '../infrastructure/postgresqlFusionEngineTaskOperations'
 import { createSqliteFusionEngineTaskOperations } from '../infrastructure/fusionEngineTaskOperations'
 import {
@@ -117,6 +122,10 @@ export type TaskExecutionBackgroundStartDependencies =
   TaskExecutionProviderBackgroundStartDependencies
 
 interface SelectedTaskExecutionProviderRuntimeBase {
+  readonly driverLifecycle: TaskDriverLifecyclePort
+  readonly launches: ReturnType<typeof createTaskExecutionLaunchParticipant>
+  readonly collaboration: SqliteRouteCollaborationContext
+  readonly workgroupTaskRoom: WorkgroupTaskRoomTaskParticipantFactory
   readonly participants: TaskExecutionRuntimeParticipants
   readonly persistence: TaskExecutionPersistence
   readonly runtime: TaskExecutionRuntime
@@ -140,7 +149,7 @@ interface SelectedTaskExecutionProviderRuntimeBase {
     agent: AgentRouteTaskLaunchOperations
     workgroup: WorkgroupRouteTaskLaunchOperations
     /** Workflow route performs its own workflow/OCC checks before this kernel. */
-    workflow?: RootTaskLaunchKernel
+    workflow: RootTaskLaunchKernel
   }>
   readonly routes: Readonly<{
     readonly tasks: TaskRouteOperations
@@ -246,6 +255,9 @@ type SqliteRuntimeParticipantsAssembled =
 export interface SqliteTaskExecutionProviderRuntimeDependencies<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
 > {
+  readonly persistence?: TaskExecutionPersistence
+  readonly driverLifecycle?: TaskDriverLifecyclePort
+  readonly schedulerDriver?: SchedulerDriverPort
   readonly archive?: TaskArchiveContentBinding
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly runtime: Omit<
@@ -272,6 +284,9 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
     'db' | 'schedulerDriver'
   >
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime | Promise<ChildResumeRuntime>
+  readonly workgroupTaskRoom?: Readonly<{
+    collaboration: WorkgroupTaskRoomClarifyParticipantFactory
+  }>
   readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
 }
 
@@ -283,10 +298,22 @@ export function composeSqliteTaskExecutionProviderRuntime<
   dependencies: SqliteTaskExecutionProviderRuntimeDependencies<C>,
 ): SelectedSqliteTaskExecutionProviderRuntime<C> {
   const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
-  const persistence = createTaskExecutionPersistence(db, {
-    workspacePresence: dependencies.runtime.workspacePresence,
-  })
+  const persistence =
+    dependencies.persistence ??
+    createTaskExecutionPersistence(db, {
+      workspacePresence: dependencies.runtime.workspacePresence,
+    })
   const log = createLogger('task')
+  const driverLifecycle =
+    dependencies.driverLifecycle ??
+    createDatabaseTaskDriverLifecyclePort({
+      db,
+      persistence,
+      log,
+      finalizeWorkspace: async (taskId) => {
+        await finishClaimedWebhookWorkspacePrune(db, taskId)
+      },
+    })
   const participants = createTaskExecutionRuntimeParticipants(
     bindProviderTaskRunParticipantsInput(
       {
@@ -303,14 +330,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
         log,
         // RFC-359 AC-1（第 12 刀）：这一支的部署形态——进程级单例的同步认领
         //（执行上下文带 `legacyConnection`）+ 进程内注册表的活跃度 / 停机票据。
-        lifecycle: createDatabaseTaskDriverLifecyclePort({
-          db,
-          persistence,
-          log,
-          finalizeWorkspace: async (taskId: string) => {
-            await finishClaimedWebhookWorkspacePrune(db, taskId)
-          },
-        }),
+        lifecycle: driverLifecycle,
         activity: composeLegacyTaskActivityParticipant(),
         stop: composeLegacyTaskStopRegistry(),
       },
@@ -321,7 +341,18 @@ export function composeSqliteTaskExecutionProviderRuntime<
       },
     ),
   )
-  const runtime = composeTaskExecutionRuntime({ participants, readModels: persistence.reads })
+  const composedRuntime = composeTaskExecutionRuntime({
+    participants,
+    readModels: persistence.reads,
+  })
+  const runtime =
+    dependencies.schedulerDriver === undefined
+      ? composedRuntime
+      : Object.freeze({
+          ...composedRuntime,
+          schedulerDriver: dependencies.schedulerDriver,
+          topology: Object.freeze({ schedulerDriver: dependencies.schedulerDriver }),
+        })
   const routeLaunch = createSqliteTaskRouteLaunchOperations({
     db,
     ...dependencies.routeLaunch,
@@ -399,6 +430,8 @@ export function composeSqliteTaskExecutionProviderRuntime<
   })
   return Object.freeze({
     provider: 'sqlite',
+    driverLifecycle,
+    launches,
     collaboration: routeDependencies.collaboration,
     participants,
     persistence,
@@ -423,7 +456,22 @@ export function composeSqliteTaskExecutionProviderRuntime<
       taskExecutions,
       buildScheduleLaunch,
     }),
-    routeLaunch: Object.freeze({ ...routeLaunch }),
+    routeLaunch: Object.freeze({
+      ...routeLaunch,
+      workflow: createRootTaskLaunchKernel({
+        db,
+        ...dependencies.routeLaunch,
+        workspace: createTaskRouteWorkspaceParticipant({
+          db,
+          ...dependencies.routeLaunch.routeWorkspace,
+        }),
+      }),
+    }),
+    workgroupTaskRoom: composeWorkgroupTaskRoomTaskParticipantFactory({
+      collaboration:
+        dependencies.workgroupTaskRoom?.collaboration ??
+        composeWorkgroupTaskRoomClarifyParticipantFactory(),
+    }),
     routes: Object.freeze({
       tasks: taskRoutes,
       clarifyDirective: composeTaskClarifyDirectiveRouteOperations(routeDependencies.collaboration),
@@ -472,6 +520,9 @@ type ProviderRuntimeWithoutChildLaunch<Runtime> = Runtime extends unknown
   : never
 
 export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
+  readonly persistence?: TaskExecutionPersistence
+  readonly driverLifecycle?: TaskDriverLifecyclePort
+  readonly schedulerDriver?: SchedulerDriverPort
   readonly archive?: TaskArchiveContentBinding
   /** RFC-370 §9.2 V4 — hosted (PostgreSQL-only) platform recovery consumer. */
   readonly recoverySelection?: TaskRecoveryProviderSelection
@@ -507,6 +558,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
 ): SelectedPostgresqlTaskExecutionProviderRuntime {
   const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
   const persistence =
+    dependencies.persistence ??
     dependencies.runtime.persistence ??
     createTaskExecutionPersistence(db, {
       workspacePresence: dependencies.runtime.workspacePresence,
@@ -516,6 +568,16 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     createProviderTaskExecutionModule({
       daemonGeneration: dependencies.runtime.daemonGeneration,
       persistence,
+    })
+  const driverLifecycle =
+    dependencies.driverLifecycle ??
+    createTaskDriverLifecyclePort({
+      db,
+      module: executionModule,
+      claim: (intentId) => executionModule.claimPersisted({ intentId }),
+      persistence,
+      log: dependencies.runtime.log,
+      finalizeWorkspace: dependencies.runtime.finalizeWorkspace,
     })
   // RFC-359 AC-1（第 12 刀）：这一支的部署形态——持久化租约认领 + 注入的执行模块注册表。
   const activity = Object.freeze({
@@ -540,14 +602,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
           dependencies.runtime.memoryInjectionQueries ??
           composePostgresqlMemoryInjectionQueries(db),
         childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
-        lifecycle: createTaskDriverLifecyclePort({
-          db,
-          module: executionModule,
-          claim: (intentId) => executionModule.claimPersisted({ intentId }),
-          persistence,
-          log: dependencies.runtime.log,
-          finalizeWorkspace: dependencies.runtime.finalizeWorkspace,
-        }),
+        lifecycle: driverLifecycle,
         activity,
         stop: executionModule.runtimeRegistry,
       },
@@ -558,7 +613,18 @@ export function composePostgresqlTaskExecutionProviderRuntime(
       },
     ),
   )
-  const runtime = composeTaskExecutionRuntime({ participants, readModels: persistence.reads })
+  const composedRuntime = composeTaskExecutionRuntime({
+    participants,
+    readModels: persistence.reads,
+  })
+  const runtime =
+    dependencies.schedulerDriver === undefined
+      ? composedRuntime
+      : Object.freeze({
+          ...composedRuntime,
+          schedulerDriver: dependencies.schedulerDriver,
+          topology: Object.freeze({ schedulerDriver: dependencies.schedulerDriver }),
+        })
   const workspaceDependencies: TaskRouteWorkspaceDependencies = {
     db,
     ...dependencies.routeWorkspace,
@@ -658,6 +724,9 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   })
   return Object.freeze({
     provider: 'postgresql',
+    driverLifecycle,
+    launches,
+    collaboration: routeDependencies.collaboration,
     participants,
     persistence,
     runtime,

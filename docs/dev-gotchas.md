@@ -58,6 +58,10 @@
 
 MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionModule.runtimeRegistry`，否则 PostgreSQL 的私有驱动无法立即收到停机请求。工作区收尾用同一会话的 `finalizeClaimedWorkspace`，交给 MR worker 的包装只记 warn、不抛出；失败保留认领，由维护恢复重试，不能让已经终止的 MR 无限重试并挡住同流后续事件。融合栈共享后也不能共享启动配置快照：SQLite 的 `startDeps.launchConfiguration` 与融合路由用 `taskLaunchConfiguration.continuationQueries`，PostgreSQL 每次启动用 `taskLaunchConfiguration.start()` 投影完整 `runConfiguration`，包括子 Agent 实时捕获、合并 Agent 与并发池设置。事件中心初始化与 MR 启停仍由生命周期步骤负责，bundle 构造不得执行 SQL 或启动定时器。
 
+## 会话任务协调器与续跑配置（RFC-382）
+
+会话级任务协调器与实时 `runConfiguration()` 只在 `cli/daemonModules/taskExecution.ts` 构造；HTTP、MCP、集成触发、宿主任务与根续跑复用该会话产物。续跑必须经 `runtimeConfigOpts` 投影（直接展开启动配置会丢提交推送与合并 Agent 设置），并携带记忆提炼入队器。会话引擎异常必须交给失败上报，置任务为 failed 并终结对应意图，不能只记日志。每次调用的旧协调器及房间续跑仍由后继 RFC-385 处理。
+
 ## 测试 / CI
 
 - **改了共享 union / schema / 导出类型之后，本地自查必须覆盖「爆炸半径」而不是「我改的那几个文件」**（2026-09-21 实撞两次，RFC-366 + RFC-367 各中一次，方向相反）：两次都是「绿」的口径比改动的影响面窄，于是人declare done 之后才由对方查出来。
@@ -557,6 +561,10 @@ e2e 分片 4 个 worker 各起 daemon 又各开浏览器，3 核机器严重超�
 - 判据：看到 e2e「daemon ready」超时，先看日志里「extracted embedded migrations」到「config loaded」
   的间隔，而不是先怀疑自己的用例；本机用 `bun --cpu-prof --cpu-prof-md` 跑一次
   `loadPostgresqlMigrationHistory()` 即可看到热点。
+- 处置（2026-10-20）：`e2e/harness.ts` 的 daemon 就绪预算在 macOS 上改为 90 秒（同 Windows，Linux
+  维持 30 秒）。此前 2026-10-19～20 主干 macOS 分片多次红在这里；`45aa84adf` 的主 CI `39507770918`
+  三个 macOS 分片 0 次就绪超时、0 flaky。治本是让启动只在需要时（代际指针停在旧 schema、迁移操作
+  中断）才校验这份历史，这会改变启动发现历史漂移的时机，属于产品改动，需另立 RFC。
 - 改规范化 JSON（`canonicalSchemaJson`）的任何实现都必须与原路径**逐字节**一致——摘要已写进迁移日志与
   清单。两处容易漏：JS 对象总是先按数值升序枚举数组下标形式的键（`"2"`、`"10"`），排序后的键数组不等于
   `Object.fromEntries` 重建对象后的枚举序；用 `keys.join(分隔符)` 当键集签名会让「单个空串键」与「空对象」

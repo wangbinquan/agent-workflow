@@ -378,7 +378,8 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     const runtime = read(
       'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
     )
-    expect(server.match(/composeTaskExecutionRuntime\(/g)).toHaveLength(1)
+    expect(server.match(/composeDaemonTaskExecutionModules\(/g)).toHaveLength(1)
+    expect(server).not.toContain('composeTaskExecutionRuntime(')
     expect(cli).toContain('const taskExecutionRuntime = taskExecutionProvider.runtime')
     expect(cli).not.toContain('composeTaskExecutionRuntime(')
     expect(runtime.match(/export function composeTaskExecutionRuntime\(/g)).toHaveLength(1)
@@ -419,9 +420,11 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(server).toContain('export function mountApiRoutes(')
     expect(server).toContain('deps: ComposedAppDeps')
     expect(server).toContain('identityAccess: IdentityAccessModule')
-    expect(server).toContain('deps.schedulerDriver ?? taskExecutionRuntime?.schedulerDriver')
-    expect(server).toContain('const schedulerDriver = deps.schedulerDriver')
-    expect(server).toContain('taskExecutionRuntime?.readModels')
+    expect(server).toContain('schedulerDriver: deps.schedulerDriver,')
+    expect(server).toContain('const schedulerDriver = taskExecutionModules.runtime.schedulerDriver')
+    expect(server).toContain('deps.taskExecutionReadModels ?? taskExecutionModules.readModels')
+    const bundle = read('packages/backend/src/cli/daemonModules/taskExecution.ts')
+    expect(bundle).toContain('schedulerDriver: input.testSeams?.schedulerDriver,')
     expect(cli).toContain('taskExecutionReadModels: taskExecutionRuntime.readModels')
 
     const mcpServer = read('packages/backend/src/mcp/server.ts')
@@ -456,7 +459,6 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(containing('composeTaskExecutionRuntime(')).toEqual([
       'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
       'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
-      'packages/backend/src/server.ts',
     ])
     expect(containing('composeWrapperRuntime')).toEqual([
       'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',

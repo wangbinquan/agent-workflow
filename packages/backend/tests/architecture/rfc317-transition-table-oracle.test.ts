@@ -333,7 +333,9 @@ describe('RFC-317 T47 —— CAS 站点的 allowedFrom 必须能从转移表推�
     // 两边都空而假绿。这条从反面钉住：确实有一大批站点被判为**表内**。
     // RFC-359 AC-1（第 9 刀）：20 → 35，同上（19 条中立端口站点是表内的）。
     const onTable = sites.filter((site) => offTableSources(site).length === 0)
-    expect(onTable.length).toBeGreaterThanOrEqual(35)
+    // RFC-382: six root failure reporters collapse into one bundle reporter; measured 37 -> 32.
+    // The exact off-table ledger below remains unchanged.
+    expect(onTable.length).toBeGreaterThanOrEqual(32)
   })
 
   test('越界站点与偏离账本**逐条相等**（新增一条 ⇒ 红；改对一条不销账 ⇒ 也红）', () => {

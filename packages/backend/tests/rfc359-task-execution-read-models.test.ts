@@ -1,9 +1,3 @@
-import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
-import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
-import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
-import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
-import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 // RFC-359 AC-1 / AC-6 —— 任务执行读模型**只有一份实现**，两个引擎跑同一组判据。
 //
 // 这个文件原名 `rfc349-task-execution-read-models-postgresql-adapter.test.ts`，
@@ -24,37 +18,14 @@ import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 // 这些**形状**判据一起锁住，两个引擎同一套。
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { resolve, join } from 'node:path'
-
-import { createInMemoryDb } from '@/db/client'
+import { tmpdir } from 'node:os'
 import { docVersions, nodeRuns, taskRepos, tasks, users, workflows } from '@/db/schema'
-import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
-import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
-import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
-import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
-import { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
-import {
-  composeLegacyTaskRunDriveBinding,
-  composeTaskWorkspaceExcludeProfilesFor,
-} from '@/modules/task-execution/composition/localTaskRunSelection'
-import {
-  composeTestChildLaunchWorkgroup,
-  singleProcessDeploymentPorts,
-} from './helpers/taskExecutionTestTopology'
-import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
-import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
-import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
+import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { describeEachProvider } from './helpers/eachProvider'
-import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
-import { composeTestWorkgroupTurns } from './helpers/workgroupTurns'
-import {
-  createTaskExecutionTestIdentity,
-  createTestRepositoryPublicationTransport,
-} from './helpers/taskExecutionTestTopology'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { taskBundleInput } from './helpers/daemonTaskExecutionBundle'
 
 const REVIEW_SNAPSHOT = JSON.stringify({
   nodes: [
@@ -211,47 +182,29 @@ describeEachProvider('RFC-359 任务执行读模型（双引擎，单一实现�
   })
 })
 
-describe('RFC-359 任务执行读模型的装配身份（SQLite 组合根）', () => {
+// RFC-382: the neutral assembly identity also runs on both real providers.
+describeEachProvider('RFC-359 任务执行读模型的装配身份', (h) => {
   test('runtime 原样交回注入进来的 provider-中立读模型', () => {
-    const sqlite = createInMemoryDb(MIGRATIONS)
-    const readModels = createTaskExecutionReadModels(sqlite)
-    const runtime = composeTaskExecutionRuntime({
-      readModels,
-      participants: createTaskExecutionRuntimeParticipants({
-        taskRunBinding: composeLegacyTaskRunDriveBinding({
-          taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
-          taskScriptRunsFor: composeLocalTaskScriptRunFamily,
-          nodeRunPromptsFor: (appHome) =>
-            composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
-          portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
-        }),
-        workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
-        db: sqlite,
-        ...singleProcessDeploymentPorts(sqlite),
-        childLaunchWorkgroup: composeTestChildLaunchWorkgroup(sqlite),
-        identityAccess: createTaskExecutionTestIdentity(sqlite).resources,
-        memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
-        collaborationRuntime: createCollaborationRuntimeMechanics(sqlite),
-        persistence: createTaskExecutionPersistence(sqlite),
-        runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
-        observationInvocations: composeRunObservationCalls(sqlite),
-        runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
-        nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
-        workgroupTurns: composeTestWorkgroupTurns(sqlite),
-        dynamicWorkflow: {
-          persistence: composeDynamicWorkflowPersistence(sqlite),
-          validationContext: composeSqliteDynamicWorkflowValidationContext(sqlite),
-        },
-        repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
-      }),
-    })
-
-    expect(runtime.readModels).toBe(readModels)
+    const home = mkdtempSync(join(tmpdir(), 'rfc382-read-models-'))
+    const fixture = taskBundleInput(h, home)
+    try {
+      const bundle = fixture.compose()
+      const readModels = createTaskExecutionReadModels(h.db)
+      const runtime = composeTaskExecutionRuntime({ readModels, participants: bundle.participants })
+      expect(runtime.readModels).toBe(readModels)
+      expect(bundle.readModels).toBe(bundle.persistence.reads)
+    } finally {
+      fixture.identityAccess.shutdown()
+      rmSync(home, { recursive: true, force: true })
+    }
   })
+})
 
+describe('RFC-359 SQLite 守护进程读模型接线', () => {
   test('守护进程 bootstrap 显式选 SQLite，而不是靠 runtime 兜底', () => {
     const start = readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8')
-    expect(start).toContain('composeSqliteTaskExecutionProviderRuntime(db, {')
+    expect(start).toContain('composeDaemonTaskExecutionModules({')
+    expect(start).toContain('DAEMON_TASK_EXECUTION_ADAPTERS.sqlite({ db })')
     expect(start).toContain('taskExecutionReadModels: taskExecutionRuntime.readModels,')
     expect(start).not.toContain('composeTaskExecutionRuntime({\n          readModels: undefined')
   })

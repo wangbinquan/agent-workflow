@@ -1,4 +1,9 @@
-import { materializingSpaces } from '@/services/gc'
+import {
+  composeDaemonTaskExecutionModules,
+  type DaemonTaskExecutionModules,
+} from '@/cli/daemonModules/taskExecution'
+import { DAEMON_TASK_EXECUTION_ADAPTERS } from '@/cli/daemonModules/adapters'
+import { finishClaimedWebhookWorkspacePrune, materializingSpaces } from '@/services/gc'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import {
   composeDaemonScheduledTaskModules,
@@ -9,7 +14,6 @@ import {
   type DaemonIntegrationModules,
 } from '@/cli/daemonModules/integration'
 import { composeDaemonFusionModules, type DaemonFusionModules } from '@/cli/daemonModules/fusion'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import {
   DAEMON_PROVIDER_CORE_ADAPTERS,
@@ -43,7 +47,6 @@ import type { ReviewArtifactSelection } from '@/modules/collaboration/compositio
 import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
 import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
-import { runtimeConfigOpts } from '@/services/task'
 import type {
   ApprovalAdapterBinding,
   PipelineAdapterBinding,
@@ -87,7 +90,6 @@ import {
 import {
   composePortArtifactOperations,
   selectPortArtifactOperations,
-  selectPortArtifactReader,
 } from '@/modules/task-execution/composition/portArtifacts'
 import type {
   PortArtifactContentEffects,
@@ -129,12 +131,9 @@ import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
 } from '@/modules/system-operations/composition/applicationConfiguration'
-import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { createArtifactProgramToolSource } from '@/modules/task-execution/composition/programTools'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
-import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
-import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 // Hono app factory. Routes that touch DB / config / version probe receive
 // their dependencies via the `AppDeps` interface so tests can inject mocks
 // without monkey-patching the module.
@@ -155,9 +154,7 @@ import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudi
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import type { SecretBox } from '@/auth/secretBox'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
-import { composeHostTaskLaunchKernel } from '@/modules/task-execution/composition/hostTaskLaunch'
 import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
-import { createTaskDriveCoordinator, retryRepositoryPreparation } from '@/services/task'
 import { takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
@@ -211,17 +208,13 @@ import {
   composeWorkgroupTaskRoomActiveUsers,
   composeWorkgroupTaskRoomDynamicWorkflow,
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
-import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
-import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import type { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { type ProviderResourceCatalogComposition } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { type ComposedResourcePackageCatalog } from '@/modules/resource-catalog/composition/resourcePackageOperations'
-import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import type { updateResourceAcl } from '@/modules/resource-catalog/composition/resourceAcl'
 import { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
 import { resourceAclAudienceAuthority } from '@/modules/resource-catalog/domain/resourceAccess'
 
-import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type {
   AgentCatalogModule,
@@ -253,8 +246,6 @@ import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
 import type { composeMemoryCatalogOperations } from '@/modules/memory/composition'
 
-import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
-import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import {
   composeRepositoryMirrors,
@@ -269,13 +260,6 @@ import {
   type RepositoryWorkspaceReadQueries,
   type WorkspacePresenceQueries,
 } from '@/modules/source-control/public/queries'
-import { createChildTaskLifecycleParticipant } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
-import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
-import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
-import {
-  composeLegacyTaskActivityParticipant,
-  composeLegacyTaskStopRegistry,
-} from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import type { MemoryOperations } from '@/modules/memory/public/operations'
 import type { MemoryDistillCommands } from '@/modules/memory/public/commands'
 import type { MemoryDistillQueries } from '@/modules/memory/public/queries'
@@ -287,7 +271,6 @@ import {
 import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
 import { mountOverviewRoutes, type OverviewRouteQuery } from '@/routes/overview'
 import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
-import { createTaskOverviewQuery } from '@/modules/task-execution/composition/taskOverview'
 import { composeSystemOverviewQuery } from '@/modules/system-operations/composition/overview'
 import { mountOidcRoutes } from '@/routes/oidc'
 import { mountOidcAuthRoutes } from '@/routes/oidc-auth'
@@ -380,7 +363,6 @@ import {
   createEmployeeInputArtifactStore,
 } from '@/modules/digital-employee/composition'
 
-import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
 import type {
   DigitalEmployeePlatformToolCatalogParticipant,
@@ -419,36 +401,15 @@ import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeReactionExecutionProvider,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
-import {
-  composeTaskClarifyDirectiveRouteOperations,
-  composeTaskExecutionRuntime,
-  createTaskExecutionPersistence,
-} from '@/modules/task-execution/composition/taskExecutionRuntime'
-import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
-import { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
+import type { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import {
   createDrizzleTaskArchiveMaintenanceCommand,
   type TaskArchiveContentBinding,
   type TaskArchiveMaintenanceCommand,
 } from '@/modules/task-execution/composition/taskArchiveMaintenance'
-import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
-import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
-import {
-  createSqliteTaskExecutionLaunchParticipant,
-  createSqliteTaskRouteLaunchOperations,
-  type TaskExecutionLaunchParticipant,
-  type SqliteTaskRouteLaunchDependencies,
-} from '@/modules/task-execution/composition/taskRouteLaunch'
-
-import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
-import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { createTaskExecutionTriggerParticipant } from '@/modules/task-execution/composition/triggerExecution'
-import { createBuildScheduleLaunch } from '@/modules/task-execution/composition/triggerExecution'
+import type { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
 import type { RuntimeRegistryOperations } from '@/modules/runtime-management/composition/runtimeRegistry'
-import {
-  requireSchedulerDriver,
-  type SchedulerDriverPort,
-} from '@/modules/task-execution/public/commands'
+import { type SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import type {
   NodeRunPromptContentEffects,
   NodeRunPromptOperations,
@@ -460,30 +421,11 @@ import {
   selectNodeRunPromptOperations,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
 import {
-  createCollaborationCommandContext,
   createSqliteCollaborationTaskAccessPort,
   planMembersReplacement,
 } from '@/modules/collaboration/composition'
-import {
-  createClarifyDecisionCommand,
-  createQuestionDispatchCommand,
-  createReviewDecisionCommand,
-  createTaskDagCollaborationOperations,
-} from '@/modules/collaboration/composition/decisionCommands'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
-import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
-import {
-  createClarifyRepairParticipant,
-  createReviewRepairParticipant,
-} from '@/modules/collaboration/composition'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
-import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/taskCatalogSources'
-import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
-import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
-import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
-import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { composeWorkgroupTaskRoomContinuationDriver } from '@/services/task'
 
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { createResourcePackagePluginInstaller } from '@/services/resourcePackage/pluginInstallerAdapter'
@@ -582,6 +524,13 @@ export interface AppDeps {
   resourceCatalogModules?: DaemonResourceCatalogModules
   observationModules?: DaemonObservationModules
   memoryModules?: DaemonMemoryModules
+  taskExecutionModules?: DaemonTaskExecutionModules<'sqlite'>
+  repositoryPreparationEffects?: NonNullable<
+    Parameters<typeof composeDaemonTaskExecutionModules>[0]['selection']['preparationEffects']
+  >
+  scratchWorkspaceEffects?: NonNullable<
+    Parameters<typeof composeDaemonTaskExecutionModules>[0]['selection']['scratchEffects']
+  >
   scheduledTaskModules?: DaemonScheduledTaskModules
   integrationModules?: DaemonIntegrationModules
   fusionModules?: DaemonFusionModules
@@ -855,6 +804,7 @@ export interface AppDeps {
 type SqliteAppDeps = AppDeps & { readonly db: DbClient }
 
 type RuntimeComposedAppDeps = SqliteAppDeps & {
+  readonly taskExecutionModules: DaemonTaskExecutionModules<'sqlite'>
   readonly scheduledTaskModules: DaemonScheduledTaskModules
   readonly integrationModules: DaemonIntegrationModules
   readonly fusionModules: DaemonFusionModules
@@ -887,28 +837,12 @@ export type IntegrationTriggerIdentityAccess = IdentityAccessRuntime & {
   readonly taskExecutionResources: TaskExecutionResourceBinding
 }
 
-function hasIntegrationTriggerResources(
-  identityAccess: IdentityAccessRuntime,
-): identityAccess is IntegrationTriggerIdentityAccess {
-  return (
-    'integrationTriggerResources' in identityAccess && 'taskExecutionResources' in identityAccess
-  )
-}
-
 function withIntegrationTriggerResources(
-  db: DbClient,
   identityAccess: IdentityAccessRuntime,
   integrationTriggerResources: IntegrationTriggerResourceBinding,
+  taskExecutionResources: TaskExecutionResourceBinding,
 ): IntegrationTriggerIdentityAccess {
-  if (hasIntegrationTriggerResources(identityAccess)) return identityAccess
-  return Object.freeze({
-    ...identityAccess,
-    integrationTriggerResources,
-    taskExecutionResources: createTaskExecutionResourceBinding(
-      db,
-      composeTaskExecutionResourceBinding(taskExecutionResourceDependencies),
-    ),
-  })
+  return Object.freeze({ ...identityAccess, integrationTriggerResources, taskExecutionResources })
 }
 
 type RepositoryBootstrap = DaemonRepositoryCredentials
@@ -1047,6 +981,7 @@ export interface ComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProv
 export interface SqliteAppComposition<
   TCore extends AppHttpProviderCore = AppHttpProviderCore,
 > extends ComposedAppDeps<TCore> {
+  readonly taskExecutionModules: DaemonTaskExecutionModules<'sqlite'>
   readonly digitalEmployeeWorkStart: DigitalEmployeeWorkStartPort
   readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
   /**
@@ -1489,103 +1424,10 @@ function composeFallbackDevelopmentAutomation(
   appHome: string,
   // RFC-345：Agent 查询由 bootstrap 从模块的目录查询面提供，本文件不再经 services/agent 门面。
   agents: Parameters<typeof composeAgentActionExecution>[0]['agents'],
-  taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>,
 ): DevelopmentAutomationModule {
-  // RFC-359 AC-1（plan §5hi）：数字员工的宿主任务改走**启动内核**，与 PostgreSQL 同一条路。
-  // 此前 SQLite 侧走 `startTask` + `preCreatedWorktree`，PG 侧走内核 + 借用工作区租约——
-  // 两份 action 执行装配面因此长期是一对。内核在两个引擎上都真启动过（plan §5hh 的用例），
-  // 所以这里换的是「走哪条机制」，不是「赌它能不能跑」。
-  //
-  // 失败上报逐条对齐 PostgreSQL daemon 那份（`postgresqlDaemonApplication.ts` 的
-  // `boundTaskDriveCoordinator.failureReporter`）：驱动崩了要把任务落成 failed 并终结意图，
-  // 否则失败会表现成「动作卡住不失败」。
-  const persistence = createTaskExecutionPersistence(deps.db, {
-    workspacePresence: deps.workspacePresence,
-  })
-  const hostLaunchStartDeps =
-    taskLaunchConfiguration.selectedQueries === undefined
-      ? buildStartTaskDeps(
-          deps.db,
-          deps.schedulerDriver,
-          deps.configPath,
-          SYSTEM_USER_ID,
-          deps.secretBox,
-          deps.identityAccess,
-          {
-            repositoryWorkspace: deps.repositoryWorkspaceStore,
-            runtimeSessionLeases: deps.observationModules.runtimeSessionLeases,
-          },
-        )
-      : {
-          db: deps.db,
-          schedulerDriver: deps.schedulerDriver,
-          repositoryWorkspace: deps.repositoryWorkspaceStore,
-          runtimeSessionLeases: deps.observationModules.runtimeSessionLeases,
-          configPath: deps.configPath,
-          actorUserId: SYSTEM_USER_ID,
-          secretBox: deps.secretBox,
-          identityAccess: deps.identityAccess,
-          launchConfiguration: taskLaunchConfiguration.selectedQueries,
-        }
-  const hostTaskLaunch = composeHostTaskLaunchKernel({
-    sourceContexts: deps.identityAccess.taskPreparationContext,
-    repositoryPreparation: composeRepositoryPreparation({
-      ...(taskLaunchConfiguration.preparationConfiguration === undefined
-        ? {}
-        : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
-      db: deps.db,
-      appHome: appHome,
-      secretBox: deps.secretBox,
-    }),
-    db: deps.db,
-    appHome,
-    secretBox: deps.secretBox,
-    gitCommitIdentity: deps.identityAccess.getUserGitCommitIdentity,
-    coordinator: createTaskDriveCoordinator({
-      ...(taskLaunchConfiguration.selectedQueries === undefined
-        ? {}
-        : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
-      deps: hostLaunchStartDeps,
-      persistence,
-      // 2026-09-19：组合根装配一次、之后长驻——17 个运行期旋钮必须每次 drive 现读，
-      // 否则设置页改完配置对新任务不生效（e2e CFG-45 实撞，判据在
-      // `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`）。
-      refreshLaunchConfig: () =>
-        taskLaunchConfiguration.selectedQueries === undefined
-          ? resolveLaunchRuntimeConfig(deps.configPath)
-          : {},
-      appHome,
-      engineFailureMessage: 'digital employee host task drive threw',
-      failureReporter: {
-        async report({ taskId, error, execution }) {
-          const now = Date.now()
-          await persistence.runtimeLifecycle.trySet({
-            taskId,
-            to: 'failed',
-            allowedFrom: ['pending', 'running'],
-            extra: {
-              finishedAt: now,
-              errorSummary: 'task drive failed',
-              errorMessage: error instanceof Error ? error.message : String(error),
-            },
-            executionContext: execution,
-            now,
-            reason: 'task-drive',
-          })
-          await persistence.intentTerminalization.terminalize({
-            taskId,
-            state: 'failed',
-            failureCode: 'task-drive-failed',
-            now,
-            claimedOwnerEpoch: execution.token.epoch,
-          })
-        },
-      },
-    }),
-  })
   const hostActionEnvironment = {
     db: deps.db,
-    launch: hostTaskLaunch,
+    launch: deps.taskExecutionModules.routeLaunch.workflow,
     resolveActor: async () => {
       const identity = await admitDaemonIdentity(deps.identityAccess)
       if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')
@@ -1760,11 +1602,7 @@ export function composeSqliteApplicationDeps(
       assertAgentIntegrity: (agentIds) =>
         agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
     })
-  const identityAccess = withIntegrationTriggerResources(
-    deps.db,
-    deps.identityAccess ?? providerCore.identityAccess,
-    scheduledTaskModules.scheduledTaskRuntime.integrationTriggerResources,
-  )
+  const baseIdentityAccess = deps.identityAccess ?? providerCore.identityAccess
   const authRuntime = deps.authRuntime ?? providerCore.authRuntime
   const tokenCallAudit = deps.tokenCallAudit ?? providerCore.tokenCallAudit
   const healthDatabase = deps.healthDatabase ?? providerCore.healthDatabase
@@ -1777,7 +1615,7 @@ export function composeSqliteApplicationDeps(
       appHome,
       configuration,
       notificationKey: applicationConfiguration.notificationKey,
-      identityAccess,
+      identityAccess: baseIdentityAccess,
       runtimeRegistry,
       mcpCatalog: () => mcpCatalog,
       adapters: {
@@ -1841,119 +1679,72 @@ export function composeSqliteApplicationDeps(
       db: deps.db,
       nodeRunPrompts,
       systemAgentBinding: observationModules.memorySystemAgentBinding,
-      contexts: identityAccess.contexts,
+      contexts: baseIdentityAccess.contexts,
       operations: deps.memoryOperations,
       reviewedArtifacts: {
         read: async (finalPath) =>
           await readCommittedReviewArtifactBody(collaborationContext, finalPath),
       },
     })
-  const { memoryOperations, memoryInjectionQueries, memoryCatalog } = memoryModules
+  const { memoryOperations, memoryCatalog } = memoryModules
   const configConcurrencyHotApply =
     deps.configConcurrencyHotApply ?? composeLegacyConfigConcurrencyHotApply(deps.db)
-  const taskExecutionPersistence = createTaskExecutionPersistence(deps.db, {
-    workspacePresence,
-  })
-  // RFC-359 W11：读模型先定下来，再决定要不要装配 runtime。此前是反过来的——先装 runtime、
-  // 再从 `deps.taskExecutionReadModels ?? taskExecutionRuntime?.readModels` 取，于是类型上多出
-  // 一个 `undefined` 分支要兜一句 throw，而那个分支**根本不可达**（runtime 只在
-  // `deps.taskExecutionReadModels === undefined` 时才不装配，两个条件 tsc 关联不起来）。
-  // `composeTaskExecutionRuntime` 原样回传 `readModels`（`composition/runtimeAssembly.ts`），
-  // 所以先取值再交进去与原来同值，且类型上不再有空档。
-  const taskExecutionReadModels = deps.taskExecutionReadModels ?? taskExecutionPersistence.reads
-  const taskExecutionRuntime =
-    deps.schedulerDriver !== undefined && deps.taskExecutionReadModels !== undefined
-      ? undefined
-      : composeTaskExecutionRuntime({
-          participants: createTaskExecutionRuntimeParticipants({
-            db: deps.db,
-            taskRunBinding: taskRunRoot.drive,
-            workspaceExcludeProfilesFor,
-            isolationWorkspaces,
-            repositoryGitWorkspaces,
-            workspacePresence,
-            observationInvocations: observationModules.observationCalls,
-            workgroupTurns: composeWorkgroupTurnsOperations(
-              deps.db,
-              composeWorkgroupHostLedgerParticipantFactory({
-                collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
-              }),
-              createWorkgroupClarifyAskGate(deps.db),
-            ),
-            memoryInjectionQueries,
-            collaborationRuntime: createCollaborationRuntimeMechanics(deps.db, {
-              reviewArtifacts: deps.reviewArtifacts,
-              portArtifactReaderFor: () => portArtifacts,
-            }),
-            persistence: taskExecutionPersistence,
-            runtimeSessionLeases: observationModules.runtimeSessionLeases,
-            runtimeRegistry,
-            nodeRunRuntime: composeNodeRunRuntimePersistence(
-              deps.db,
-              composeRuntimeSelectionParticipantInTx,
-            ),
-            dynamicWorkflow: {
-              persistence: composeDynamicWorkflowPersistence(deps.db),
-              validationContext: composeSqliteDynamicWorkflowValidationContext(deps.db),
-            },
-            identityAccess,
-            repositoryPublicationTransport: repositoryBootstrap.repositoryPublicationTransport,
-            // RFC-359 AC-1（plan §5hn 批次二 ⑤）：子任务（call 节点）改走与 PostgreSQL 共用的
-            // 那台铸造机，它的工作组资源面走**同一份** `composeWorkgroupLaunchResourceOperations`
-            // ——别在这里手拼 ACL 读法（批次二 ① 实撞：按 PG daemon 抄成「把 actor 投影成
-            // direct authority 再查目录」，认不出定时 / webhook 的委派 actor，当场 500）。
-            //
-            // 这一格只在**回退路**上构造：生产（`cli/start.ts`）交齐 `schedulerDriver` +
-            // `taskExecutionReadModels`，这整段 runtime 根本不装配，走的是
-            // `composeSqliteTaskExecutionProviderRuntime`，那里直接复用 `routeLaunch.workgroup`。
-            // RFC-380: reuse the session catalog's integrity participant in this fallback too.
-            childLaunchWorkgroup: composeWorkgroupLaunchResourceOperations({
-              db: deps.db,
-              integrity: agentResourceIntegrity.launch,
-            }),
-            // RFC-359 AC-1（第 12 刀）：参与者已合一，这几格此前由 SQLite 那份工厂在体内现造
-            // （协作投影 / 并发域 / 日志），现在与 `composeSqliteTaskExecutionProviderRuntime`
-            // 逐字同形地由装配方交。三个端口是这条回退路的部署形态：进程级单例认领 +
-            // 进程内注册表。
-            taskDagCollaboration: createTaskDagCollaborationOperations(deps.db),
-            processConcurrencyScope: deps.db,
-            log: createLogger('task'),
-            lifecycle: createDatabaseTaskDriverLifecyclePort({
-              db: deps.db,
-              persistence: taskExecutionPersistence,
-              log: createLogger('task'),
-              finalizeWorkspace: async (taskId: string) => {
-                await finishClaimedWebhookWorkspacePrune(deps.db, taskId)
-              },
-            }),
-            activity: composeLegacyTaskActivityParticipant(),
-            stop: composeLegacyTaskStopRegistry(),
-          }),
-          readModels: taskExecutionReadModels,
-        })
-  const schedulerDriver = requireSchedulerDriver(
-    deps.schedulerDriver ?? taskExecutionRuntime?.schedulerDriver,
+  const taskExecutionModules: DaemonTaskExecutionModules<'sqlite'> =
+    deps.taskExecutionModules ??
+    composeDaemonTaskExecutionModules({
+      db: deps.db,
+      appHome,
+      configPath: deps.configPath,
+      secretBox: deps.secretBox,
+      taskLaunchConfiguration,
+      adapters: DAEMON_TASK_EXECUTION_ADAPTERS.sqlite({ db: deps.db }),
+      core: {
+        ...providerCore,
+        identityAccess: baseIdentityAccess,
+        runtimeRegistry,
+        repositoryWorkspaceStore: repositoryBootstrap.repositoryWorkspaceStore,
+      },
+      observation: observationModules,
+      resources: { agentResourceIntegrity, owners: composeOwnerIdentityQueries(deps.db) },
+      repository: repositoryBootstrap,
+      memory: memoryModules,
+      selection: {
+        taskRunBinding: taskRunRoot.drive,
+        workspaceExcludeProfilesFor,
+        nodeRunPrompts,
+        portArtifacts,
+        isolationWorkspaces,
+        repositoryGitWorkspaces,
+        workspaceReads,
+        archive: deps.taskArchive,
+        effects: deps.taskDeletionEffects,
+        archivedEvents: deps.archivedNodeEvents,
+        reviewArtifacts: deps.reviewArtifacts,
+        reviewRollbackSnapshots: deps.reviewRollbackSnapshots,
+        workspaceUploads,
+        preparationEffects: deps.repositoryPreparationEffects,
+        scratchEffects: deps.scratchWorkspaceEffects,
+        fusionWorkspaces: createFileFusionWorkspaceEffects({ appHome }),
+      },
+      testSeams: {
+        schedulerDriver: deps.schedulerDriver,
+        collaboration: deps.collaborationContext,
+      },
+      finalizeWorkspace: async (taskId) => {
+        await finishClaimedWebhookWorkspacePrune(deps.db, taskId)
+      },
+    })
+  const taskExecutionPersistence = taskExecutionModules.persistence
+  const taskExecutionReadModels = deps.taskExecutionReadModels ?? taskExecutionModules.readModels
+  const schedulerDriver = taskExecutionModules.runtime.schedulerDriver
+  const collaborationContext = taskExecutionModules.collaboration
+  const identityAccess = withIntegrationTriggerResources(
+    baseIdentityAccess,
+    scheduledTaskModules.scheduledTaskRuntime.integrationTriggerResources,
+    taskExecutionModules.resources,
   )
   const systemOperations = deps.systemOperations ?? providerCore.systemOperations
   const maintenanceDisk = providerCore.maintenanceDisk
-  // 显式标注是这个环的**约束点**：`memoryOperations` 的闭包引用它、它又吃
-  // `memoryOperations.distillCommands`，推断转不出来（TS7022），标注把契约写死在类型层。
-  const collaborationContext: CollaborationRouteContext =
-    deps.collaborationContext ??
-    createCollaborationCommandContext({
-      reviewArtifacts: deps.reviewArtifacts,
-      db: deps.db,
-      appHome,
-      taskExecutionReadModels,
-      reviewDecisions: createReviewDecisionCommand({
-        db: deps.db,
-        appHome,
-        reviewArtifacts: deps.reviewArtifacts,
-        rollbackSnapshots: deps.reviewRollbackSnapshots,
-      }),
-      questionDispatches: createQuestionDispatchCommand(deps.db),
-      clarifyDecisions: createClarifyDecisionCommand(deps.db, memoryOperations.distillCommands),
-    })
   const fusionModules: DaemonFusionModules =
     deps.fusionModules ??
     composeDaemonFusionModules({
@@ -1962,21 +1753,7 @@ export function composeSqliteApplicationDeps(
       memories: memoryCatalog,
       skillContent: deps.skillContent,
       taskLaunchConfiguration,
-      tasks: createSqliteFusionEngineTaskOperations({
-        db: deps.db,
-        appHome,
-        schedulerDriver,
-        workspaces: createFileFusionWorkspaceEffects({ appHome }),
-        startDeps: {
-          repositoryWorkspace: repositoryBootstrap.repositoryWorkspaceStore,
-          runtimeSessionLeases: observationModules.runtimeSessionLeases,
-          configPath: deps.configPath,
-          actorUserId: SYSTEM_USER_ID,
-          secretBox: deps.secretBox,
-          identityAccess,
-          launchConfiguration: taskLaunchConfiguration.continuationQueries,
-        },
-      }),
+      tasks: taskExecutionModules.fusion,
     })
   const integrationModules: DaemonIntegrationModules =
     deps.integrationModules ??
@@ -1987,7 +1764,7 @@ export function composeSqliteApplicationDeps(
       scheduledTaskRuntime: scheduledTaskModules.scheduledTaskRuntime,
       identityAccess,
       bindEventAutomationContexts: createEventAutomationDelegatedContextBinding,
-      runtimeRegistry: taskExecutionModule.runtimeRegistry,
+      runtimeRegistry: taskExecutionModules.executionModule.runtimeRegistry,
       workspaceMaintenance: composeWorkspaceMaintenanceCommand({
         db: deps.db,
         appHome,
@@ -1995,13 +1772,7 @@ export function composeSqliteApplicationDeps(
         isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
         invalidateWorkspacePath: invalidateCallGraphIndex,
       }),
-      taskExecutions: {
-        async launch(request) {
-          const task = await apiComposition.taskExecutionLaunches.launch(request)
-          return { taskId: task.id }
-        },
-        cancel: (taskId) => composeTaskCancellation(deps.db).cancel(taskId),
-      },
+      taskExecutions: taskExecutionModules.trigger.taskExecutions,
       digitalEmployeeWorkStart: {
         launch: (request) => apiComposition.digitalEmployeeWorkStart.launch(request),
       },
@@ -2021,6 +1792,7 @@ export function composeSqliteApplicationDeps(
   }
   const runtimeDeps: RuntimeComposedAppDeps = {
     ...deps,
+    taskExecutionModules,
     scheduledTaskModules,
     integrationModules,
     fusionModules,
@@ -2095,7 +1867,6 @@ export function composeSqliteApplicationDeps(
           return agentCatalog.queries.get(identity.actor, { id })
         },
       },
-      taskLaunchConfiguration,
     )
   const developmentMissionOperations = composeDevelopmentMissionOperations({
     repositoryBaselines: deps.repositoryBaselines,
@@ -2218,7 +1989,6 @@ export function composeSqliteApplicationDeps(
     taskExecutionPersistence,
     applicationConfiguration,
     configuration,
-    taskLaunchConfiguration,
     unstarted,
   )
   const application = freezeComposedAppDeps({
@@ -2254,6 +2024,7 @@ export function composeSqliteApplicationDeps(
   })
   return Object.freeze({
     ...application,
+    taskExecutionModules,
     digitalEmployeeWorkStart: apiComposition.digitalEmployeeWorkStart,
     repositoryWorkspaceStore: repositoryBootstrap.repositoryWorkspaceStore,
     taskExecutionReadModels: effectiveDeps.taskExecutionReadModels,
@@ -2423,7 +2194,6 @@ export function composeDigitalEmployeeRoutePersistence(input: {
 interface SqliteApiRouteComposition {
   readonly apiRoutes: AppApiRouteMounts
   readonly digitalEmployeeWorkStart: DigitalEmployeeWorkStartPort
-  readonly taskExecutionLaunches: TaskExecutionLaunchParticipant
 }
 
 /** SQLite compatibility composition used by direct `createApp({ db })` tests. */
@@ -2464,7 +2234,6 @@ function composeSqliteApiRouteMounts(
   taskExecutionPersistence: ReturnType<typeof createTaskExecutionPersistence>,
   applicationConfiguration: ApplicationConfigurationBinding,
   configuration: ApplicationConfigurationQueries,
-  taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>,
   unstarted?: UnstartedApplicationScope,
 ): SqliteApiRouteComposition {
   const appHome = deps.appHome ?? Paths.root
@@ -2488,144 +2257,7 @@ function composeSqliteApiRouteMounts(
   const schedulerDriver = deps.schedulerDriver
   const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace
   const { narrativeSystemAgentBinding, runtimeManagement } = deps.observationModules
-  const taskRouteOperations = createTaskRouteOperations({
-    archivedEvents: deps.archivedNodeEvents,
-    workspaceReads: deps.workspaceReads,
-    effects: deps.taskDeletionEffects,
-    nodeRunPrompts: deps.nodeRunPrompts,
-    db: deps.db,
-    collaboration: deps.collaborationContext,
-    // RFC-359 AC-1（第 3 刀）：列表行的 owner 身份投影由组合根装配，与 PostgreSQL 同形。
-    owners: composeOwnerIdentityQueries(deps.db),
-    // RFC-359 AC-1（第 5 刀）：`delete` 的 `task-active` 门读注入的参与者，不再读模块全局。
-    // 这条路不装配完整 runtime，所以直接取那个唯一装配点。
-    activity: composeLegacyTaskActivityParticipant(),
-    persistence: taskExecutionPersistence,
-    // RFC-359 AC-1（第 13 刀收尾）：`/api/tasks` 只剩一个中立工厂。这条**不装配完整 runtime**
-    // 的回退路因此要自己把子任务生命周期参与者装出来——它就是第 12 刀之后那份共用实现，
-    // 端口按本条路的部署形态绑（进程级单例认领 + 进程内注册表），与
-    // `composeSqliteTaskExecutionProviderRuntime` 逐字同形。取消 / 复活 / 级联取消三处
-    // 从此走同一个参与者，不再各拼各的。
-    children: createChildTaskLifecycleParticipant({
-      db: deps.db,
-      workspacePresence: deps.workspacePresence,
-      persistence: taskExecutionPersistence,
-      runtimeSessionLeases: deps.observationModules.runtimeSessionLeases,
-      log: createLogger('task'),
-      lifecycle: createDatabaseTaskDriverLifecyclePort({
-        db: deps.db,
-        persistence: taskExecutionPersistence,
-        log: createLogger('task'),
-        finalizeWorkspace: async (id: string) => {
-          await finishClaimedWebhookWorkspacePrune(deps.db, id)
-        },
-      }),
-      activity: composeLegacyTaskActivityParticipant(),
-      stop: composeLegacyTaskStopRegistry(),
-    }),
-    topology: { schedulerDriver },
-    resumeRuntimeFor: (actor) =>
-      taskLaunchConfiguration.selectedQueries === undefined
-        ? {
-            actorUserId: actor.user.id,
-            runConfig: {
-              appHome,
-              ...(taskLaunchConfiguration.selectedQueries === undefined
-                ? resolveLaunchRuntimeConfig(deps.configPath)
-                : {}),
-            },
-          }
-        : (async () => {
-            const fresh = await taskLaunchConfiguration.drive()
-            return {
-              actorUserId: actor.user.id,
-              runConfig: {
-                appHome,
-                subagentLiveCapture: fresh.subagentLiveCapture,
-                ...runtimeConfigOpts(fresh),
-              },
-            }
-          })(),
-    // RFC-359 AC-1（第 9 刀）：`retry` 与 PostgreSQL 共用同一份实现。这条路不装配完整 runtime，
-    // 仓库准备重试与 `cli/start.ts` 同形。
-    repositoryPreparationRetry: Object.freeze({
-      // 2026-09-19：**发起人必须原样传下去**。`continuationSource` 只有在
-      // `actorUserId !== SYSTEM_USER_ID` 时才返回 `'rest'`，而 `mayAuthorizeReplay` 只授权
-      // `rest`/`mcp` 的演员命令。这里把它写死成 SYSTEM_USER_ID，于是用户点「重试准备」提交的
-      // 续跑拿不到重放授权，血缘上留着的 `requires-actor` 决定把这次重试判成
-      // `task-execution-outcome-unknown`（提示「use a manual resume/retry/sync command」——
-      // 而他用的就是那条命令）：卡在仓库准备的任务从界面上永远重试不了（e2e TASK-27）。
-      // 缺席授权 = boot 自动恢复那条路，它继续以 SYSTEM_USER_ID 走 `auto`。
-      async retry(taskId: string, authorization?: { readonly actorUserId: string }) {
-        await retryRepositoryPreparation(deps.db, taskId, {
-          ...(taskLaunchConfiguration.selectedQueries === undefined
-            ? buildStartTaskDeps(
-                deps.db,
-                schedulerDriver,
-                deps.configPath,
-                authorization?.actorUserId ?? SYSTEM_USER_ID,
-                deps.secretBox,
-                identityAccess,
-                {
-                  repositoryWorkspace: deps.repositoryWorkspaceStore,
-                  runtimeSessionLeases: deps.observationModules.runtimeSessionLeases,
-                },
-              )
-            : {
-                db: deps.db,
-                schedulerDriver,
-                repositoryWorkspace: deps.repositoryWorkspaceStore,
-                runtimeSessionLeases: deps.observationModules.runtimeSessionLeases,
-                configPath: deps.configPath,
-                actorUserId: authorization?.actorUserId ?? SYSTEM_USER_ID,
-                secretBox: deps.secretBox,
-                identityAccess,
-                launchConfiguration: taskLaunchConfiguration.selectedQueries,
-                ...(await taskLaunchConfiguration.start()),
-              }),
-          repositoryPreparation: composeRepositoryPreparation({
-            ...(taskLaunchConfiguration.preparationConfiguration === undefined
-              ? {}
-              : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
-            db: deps.db,
-            appHome,
-            secretBox: deps.secretBox,
-            cloneTimeoutMs: (taskLaunchConfiguration.selectedQueries === undefined
-              ? resolveLaunchRuntimeConfig(deps.configPath)
-              : {}
-            ).cloneTimeoutMs,
-          }),
-        })
-      },
-    }),
-    resourceAuthorityFor: (actor: Actor) =>
-      Object.freeze({
-        actor,
-        authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
-        resources: identityAccess.taskExecutionResources,
-      }),
-    // RFC-359 AC-1（第 13 刀下）：`syncWorkflow` 的静态校验门转发到同一份
-    // `composeAgentLaunchResourceOperations`（它在本函数更下方才装配得起来，
-    // 与紧邻的 `launches` 同一个词法闭环手法）。
-    validateHostWorkflow: (definition, candidate) =>
-      agentLaunchResources.resources.validateHostWorkflow(definition, candidate),
-    // RFC-359 AC-1（plan §5hn 批次二 ④）：工作流 JSON 启动的编排与 PostgreSQL 共用。
-    // 这里是**转发面**——真参与者是同一作用域后面那个 const（它依赖的 `taskRouteLaunchDependencies`
-    // 在本函数更下方才装配得起来），与协调器转发面同一个词法闭环手法。
-    launches: Object.freeze({
-      launch: (request: Parameters<TaskExecutionLaunchParticipant['launch']>[0]) =>
-        sqliteTaskExecutionLaunches.launch(request),
-    }),
-    repair: {
-      collaborationRuntime: createCollaborationRuntimeMechanics(deps.db, {
-        reviewArtifacts: deps.reviewArtifacts,
-        portArtifactReaderFor: () => selectPortArtifactReader(deps.portArtifacts, appHome),
-      }),
-      clarify: createClarifyRepairParticipant(deps.db),
-      review: createReviewRepairParticipant(deps.db),
-    },
-    appHome,
-  })
+  const taskRouteOperations = deps.taskExecutionModules.routes.tasks
   const routeDeps = {
     ...deps,
     configuration,
@@ -2744,69 +2376,7 @@ function composeSqliteApiRouteMounts(
           authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
           resources: identityAccess.taskExecutionResources,
         }),
-        launch: composeHostTaskLaunchKernel({
-          sourceContexts: identityAccess.taskPreparationContext,
-          repositoryPreparation: composeRepositoryPreparation({
-            ...(taskLaunchConfiguration.preparationConfiguration === undefined
-              ? {}
-              : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
-            db: deps.db,
-            appHome: appHome,
-            secretBox: deps.secretBox,
-          }),
-          db: deps.db,
-          appHome,
-          secretBox: deps.secretBox,
-          gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-          coordinator: createTaskDriveCoordinator({
-            ...(taskLaunchConfiguration.selectedQueries === undefined
-              ? {}
-              : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
-            persistence: taskExecutionPersistence,
-            // 同下面那台路由协调器：`runtimeConfigOpts(deps)` 读的十七个旋钮必须从配置漏斗取，
-            // 否则数字员工执行这条路也在用编译期缺省跑（RFC-359 AC-1，plan §5hn 批次二 ①②）。
-            deps: {
-              db: deps.db,
-              schedulerDriver,
-              configPath: deps.configPath,
-              ...(taskLaunchConfiguration.selectedQueries === undefined
-                ? resolveLaunchRuntimeConfig(deps.configPath)
-                : {}),
-            },
-            // 2026-09-19：同上——长驻协调器每次 drive 现读配置。
-            refreshLaunchConfig: () =>
-              taskLaunchConfiguration.selectedQueries === undefined
-                ? resolveLaunchRuntimeConfig(deps.configPath)
-                : {},
-            appHome,
-            engineFailureMessage: 'digital employee execution task drive threw',
-            failureReporter: {
-              async report({ taskId, error, execution }) {
-                const now = Date.now()
-                await taskExecutionPersistence.runtimeLifecycle.trySet({
-                  taskId,
-                  to: 'failed',
-                  allowedFrom: ['pending', 'running'],
-                  extra: {
-                    finishedAt: now,
-                    errorSummary: 'task drive failed',
-                    errorMessage: error instanceof Error ? error.message : String(error),
-                  },
-                  executionContext: execution,
-                  now,
-                  reason: 'task-drive',
-                })
-                await taskExecutionPersistence.intentTerminalization.terminalize({
-                  taskId,
-                  state: 'failed',
-                  failureCode: 'task-drive-failed',
-                  now,
-                  claimedOwnerEpoch: execution.token.epoch,
-                })
-              },
-            },
-          }),
-        }),
+        launch: deps.taskExecutionModules.routeLaunch.workflow,
         ...composeDatabaseDigitalEmployeeExecutionPorts(deps.db),
         tasks: taskRouteOperations,
         readModels: deps.taskExecutionReadModels,
@@ -2871,7 +2441,7 @@ function composeSqliteApiRouteMounts(
     sources: [
       // RFC-357：owner 身份是 identity-access 的能力，由装配根注入；
       // task-execution 只声明端口，不去 compose 别的 context 的 provider。
-      ...composeTaskExecutionCatalogSources(deps.db, composeOwnerIdentityQueries(deps.db)),
+      ...deps.taskExecutionModules.catalogSources,
       composeDigitalEmployeeTaskCatalogSource(digitalEmployee.runtime),
     ],
   })
@@ -2890,180 +2460,19 @@ function composeSqliteApiRouteMounts(
     identityAccess,
   })
   const memoryCatalog = deps.memoryOperations.catalog ?? composedMemoryCatalog
-  const agentLaunchResources = Object.freeze({
-    resources: composeAgentLaunchResourceOperations({ db: deps.db }),
-    integrity: agentResourceIntegrity.launch,
-  })
-  const launchRuntime =
-    taskLaunchConfiguration.selectedQueries === undefined
-      ? resolveLaunchRuntimeConfig(deps.configPath)
-      : {}
-  const launchRuntimeKnobs = Object.freeze({
-    ...(launchRuntime.cloneTimeoutMs === undefined
-      ? {}
-      : { cloneTimeoutMs: launchRuntime.cloneTimeoutMs }),
-    ...(launchRuntime.gitBaselineSyncWindowMs === undefined
-      ? {}
-      : { gitBaselineSyncWindowMs: launchRuntime.gitBaselineSyncWindowMs }),
-  })
-  // RFC-359 AC-1（plan §5hn 批次二 ①）：这一份依赖束同时喂给**路由启动**与**启动参与者**
-  // ——定时 / webhook 触发走后者，两条路因此共用同一台内核。
-  const taskRouteLaunchDependencies: SqliteTaskRouteLaunchDependencies = Object.freeze({
-    workspaceUploads: deps.workspaceUploads,
-    db: deps.db,
-    configPath: deps.configPath,
-    // RFC-359 AC-1（plan §5hn 批次一）：单代理启动改走与 PostgreSQL 同一份编排。
-    gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-    agent: agentLaunchResources,
-    routeWorkspace: {
-      sourceContexts: identityAccess.taskPreparationContext,
-      appHome,
-      secretBox: deps.secretBox,
-      repositoryPreparation: composeRepositoryPreparation({
-        ...(taskLaunchConfiguration.preparationConfiguration === undefined
-          ? {}
-          : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
-        db: deps.db,
-        appHome,
-        secretBox: deps.secretBox,
-        cloneTimeoutMs: launchRuntime.cloneTimeoutMs,
-      }),
-    },
-    resourceAuthorityFor: (actor: Actor) =>
-      Object.freeze({
-        actor,
-        authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
-        resources: identityAccess.taskExecutionResources,
-      }),
-    // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组臂的资源面，两个根共用**同一份**
-    // （`composeWorkgroupLaunchResourceOperations`）。别在这里手拼 ACL 读法——
-    // 第一版按 PG daemon 抄成了「把 actor 投影成 direct authority 再查目录」，
-    // 那条路认不出定时 / webhook 的**委派** actor，PG 上当场 500。
-    workgroup: composeWorkgroupLaunchResourceOperations({
-      db: deps.db,
-      integrity: agentResourceIntegrity.launch,
-    }),
-    coordinator: createTaskDriveCoordinator({
-      ...(taskLaunchConfiguration.selectedQueries === undefined
-        ? {}
-        : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
-      persistence: taskExecutionPersistence,
-      // RFC-359 AC-1（plan §5hn 批次二 ①②，**修 20d4a6ce5 推的 e2e 红**）：运行期配置必须与
-      // `buildStartTaskDeps` 取自同一处——`createTaskDriveCoordinator` 里的
-      // `runtimeConfigOpts(input.deps)` 从 `deps` 上读十七个旋钮（`defaultNodeRetries` /
-      // `defaultPerNodeTimeoutMs` / `commitPush` / `mergeAgent` / 各类并发上限…），
-      // 只给 `{db, schedulerDriver, configPath}` 时它们**全是 undefined**，驱动退回编译期缺省。
-      // webhook 启动改走这台协调器之后当场照出来：`webhook-mr-runtime-races` 里那个故意崩溃
-      // 的 runtime 节点被重试到 **8 次**（判据要 1 次），因为 `defaultNodeRetries` 丢了。
-      deps: {
-        db: deps.db,
-        schedulerDriver,
-        configPath: deps.configPath,
-        // RFC-366：绑上 memory 的蒸馏入队 participant。
-        // 两个用处，都靠它：`runtimeConfigOpts` 据此组出 agent 运行结束的观察者
-        // （每个 agent node_run 结算一次），`gateContinuationPreDrive` 据此拿到真正的
-        // 入队器而不是那个 fail-closed 的占位（`missingMemoryDistillEnqueuer`，
-        // `StartTaskDeps.memoryDistillEnqueuer` 的注释本来就写明「bootstrap 必须绑」）。
-        memoryDistillEnqueuer: deps.memoryOperations.distillCommands,
-        ...(taskLaunchConfiguration.selectedQueries === undefined
-          ? resolveLaunchRuntimeConfig(deps.configPath)
-          : {}),
-      },
-      // 2026-09-19：这台协调器**长驻**（组合根装配一次、之后服务每一次 `POST /api/tasks`），
-      // 所以那 17 个旋钮不能冻在装配那一刻——用户在设置页把默认运行时改到另一行之后，新任务
-      // 必须按新那一行派发（e2e CFG-45 实测：不给 refresher 时每次 drive 拿到的 `defaultRuntime`
-      // 恒为 undefined，任务一律退回内置 opencode）。`cli/start.ts` 与 PG daemon 的同位协调器
-      // 同款处置，判据在 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`。
-      refreshLaunchConfig: () =>
-        taskLaunchConfiguration.selectedQueries === undefined
-          ? resolveLaunchRuntimeConfig(deps.configPath)
-          : {},
-      appHome,
-      engineFailureMessage: 'agent route task drive threw',
-      failureReporter: {
-        async report({ taskId, error, execution }) {
-          const now = Date.now()
-          await taskExecutionPersistence.runtimeLifecycle.trySet({
-            taskId,
-            to: 'failed',
-            allowedFrom: ['pending', 'running'],
-            extra: {
-              finishedAt: now,
-              errorSummary: 'task drive failed',
-              errorMessage: error instanceof Error ? error.message : String(error),
-            },
-            executionContext: execution,
-            now,
-            reason: 'task-drive',
-          })
-          await taskExecutionPersistence.intentTerminalization.terminalize({
-            taskId,
-            state: 'failed',
-            failureCode: 'task-drive-failed',
-            now,
-            claimedOwnerEpoch: execution.token.epoch,
-          })
-        },
-      },
-      // RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：这台协调器现在也要驱动**延后仓库准备**
-      // 的第 0 步——定时 / webhook 触发走的就是它。缺了这一格，占位行会永远停在 `pending`
-      // 或者（空工作流）被直接跑完落 `done`——两种都不是 G7 要的归宿。
-      // 直启路由不延后，届时这一步只会看到 `worktreePath !== ''` 并直接返回 ready。
-      // `cloneTimeoutMs` / `gitBaselineSyncWindowMs` 必须从配置里取：此前这条路经
-      // `buildStartTaskDeps`（它 spread 了 `resolveLaunchRuntimeConfig`）拿到它们，
-      // 换成显式装配后漏掉就等于把管理员调过的两个旋钮静默丢掉——实撞：G6 窗口退回默认
-      // 60s，一个必然失败的准备要退避重试整整一分钟。
-      repositoryPreparation: composeDeferredRepositoryPreparation({
-        ...(taskLaunchConfiguration.selectedQueries === undefined
-          ? {}
-          : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
-        repositoryPreparation: composeRepositoryPreparation({
-          ...(taskLaunchConfiguration.preparationConfiguration === undefined
-            ? {}
-            : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
-          db: deps.db,
-          appHome: appHome,
-          secretBox: deps.secretBox,
-          cloneTimeoutMs: launchRuntime.cloneTimeoutMs,
-        }),
-        db: deps.db,
-        appHome,
-
-        ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-        ...launchRuntimeKnobs,
-      }),
-    }),
-  })
-  const taskRouteLaunch =
-    deps.taskRouteLaunch ?? createSqliteTaskRouteLaunchOperations(taskRouteLaunchDependencies)
-  // 上面那个转发面指向的真身（同一份依赖束，终端同一台内核）。
-  const sqliteTaskExecutionLaunches = createSqliteTaskExecutionLaunchParticipant(
-    taskRouteLaunchDependencies,
-  )
+  const taskRouteLaunch = deps.taskRouteLaunch ?? deps.taskExecutionModules.routeLaunch
   const workgroupTaskRoom = composeWorkgroupTaskRoom({
     db: deps.db,
-    taskParticipantFactory: composeWorkgroupTaskRoomTaskParticipantFactory({
-      collaboration: composeWorkgroupTaskRoomClarifyParticipantFactory(),
-    }),
+    taskParticipantFactory: deps.taskExecutionModules.workgroupTaskRoom,
     activeUsers: composeWorkgroupTaskRoomActiveUsers({
       userDirectory: identityAccess.userDirectory,
     }),
     dynamicWorkflow: composeWorkgroupTaskRoomDynamicWorkflow({
-      validationContext: composeSqliteDynamicWorkflowValidationContext(deps.db),
+      validationContext: deps.taskExecutionModules.validationContext,
       workflows: workflowCatalog.operations.create,
     }),
     systemUserId: SYSTEM_USER_ID,
-    // 单进程部署：受理请求的进程既看得到工作树、也持有调度器，预检与驱动都在本进程内做。
-    continuation: composeWorkgroupTaskRoomContinuationDriver({
-      ...(taskLaunchConfiguration.selectedQueries === undefined
-        ? {}
-        : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
-      db: deps.db,
-      workspacePresence: deps.workspacePresence,
-      configPath: deps.configPath,
-      schedulerDriver,
-      taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
-    }),
+    continuation: deps.taskExecutionModules.roomContinuation,
     broadcast(taskId, event) {
       taskBroadcaster.broadcast(TASK_CHANNEL(taskId), { id: -1, ...event })
     },
@@ -3083,7 +2492,7 @@ function composeSqliteApiRouteMounts(
     repositories: deps.repositoryWorkspaceOperations.overviewQueries,
     integration: scheduledTaskRuntime.overview,
     memories: memoryCatalog,
-    tasks: createTaskOverviewQuery(deps.db),
+    tasks: deps.taskExecutionModules.overview,
   })
   const scheduledIdentityAccess = Object.freeze({
     ...identityAccess,
@@ -3093,17 +2502,7 @@ function composeSqliteApiRouteMounts(
   // 此前这里是 `services/scheduleLaunch.ts#buildScheduleLaunch`——`startExecution` 那个
   // 三分支 switch 的**第三份**写法（provider runtime 的后台 tick 是第二份）。
   const scheduledLaunch =
-    deps.buildScheduleLaunch ??
-    createBuildScheduleLaunch(
-      createTaskExecutionTriggerParticipant({
-        launches: createSqliteTaskExecutionLaunchParticipant(taskRouteLaunchDependencies),
-        cancellation: Object.freeze({
-          async cancel(input: { readonly taskId: string }) {
-            await taskRouteOperations.cancel(input.taskId)
-          },
-        }),
-      }),
-    )
+    deps.buildScheduleLaunch ?? deps.taskExecutionModules.trigger.buildScheduleLaunch
   const { webhookEndpointService, webhookTriggerService, webhookDeliveryRuntime } =
     deps.integrationModules
   const capabilityTemplateRouteDeps = Object.freeze({
@@ -3240,7 +2639,7 @@ function composeSqliteApiRouteMounts(
   })
   const collaborationTaskAccess = createSqliteCollaborationTaskAccessPort(deps.db)
   const taskClarifyDirectiveRoutes = Object.freeze({
-    operations: composeTaskClarifyDirectiveRouteOperations(deps.collaborationContext),
+    operations: deps.taskExecutionModules.routes.clarifyDirective,
   })
   const worktreeFiles = Object.freeze({
     store: repositoryWorkspaceStore,
@@ -3520,7 +2919,6 @@ function composeSqliteApiRouteMounts(
   return Object.freeze({
     apiRoutes,
     digitalEmployeeWorkStart,
-    taskExecutionLaunches: sqliteTaskExecutionLaunches,
   })
 }
 

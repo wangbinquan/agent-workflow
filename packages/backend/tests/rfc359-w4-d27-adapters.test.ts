@@ -10,7 +10,6 @@
 //
 // 这套断言两个引擎各跑一遍读面的核心判据：启动工作流可见性、调用目标按名解析、agent 注入闭包
 // 展开与依赖缺失，以及闭包冻结的产物在两个引擎上逐字相同。
-
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
@@ -231,8 +230,12 @@ test('源码锁：资源快照只剩一份读面 + 一份绑定，四个 provide
     expect(() => read(retired)).toThrow()
   }
 
-  // 三个 bootstrap 装的是同一份绑定。
+  expect(
+    read('cli/daemonModules/taskExecution.ts').match(/createTaskExecutionResourceBinding\(/g),
+  ).toHaveLength(1)
+  // RFC-382: three roots consume the single session binding.
   for (const bootstrap of ['server.ts', 'cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
-    expect(read(bootstrap)).toContain('createTaskExecutionResourceBinding(')
+    expect(read(bootstrap)).toContain('composeDaemonTaskExecutionModules(')
+    expect(read(bootstrap)).not.toContain('createTaskExecutionResourceBinding(')
   }
 })

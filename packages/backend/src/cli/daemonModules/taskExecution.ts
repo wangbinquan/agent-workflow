@@ -1,0 +1,424 @@
+// RFC-382: one passive task-execution graph and one live configuration source per session.
+import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import type { SecretBox } from '@/auth/secretBox'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
+import { createLogger } from '@/util/log'
+import { runtimeConfigOpts } from '@/services/task'
+import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
+import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
+import { composeDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
+import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
+import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
+import {
+  createCollaborationCommandContext,
+  createCollaborationRuntimeMechanics,
+} from '@/modules/collaboration/composition'
+import {
+  createClarifyDecisionCommand,
+  createQuestionDispatchCommand,
+  createReviewDecisionCommand,
+  createTaskDagCollaborationOperations,
+} from '@/modules/collaboration/composition/decisionCommands'
+import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
+import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
+import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
+import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
+import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/taskCatalogSources'
+import {
+  createTaskExecutionPersistence,
+  createTaskExecutionResourceBinding,
+} from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
+import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
+import {
+  DefaultTaskDriveCoordinator,
+  resolveTaskDriveConfig,
+} from '@/modules/task-execution/composition/taskDriveLegacy'
+import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
+import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
+import type { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import type { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
+import type {
+  SchedulerDriverPort,
+  TaskDriveCoordinator,
+} from '@/modules/task-execution/public/commands'
+import type {
+  PostgresqlTaskExecutionProviderRuntimeDependencies,
+  SqliteTaskExecutionProviderRuntimeDependencies,
+  SelectedTaskExecutionProviderRuntime,
+} from '@/modules/task-execution/composition/providerRuntime'
+import type { DaemonProviderCore } from './providerCore'
+import type { DaemonObservationModules } from './observation'
+import type { DaemonResourceCatalogModules } from './resourceCatalog'
+import type { DaemonRepositoryCredentials } from './repositoryCredentials'
+import type { DaemonMemoryModules } from './memory'
+
+type ProviderDependencies =
+  SqliteTaskExecutionProviderRuntimeDependencies<CollaborationRouteContext>
+type PreparationInput = Parameters<typeof composeRepositoryPreparation>[0]
+type RouteInputs = ReturnType<ProviderDependencies['routes']>
+type ReviewInputs = Parameters<typeof createReviewDecisionCommand>[0]
+
+/** Neutral inputs; the adapter table owns all remaining provider mechanisms. */
+export interface DaemonTaskProviderInput extends Omit<
+  ProviderDependencies,
+  'runtime' | 'routeLaunch' | 'fusion' | 'repositoryPreparationRetry'
+> {
+  readonly persistence: ReturnType<typeof createTaskExecutionPersistence>
+  readonly workgroupTaskRoom: NonNullable<ProviderDependencies['workgroupTaskRoom']>
+  readonly runtime: ProviderDependencies['runtime'] & {
+    readonly taskDagCollaboration: ReturnType<typeof createTaskDagCollaborationOperations>
+  }
+  readonly routeLaunch: PostgresqlTaskExecutionProviderRuntimeDependencies['routeLaunch']
+  readonly routeWorkspace: PostgresqlTaskExecutionProviderRuntimeDependencies['routeWorkspace']
+  readonly fusion: ProviderDependencies['fusion'] &
+    PostgresqlTaskExecutionProviderRuntimeDependencies['fusion']
+  readonly recoverySelection?: PostgresqlTaskExecutionProviderRuntimeDependencies['recoverySelection']
+  readonly finalizeWorkspace: (taskId: string) => Promise<void>
+  readonly legacyLaunch: {
+    readonly configuration: ReturnType<typeof composeTaskLaunchConfiguration>
+    readonly identityAccess: DaemonProviderCore['identityAccess']
+    readonly repositoryWorkspace: DaemonProviderCore['repositoryWorkspaceStore']
+    readonly preparationEffects: Pick<PreparationInput, 'preparationEffects' | 'scratchEffects'>
+    readonly agentLaunchResources: ProviderDependencies['routeLaunch']['agent']
+  }
+}
+export interface DaemonTaskExecutionAdapters<P extends DatabaseProvider = DatabaseProvider> {
+  readonly provider: P
+  readonly daemonGeneration: string
+  compose(
+    input: DaemonTaskProviderInput,
+  ): Extract<SelectedTaskExecutionProviderRuntime<CollaborationRouteContext>, { provider: P }>
+  roomContinuation(input: {
+    readonly provider: SelectedTaskExecutionProviderRuntime<CollaborationRouteContext>
+    readonly configPath: string
+    readonly configuration: ReturnType<typeof composeTaskLaunchConfiguration>
+    readonly workspacePresence: DaemonObservationModules['workspacePresence']
+  }): Readonly<{
+    assertResumable(taskId: string, verb: string): Promise<void>
+    driveAfterCommit(continuation: Readonly<{ taskId: string; intentId: string }>): Promise<void>
+  }>
+}
+export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseProvider> {
+  readonly db: ProviderNeutralDatabase
+  readonly appHome: string
+  readonly configPath: string
+  readonly secretBox?: SecretBox
+  readonly adapters: DaemonTaskExecutionAdapters<P>
+  readonly taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>
+  readonly core: Pick<
+    DaemonProviderCore,
+    'identityAccess' | 'runtimeRegistry' | 'repositoryWorkspaceStore'
+  >
+  readonly observation: Pick<
+    DaemonObservationModules,
+    'observationCalls' | 'workspacePresence' | 'runtimeSessionLeases'
+  >
+  readonly resources: Pick<DaemonResourceCatalogModules, 'agentResourceIntegrity'> & {
+    readonly owners: Parameters<typeof composeTaskExecutionCatalogSources>[1]
+  }
+  readonly repository: Pick<
+    DaemonRepositoryCredentials,
+    'codeHostConnections' | 'repositoryPublicationTransport'
+  >
+  readonly memory: Pick<DaemonMemoryModules, 'memoryInjectionQueries'> & {
+    readonly memoryOperations: {
+      readonly distillCommands: Parameters<typeof createClarifyDecisionCommand>[1]
+    }
+  }
+  readonly selection: Required<
+    Pick<ProviderDependencies['runtime'], 'taskRunBinding' | 'workspaceExcludeProfilesFor'>
+  > &
+    Pick<ProviderDependencies['runtime'], 'isolationWorkspaces' | 'repositoryGitWorkspaces'> & {
+      readonly nodeRunPrompts: RouteInputs['nodeRunPrompts']
+      readonly portArtifacts: ReturnType<typeof composePortArtifactOperations>
+      readonly archive?: ProviderDependencies['archive']
+      readonly workspaceReads?: ProviderDependencies['workspaceReads']
+      readonly effects?: RouteInputs['effects']
+      readonly archivedEvents?: RouteInputs['archivedEvents']
+      readonly reviewArtifacts?: ReviewInputs['reviewArtifacts']
+      readonly reviewRollbackSnapshots?: ReviewInputs['rollbackSnapshots']
+      readonly workspaceUploads?: ProviderDependencies['routeLaunch']['workspaceUploads']
+      readonly inputFiles?: PostgresqlTaskExecutionProviderRuntimeDependencies['routeLaunch']['inputFiles']
+      readonly preparationEffects?: PreparationInput['preparationEffects']
+      readonly scratchEffects?: PreparationInput['scratchEffects']
+      readonly recoverySelection?: PostgresqlTaskExecutionProviderRuntimeDependencies['recoverySelection']
+      readonly fusionWorkspaces: PostgresqlTaskExecutionProviderRuntimeDependencies['fusion']['workspaces']
+    }
+  readonly finalizeWorkspace: (taskId: string) => Promise<void>
+  readonly alerts?: ProviderDependencies['lifecycleRepair']
+  readonly fusionRunConfiguration?: PostgresqlTaskExecutionProviderRuntimeDependencies['fusion']['runConfiguration']
+  /** Direct HTTP fixtures only. Production never substitutes its session scheduler. */
+  readonly testSeams?: {
+    readonly schedulerDriver?: SchedulerDriverPort
+    readonly collaboration?: CollaborationRouteContext
+  }
+}
+
+export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
+  input: DaemonTaskExecutionInput<P>,
+) {
+  const {
+    db,
+    appHome,
+    configPath,
+    secretBox,
+    taskLaunchConfiguration,
+    selection,
+    core,
+    observation,
+    memory,
+  } = input
+  const log = createLogger('task')
+  const resourceSnapshots = composeTaskExecutionResourceBinding(taskExecutionResourceDependencies)
+  const resources = createTaskExecutionResourceBinding(db, resourceSnapshots)
+  const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: observation.workspacePresence,
+  })
+  const collaboration: CollaborationRouteContext =
+    input.testSeams?.collaboration ??
+    createCollaborationCommandContext({
+      db,
+      appHome,
+      taskExecutionReadModels: persistence.reads,
+      reviewArtifacts: selection.reviewArtifacts,
+      reviewDecisions: createReviewDecisionCommand({
+        db,
+        appHome,
+        reviewArtifacts: selection.reviewArtifacts,
+        rollbackSnapshots: selection.reviewRollbackSnapshots,
+      }),
+      questionDispatches: createQuestionDispatchCommand(db),
+      clarifyDecisions: createClarifyDecisionCommand(db, memory.memoryOperations.distillCommands),
+    })
+  const validationContext = composeDynamicWorkflowValidationContext(db)
+  const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
+  const agentLaunchResources = Object.freeze({
+    resources: composeAgentLaunchResourceOperations({ db }),
+    integrity: input.resources.agentResourceIntegrity.launch,
+  })
+  const resourceAuthorityFor = (actor: Actor) =>
+    Object.freeze({
+      actor,
+      authority: core.identityAccess.directAuthority.authorityForLegacyProjection(actor),
+      resources,
+    })
+  async function runConfiguration() {
+    const fresh = await taskLaunchConfiguration.start()
+    return Object.freeze({
+      appHome,
+      configPath,
+      daemonGeneration: input.adapters.daemonGeneration,
+      ...(fresh.subagentLiveCapture === undefined
+        ? {}
+        : { subagentLiveCapture: fresh.subagentLiveCapture }),
+      ...(fresh.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: fresh.cloneTimeoutMs }),
+      ...(fresh.gitBaselineSyncWindowMs === undefined
+        ? {}
+        : { gitBaselineSyncWindowMs: fresh.gitBaselineSyncWindowMs }),
+      ...runtimeConfigOpts({
+        ...fresh,
+        memoryDistillEnqueuer: memory.memoryOperations.distillCommands,
+      }),
+    })
+  }
+  const repositoryPreparation = composeRepositoryPreparation({
+    db,
+    appHome,
+    secretBox,
+    preparationEffects: selection.preparationEffects,
+    scratchEffects: selection.scratchEffects,
+    preparationConfiguration: {
+      async read() {
+        const current = await runConfiguration()
+        return { cloneTimeoutMs: current.cloneTimeoutMs }
+      },
+    },
+  })
+  const coordinator: TaskDriveCoordinator = Object.freeze({
+    submit: (request: Parameters<TaskDriveCoordinator['submit']>[0]) =>
+      sessionCoordinator.submit(request),
+  })
+  const provider = input.adapters.compose({
+    persistence,
+    schedulerDriver: input.testSeams?.schedulerDriver,
+    archive: selection.archive,
+    workspaceReads: selection.workspaceReads,
+    recoverySelection: selection.recoverySelection,
+    runtime: {
+      taskRunBinding: selection.taskRunBinding,
+      workspaceExcludeProfilesFor: selection.workspaceExcludeProfilesFor,
+      isolationWorkspaces: selection.isolationWorkspaces,
+      repositoryGitWorkspaces: selection.repositoryGitWorkspaces,
+      workspacePresence: observation.workspacePresence,
+      observationInvocations: observation.observationCalls,
+      memoryInjectionQueries: memory.memoryInjectionQueries,
+      runtimeSessionLeases: observation.runtimeSessionLeases,
+      runtimeRegistry: core.runtimeRegistry,
+      nodeRunRuntime: composeNodeRunRuntimePersistence(db, composeRuntimeSelectionParticipantInTx),
+      taskDagCollaboration: createTaskDagCollaborationOperations(db),
+      collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+        reviewArtifacts: selection.reviewArtifacts,
+        portArtifactReaderFor: () => selection.portArtifacts,
+      }),
+      workgroupTurns: composeWorkgroupTurnsOperations(
+        db,
+        composeWorkgroupHostLedgerParticipantFactory({ collaboration: workgroupClarify }),
+        createWorkgroupClarifyAskGate(db),
+      ),
+      identityAccess: {
+        delegatedRequests: core.identityAccess.delegatedRequests,
+        taskExecutionResources: resources,
+      },
+      dynamicWorkflow: { persistence: composeDynamicWorkflowPersistence(db), validationContext },
+      codeHostConnections: input.repository.codeHostConnections,
+      repositoryPublicationTransport: input.repository.repositoryPublicationTransport,
+    },
+    rootResumeRuntime: async () => ({ runConfig: await runConfiguration() }),
+    routeLaunch: {
+      inputFiles: selection.inputFiles,
+      workspaceUploads: selection.workspaceUploads,
+      configPath,
+      gitCommitIdentity: core.identityAccess.getUserGitCommitIdentity,
+      coordinator,
+      resourceAuthorityFor,
+      agent: agentLaunchResources,
+      workgroup: composeWorkgroupLaunchResourceOperations({
+        db,
+        integrity: input.resources.agentResourceIntegrity.launch,
+      }),
+    },
+    routeWorkspace: {
+      sourceContexts: core.identityAccess.taskPreparationContext,
+      appHome,
+      secretBox,
+      repositoryPreparation,
+    },
+    routes: () => ({
+      archivedEvents: selection.archivedEvents,
+      effects: selection.effects,
+      nodeRunPrompts: selection.nodeRunPrompts,
+      collaboration,
+      owners: input.resources.owners,
+      appHome,
+    }),
+    lifecycleRepair: input.alerts ?? {},
+    fusion: {
+      appHome,
+      workspaces: selection.fusionWorkspaces,
+      runConfiguration: input.fusionRunConfiguration,
+      startDeps: {
+        launchConfiguration: taskLaunchConfiguration.continuationQueries,
+        actorUserId: SYSTEM_USER_ID,
+        secretBox,
+        identityAccess: core.identityAccess,
+        repositoryWorkspace: core.repositoryWorkspaceStore,
+        runtimeSessionLeases: observation.runtimeSessionLeases,
+        configPath,
+      },
+    },
+    workgroupTaskRoom: { collaboration: workgroupClarify },
+    finalizeWorkspace: input.finalizeWorkspace,
+    legacyLaunch: {
+      preparationEffects: {
+        preparationEffects: selection.preparationEffects,
+        scratchEffects: selection.scratchEffects,
+      },
+      configuration: taskLaunchConfiguration,
+      identityAccess: core.identityAccess,
+      repositoryWorkspace: core.repositoryWorkspaceStore,
+      agentLaunchResources,
+    },
+  })
+  const sessionCoordinator = new DefaultTaskDriveCoordinator({
+    get runtime() {
+      return runConfiguration().then(resolveTaskDriveConfig)
+    },
+    lifecycle: provider.driverLifecycle,
+    gateContinuationPreDrive: composeGateContinuationPreDrive({
+      db,
+      memoryDistillEnqueuer: memory.memoryOperations.distillCommands,
+      persistence,
+    }),
+    repositoryPreparation: {
+      async run(context) {
+        const fresh = await runConfiguration()
+        return composeDeferredRepositoryPreparation({
+          db,
+          appHome,
+          secretBox,
+          repositoryPreparation,
+          cloneTimeoutMs: fresh.cloneTimeoutMs,
+          gitBaselineSyncWindowMs: fresh.gitBaselineSyncWindowMs,
+        }).run(context)
+      },
+    },
+    engineOrchestrator: {
+      async drive(context) {
+        await provider.runtime.schedulerDriver.drive({
+          taskId: context.taskId,
+          appHome: context.runtime.appHome,
+          ...context.runtime.runtime,
+          ...(context.runtime.ensureWorkspaceProfiles ? { ensureWorkspaceProfiles: true } : {}),
+          signal: context.signal,
+          executionContext: context.execution,
+        })
+      },
+    },
+    failureReporter: {
+      async report({ taskId, error, execution }) {
+        const now = Date.now()
+        log.error('task drive failed', {
+          taskId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        await persistence.runtimeLifecycle.trySet({
+          taskId,
+          to: 'failed',
+          allowedFrom: ['pending', 'running'],
+          extra: {
+            finishedAt: now,
+            errorSummary: 'task drive failed',
+            errorMessage: error instanceof Error ? error.message : String(error),
+          },
+          executionContext: execution,
+          now,
+          reason: 'task-drive',
+        })
+        await persistence.intentTerminalization.terminalize({
+          taskId,
+          state: 'failed',
+          failureCode: 'task-drive-failed',
+          now,
+          claimedOwnerEpoch: execution.token.epoch,
+        })
+      },
+    },
+  })
+  return Object.freeze({
+    ...provider,
+    collaboration,
+    resourceSnapshots,
+    resources,
+    coordinator: sessionCoordinator,
+    runConfiguration,
+    validationContext,
+    catalogSources: composeTaskExecutionCatalogSources(db, input.resources.owners),
+    roomContinuation: input.adapters.roomContinuation({
+      provider,
+      configPath,
+      configuration: taskLaunchConfiguration,
+      workspacePresence: observation.workspacePresence,
+    }),
+    activeTaskIds: () =>
+      provider.executionModule.runtimeRegistry.activeTokens().map((token) => token.taskId),
+    isTaskActive: (taskId: string) => provider.executionModule.runtimeRegistry.hasTask(taskId),
+  })
+}
+export type DaemonTaskExecutionModules<P extends DatabaseProvider = DatabaseProvider> = ReturnType<
+  typeof composeDaemonTaskExecutionModules<P>
+>
