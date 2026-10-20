@@ -17,7 +17,7 @@ import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/
 import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
 import type { EmployeeWorkspacePersistence } from '../application/ports/employeeWorkspacePersistence'
 import { createEmployeeWorkspacePersistence } from '../infrastructure/employeeWorkspacePersistence'
-import { PLATFORM_OWNED_GIT_METADATA_PREFIXES } from '../infrastructure/attemptSupport'
+import { GIT_METADATA_SKIP_PREFIXES } from '../infrastructure/attemptSupport'
 import {
   protectedRootSnapshotDigest,
   snapshotProtectedRoots,
@@ -194,7 +194,7 @@ function skipPrefixes(
 ) {
   const platformCaseKey = stableIdentityComponent(caseId)
   return {
-    'git-meta': PLATFORM_OWNED_GIT_METADATA_PREFIXES,
+    'git-meta': GIT_METADATA_SKIP_PREFIXES,
     evidence: policy.platformWritePrefixes.flatMap((prefix) => {
       if (prefix === 'inputs/requirements' && workItemRef === 'analyze-implement') {
         return planReviewEnabled

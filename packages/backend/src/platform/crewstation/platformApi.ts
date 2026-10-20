@@ -9,11 +9,13 @@
 // unchanged requestKey).
 //
 // `409 stale_generation` is retried the same way: the platform answers it while
-// the latest lease renewal is still being propagated to its object-write control
-// (every renewal advances it), so a call carrying the current fence can be
-// refused for a moment and succeed unchanged. A fence that really lost the lease
-// keeps failing and the error surfaces after the bounded attempts; the authority
-// loop observes the loss on its own (RFC-370 acceptance, 2026-10-17).
+// a change of the execution authority is still being propagated to its
+// object-write control, so a call carrying the current fence can be refused for a
+// moment and succeed unchanged. Until the CrewStation fix of 2026-10-19 every
+// lease renewal did that too, for as long as its delivery took (seconds under
+// load, past these attempts). A fence that really lost the lease keeps failing
+// and the error surfaces after the bounded attempts; the authority loop observes
+// the loss on its own (RFC-370 acceptance, 2026-10-17).
 
 import { timeoutSignal } from '@/util/timeoutSignal'
 

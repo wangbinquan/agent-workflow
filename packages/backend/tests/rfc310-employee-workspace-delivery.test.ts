@@ -728,6 +728,10 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
     )
     mkdirSync(join(first.workspacePath, 'src'), { recursive: true })
     writeFileSync(join(first.workspacePath, 'src', 'feature.ts'), 'export const feature = 1\n')
+    // RFC-370 hosted acceptance 2026-10-19: OpenCode caches its project id in the Git common
+    // directory, which for the Agent's linked worktree is this workspace's `.git`; the round
+    // must not fail as "protected-root-write: added git-meta/opencode".
+    writeFileSync(join(first.workspacePath, '.git', 'opencode'), 'project-id')
     expect(
       await workspace.validate({
         roundRef: 'round-analyze',

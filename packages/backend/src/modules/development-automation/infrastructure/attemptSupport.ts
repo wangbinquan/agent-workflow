@@ -62,8 +62,27 @@ export const PLATFORM_OWNED_GIT_METADATA_PREFIXES = [
   'worktrees',
 ] as const
 
+/**
+ * The runtime's own cache in the Git common directory, written by the runtime
+ * process rather than by an Agent-side Git command: OpenCode stores its project
+ * id at `<git common dir>/opencode` every time it starts in a repository
+ * (opencode packages/core/src/project.ts:124-126, called from
+ * packages/opencode/src/project/project.ts:306-308). An Agent node runs in an
+ * RFC-130 linked worktree whose common directory is the action workspace's
+ * `.git`, so the first real OpenCode round of every action workspace reported
+ * it as added (RFC-370 hosted acceptance, 2026-10-19). It is not Git state;
+ * HEAD, refs, index and config stay covered by the runner's window check.
+ */
+export const RUNTIME_OWNED_GIT_METADATA_PREFIXES = ['opencode'] as const
+
+/** What the `git-meta` protected root leaves out of its byte comparison. */
+export const GIT_METADATA_SKIP_PREFIXES: readonly string[] = [
+  ...PLATFORM_OWNED_GIT_METADATA_PREFIXES,
+  ...RUNTIME_OWNED_GIT_METADATA_PREFIXES,
+]
+
 const PROTECTED_SKIP_PREFIXES_BY_ROOT = {
-  'git-meta': PLATFORM_OWNED_GIT_METADATA_PREFIXES,
+  'git-meta': GIT_METADATA_SKIP_PREFIXES,
 } as const
 
 interface SerializedPreState {
