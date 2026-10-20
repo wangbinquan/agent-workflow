@@ -407,6 +407,9 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
       },
       async run(request) {
         attempts.push(request.observationDemand?.originalAttempt ?? '')
+        // The family's default budget applies (a 120 s one cancelled every
+        // hosted narrative mid-turn).
+        expect(request.timeoutMs).toBeUndefined()
         const { scratchDir: _native, ...response } =
           attempts.length === 1
             ? { ...okRun(GOOD_OUTPUT), status: 'timeout' as const }

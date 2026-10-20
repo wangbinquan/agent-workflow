@@ -87,6 +87,11 @@ export function createHostedTaskArchiveContent(input: {
   readonly objects: Pick<CrewStationStreamObjectStorage, 'open'>
   readonly publications: HostedObjectPublications
   readonly sources: HostedArchiveSources
+  /** Each archived task's own volume (Source Control's hosted workspaces). */
+  readonly workspaces: {
+    find(taskId: string): Promise<unknown | null>
+    abandon(taskId: string): Promise<void>
+  }
   readonly now?: () => number
 }): TaskArchiveContentBinding & { readText(reference: string): Promise<string> } {
   const session = databaseSessionFor(input.db)
@@ -287,6 +292,16 @@ export function createHostedTaskArchiveContent(input: {
         }
         await remove(directory, true)
         return true
+      },
+      async releaseTaskStorage(taskIds) {
+        // A move never consumes its source, so the archived tasks' volumes still
+        // hold their worktrees, runs and logs, and orphan sweeps visit only
+        // running parents: archiving is what releases them, as deleting a task
+        // does. Each own registration is closed (the intent is recorded first;
+        // the lifecycle reconciler completes a close the platform refuses for
+        // now). A task working in another task's volume has none of its own.
+        for (const taskId of taskIds)
+          if ((await input.workspaces.find(taskId)) !== null) await input.workspaces.abandon(taskId)
       },
     },
     async readText(reference) {

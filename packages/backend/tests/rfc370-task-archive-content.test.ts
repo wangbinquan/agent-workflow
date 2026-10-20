@@ -47,6 +47,7 @@ function memoryContent(
   const files = new Map<string, string>()
   const directories = new Set<string>()
   const calls: Array<{ operation: string; reference: string; text?: string }> = []
+  const releases: string[][] = []
   function makeDirectory(reference: string) {
     directories.add(reference)
     const parent = reference.lastIndexOf('/')
@@ -134,8 +135,14 @@ function memoryContent(
       await before('restore', `${temporary}/${kind}`)
       return control.restored ?? true
     },
+    // Not a content reference: recorded apart from `calls`.
+    async releaseTaskStorage(taskIds) {
+      expect(this).toBe(content)
+      releases.push([...taskIds])
+      await control.before?.('release-storage', taskIds.join(','))
+    },
   }
-  return { content, files, directories, calls, putFile, makeDirectory }
+  return { content, files, directories, calls, releases, putFile, makeDirectory }
 }
 
 async function seedTask(db: ProviderNeutralDatabase) {
@@ -248,6 +255,51 @@ describeEachProvider('RFC-370 selected archive content', (harness) => {
       }
     }, 20_000)
   }
+
+  // RFC-370 hosted acceptance (2026-10-19, user decision): archiving is the
+  // hosted retention path. A hosted archive move never consumes its source, so
+  // an archived task's volume kept its worktree, runs and logs and stayed
+  // counted against the project's PVC quota with no task left to close it.
+  test('per-task storage is released once the rows are removed, before the claim completes', async () => {
+    const db = harness.db
+    await seedTask(db)
+    const observed: Array<{ taskExists: boolean; claimState: string }> = []
+    const store = memoryContent({
+      before: async (operation) => {
+        if (operation === 'release-storage')
+          observed.push({
+            taskExists: await taskExists(db),
+            claimState: (await claims(db))[0]!.state,
+          })
+      },
+    })
+    const result = await runSweep(db, store.content)
+    expect(result.archived.map((tree) => tree.rootTaskId)).toEqual([ROOT])
+    expect(store.releases).toEqual([[ROOT]])
+    expect(observed).toEqual([{ taskExists: false, claimState: 'db-finalized' }])
+    expect((await claims(db))[0]!.state).toBe('completed')
+  }, 20_000)
+
+  test('a release interrupted after the rows were removed is repeated by recovery', async () => {
+    const db = harness.db
+    await seedTask(db)
+    let interrupted = true
+    const store = memoryContent({
+      before: (operation) => {
+        if (operation === 'release-storage' && interrupted) {
+          interrupted = false
+          throw new Error('storage release interrupted')
+        }
+      },
+    })
+    const command = createDrizzleTaskArchiveMaintenanceCommand(db, { content: store.content })
+    await command.runSweep({ enabled: true, retentionDays: 1, maxTreesPerSweep: 10 }, OPTIONS)
+    expect(await taskExists(db)).toBe(false)
+    expect((await claims(db))[0]!.state).toBe('db-finalized')
+    await command.recover(OPTIONS)
+    expect(store.releases).toEqual([[ROOT], [ROOT]])
+    expect((await claims(db))[0]!.state).toBe('completed')
+  }, 20_000)
 
   test('lost commit ACK keeps online rows and recovers the same committed artifact and claim', async () => {
     const db = harness.db

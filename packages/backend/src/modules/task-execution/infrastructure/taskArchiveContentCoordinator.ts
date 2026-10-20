@@ -604,6 +604,9 @@ async function archiveClaimed(
 
   const ioClaim = await maintenance.transition({ claim: initialClaim, to: 'io-complete', now })
   const finalized = await finalizeDatabase(db, rootTaskId, taskIds, ioClaim, now)
+  // The rows are gone: release what the store keeps per task (a hosted task's
+  // volume). Before completing the claim, so a crash repeats it on recovery.
+  await content.releaseTaskStorage(taskIds)
   await maintenance.complete({ claim: finalized, now })
 
   log.info('archived task tree', { rootTaskId, tasks: taskIds.length, dir: finalDir })
@@ -751,6 +754,7 @@ async function recoverClaimedArchives(
         await maintenance.transition({ claim, to: 'recovery-required' })
         continue
       }
+      await content.releaseTaskStorage(members)
       await maintenance.complete({ claim })
     }
   }

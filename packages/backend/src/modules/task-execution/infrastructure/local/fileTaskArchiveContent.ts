@@ -42,5 +42,8 @@ export function createFileTaskArchiveContent(): TaskArchiveContentPort {
     appendText: (reference, text) => appendFileSync(reference, text, 'utf8'),
     writeText: (reference, text) => writeFileSync(reference, text, 'utf8'),
     restoreMovedDirectories: restoreFileArchiveMovedDirectories,
+    // Local runs / logs were moved into the archive; an archived task's
+    // worktree is left to worktree GC's orphan sweep.
+    releaseTaskStorage: () => undefined,
   }
 }

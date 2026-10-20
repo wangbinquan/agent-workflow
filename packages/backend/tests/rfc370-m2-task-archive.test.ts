@@ -57,6 +57,14 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
         ]
       },
     }
+    // The parent's own volume; the child works in it and has none of its own.
+    const abandoned: string[] = []
+    const workspaces = {
+      find: async (taskId: string) => (taskId === 'parent' ? { taskId } : null),
+      abandon: async (taskId: string) => {
+        abandoned.push(taskId)
+      },
+    }
     const reopen = () =>
       createHostedTaskArchiveContent({
         db,
@@ -64,6 +72,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
         fence,
         sources,
         publications: journal.publications,
+        workspaces,
       })
     await db.insert(workflows).values({ id: 'wf', name: 'archive', definition: '{}' })
     for (const [id, parentTaskId] of [
@@ -99,6 +108,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
       f,
       reopen,
       journal,
+      abandoned,
       /** Makes a task's source an existing immutable object (a task artifact). */
       async link(taskId: string) {
         const [object] = await journal.publications.publish([
@@ -155,6 +165,10 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
     expect(await second.readText(`${root}/db/node_execution_event_sources.jsonl`)).toContain(
       'cs:event:1',
     )
+    // 2026-10-19 hosted acceptance (user decision): archiving releases each
+    // archived task's own volume; before, the volume stayed counted against the
+    // project's PVC quota with no task left to close it.
+    expect(f.abandoned).toEqual(['parent'])
     f.f.tamper('body')
     await expect(second.readText(`${root}/manifest.json`)).rejects.toThrow('content-mismatch')
   })

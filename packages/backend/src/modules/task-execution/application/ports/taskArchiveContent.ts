@@ -13,4 +13,8 @@ export interface TaskArchiveContentPort {
     kind: 'runs' | 'logs',
     root: string,
   ): boolean | Promise<boolean>
+  /** The archived tree's rows are gone: release the storage the selected store
+   * keeps per task outside the archive (a hosted task's volume). Repeated after
+   * a crash, so it must be idempotent. */
+  releaseTaskStorage(taskIds: readonly string[]): void | Promise<void>
 }

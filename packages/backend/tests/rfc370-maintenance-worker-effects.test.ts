@@ -240,6 +240,7 @@ class PrototypeEnvironment implements MaintenanceWorkerEffectsEnvironment {
         appendText: async () => {},
         writeText: async () => {},
         restoreMovedDirectories: async () => false,
+        releaseTaskStorage: async () => {},
       }),
     })
     Object.freeze(this)

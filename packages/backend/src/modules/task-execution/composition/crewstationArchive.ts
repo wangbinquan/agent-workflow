@@ -19,7 +19,10 @@ export function composeCrewStationTaskArchive(input: {
   readonly helper: WorkspaceHelper
   readonly locate: (reference: string) => { taskId: string }
   readonly reference: (taskId: string, path: string) => string
-  readonly workspaces: { find(taskId: string): Promise<unknown | null> }
+  readonly workspaces: {
+    find(taskId: string): Promise<unknown | null>
+    abandon(taskId: string): Promise<void>
+  }
   readonly openFile: (reference: string) => Promise<ReadableStream<Uint8Array>>
   readonly reviewFiles: (
     taskId: string,

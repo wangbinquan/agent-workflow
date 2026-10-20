@@ -89,6 +89,8 @@ type Row = typeof hostedTaskWorkspaces.$inferSelect
  * recovery page can rebuild the workspace on its original volume, after which
  * the files are readable again and an unfinished task is resumed. */
 export class HostedWorkspaceUnavailableError extends DomainError {
+  /** The parent's volume; null when it failed before one existed. */
+  readonly volumeUid: string | null
   constructor(businessTaskId: string, task: BusinessTask) {
     const state =
       task.state === 'failed' || task.resourceState === 'failed'
@@ -107,6 +109,7 @@ export class HostedWorkspaceUnavailableError extends DomainError {
         platformMessage: task.message ?? null,
       },
     )
+    this.volumeUid = task.volumeUid ?? null
   }
 }
 
@@ -558,7 +561,29 @@ export function createHostedTaskWorkspaces(input: {
       if (release === null) {
         if (row.state === 'closed' || row.state === 'closing')
           throw new Error('hosted-workspace-closed')
-        return ready(row, row.businessTaskId ?? (await allocate(row, { waitForQuota: true })))
+        try {
+          return await ready(
+            row,
+            row.businessTaskId ?? (await allocate(row, { waitForQuota: true })),
+          )
+        } catch (error) {
+          // A durable shared owner's parent that failed before its volume
+          // existed (the platform refused the volume, or the container never
+          // started) holds nothing to recover, and the platform's rebuild needs
+          // the original volume: it is replaced as a scratch parent is (RFC-370
+          // hosted acceptance, 2026-10-19: a refused `development:shared` volume
+          // blocked every development Case until someone intervened). A parent
+          // with a volume keeps the recovery path, and an AW task's parent
+          // follows its task's lifecycle.
+          if (
+            !(error instanceof HostedWorkspaceUnavailableError) ||
+            error.volumeUid !== null ||
+            hostedWorkspaceOwnerKind(taskId) !== 'shared'
+          )
+            throw error
+          row = await replace((await read(input.db, taskId))!, requestKey)
+          return ready(row, row.businessTaskId ?? (await allocate(row, { waitForQuota: true })))
+        }
       }
       // A scratch owner. A parent of another release keeps serving only the
       // work it still runs (an invocation of that release, adopted after the

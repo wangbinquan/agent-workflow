@@ -41,7 +41,6 @@ import {
   type CodeReviewArtifactStore,
 } from '@/modules/code-capability/public/participants'
 
-const NARRATIVE_TIMEOUT_MS = 120_000
 /** A failed generation stays reportable this long, then decays to the 404
  *  button state (the browser that triggered it has long shown the error). */
 const FAILURE_TTL_MS = 60_000
@@ -421,7 +420,10 @@ async function runGeneration(
       model: runtime.model,
       isSandbox: runtime.isSandbox,
       workspaceScope: systemAgents.workspaces.capture({ namespace: 'shared' }),
-      timeoutMs: NARRATIVE_TIMEOUT_MS,
+      // No budget of its own: generation runs in the background, so it takes
+      // the system agents' default like intent turns and clarify follow-ups.
+      // A 120 s budget cancelled every hosted narrative, whose Agent container
+      // takes about three minutes per turn on a busy cluster (RFC-370).
       log: deps.log,
     })
     const retainedRef = result.retainedRef

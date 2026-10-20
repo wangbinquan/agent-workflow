@@ -180,6 +180,7 @@ function selectEffects(
             'appendText',
             'writeText',
             'restoreMovedDirectories',
+            'releaseTaskStorage',
           ],
           family,
         )

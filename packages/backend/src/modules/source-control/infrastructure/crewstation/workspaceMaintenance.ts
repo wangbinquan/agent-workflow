@@ -2,7 +2,8 @@
 //
 // GC removes directories *inside* a volume (a task's worktree, isolation
 // containers, aged orphans); the volume itself (`/work/runs`, `/work/logs`, …)
-// is closed only when its owner is deleted. Sweeps never wake a paused parent:
+// is closed only when its owner is deleted or archived (task archive is the
+// hosted retention path). Sweeps never wake a paused parent:
 // they only visit parents the platform currently runs, and existence checks
 // answer from the parent's platform state while it is dormant.
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'

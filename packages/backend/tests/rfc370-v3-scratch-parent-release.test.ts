@@ -248,6 +248,47 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
     await expect(f.workspaces.ensure('01TASK')).rejects.toThrow('hosted-workspace-closed')
   })
 
+  // RFC-370 hosted acceptance (2026-10-19): the platform refused the
+  // `development:shared` volume for a full PVC quota and failed its parent
+  // before any volume existed; every development Case was then blocked on
+  // "rebuild the workspace", which needs the original volume. A durable shared
+  // owner now replaces a failed parent that never had a volume; one with a
+  // volume, and an AW task's parent, keep the recovery path.
+  test("a durable shared owner's parent that failed before its volume existed is replaced", async () => {
+    const f = await setup()
+    const first = await f.workspaces.ensure('development:shared')
+    f.setParent(first.businessTaskId, {
+      state: 'failed',
+      resourceState: 'failed',
+      message: '容器不存在',
+      volumeUid: null,
+    })
+    const second = await f.workspaces.ensure('development:shared')
+    expect(second.businessTaskId).not.toBe(first.businessTaskId)
+    expect(f.closedParents).toEqual([first.businessTaskId])
+    expect((await f.row('development:shared')).requestKey).toContain('development:shared~')
+    f.setParent(second.businessTaskId, {
+      state: 'failed',
+      resourceState: 'failed',
+      message: '容器运行失败',
+      volumeUid: 'volume-1',
+    })
+    await expect(f.workspaces.ensure('development:shared')).rejects.toMatchObject({
+      code: 'hosted-workspace-unavailable',
+    })
+    const task = await f.workspaces.ensure('01TASK')
+    f.setParent(task.businessTaskId, {
+      state: 'failed',
+      resourceState: 'failed',
+      message: '容器不存在',
+      volumeUid: null,
+    })
+    await expect(f.workspaces.ensure('01TASK')).rejects.toMatchObject({
+      code: 'hosted-workspace-unavailable',
+    })
+    expect(f.closedParents).toEqual([first.businessTaskId])
+  })
+
   test('a retired parent the platform is still finalizing does not hold its replacement', async () => {
     const f = await setup({ completionPolicy: 'archive-and-delete' })
     const first = await f.workspaces.ensure('system:shared')
