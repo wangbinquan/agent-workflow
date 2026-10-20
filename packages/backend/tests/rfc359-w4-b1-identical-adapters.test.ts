@@ -183,6 +183,7 @@ describeEachProvider('RFC-359 W4-B1 —— 分支追踪快照读取一份实现'
     expect(snapshot?.workflowSnapshot).toBe(SNAPSHOT)
     expect([...(snapshot?.runs ?? [])].sort((a, b) => a.nodeId.localeCompare(b.nodeId))).toEqual([
       {
+        seq: null,
         id: runA,
         nodeId: 'a',
         status: 'done',
@@ -192,6 +193,7 @@ describeEachProvider('RFC-359 W4-B1 —— 分支追踪快照读取一份实现'
         errorMessage: null,
       },
       {
+        seq: null,
         id: runB,
         nodeId: 'b',
         status: 'failed',

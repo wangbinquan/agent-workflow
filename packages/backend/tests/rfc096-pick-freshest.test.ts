@@ -40,16 +40,17 @@ type FullRow = typeof nodeRuns.$inferSelect
 // the test row type IS part of the lock (see header point 3).
 interface PickRow {
   id: string
+  seq: number | null
   parentNodeRunId: string | null
   status: string
 }
 
-// Explicit monotonic ids: seeding order = id order = causal mint order, the
-// exact invariant production ULIDs provide (derive-frontier.test.ts pattern).
+// RFC-374: NULL-seq legacy fixtures retain the historical ID fallback order.
 let seq = 0
 function row(over: Partial<PickRow> = {}): PickRow {
   seq += 1
   return {
+    seq: null,
     id: `01PF${String(seq).padStart(4, '0')}`,
     parentNodeRunId: null,
     status: 'done',
@@ -60,6 +61,7 @@ function row(over: Partial<PickRow> = {}): PickRow {
 function fullRow(nodeId: string, over: Partial<FullRow> = {}): FullRow {
   seq += 1
   return {
+    seq: null,
     id: `01PF${String(seq).padStart(4, '0')}`,
     nodeId,
     iteration: 0,
@@ -167,27 +169,32 @@ describe('RFC-096 pickFreshestRun — isFresherNodeRun baseline consistency', ()
 })
 
 describe('RFC-096 generic widening', () => {
-  test('isFresherNodeRun accepts bare { id } (projected RepairNodeRunRow shape) + strict-> tie semantics', () => {
-    // Type-level part of the lock: these literals are EXACTLY { id: string } —
+  test('isFresherNodeRun accepts bare { id, seq } (projected RepairNodeRunRow shape) + strict-> tie semantics', () => {
+    // Type-level part of the lock: these literals are EXACTLY { id: string; seq: number | null } —
     // before RFC-096 the parameter required the full nodeRuns row type and
     // this would not compile.
-    const a: { id: string } = { id: 'nr_a' }
-    const b: { id: string } = { id: 'nr_b' }
+    const a: { id: string; seq: number | null } = { seq: null, id: 'nr_a' }
+    const b: { id: string; seq: number | null } = { seq: null, id: 'nr_b' }
     expect(isFresherNodeRun(b, a)).toBe(true)
     expect(isFresherNodeRun(a, b)).toBe(false)
     // undefined incumbent → candidate always wins.
     expect(isFresherNodeRun(a, undefined)).toBe(true)
     // Tie on id (impossible for real ULIDs, defensive): strict '>' keeps the
     // incumbent — no reduce churn on equal rows.
-    expect(isFresherNodeRun(a, { id: 'nr_a' })).toBe(false)
+    expect(isFresherNodeRun(a, { seq: null, id: 'nr_a' })).toBe(false)
   })
 
-  test('pickFreshestRun accepts the minimal { id, parentNodeRunId, status } projection', () => {
+  test('pickFreshestRun accepts the minimal { id, seq, parentNodeRunId, status } projection', () => {
     // The whole file already uses PickRow, but spell the projection inline so
     // the generic bound itself is pinned (no hidden FullRow requirement).
-    const rows: Array<{ id: string; parentNodeRunId: string | null; status: string }> = [
-      { id: '01ZZ0001', parentNodeRunId: null, status: 'done' },
-      { id: '01ZZ0002', parentNodeRunId: null, status: 'failed' },
+    const rows: Array<{
+      seq: number | null
+      id: string
+      parentNodeRunId: string | null
+      status: string
+    }> = [
+      { seq: null, id: '01ZZ0001', parentNodeRunId: null, status: 'done' },
+      { seq: null, id: '01ZZ0002', parentNodeRunId: null, status: 'failed' },
     ]
     expect(pickFreshestRun(rows)?.id).toBe('01ZZ0002')
     expect(pickFreshestRun(rows, { statusIn: ['done'] })?.id).toBe('01ZZ0001')

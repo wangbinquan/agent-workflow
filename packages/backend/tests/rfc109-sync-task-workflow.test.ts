@@ -384,6 +384,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
 describe('RFC-109 selectSyncRollbackTargets (Codex F4)', () => {
   const row = (id: string, nodeId: string, status: string, parent: string | null = null) => ({
     id,
+    seq: null,
     nodeId,
     parentNodeRunId: parent,
     status,

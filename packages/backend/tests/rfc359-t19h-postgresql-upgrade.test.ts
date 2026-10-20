@@ -169,6 +169,8 @@ function fixture(
           pending.tables = pending.tables.filter((table) => table !== id)
           return rows([])
         }
+        // V8 adds columns to an existing table; only CREATE adds an inventory entry.
+        if (matched.statement.sql.startsWith('ALTER TABLE')) return rows([])
         pending.tables.push(matched.statement.logicalId)
         return rows([])
       }

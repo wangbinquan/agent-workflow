@@ -22,6 +22,7 @@
 //
 // 设计与决策见 design/RFC-120-task-question-list/{proposal,design}.md。
 
+import { compareNodeRunMintOrder, nodeRunOrderAnchor, type NodeRunOrderKey } from './nodeRunOrder'
 import type { ClarifyQuestion } from './schemas/clarify'
 import type { NodeRunStatus, RerunCause } from './schemas/task'
 
@@ -269,7 +270,8 @@ export function isClarifyRerunCause(cause: string | null | undefined): boolean {
 
 /** 一条 node_run 在 lineage 解析时需要的最小视图（service 从 node_runs 投影）。 */
 export interface RunLineageView {
-  id: string // ULID（freshness 比较锚）
+  id: string
+  seq: number | null // RFC-374 mint order
   nodeId: string
   iteration: number
   loopIter: number
@@ -311,7 +313,7 @@ export interface ResolveHandlerInput {
  *  v1 已知限制：多进程承接节点的子 run 聚合态以父 run 自身状态近似（design §6 注）。 */
 export function resolveHandlerRun(input: ResolveHandlerInput): HandlerRunView | null {
   if (input.effectiveTargetNodeId === null || input.triggerRunId === null) return null
-  const anchor = input.triggerRunId
+  const anchor = nodeRunOrderAnchor(input.runs, input.triggerRunId)
   const triggerCauses = new Set<string>(NEW_CLARIFY_TRIGGER_CAUSES)
   const sameNode = input.runs.filter(
     (r) =>
@@ -323,19 +325,25 @@ export function resolveHandlerRun(input: ResolveHandlerInput): HandlerRunView | 
       (input.shardKey === undefined || r.shardKey === input.shardKey),
   )
   // 上界 = 下一条「新反问触发」rerun 的 id（id 严格大于 anchor），否则 +∞。
-  let upperBound: string | null = null
+  let upperBound: NodeRunOrderKey | null = null
   for (const r of sameNode) {
-    if (r.id > anchor && r.rerunCause !== null && triggerCauses.has(r.rerunCause)) {
-      if (upperBound === null || r.id < upperBound) upperBound = r.id
+    if (
+      compareNodeRunMintOrder(r, anchor) > 0 &&
+      r.rerunCause !== null &&
+      triggerCauses.has(r.rerunCause)
+    ) {
+      if (upperBound === null || compareNodeRunMintOrder(r, upperBound) < 0) upperBound = r
     }
   }
   // 窗内 = [anchor, upperBound) 的 top-level run。
   const lineage = sameNode.filter(
     (r) =>
-      r.parentNodeRunId === null && r.id >= anchor && (upperBound === null || r.id < upperBound),
+      r.parentNodeRunId === null &&
+      compareNodeRunMintOrder(r, anchor) >= 0 &&
+      (upperBound === null || compareNodeRunMintOrder(r, upperBound) < 0),
   )
   if (lineage.length === 0) return null
   // lineage is non-empty (guarded above) → reduce without seed returns an element.
-  const freshest = lineage.reduce((a, b) => (b.id > a.id ? b : a))
+  const freshest = lineage.reduce((a, b) => (compareNodeRunMintOrder(b, a) > 0 ? b : a))
   return { status: freshest.status, startedAt: freshest.startedAt, hasOutput: freshest.hasOutput }
 }

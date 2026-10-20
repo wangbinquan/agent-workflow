@@ -22,6 +22,7 @@ import { enUS } from '../src/i18n/en-US'
 
 function makeRun(partial: Partial<NodeRun> & { id: string }): NodeRun {
   return {
+    seq: null,
     id: partial.id,
     taskId: 't1',
     nodeId: partial.nodeId ?? 'n1',

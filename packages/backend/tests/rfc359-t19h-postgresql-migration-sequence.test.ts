@@ -30,6 +30,7 @@ import {
   createPostgresqlIndexUpgrade,
   createPostgresqlAdditiveUpgrade,
   createPostgresqlCheckUpgrade,
+  createPostgresqlColumnUpgrade,
   planPostgresqlUpgrade,
   postgresqlMigrationDigest,
   postgresqlMigrationSqlDigest,
@@ -185,18 +186,28 @@ describe('RFC-359 T19h exact immutable PostgreSQL history', () => {
     )
   })
 
-  test('one combined additive edge and the full ordered chain reach the same whole plan', () => {
-    // RFC-366：提交历史里现在有一条值域边（0004），所以「一条合并边」必须是能表达
-    // 它的那一种。断言本身不变——合并边与有序链必须到达同一个 plan——而且现在还多
-    // 证一件事：V3 边与 V1/V2 边可以复合。
+  test('combined V3 and V8 edges reach the same whole plan as the full ordered chain', () => {
+    // RFC-374: V3 keeps its CHECK contract; appended columns use a subsequent V8 edge.
+    // Combining each supported segment must still reach the complete current plan.
+    const columnIndex = committed.steps.findIndex((step) => step.version === 8)
+    const beforeColumns = committed.versions[columnIndex]!
     const combined = createPostgresqlCheckUpgrade({
       from: committed.versions[0]!,
-      to: next,
+      to: beforeColumns,
       id: '0001_combined_fixture',
       sequence: 1,
       previousEntryDigest: postgresqlMigrationDigest(committed.root),
     })
-    expect(replayPostgresqlMigrationHistory(committed.root, [combined]).head).toEqual(extended.head)
+    const columns = createPostgresqlColumnUpgrade({
+      from: beforeColumns,
+      to: next,
+      id: '0002_columns_fixture',
+      sequence: 2,
+      previousEntryDigest: combined.digest,
+    })
+    expect(replayPostgresqlMigrationHistory(committed.root, [combined, columns]).head).toEqual(
+      extended.head,
+    )
     // 反向锁：expand-only 的那一种表达不了这条合并边，而且必须**当场**拒绝而不是
     // 少生成几句 SQL——否则 PostgreSQL 上的值域就会与 SQLite 悄悄走散。
     expect(() =>

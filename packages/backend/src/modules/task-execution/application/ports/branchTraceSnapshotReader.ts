@@ -1,6 +1,7 @@
 import type { NodeRunStatus } from '@agent-workflow/shared'
 
 export interface BranchTraceRunSnapshot {
+  readonly seq: number | null
   readonly id: string
   readonly nodeId: string
   readonly status: NodeRunStatus

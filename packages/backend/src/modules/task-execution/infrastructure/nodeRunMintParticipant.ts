@@ -3,7 +3,7 @@
 
 import { eq } from 'drizzle-orm'
 
-import { nodeRuns, tasks } from '@/db/schema'
+import { nodeRunSeqAllocations, nodeRuns, tasks } from '@/db/schema'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import {
   driveAsyncProgram,
@@ -23,7 +23,8 @@ export interface NodeRunMintParticipantInTx {
 }
 
 /**
- * One mint sequence: scope / lineage resolution, then the insert.
+ * One mint sequence: scope / lineage resolution, identity allocation, then the insert.
+ * RFC-374: allocation and insertion share the caller transaction; no run-row update or range read.
  *
  * RFC-369 —— 这里**不再**读同帧旧代、也不再把它们标成 abandoned。那次范围读在 PostgreSQL
  * SERIALIZABLE 下按索引页加谓词锁，同一任务里的任意两次并发铸造几乎必然互判读写依赖、其一被中止
@@ -73,11 +74,20 @@ export function* nodeRunMintProgram(
             .get(),
         ),
   )
+  const allocation = yield* transactionStep(() =>
+    tx
+      .insert(nodeRunSeqAllocations)
+      .values({ taskId: record.taskId, nodeRunId: record.id, allocatedAt: Date.now() })
+      .returning({ seq: nodeRunSeqAllocations.seq })
+      .get(),
+  )
+  if (allocation === undefined) throw new Error('node-run-seq-allocation-missing')
   const values = {
     ...record,
     scopePath,
     continuationSlotKey: lineage.continuationSlotKey,
     lineageSlotPathJson: lineage.lineageSlotPathJson,
+    seq: allocation.seq,
   }
   yield* transactionStep(() => tx.insert(nodeRuns).values(values).run())
   return values.id

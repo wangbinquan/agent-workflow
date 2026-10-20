@@ -4,7 +4,7 @@
 // RFC-369: the program no longer reads same-frame prior generations nor abandons them (that
 // range read made concurrent mints of one task abort each other under PostgreSQL SERIALIZABLE;
 // supersession is derived on read). The stage sequence shrinks to record → container? → task? →
-// insert, and every scenario — including ones that seed prior rows — must issue no update and no
+// allocate → insert, and every scenario — including ones that seed prior rows — must issue no update and no
 // third select.
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -20,7 +20,7 @@ import {
 } from '@/platform/persistence/transactionProgram'
 
 type Mode = 'sync' | 'async'
-type Stage = 'record' | 'container' | 'task' | 'prior' | 'abandon' | 'insert'
+type Stage = 'record' | 'container' | 'task' | 'prior' | 'abandon' | 'allocate' | 'insert'
 interface Scenario {
   readonly name: string
   readonly scopePath: string | null
@@ -185,6 +185,8 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
       'mergeState',
     ].map((key) => [key, `nodeRuns.${key}`]),
   )
+  const allocationSeq = 37
+  const nodeRunSeqAllocations = { seq: 'allocations.seq' }
   const tasks = {
     id: 'tasks.id',
     lineageSlotPathJson: 'tasks.lineageSlotPathJson',
@@ -254,6 +256,21 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
     },
     insert(table: unknown) {
       log('insert', table)
+      if (table === nodeRunSeqAllocations)
+        return {
+          values(values: unknown) {
+            log('allocate', values)
+            return {
+              returning() {
+                return {
+                  get() {
+                    return finish('allocate', { seq: allocationSeq })
+                  },
+                }
+              },
+            }
+          },
+        }
       return {
         values(values: unknown) {
           log('values', values)
@@ -269,6 +286,7 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
   }
   const ports: Record<string, unknown> = {
     nodeRuns,
+    nodeRunSeqAllocations,
     tasks,
     transactionStep,
     driveAsyncProgram,
@@ -348,6 +366,7 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
       return value
     },
     expectedValues: {
+      seq: allocationSeq,
       ...record,
       scopePath:
         scenario.scopePath ??
@@ -379,6 +398,7 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
         expect<readonly string[]>(run.completed).toEqual([
           ...(scenario.scopePath === null && scenario.containerRunId !== null ? ['container'] : []),
           ...(scenario.lineageSlotPathJson === null ? ['task'] : []),
+          'allocate',
           'insert',
         ])
         expect(
@@ -391,7 +411,7 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
 
   test('native errors remain immediate and asynchronous errors reject with the same identity', async () => {
     const scenario = scenarios[1]!
-    for (const stage of ['record', 'container', 'task', 'insert'] as const) {
+    for (const stage of ['record', 'container', 'task', 'allocate', 'insert'] as const) {
       for (const mode of ['sync', 'async'] as const) {
         const run = control(mode, scenario, { fail: stage })
         let error: unknown
@@ -414,7 +434,7 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
           }
           expect(error).toBe(run.failure)
         }
-        const allStages: readonly Stage[] = ['container', 'task', 'insert']
+        const allStages: readonly Stage[] = ['container', 'task', 'allocate', 'insert']
         expect(run.completed).toEqual(
           stage === 'record' ? [] : allStages.slice(0, allStages.indexOf(stage) + 1),
         )
@@ -428,7 +448,7 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
   })
 
   test('every asynchronous terminal finishes before the following operation or returned id', async () => {
-    const stages: readonly Stage[] = ['container', 'task', 'insert']
+    const stages: readonly Stage[] = ['container', 'task', 'allocate', 'insert']
     for (const stage of stages) {
       const run = control('async', scenarios[1]!, { hold: stage })
       const pending = run.mint()

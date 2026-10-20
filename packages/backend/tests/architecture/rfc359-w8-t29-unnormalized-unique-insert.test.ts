@@ -493,6 +493,11 @@ const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.
  *   modules/task-execution/infrastructure/childExecutionLaunchOperations.ts: 1
  *     :579 tasks（`idx_tasks_event_delivery_unique`）。
  *     why —— opener 是 `withSerializableTaskExecution`。removeWhen —— 同上。
+ *   modules/task-execution/infrastructure/nodeRunMintParticipant.ts: 1
+ *     node_runs（RFC-374 `idx_node_runs_task_seq`）。why —— 判据 ④ 的假阳性：前置读是按主键取
+ *       容器行的 scope 路径，不决定唯一键；`seq` 取自同一事务内 `node_run_seq_allocations` 的
+ *       identity，并发铸造不可能撞上同一个 (task_id, seq)。removeWhen —— 铸造程序的前置读消失
+ *       （scope 路径改由调用方给出）时销账。
  *   modules/task-execution/infrastructure/taskRouteOperations.ts: 1
  *     :814 taskCollaborators。why —— `withPostgresqlTaskAggregateTransaction`（事务头对 task 行
  *       取 `for update`），且插入前先整体 `delete` 同任务的成员行。removeWhen —— 那两条前提任一
@@ -557,6 +562,8 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts: 1',
   'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts: 1',
   'modules/task-execution/infrastructure/effectQuiescence.ts: 1',
+  // RFC-374：判据 ④ 的假阳性——前置读按主键取容器行，`seq` 来自 identity 分配，见上方注释。
+  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts: 1',
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 4 刀）：**这一行销账**——那处「先查存在、
   // 再插 task_collaborators」的形状随 PG 侧内联 `replaceTaskMembers` 一起删除，
   // 成员替换现在走共用的 `updateTaskMembersLocked`（聚合根锁内重读 + 全量替换）。

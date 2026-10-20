@@ -38,6 +38,7 @@ const ulid = monotonicFactory()
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { allocateNodeRunSeq } from './helpers/rfc374Fixtures'
 import { agents, clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import {
   createProviderTaskExecutionTestTopology,
@@ -519,6 +520,7 @@ function registerCases(provider: ProviderHarness) {
     await h.db.insert(nodeRuns).values({
       id: rerunId,
       taskId,
+      seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
       nodeId: 'd',
       status: 'pending',
       retryIndex: 0,
@@ -622,9 +624,11 @@ function registerCases(provider: ProviderHarness) {
     // late `done` row for the agent at a high retryIndex but clarifyIter=0.
     // This is what production task 01KRT38TKXQGKEDHCPQXPXTB9J actually had:
     // retry=6 / clarify=0 / done from process retries that succeeded.
+    const staleId = ulid()
     await h.db.insert(nodeRuns).values({
-      id: ulid(),
+      id: staleId,
       taskId,
+      seq: await allocateNodeRunSeq(h.db, taskId, staleId),
       nodeId: 'd',
       status: 'done',
       retryIndex: 6,
@@ -636,7 +640,8 @@ function registerCases(provider: ProviderHarness) {
     // Step 3: synthesize an answered clarify session + a rerun row at the
     // tuple the then-current immediate mint produced (retry=0, clarifyIter=1
     // — the production incident's exact shape; the comparator must beat it
-    // by pure id order regardless of retryIndex).
+    // by mint order regardless of retryIndex). RFC-374: directly seeded
+    // generations take their seq from the identity allocation, like a mint.
     const sessRow = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
@@ -671,6 +676,7 @@ function registerCases(provider: ProviderHarness) {
     await h.db.insert(nodeRuns).values({
       id: rerunId,
       taskId,
+      seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
       nodeId: 'd',
       status: 'pending',
       retryIndex: 0,
@@ -814,6 +820,7 @@ function registerCases(provider: ProviderHarness) {
     await h.db.insert(nodeRuns).values({
       id: rerunId,
       taskId,
+      seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
       nodeId: 'd',
       status: 'pending',
       retryIndex: 0,
@@ -959,6 +966,7 @@ function registerCases(provider: ProviderHarness) {
     await h.db.insert(nodeRuns).values({
       id: rerunId,
       taskId,
+      seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
       nodeId: 'd',
       status: 'pending',
       retryIndex: 0,
@@ -1105,6 +1113,7 @@ function registerCases(provider: ProviderHarness) {
     await h.db.insert(nodeRuns).values({
       id: ci1Id,
       taskId,
+      seq: await allocateNodeRunSeq(h.db, taskId, ci1Id),
       nodeId: 'd',
       status: 'pending',
       retryIndex: 0,
@@ -1188,6 +1197,7 @@ function registerCases(provider: ProviderHarness) {
     await h.db.insert(nodeRuns).values({
       id: ci2Id,
       taskId,
+      seq: await allocateNodeRunSeq(h.db, taskId, ci2Id),
       nodeId: 'd',
       status: 'interrupted',
       retryIndex: 0,

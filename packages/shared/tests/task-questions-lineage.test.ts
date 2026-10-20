@@ -20,6 +20,7 @@ import { describe, expect, test } from 'bun:test'
 import { deriveQuestionPhase, resolveHandlerRun, type RunLineageView } from '../src/task-questions'
 
 const R = (id: string, over: Partial<RunLineageView> = {}): RunLineageView => ({
+  seq: null,
   id,
   nodeId: 'design',
   iteration: 0,

@@ -1,3 +1,4 @@
+import type { NodeRunSeqBackfillReport } from './nodeRunSeqBackfillStore'
 import type {
   TaskExecutionRecoveryFinalization,
   TaskExecutionRecoveryPreparation,
@@ -21,7 +22,10 @@ export interface BootRecoveryLogger {
 }
 
 export interface TaskExecutionBootRecoveryInput {
-  readonly persistence: Pick<TaskExecutionPersistence, 'recovery' | 'recoveryAdministration'>
+  readonly persistence: Pick<
+    TaskExecutionPersistence,
+    'recovery' | 'recoveryAdministration' | 'nodeRunSeqBackfill'
+  >
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly lockProof: ExclusiveDaemonLockProof
   readonly codeHostProbe?: (descriptor: CodeHostRecoveryDescriptor) => Promise<CodeHostProbeOutcome>
@@ -30,6 +34,7 @@ export interface TaskExecutionBootRecoveryInput {
 }
 
 export interface TaskExecutionBootRecoveryReport {
+  readonly nodeRunSeqBackfill: NodeRunSeqBackfillReport
   readonly revokedTaskIds: readonly string[]
   readonly reap: ReapResult
   readonly repairedRuntimeLeases: number

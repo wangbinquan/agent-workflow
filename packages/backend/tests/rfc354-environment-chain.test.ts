@@ -160,11 +160,26 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
   const frame = { containerRunId: 'R_inner', iteration: 1 }
   const settledRows = [
     // same node, previous round of the same container — never visible
-    { id: '01A', iteration: 0, parentNodeRunId: null, containerRunId: 'R_inner', status: 'done' },
+    {
+      seq: null,
+      id: '01A',
+      iteration: 0,
+      parentNodeRunId: null,
+      containerRunId: 'R_inner',
+      status: 'done',
+    },
     // same frame, older done row
-    { id: '01B', iteration: 1, parentNodeRunId: null, containerRunId: 'R_inner', status: 'done' },
+    {
+      seq: null,
+      id: '01B',
+      iteration: 1,
+      parentNodeRunId: null,
+      containerRunId: 'R_inner',
+      status: 'done',
+    },
     // same frame, fresher skipped row (RFC-306: skipped IS the current answer)
     {
+      seq: null,
       id: '01C',
       iteration: 1,
       parentNodeRunId: null,
@@ -172,9 +187,17 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
       status: 'skipped',
     },
     // same frame but a born-running child (fan-out shard) — excluded
-    { id: '01D', iteration: 1, parentNodeRunId: 'X', containerRunId: 'R_inner', status: 'done' },
+    {
+      seq: null,
+      id: '01D',
+      iteration: 1,
+      parentNodeRunId: 'X',
+      containerRunId: 'R_inner',
+      status: 'done',
+    },
     // same frame, not settled
     {
+      seq: null,
       id: '01E',
       iteration: 1,
       parentNodeRunId: null,
@@ -182,7 +205,14 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
       status: 'running',
     },
     // another container at the same round — a different frame
-    { id: '01F', iteration: 1, parentNodeRunId: null, containerRunId: 'R_other', status: 'done' },
+    {
+      seq: null,
+      id: '01F',
+      iteration: 1,
+      parentNodeRunId: null,
+      containerRunId: 'R_other',
+      status: 'done',
+    },
   ]
 
   test('picks the freshest settled top-level row of exactly that frame', () => {
@@ -200,8 +230,22 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
 
   test('top frame is (null, 0)', () => {
     const top = [
-      { id: '02A', iteration: 0, parentNodeRunId: null, containerRunId: null, status: 'done' },
-      { id: '02B', iteration: 0, parentNodeRunId: null, containerRunId: 'R_x', status: 'done' },
+      {
+        seq: null,
+        id: '02A',
+        iteration: 0,
+        parentNodeRunId: null,
+        containerRunId: null,
+        status: 'done',
+      },
+      {
+        seq: null,
+        id: '02B',
+        iteration: 0,
+        parentNodeRunId: null,
+        containerRunId: 'R_x',
+        status: 'done',
+      },
     ]
     expect(pickFrameSourceRun(top, TOP_FRAME)?.id).toBe('02A')
   })
@@ -209,11 +253,46 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
 
 describe('pickLatestRunInFrame / pickLatestSettledRun — the two non-window pickers', () => {
   const rows = [
-    { id: '01A', iteration: 0, parentNodeRunId: null, containerRunId: 'R', status: 'done' },
-    { id: '01B', iteration: 0, parentNodeRunId: null, containerRunId: 'R', status: 'pending' },
-    { id: '01C', iteration: 0, parentNodeRunId: 'X', containerRunId: 'R', status: 'done' },
-    { id: '01D', iteration: 1, parentNodeRunId: null, containerRunId: 'R', status: 'done' },
-    { id: '01E', iteration: 0, parentNodeRunId: null, containerRunId: null, status: 'skipped' },
+    {
+      seq: null,
+      id: '01A',
+      iteration: 0,
+      parentNodeRunId: null,
+      containerRunId: 'R',
+      status: 'done',
+    },
+    {
+      seq: null,
+      id: '01B',
+      iteration: 0,
+      parentNodeRunId: null,
+      containerRunId: 'R',
+      status: 'pending',
+    },
+    {
+      seq: null,
+      id: '01C',
+      iteration: 0,
+      parentNodeRunId: 'X',
+      containerRunId: 'R',
+      status: 'done',
+    },
+    {
+      seq: null,
+      id: '01D',
+      iteration: 1,
+      parentNodeRunId: null,
+      containerRunId: 'R',
+      status: 'done',
+    },
+    {
+      seq: null,
+      id: '01E',
+      iteration: 0,
+      parentNodeRunId: null,
+      containerRunId: null,
+      status: 'skipped',
+    },
   ]
 
   test('pickLatestRunInFrame keeps any status so a review can fail loudly on a newer pending row', () => {
@@ -237,8 +316,8 @@ describe('resolveSourceFrameInScope — a wrapper reading on behalf of its body'
     ['other', 'sib'],
   ])
   const rows = new Map([
-    ['O1', { id: 'O1', nodeId: 'oloop', containerRunId: null, iteration: 0 }],
-    ['I2', { id: 'I2', nodeId: 'iloop', containerRunId: 'O1', iteration: 1 }],
+    ['O1', { seq: null, id: 'O1', nodeId: 'oloop', containerRunId: null, iteration: 0 }],
+    ['I2', { seq: null, id: 'I2', nodeId: 'iloop', containerRunId: 'O1', iteration: 1 }],
   ])
   const lookup = (id: string) => rows.get(id)
   // The inner loop's body frame on outer round 1, inner round 0.

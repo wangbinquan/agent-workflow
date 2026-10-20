@@ -3,7 +3,7 @@
 // cannot fill them: which generation row a body row belongs to needs the
 // task's containment tree (the frozen workflow snapshot), which SQL cannot
 // parse. This planner reconstructs the frame of every legacy row from the
-// only order the old data still carries — mint order (ULID ids):
+// only order the old data still carries — mint order (seq, with legacy ID fallback):
 //
 //   • a row of a node whose container is wrapper W belongs to the LATEST row
 //     of W minted before it (pre-354 wrappers re-used one row across their
@@ -23,9 +23,11 @@
 //
 // Locks: tests/rfc354-frame-backfill.test.ts.
 
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import { childScopePath } from './environmentChain'
 
 export interface FrameBackfillRunRow {
+  readonly seq: number | null
   readonly id: string
   readonly nodeId: string
   readonly iteration: number
@@ -59,7 +61,7 @@ export function planFrameBackfill(input: {
   readonly rows: readonly FrameBackfillRunRow[]
 }): FrameBackfillPlan {
   const wrapperIds = new Set(input.parentOf.values())
-  const rows = [...input.rows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  const rows = [...input.rows].sort(compareNodeRunMintOrder)
   const settledById = new Map<string, SettledRow>()
   const latestRowOfNode = new Map<string, SettledRow>()
   const updates: FrameBackfillUpdate[] = []

@@ -150,12 +150,13 @@ describe('RFC-074 PR-B — parseConsumedJson robustness', () => {
 describe('RFC-098 B3 — pickReusableShardRun (done-only + freshest + hash null=match)', () => {
   type ShardRow = {
     id: string
+    seq: number | null
     status: string
     shardKey: string | null
     shardValueHash: string | null
   }
   function row(over: Partial<ShardRow> & { id: string }): ShardRow {
-    return { status: 'done', shardKey: 'a.md', shardValueHash: null, ...over }
+    return { seq: null, status: 'done', shardKey: 'a.md', shardValueHash: null, ...over }
   }
 
   test('shardKey match is exact ((shardKey ?? null) === wanted); null = shared row', () => {

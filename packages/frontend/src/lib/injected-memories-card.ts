@@ -1,6 +1,7 @@
 // RFC-046 — pure helpers backing <InjectedMemoriesCard>. Kept separate
 // from the component so each branch is unit-testable in isolation.
 
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import type { InjectedMemorySnapshot, NodeRun } from '@agent-workflow/shared'
 
 // RFC-146: isAgentKind was a copy of the agent-kind predicate — callers now
@@ -114,9 +115,9 @@ export function findFirstAttemptSibling(
         r.iteration === run.iteration &&
         r.shardKey === run.shardKey &&
         r.reviewIteration === run.reviewIteration &&
-        r.id <= run.id,
+        compareNodeRunMintOrder(r, run) <= 0,
     )
-    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .sort(compareNodeRunMintOrder)
   let anchor: NodeRun | undefined
   let prevStatus: string | undefined
   for (const r of scoped) {

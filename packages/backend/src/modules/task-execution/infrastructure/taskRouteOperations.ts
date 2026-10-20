@@ -12,6 +12,7 @@
 import type { TaskArchivedEventsReader } from '../public/types'
 import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 import {
+  compareNodeRunMintOrder,
   CommitPushMetaSchema,
   NodeRunSchema,
   NodeRunEventsResponseSchema,
@@ -333,12 +334,13 @@ async function failedCode(
   const rows = await db
     .select({
       id: nodeRuns.id,
+      seq: nodeRuns.seq,
       parentNodeRunId: nodeRuns.parentNodeRunId,
       failureCode: nodeRuns.failureCode,
     })
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, task.failedNodeId)))
-    .orderBy(desc(nodeRuns.id))
+    .orderBy(engineOf(db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
   return rows.find((row) => row.parentNodeRunId === null)?.failureCode ?? null
 }
 
@@ -944,7 +946,11 @@ export async function taskNodeRunsProjection(
       .where(eq(nodeRuns.taskId, taskId))
       // 还没开始的 run（started_at IS NULL）要排在最前：两个引擎的默认落位正好相反，
       // NULL 掉到队尾会让时间线把「还没开始」排在「已完成」后面。渲染权在能力矩阵。
-      .orderBy(engineOf(dependencies.db).ascNullsFirst(nodeRuns.startedAt), asc(nodeRuns.id)),
+      .orderBy(
+        engineOf(dependencies.db).ascNullsFirst(nodeRuns.startedAt),
+        engineOf(dependencies.db).ascNullsFirst(nodeRuns.seq),
+        asc(nodeRuns.id),
+      ),
     dependencies.db
       .select({
         reviewNodeRunId: docVersions.reviewNodeRunId,
@@ -1006,6 +1012,7 @@ export async function taskNodeRunsProjection(
       }
       return NodeRunSchema.parse({
         id: row.id,
+        seq: row.seq ?? null,
         taskId: row.taskId,
         nodeId: row.nodeId,
         parentNodeRunId: row.parentNodeRunId,
@@ -1358,7 +1365,7 @@ async function syncRunSummary(db: ProviderNeutralDatabase, taskId: string) {
   for (const [nodeId, rows] of byNode) {
     const row = rows
       .filter((run) => run.parentNodeRunId === null && run.status === 'done')
-      .sort((left, right) => right.id.localeCompare(left.id))[0]
+      .sort((left, right) => compareNodeRunMintOrder(right, left))[0]
     if (row !== undefined) freshestDone.set(nodeId, row)
   }
   const outputRows =

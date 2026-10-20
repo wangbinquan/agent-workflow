@@ -9,7 +9,7 @@
 //      CAS 永远 miss，这是与 status 机唯一的机械差异）；
 //   ③ try 变体：域错误（非法转移/竞态/行不存在）折 false，非域错误重抛；
 //   ④ supersede 闭包：(a) 废前代 top-level / (b) 废前代子行闭包 /
-//      merged 与 merge-failed 不可误废弃 / id< 边界（新行自身与更新行不动）/
+//      merged 与 merge-failed 不可误废弃 / seq 边界（新行自身与更新行不动）/
 //      **父行未被取代的子行不误伤**（Codex 设计门 P1-2 对应格）/ 幂等 /
 //      **同事务原子性**（tx 内注入故障 → insert 回滚，P1-1 对应格）。
 //
@@ -41,7 +41,7 @@ import { dbWithCompetingWriter } from './helpers/competingWriter'
 import { derivedSupersededIds, expectFencedToAbandoned } from './helpers/nodeRunSupersession'
 import { describeEachProvider } from './helpers/eachProvider'
 
-/** 定长补零 id：字典序 = 数值序，供 supersede 的 id< 边界断言。 */
+/** 定长补零 id：旧行 NULL seq 回退时仍保留字典序 oracle。 */
 const mkId = (n: number): string => String(n).padStart(26, '0')
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
@@ -383,22 +383,22 @@ describeEachProvider('RFC-144 铸行即取代 —— supersede 闭包', (harness
     expect(await mergeStateOf(db, oldChildMerged)).toBe('merged')
   })
 
-  test('P1-2 对应格：父行未被取代（最新代）的子行不误伤；id< 边界（自身与更新行不动）', async () => {
+  test('P1-2 / RFC-374：最新父代的子行先不受伤；后铸行即使 ID 更小也取代父代闭包', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    // freshest 父行（id 大于新铸行的场景不存在——mint 后代行必然最大；这里构造
-    // 「新铸行早于现存行」的越界调用，断言零命中）。
+    // Legacy rows remain current until a later allocated generation exists.
     const freshParent = await seedRun(db, taskId, { id: mkId(20), mergeState: 'isolating' })
     // 子行带 shard（生产里的子行要么带 shard、要么在父行之下的另一帧 / 另一个 nodeId）：同帧、
-    // null shard、id 更大的行本身就会按 §3(a) 取代父行——改前的铸造闭包在铸出这样一行时同样会废掉父行。
+    // null shard、后铸的行本身就会按 §3(a) 取代父行；子行的 shard 隔开两条执行链。
     const freshChild = await seedRun(db, taskId, {
       id: mkId(21),
       mergeState: 'pending-merge',
       parentNodeRunId: freshParent,
       shardKey: 's1',
     })
-    await mint(db, taskId, { id: mkId(10) }) // 早于两行 → 都不是「前代」
     expect(await derivedSupersededIds(db, taskId)).toEqual([])
+    await mint(db, taskId, { id: mkId(10) }) // Lower ID, later seq: both predecessors are superseded.
+    expect(await derivedSupersededIds(db, taskId)).toEqual([freshParent, freshChild])
     expect(await mergeStateOf(db, freshParent)).toBe('isolating')
     expect(await mergeStateOf(db, freshChild)).toBe('pending-merge')
   })

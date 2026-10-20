@@ -1,7 +1,7 @@
 // RFC-332 — pure DAG frontier owner.
 
 import type { MergeStateOrNull, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { isMergeStateSettled } from '@agent-workflow/shared'
+import { compareNodeRunMintOrder, isMergeStateSettled } from '@agent-workflow/shared'
 import {
   areTransitiveUpstreamsCompleted,
   buildFreshestSettledPerNode,
@@ -91,14 +91,14 @@ function freshestUpstreamEvidenceId(
   freshestSettled: Map<string, NodeRunRow>,
 ): string | undefined {
   const consumed = parseConsumedJson(skippedRow.consumedUpstreamRunsJson)
-  let best: string | undefined
+  let best: NodeRunRow | undefined
   for (const upstreamId of upstreams) {
     const current = freshestSettled.get(upstreamId)
     if (current === undefined) continue
     if (consumed[upstreamId] === current.id) continue // this leg is unchanged
-    if (best === undefined || current.id > best) best = current.id
+    if (best === undefined || compareNodeRunMintOrder(current, best) > 0) best = current
   }
-  return best
+  return best?.id
 }
 
 /** RFC-311 — the frontier consumes the freshness column contract (see

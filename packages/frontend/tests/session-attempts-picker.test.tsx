@@ -33,6 +33,7 @@ function openCombobox() {
 
 function run(partial: Partial<NodeRun> & { id: string }): NodeRun {
   return {
+    seq: null,
     id: partial.id,
     taskId: 't1',
     nodeId: partial.nodeId ?? 'agent_1',

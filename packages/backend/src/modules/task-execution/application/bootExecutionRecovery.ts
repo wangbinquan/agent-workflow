@@ -1,14 +1,18 @@
+import { backfillNodeRunSequences } from './nodeRunSeqBackfill'
 import type {
   BootExecutionRecoveryFactory,
   TaskExecutionBootRecoveryInput,
   TaskExecutionBootRecoveryReport,
 } from './ports/bootExecutionRecovery'
 
-/** One four-step sequence, completed before listeners and automatic continuation start. */
+/** One five-step sequence, completed before listeners and automatic continuation start. */
 export async function runBootExecutionRecovery(
   factory: BootExecutionRecoveryFactory,
   input: TaskExecutionBootRecoveryInput,
 ): Promise<TaskExecutionBootRecoveryReport> {
+  const nodeRunSeqBackfill = await backfillNodeRunSequences(input.persistence.nodeRunSeqBackfill)
+  if (nodeRunSeqBackfill.runs > 0)
+    input.log.info('backfilled node run mint sequences', { ...nodeRunSeqBackfill })
   const effects = factory.create(input)
   const preparation = await effects.prepare()
   if (preparation.revokedTaskIds.length > 0) {
@@ -46,5 +50,11 @@ export async function runBootExecutionRecovery(
       retryAuthorizedCodeHostEffects: finalization.retryAuthorizedCodeHostEffectIds.length,
     })
   }
-  return { revokedTaskIds: preparation.revokedTaskIds, reap, repairedRuntimeLeases, finalization }
+  return {
+    nodeRunSeqBackfill,
+    revokedTaskIds: preparation.revokedTaskIds,
+    reap,
+    repairedRuntimeLeases,
+    finalization,
+  }
 }

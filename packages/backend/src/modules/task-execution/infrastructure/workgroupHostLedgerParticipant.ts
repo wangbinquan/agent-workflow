@@ -1,3 +1,4 @@
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 
 import { nodeRuns, tasks } from '@/db/schema'
@@ -39,6 +40,7 @@ async function loadSnapshot(
     transaction
       .select({
         id: nodeRuns.id,
+        seq: nodeRuns.seq,
         nodeId: nodeRuns.nodeId,
         shardKey: nodeRuns.shardKey,
         status: nodeRuns.status,
@@ -54,7 +56,7 @@ async function loadSnapshot(
           inArray(nodeRuns.nodeId, [WORKGROUP_TURN_LEADER_NODE_ID, WORKGROUP_TURN_MEMBER_NODE_ID]),
         ),
       )
-      .orderBy(asc(nodeRuns.id)),
+      .orderBy(engineOf(transaction).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id)),
     clarify.loadProjection(taskId),
   ])
   const askingNodeRunIds = new Set(clarifyProjection.askingNodeRunIds)
@@ -63,6 +65,7 @@ async function loadSnapshot(
     workgroupConfigJson: task.workgroupConfigJson,
     hostRuns: hostRows.map((row) => ({
       id: row.id,
+      seq: row.seq,
       nodeId: row.nodeId,
       shardKey: row.shardKey,
       status: row.status,

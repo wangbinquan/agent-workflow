@@ -217,7 +217,7 @@ describeEachProvider('RFC-359 W4-B1 批 2c —— 调度器收尾读写', (harne
     await seedRun(db, taskId, { status: 'done', nodeId: 'other' })
     const persistence = new DrizzleSchedulerCompletionPersistence(db)
     expect(await persistence.listDoneNodeRuns({ taskId, nodeId: 'n', iteration: 0 })).toEqual([
-      { id: done, parentNodeRunId: null, status: 'done' },
+      { seq: null, id: done, parentNodeRunId: null, status: 'done' },
     ])
   })
 })

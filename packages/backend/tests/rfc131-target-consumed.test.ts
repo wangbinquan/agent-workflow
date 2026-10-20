@@ -20,6 +20,7 @@ const T = 'agent_T'
 
 function mkRun(over: Partial<NodeRunRow>): NodeRunRow {
   return {
+    seq: null,
     id: 'run',
     nodeId: T,
     iteration: 0,

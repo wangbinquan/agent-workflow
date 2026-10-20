@@ -10,6 +10,7 @@ import type {
   WorkflowNode,
 } from '@agent-workflow/shared'
 import {
+  type NodeRunOrderKey,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   declaredPorts,
   isMergeStateSettled,
@@ -1121,7 +1122,7 @@ async function dispatchFanoutAggregatorAttempt(
   // Every inner row that fed this aggregation: an existing aggregator row may
   // only be REPLAYED when it is fresher (pure id-order) than ALL of them — a
   // shard that re-ran after the old aggregation makes that aggregation stale.
-  const participatingRowIds: string[] = []
+  const participatingRows: NodeRunOrderKey[] = []
   const incoming = definition.edges.filter(
     (e) => e.target.nodeId === aggNode.id && e.boundary === undefined,
   )
@@ -1143,7 +1144,7 @@ async function dispatchFanoutAggregatorAttempt(
           valueHash: sha256Hex(s.value),
         })
         if (row === undefined) continue
-        participatingRowIds.push(row.id)
+        participatingRows.push(row)
         const outRows = await state.opts.persistence.nodeExecution.listOutputs(row.id)
         const port = outRows.find((o) => o.portName === edge.source.portName)
         // RFC-306 D13: only ACTIVE shards feed the aggregation. A shard that
@@ -1161,7 +1162,7 @@ async function dispatchFanoutAggregatorAttempt(
       // shared upstream — single (NULL-shardKey) row, plain content.
       const row = pickReusableShardRun(innerRows, { shardKey: null, valueHash: null })
       if (row !== undefined) {
-        participatingRowIds.push(row.id)
+        participatingRows.push(row)
         const outRows = await state.opts.persistence.nodeExecution.listOutputs(row.id)
         const port = outRows.find((o) => o.portName === edge.source.portName)
         // Same rule for a shared (broadcast) upstream — see above.
@@ -1199,7 +1200,7 @@ async function dispatchFanoutAggregatorAttempt(
     !args.reuseDisabled &&
     row !== undefined &&
     row.status === 'done' &&
-    participatingRowIds.every((id) => isFresherNodeRun<{ id: string }>(row, { id }))
+    participatingRows.every((participating) => isFresherNodeRun(row, participating))
   // RFC-370 — same rule as the shards: an interrupted merge-back completes in
   // the dispatching scope before the aggregation is replayed, a failed one re-runs.
   if (
@@ -1287,12 +1288,14 @@ async function dispatchFanoutAggregatorAttempt(
   // SHARDS are deliberately NOT given prior output: their value-hash replay means
   // an unchanged slice replays without a spawn, and a CHANGED slice's prior
   // output would mis-anchor the agent to stale content.
+  const aggRun = await state.opts.persistence.nodeExecution.read(aggRunId)
   const aggPriorRun = await freshestPriorRunWithOutput(state.opts.persistence.nodeExecution, {
     taskId,
     nodeId: aggNode.id,
     iteration,
     shardKey: null,
     id: aggRunId,
+    seq: aggRun?.seq ?? null,
   })
   let aggPriorOutputUpdate: { block: string } | undefined
   if (aggPriorRun !== undefined) {
@@ -1301,7 +1304,7 @@ async function dispatchFanoutAggregatorAttempt(
       aggPriorRun.id,
       injection.spec.agent.outputs ?? [],
       undefined,
-      (await state.opts.persistence.nodeExecution.read(aggRunId))?.envelopeNonce ?? '',
+      aggRun?.envelopeNonce ?? '',
     )
     if (block.length > 0) aggPriorOutputUpdate = { block }
   }

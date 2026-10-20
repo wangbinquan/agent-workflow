@@ -106,6 +106,7 @@ async function loadUndispatchedParkTargets(
   const runs = await db
     .select({
       id: nodeRuns.id,
+      seq: nodeRuns.seq,
       nodeId: nodeRuns.nodeId,
       iteration: nodeRuns.iteration,
       rerunCause: nodeRuns.rerunCause,

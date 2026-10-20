@@ -27,6 +27,7 @@ export class DrizzleSchedulerCompletionPersistence implements SchedulerCompletio
     return await this.db
       .select({
         id: nodeRuns.id,
+        seq: nodeRuns.seq,
         parentNodeRunId: nodeRuns.parentNodeRunId,
         status: nodeRuns.status,
       })

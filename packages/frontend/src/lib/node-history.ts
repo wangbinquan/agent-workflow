@@ -5,7 +5,7 @@
 // differ on any of several orthogonal counters — loop `iteration`, RFC-005
 // `reviewIteration`, process `retryIndex` — plus the clarify "generation".
 // RFC-074 PR-C retired the `clarifyIteration` column; the clarify round is now
-// DERIVED from ULID id-order (design §6.5), mirroring the scheduler's canonical
+// DERIVED from mint seq order (RFC-374), mirroring the scheduler's canonical
 // `priorDoneGenerationsForRun`: the round is the count of prior COMPLETED
 // generations — top-level `done` rows of the same node at the same (iteration,
 // reviewIteration) minted before this run. This is retry-AGNOSTIC (see
@@ -13,13 +13,13 @@
 // reruns). We render one unified, always-visible timeline with the active row
 // highlighted.
 
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import type { NodeRun } from '@agent-workflow/shared'
 
 /**
  * All sibling node_runs of the same workflow node, sorted by
- * (iteration, reviewIteration, id). RFC-074 PR-C: ULID id is the canonical
- * creation order, replacing the retired (clarifyIteration, retryIndex,
- * startedAt) tail. *Includes* the current run so the active row can be
+ * (iteration, reviewIteration, mint order). RFC-374: seq defines mint order,
+ * with an ID fallback for legacy NULL rows. *Includes* the current run so the active row can be
  * highlighted in place. Excludes multi-process shard children (they belong to a
  * separate "shards" section above).
  */
@@ -28,10 +28,10 @@ export function nodeRunHistory(current: NodeRun, runs: readonly NodeRun[]): Node
     .filter((r) => r.nodeId === current.nodeId && r.parentNodeRunId === null)
     .sort((a, b) => {
       // RFC-354: the flat order stands; frame grouping is a separate pass
-      // (`groupHistoryByFrame`, generations in creation order by oldest id).
+      // (`groupHistoryByFrame`, generations in creation order by oldest seq).
       if (a.iteration !== b.iteration) return a.iteration - b.iteration
       if (a.reviewIteration !== b.reviewIteration) return a.reviewIteration - b.reviewIteration
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+      return compareNodeRunMintOrder(a, b)
     })
 }
 
@@ -104,7 +104,7 @@ export interface FrameGroup {
 
 /**
  * Group a node's history by frame, groups in first-appearance order of their
- * runs (ULID id = creation order) and runs inside a group in the caller's
+ * runs (seq-first mint order) and runs inside a group in the caller's
  * order. A flat workflow yields one group, so the drawer renders headers only
  * when there are several.
  */
@@ -126,9 +126,15 @@ export function groupHistoryByFrame(history: readonly NodeRun[]): FrameGroup[] {
     })
   }
   return [...groups.values()].sort((a, b) => {
-    const firstA = a.runs.reduce((min, r) => (r.id < min ? r.id : min), a.runs[0]!.id)
-    const firstB = b.runs.reduce((min, r) => (r.id < min ? r.id : min), b.runs[0]!.id)
-    return firstA < firstB ? -1 : firstA > firstB ? 1 : 0
+    const firstA = a.runs.reduce(
+      (min, r) => (compareNodeRunMintOrder(r, min) < 0 ? r : min),
+      a.runs[0]!,
+    )
+    const firstB = b.runs.reduce(
+      (min, r) => (compareNodeRunMintOrder(r, min) < 0 ? r : min),
+      b.runs[0]!,
+    )
+    return compareNodeRunMintOrder(firstA, firstB)
   })
 }
 
@@ -168,7 +174,7 @@ export function clarifyRoundForRun(run: NodeRun, runs: readonly NodeRun[]): numb
       r.reviewIteration === run.reviewIteration &&
       (r.shardKey ?? null) === (run.shardKey ?? null) &&
       r.status === 'done' &&
-      r.id < run.id,
+      compareNodeRunMintOrder(r, run) < 0,
   ).length
 }
 
@@ -200,13 +206,17 @@ export function displayRetryForRun(run: NodeRun, runs: readonly NodeRun[]): numb
       sameFrame(r, run) &&
       r.reviewIteration === run.reviewIteration &&
       (r.shardKey ?? null) === (run.shardKey ?? null) &&
-      r.id < run.id,
+      compareNodeRunMintOrder(r, run) < 0,
   )
-  let lastDoneId = ''
+  let lastDone: NodeRun | undefined
   for (const r of lineage) {
-    if (r.status === 'done' && r.id > lastDoneId) lastDoneId = r.id
+    if (r.status === 'done' && (lastDone === undefined || compareNodeRunMintOrder(r, lastDone) > 0))
+      lastDone = r
   }
-  return lineage.filter((r) => r.status === 'failed' && r.id > lastDoneId).length
+  return lineage.filter(
+    (r) =>
+      r.status === 'failed' && (lastDone === undefined || compareNodeRunMintOrder(r, lastDone) > 0),
+  ).length
 }
 
 interface IterationLabelOpts {

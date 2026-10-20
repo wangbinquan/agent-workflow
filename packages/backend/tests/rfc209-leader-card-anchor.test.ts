@@ -39,7 +39,15 @@ function leaderRun(
   wgRound: number | null,
   cause = 'wg-leader-round',
 ): HostRunLite {
-  return { id, nodeId: WG_LEADER_NODE_ID, shardKey: null, status, rerunCause: cause, wgRound }
+  return {
+    seq: null,
+    id,
+    nodeId: WG_LEADER_NODE_ID,
+    shardKey: null,
+    status,
+    rerunCause: cause,
+    wgRound,
+  }
 }
 
 describe('RFC-209 T9 — leader 卡片轮号读 wg_round', () => {
@@ -91,6 +99,7 @@ describe('RFC-209 T9 — leader 卡片轮号读 wg_round', () => {
     const runs: HostRunLite[] = [
       leaderRun('L1-run', 'done', 1),
       {
+        seq: null,
         id: 'M1-run',
         nodeId: WG_MEMBER_NODE_ID,
         shardKey: `msg:${A1}:0`,

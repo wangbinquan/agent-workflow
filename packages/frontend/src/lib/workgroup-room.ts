@@ -183,9 +183,8 @@ export function buildRoomTimeline(
       .map((e) => (e.type === 'round' ? { type: 'round' as const, round: e.round } : e))
   if (standaloneTurns.length === 0) return strip(base)
 
-  const turns = [...standaloneTurns].sort((a, b) =>
-    a.nodeRunId < b.nodeRunId ? -1 : a.nodeRunId > b.nodeRunId ? 1 : 0,
-  )
+  // RFC-374: the backend projects seq-first order; retain it across message interleaving.
+  const turns = [...standaloneTurns]
   const out: InternalEntry[] = []
   const tail: WorkgroupRunEntry[] = []
   // fc（dividers=false）没有分隔线可锚，全部按 ULID 交织。

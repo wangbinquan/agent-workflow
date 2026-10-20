@@ -187,7 +187,8 @@ describe('RFC-187 T13 — source locks (driver-entry revive)', () => {
     // 保住澄清血缘——正是它让人回答过的 Q&A 重新注回提示词。
     // 用 regex 而非 toContain：prettier 会把这个三元按行宽折行，锁字面串等于锁排版。
     expect(RUNNER).toMatch(/cause:\s*latest\.rerunCause === 'clarify-answer'/)
-    // 只复活每组最新那条（更早的 interrupted 续跑已被取代，属于历史）。
-    expect(RUNNER).toContain('const latest = group[group.length - 1]')
+    // 只复活每组最新那条（更早的 interrupted 续跑已被取代，属于历史）。RFC-374：「最新」按铸造
+    // 序显式选取，不再依赖装载顺序的最后一条。
+    expect(RUNNER).toContain('const latest = newestNodeRun(group)')
   })
 })

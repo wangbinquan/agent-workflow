@@ -1,3 +1,6 @@
+// RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
+import { catchUpLegacySequenceTask, mintSequenceRun } from './helpers/rfc374Fixtures'
 // EXPLORATORY combination-scenario probes (agent × review × clarify).
 //
 // Goal: drive end-to-end flows through the REAL scheduler (runTask) + REAL
@@ -345,6 +348,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       },
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_review')
+    await catchUpLegacySequenceTask(c.db, task.id)
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev).toBeDefined()
 
@@ -1398,13 +1402,13 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // Trigger a fresh A generation: mint a pending A rerun (the answer-
     // continuation shape) so the next runScope re-runs A → A_V2. With
     // Layer A gone, NOTHING pre-mints B/C — the per-batch demote must.
-    await c.db.insert(nodeRuns).values({
+    await mintSequenceRun(c.db, task.id, {
       id: ulid(),
-      taskId: task.id,
       nodeId: 'agentA',
       status: 'pending',
       retryIndex: 0,
       iteration: 0,
+      cause: 'clarify-answer',
     })
     await c.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, task.id))
 
@@ -1414,7 +1418,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     const doneA2 = (await topLevel(c.db, task.id, 'agentA')).filter((r) => r.status === 'done')
     const doneB2 = (await topLevel(c.db, task.id, 'agentB')).filter((r) => r.status === 'done')
     const doneC2 = (await topLevel(c.db, task.id, 'agentC')).filter((r) => r.status === 'done')
-    const newest = (rows: typeof doneA2) => rows.reduce((m, r) => (r.id > m.id ? r : m))
+    const newest = (rows: typeof doneA2) =>
+      rows.reduce((m, r) => (compareNodeRunMintOrder(r, m) > 0 ? r : m))
     const newA = newest(doneA2)
     const newB = newest(doneB2)
     const newC = newest(doneC2)

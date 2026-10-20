@@ -11,6 +11,7 @@ import {
 } from './observationSourceRevisionSchema'
 import {
   buildPostgresqlSchemaPlan,
+  renderPostgresqlColumnSql,
   renderPostgresqlBaselineSql,
   POSTGRESQL_APPLICATION_SCHEMA,
   type PostgresqlSchemaPlan,
@@ -22,6 +23,7 @@ import {
   digestSchemaContract,
   withCanonicalFragmentCache,
   type LogicalIndexContract,
+  type LogicalColumnContract,
   type LogicalSchemaContract,
   type LogicalTableContract,
   type OwnerContext,
@@ -122,7 +124,9 @@ export interface PostgresqlCheckReplacement {
 export interface PostgresqlIndexUpgrade {
   /** V4 explicitly retires obsolete whole tables; existing migration artifacts stay immutable. */
   readonly retiredTables?: readonly string[]
-  readonly version: 1 | 2 | 3 | 4 | 5 | 6 | 7
+  readonly version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+  /** V8 appends columns to existing KEEP tables; old artifacts omit this key. */
+  readonly logicalColumns?: readonly LogicalColumnAddition[]
   /** V6 is metadata-only: ownership changes cannot alter any physical row or DDL. */
   readonly logicalOwners?: readonly LogicalOwnerReplacement[]
   /** V5 only: the exact legacy -> committed-row-journal clock transition. */
@@ -804,13 +808,106 @@ function indexPredicateStatements(
   })
 }
 
+export interface LogicalColumnAddition {
+  readonly tableId: string
+  readonly position: number
+  readonly column: LogicalColumnContract
+}
+
+export function logicalColumnAdditions(
+  from: LogicalSchemaContract,
+  to: LogicalSchemaContract,
+): LogicalColumnAddition[] {
+  return to.tables.flatMap((table) => {
+    const prior = from.tables.find((candidate) => candidate.id === table.id)
+    if (!prior) return []
+    return table.columns.slice(prior.columns.length).map((column, offset) => ({
+      tableId: table.id,
+      position: prior.columns.length + offset,
+      column,
+    }))
+  })
+}
+
+/** RFC-374 V8: physical ALTER appends columns, so their logical order must match. */
+function appendLogicalColumns(
+  contract: LogicalSchemaContract,
+  additions: readonly LogicalColumnAddition[],
+): LogicalSchemaContract {
+  for (const addition of additions) {
+    const table = contract.tables.find((candidate) => candidate.id === addition.tableId)
+    const column = addition.column
+    requireSequence(table?.disposition === 'KEEP', 'column addition requires an active KEEP table')
+    requireSequence(
+      !column.primary &&
+        !column.identity &&
+        column.uniqueName === null &&
+        (column.nullable ||
+          (column.defaultKind === 'literal' && column.providerDefault.postgresql !== null)) &&
+        (column.defaultKind === 'none' || column.defaultKind === 'literal') &&
+        !table.foreignKeys.some((key) => key.columns.includes(column.name)),
+      'column addition must be nullable or have a literal default, without keys or identity',
+    )
+  }
+  const tables = contract.tables.map((table) => {
+    const changes = additions.filter((addition) => addition.tableId === table.id)
+    if (!changes.length) return table
+    const columns = [...table.columns]
+    for (const { position, column } of changes) {
+      requireSequence(position === columns.length, 'column addition must append at the end')
+      requireSequence(
+        !columns.some((old) => old.name === column.name),
+        'duplicate logical column name',
+      )
+      columns.push(column)
+    }
+    return { ...table, columns }
+  })
+  const payload = { ...contractPayload(contract), tables }
+  return { ...payload, digest: digestSchemaContract(payload) }
+}
+
+function columnAdditionStatements(
+  contract: LogicalSchemaContract,
+  additions: readonly LogicalColumnAddition[],
+): PostgresqlSchemaStatement[] {
+  const quote = (value: string) => `"${value.replaceAll('"', '""')}"`
+  return additions.map(({ tableId, column }) => {
+    const table = contract.tables.find((candidate) => candidate.id === tableId)!
+    return {
+      kind: 'table',
+      logicalId: `${tableId}.${column.name}`,
+      sql: `ALTER TABLE ${quote(POSTGRESQL_APPLICATION_SCHEMA)}.${quote(table.providerTables.postgresql!)} ADD COLUMN ${renderPostgresqlColumnSql(column)}`,
+    }
+  })
+}
+
 function logicalIndexAdditions(
   from: LogicalSchemaContract,
   to: LogicalSchemaContract,
+  columns: readonly LogicalColumnAddition[] = [],
 ): LogicalIndexAddition[] {
+  const rowTarget = {
+    ...to,
+    tables: to.tables.map((table) => {
+      const previous = from.tables.find((candidate) => candidate.id === table.id)!
+      const added = table.indexes.filter(
+        (index) =>
+          index.unique &&
+          !previous.indexes.some((old) => old.name === index.name) &&
+          columns.some(
+            (column) => column.tableId === table.id && index.columns.includes(column.column.name),
+          ),
+      )
+      return {
+        ...table,
+        unique: table.unique.filter((key) => !added.some((index) => index.name === key.name)),
+      }
+    }),
+  }
   exact(
     rowContract(from),
-    rowContract(to),
+    rowContract(rowTarget),
     'index-only upgrade changed a row, codec, key or disposition',
   )
   return to.tables.flatMap((table, tableAt) => {
@@ -853,6 +950,7 @@ function insertAtPositions<T>(
 function appendLogicalIndexes(
   contract: LogicalSchemaContract,
   additions: readonly LogicalIndexAddition[],
+  columns: readonly LogicalColumnAddition[] = [],
 ): LogicalSchemaContract {
   for (const addition of additions) {
     const table = contract.tables.find((candidate) => candidate.id === addition.tableId)
@@ -861,7 +959,12 @@ function appendLogicalIndexes(
       'index addition requires an existing active table',
     )
     requireSequence(
-      !addition.index.unique,
+      !addition.index.unique ||
+        columns.some(
+          (column) =>
+            column.tableId === addition.tableId &&
+            addition.index.columns.includes(column.column.name),
+        ),
       'this upgrade translator supports ordinary covering indexes only',
     )
   }
@@ -876,7 +979,19 @@ function appendLogicalIndexes(
       new Set(indexes.map((index) => index.name)).size === indexes.length,
       'duplicate logical index name',
     )
-    return { ...table, indexes }
+    const unique = changes.some((change) => change.index.unique)
+      ? [
+          ...table.unique.filter((key) => !table.indexes.some((index) => index.name === key.name)),
+          ...indexes
+            .filter((index) => index.unique)
+            .map((index) => ({
+              name: index.name,
+              columns: index.columns,
+              expression: index.where,
+            })),
+        ]
+      : table.unique
+    return { ...table, indexes, unique }
   })
   const payload = { ...contractPayload(contract), tables }
   return { ...payload, digest: digestSchemaContract(payload) }
@@ -1102,6 +1217,13 @@ export function createPostgresqlRetirementUpgrade(
   return createPostgresqlUpgrade(input, true, false, retired)
 }
 
+/** RFC-374 V8: new tables plus appended columns and indexes using those columns. */
+export function createPostgresqlColumnUpgrade(
+  input: PostgresqlUpgradeInput,
+): PostgresqlIndexUpgrade {
+  return createPostgresqlUpgrade(input, true, false, [], false, false, false, true)
+}
+
 function createPostgresqlUpgrade(
   input: PostgresqlUpgradeInput,
   allowNewTables: boolean,
@@ -1110,6 +1232,7 @@ function createPostgresqlUpgrade(
   allowSourceRevisionReplacement = false,
   allowOwnershipReplacement = false,
   allowIndexPredicateReplacement = false,
+  allowNewColumns = false,
 ): PostgresqlIndexUpgrade {
   const { from, to } = input
   validateVersion(from)
@@ -1156,13 +1279,23 @@ function createPostgresqlUpgrade(
     !allowIndexPredicateReplacement || logicalIndexPredicates.length > 0,
     'index predicate upgrade has no change',
   )
+  const logicalColumns = allowNewColumns ? logicalColumnAdditions(retained, to.contract) : []
+  requireSequence(
+    !allowNewColumns || logicalColumns.length > 0,
+    'column upgrade has no appended column',
+  )
+  const withColumns = appendLogicalColumns(withTables, logicalColumns)
   const expanded = applyLogicalIndexPredicates(
-    applyLogicalColumnEnums(applyLogicalCheckReplacements(withTables, logicalChecks), logicalEnums),
+    applyLogicalColumnEnums(
+      applyLogicalCheckReplacements(withColumns, logicalChecks),
+      logicalEnums,
+    ),
     logicalIndexPredicates,
   )
-  const logicalIndexes = logicalIndexAdditions(expanded, to.contract)
+  const logicalIndexes = logicalIndexAdditions(expanded, to.contract, logicalColumns)
   requireSequence(
     logicalTables.length +
+      logicalColumns.length +
       logicalIndexes.length +
       logicalChecks.length +
       logicalIndexPredicates.length +
@@ -1176,7 +1309,11 @@ function createPostgresqlUpgrade(
     !allowCheckReplacement || logicalChecks.length > 0,
     'check upgrade has no replaced constraint',
   )
-  exact(appendLogicalIndexes(expanded, logicalIndexes), to.contract, 'logical index replay differs')
+  exact(
+    appendLogicalIndexes(expanded, logicalIndexes, logicalColumns),
+    to.contract,
+    'logical index replay differs',
+  )
   exact(
     to.sqliteMigrations.slice(0, from.sqliteMigrations.length),
     from.sqliteMigrations,
@@ -1200,6 +1337,7 @@ function createPostgresqlUpgrade(
     logicalSourceRevision,
   )
   const replacedKeys = new Set<string>([
+    ...logicalColumns.map((item) => `table:${item.tableId}`),
     ...checkReplacements.map((item) => `constraint:${item.logicalId}`),
     ...indexPredicateReplacements.map((item) => `index:${item.logicalId}`),
     ...sourceRevisionReplacements.map((item) => `function:${item.logicalId}`),
@@ -1234,25 +1372,29 @@ function createPostgresqlUpgrade(
     ...checkReplacements.flatMap((item) => [item.drop, item.after]),
     ...indexPredicateReplacements.flatMap((item) => [item.drop, item.after]),
     ...sourceRevisionReplacements.map(sourceRevisionExecutable),
+    ...columnAdditionStatements(to.contract, logicalColumns),
     ...indexAdditions.map((addition) => addition.statement),
     contractUpdate(from.plan, to.plan),
   ]
   const payload = {
     ...(retiredTables.length ? { retiredTables } : {}),
     ...(logicalOwners.length ? { logicalOwners } : {}),
-    version: logicalIndexPredicates.length
-      ? (7 as const)
-      : logicalOwners.length
-        ? (6 as const)
-        : logicalSourceRevision
-          ? (5 as const)
-          : retiredTables.length
-            ? (4 as const)
-            : logicalChecks.length > 0
-              ? (3 as const)
-              : logicalTables.length === 0
-                ? (1 as const)
-                : (2 as const),
+    ...(logicalColumns.length ? { logicalColumns } : {}),
+    version: logicalColumns.length
+      ? (8 as const)
+      : logicalIndexPredicates.length
+        ? (7 as const)
+        : logicalOwners.length
+          ? (6 as const)
+          : logicalSourceRevision
+            ? (5 as const)
+            : retiredTables.length
+              ? (4 as const)
+              : logicalChecks.length > 0
+                ? (3 as const)
+                : logicalTables.length === 0
+                  ? (1 as const)
+                  : (2 as const),
     ...(logicalIndexPredicates.length
       ? { logicalIndexPredicates, indexPredicateReplacements }
       : {}),
@@ -1300,7 +1442,8 @@ function applyPostgresqlIndexUpgrade(
       step.version === 4 ||
       step.version === 5 ||
       step.version === 6 ||
-      step.version === 7) &&
+      step.version === 7 ||
+      step.version === 8) &&
       digest === postgresqlMigrationDigest(payload),
     'upgrade entry digest differs',
   )
@@ -1331,6 +1474,11 @@ function applyPostgresqlIndexUpgrade(
   requireSequence(
     step.version === 4 ? retiredTables.length > 0 : step.retiredTables === undefined,
     'retirement does not match upgrade version',
+  )
+  const logicalColumns = step.logicalColumns ?? []
+  requireSequence(
+    step.version === 8 ? logicalColumns.length > 0 : step.logicalColumns === undefined,
+    'column additions do not match upgrade version',
   )
   const logicalTables = step.logicalTables ?? []
   const logicalIndexPredicates = step.logicalIndexPredicates ?? []
@@ -1363,7 +1511,7 @@ function applyPostgresqlIndexUpgrade(
       ? step.logicalTables === undefined && step.logicalChecks === undefined
       : step.version === 2
         ? logicalTables.length > 0 && step.logicalChecks === undefined
-        : step.version === 4
+        : step.version === 4 || step.version === 8
           ? logicalChecks.length === 0
           : step.version === 5 || step.version === 6 || step.version === 7
             ? logicalChecks.length === 0 && logicalTables.length === 0
@@ -1384,6 +1532,7 @@ function applyPostgresqlIndexUpgrade(
   )
   requireSequence(
     step.logicalIndexes.length +
+      logicalColumns.length +
       logicalTables.length +
       logicalChecks.length +
       logicalIndexPredicates.length +
@@ -1400,11 +1549,15 @@ function applyPostgresqlIndexUpgrade(
     ),
     logicalSourceRevision,
   )
+  const withColumns = appendLogicalColumns(withTables, logicalColumns)
   const expanded = applyLogicalIndexPredicates(
-    applyLogicalColumnEnums(applyLogicalCheckReplacements(withTables, logicalChecks), logicalEnums),
+    applyLogicalColumnEnums(
+      applyLogicalCheckReplacements(withColumns, logicalChecks),
+      logicalEnums,
+    ),
     logicalIndexPredicates,
   )
-  const contract = appendLogicalIndexes(expanded, step.logicalIndexes)
+  const contract = appendLogicalIndexes(expanded, step.logicalIndexes, logicalColumns)
   requireSequence(
     contract.digest === step.to.contractDigest,
     'upgrade target contract digest differs',
@@ -1439,9 +1592,19 @@ function applyPostgresqlIndexUpgrade(
   const sourceReplacedByKey = new Map(
     sourceRevisionReplacements.map((item) => [`function:${item.logicalId}`, item]),
   )
+  const columnTableIds = new Set(logicalColumns.map((column) => column.tableId))
+  const columnReplacedByKey = new Map(
+    buildPostgresqlSchemaPlan(contract)
+      .statements.filter(
+        (statement) => statement.kind === 'table' && columnTableIds.has(statement.logicalId),
+      )
+      .map((statement) => [statementKey(statement), statement]),
+  )
   const original = retainedStatements(previous, retiredTables).map((statement) => {
     const key = statementKey(statement)
     if (key === 'metadata:contract-row') return step.contractRow.after
+    const columnReplacement = columnReplacedByKey.get(key)
+    if (columnReplacement) return columnReplacement
     const predicateReplacement = predicateReplacedByKey.get(key)
     if (predicateReplacement) return predicateReplacement.after
     const sourceReplacement = sourceReplacedByKey.get(key)
@@ -1496,7 +1659,8 @@ function applyPostgresqlIndexUpgrade(
       key !== 'metadata:contract-row' &&
       !replacedByKey.has(key) &&
       !sourceReplacedByKey.has(key) &&
-      !predicateReplacedByKey.has(key)
+      !predicateReplacedByKey.has(key) &&
+      !columnReplacedByKey.has(key)
     )
       exact(statement, prior, 'schema upgrade changed an existing statement')
   }
@@ -1534,6 +1698,7 @@ function applyPostgresqlIndexUpgrade(
       ...checkReplacements.flatMap((item) => [item.drop, item.after]),
       ...indexPredicateReplacements.flatMap((item) => [item.drop, item.after]),
       ...sourceRevisionReplacements.map(sourceRevisionExecutable),
+      ...columnAdditionStatements(contract, logicalColumns),
       ...step.indexAdditions.map((addition) => addition.statement),
       contractUpdate(previous.plan, plan),
     ],
@@ -1728,9 +1893,16 @@ function resolvePostgresqlRowBridge(
                     applyLogicalSourceRevision(
                       applyLogicalColumnEnums(
                         applyLogicalCheckReplacements(
-                          appendLogicalTables(
-                            retireLogicalTables(contract, step.retiredTables ?? []),
-                            step.logicalTables ?? [],
+                          appendLogicalIndexes(
+                            appendLogicalColumns(
+                              appendLogicalTables(
+                                retireLogicalTables(contract, step.retiredTables ?? []),
+                                step.logicalTables ?? [],
+                              ),
+                              step.logicalColumns ?? [],
+                            ),
+                            step.logicalIndexes,
+                            step.logicalColumns ?? [],
                           ),
                           step.logicalChecks ?? [],
                         ),

@@ -138,6 +138,8 @@ import type {
   WorkflowNode,
 } from '@agent-workflow/shared'
 import {
+  compareNodeRunMintOrder,
+  type NodeRunOrderKey,
   agentHasClarifyChannel,
   buildPriorOutputBlock,
   DAEMON_RESTART_ERROR_SUMMARY,
@@ -601,6 +603,7 @@ export async function executeWorkgroupHostMechanics(
                     iteration: currentRunRow.iteration,
                     shardKey: currentRunRow.shardKey ?? null,
                     id: currentRunRow.id,
+                    seq: currentRunRow.seq,
                   })
                 ).length
               : 0
@@ -4143,7 +4146,7 @@ export async function runAgentSingleNode(
       // RFC-074 PR-C: the clarify "generation" is derived from id-order, NOT
       // the retired `clarifyIteration` counter. The prior top-level `done`
       // rows for this node at the same (iteration, shardKey), minted before
-      // this run (id < current), each represent an earlier completed clarify
+      // this run (earlier mint seq), each represent an earlier completed clarify
       // generation; their count is the generation index the counter used to
       // hold. `done` (not canceled) so review-iterate supersede markers don't
       // inflate it, and parentNodeRunId === null so fan-out shard children
@@ -4155,6 +4158,7 @@ export async function runAgentSingleNode(
             iteration: currentRunRow.iteration,
             shardKey: currentShardKey,
             id: currentRunRow.id,
+            seq: currentRunRow.seq,
           })
         : []
       const clarifyGeneration = priorDoneGenerations.length
@@ -4216,7 +4220,7 @@ export async function runAgentSingleNode(
               agentNodeId: node.id,
               shardKey: currentShardKey,
               iteration: currentRunRow.iteration,
-              beforeId: currentRunRow.id,
+              before: currentRunRow,
             })
           : null
       // RFC-026 fallback reasons recorded via `recordClarifyInlineEvent`
@@ -4351,6 +4355,7 @@ export async function runAgentSingleNode(
             iteration: currentRunRow.iteration,
             shardKey: currentShardKey,
             id: currentRunRow.id,
+            seq: currentRunRow.seq,
           })
         : []
       const clarifyLineageContinues = continuesClarifyLineage(lineageCauses)
@@ -4430,6 +4435,7 @@ export async function runAgentSingleNode(
           iteration: currentRunRow.iteration,
           shardKey: currentShardKey,
           id: currentRunRow.id,
+          seq: currentRunRow.seq,
         })
         if (priorRun !== undefined) {
           const onlyPorts =
@@ -5009,6 +5015,7 @@ export async function runAgentSingleNode(
             iteration: currentRunRow.iteration,
             shardKey: currentRunRow.shardKey ?? null,
             id: currentRunRow.id,
+            seq: currentRunRow.seq,
           })
         ).length
       : 0
@@ -5303,7 +5310,7 @@ export async function composePriorOutputBlock(
 
 /**
  * RFC-119: the freshest prior run of this node at the SAME (iteration, shardKey),
- * minted before this run (id < current), that captured at least one output row —
+ * minted before this run (earlier mint seq), that captured at least one output row —
  * REGARDLESS of final status. Unlike `priorDoneGenerationsForRun` (deliberately
  * `done`-only, for the clarify generation count) this MUST also see
  * review-supersede `canceled` rows: review reject/iterate flips the prior `done`
@@ -5318,7 +5325,7 @@ export async function composePriorOutputBlock(
  * (nodeId, iteration, shardKey): a single-process agent node has only top-level
  * runs (so the dropped filter is a no-op there); a fan-out inner node has only
  * shard children (keyed by shardKey); a fan-out aggregator node has only
- * aggregator children (shardKey null). So id-order within (nodeId, iteration,
+ * aggregator children (shardKey null). So mint order within (nodeId, iteration,
  * shardKey) uniquely identifies the freshest prior run for all three dispatch
  * sites (single-process / fan-out shard / fan-out aggregator).
  *
@@ -5327,7 +5334,14 @@ export async function composePriorOutputBlock(
  */
 export async function freshestPriorRunWithOutput(
   persistence: NodeExecutionPersistence,
-  run: { taskId: string; nodeId: string; iteration: number; shardKey: string | null; id: string },
+  run: {
+    taskId: string
+    nodeId: string
+    iteration: number
+    shardKey: string | null
+    id: string
+    seq: number | null
+  },
 ): Promise<NodeExecutionSnapshot | undefined> {
   const rows = await persistence.list({
     taskId: run.taskId,
@@ -5335,11 +5349,13 @@ export async function freshestPriorRunWithOutput(
     iteration: run.iteration,
   })
   // shardKey filtered in memory (drizzle IS NULL handling varies; see
-  // readPriorAgentSessionId). Walk freshest-first (largest id) and return the
+  // readPriorAgentSessionId). Walk freshest-first (largest seq) and return the
   // first prior run (any parent — see doc) that captured output.
   const candidates = rows
-    .filter((r) => (r.shardKey ?? null) === (run.shardKey ?? null) && r.id < run.id)
-    .sort((a, b) => (a.id > b.id ? -1 : a.id < b.id ? 1 : 0))
+    .filter(
+      (r) => (r.shardKey ?? null) === (run.shardKey ?? null) && compareNodeRunMintOrder(r, run) < 0,
+    )
+    .sort((a, b) => compareNodeRunMintOrder(b, a))
   for (const c of candidates) {
     const has = await persistence.listOutputs(c.id)
     if (has.length > 0) return c
@@ -5351,7 +5367,7 @@ export async function freshestPriorRunWithOutput(
  * RFC-183 (Codex design-gate P2#1/P2#4): the cause chain of this run's
  * lineage, newest-first, INCLUDING the current row — the input to
  * `continuesClarifyLineage` (nodeRunMint.ts). Top-level rows only, same
- * (taskId, nodeId, iteration, shardKey), id <= current. Persisted-row
+ * (taskId, nodeId, iteration, shardKey), minted no later than current. Persisted-row
  * derivation on purpose: the verdict must survive the attempt loop
  * (process-retry mints), daemon restarts (interrupted → 'revival' mints) and
  * resumes alike — an in-memory boolean carried across attempts cannot
@@ -5359,7 +5375,14 @@ export async function freshestPriorRunWithOutput(
  */
 async function lineageCausesNewestFirst(
   persistence: NodeExecutionPersistence,
-  run: { taskId: string; nodeId: string; iteration: number; shardKey: string | null; id: string },
+  run: {
+    taskId: string
+    nodeId: string
+    iteration: number
+    shardKey: string | null
+    id: string
+    seq: number | null
+  },
 ): Promise<Array<string | null>> {
   const rows = await persistence.list({
     taskId: run.taskId,
@@ -5371,18 +5394,18 @@ async function lineageCausesNewestFirst(
       (r) =>
         (r.shardKey ?? null) === (run.shardKey ?? null) &&
         r.parentNodeRunId === null &&
-        r.id <= run.id,
+        compareNodeRunMintOrder(r, run) <= 0,
     )
-    .sort((a, b) => (a.id > b.id ? -1 : a.id < b.id ? 1 : 0))
+    .sort((a, b) => compareNodeRunMintOrder(b, a))
     .map((r) => r.rerunCause)
 }
 
 /**
- * RFC-074 PR-C: derive a node_run's clarify "generation" from id-order instead
+ * RFC-074 PR-C: derive a node_run's clarify "generation" from mint order instead
  * of the retired `clarifyIteration` counter. The generation is the number of
  * earlier completed generations: top-level (`parentNodeRunId === null`) `done`
  * rows for the same (taskId, nodeId, iteration, shardKey) minted before this
- * run (id < beforeId). 0 = first generation. `done` (not canceled) so
+ * run (earlier mint seq). 0 = first generation. `done` (not canceled) so
  * review-iterate supersede markers don't inflate it; parent-null so fan-out
  * shard children don't either. Returns the prior rows too — the freshest is the
  * clarify-rerun's working draft (priorDoneDesigner) and the session-resume
@@ -5390,7 +5413,14 @@ async function lineageCausesNewestFirst(
  */
 async function priorDoneGenerationsForRun(
   persistence: NodeExecutionPersistence,
-  run: { taskId: string; nodeId: string; iteration: number; shardKey: string | null; id: string },
+  run: {
+    taskId: string
+    nodeId: string
+    iteration: number
+    shardKey: string | null
+    id: string
+    seq: number | null
+  },
 ): Promise<readonly NodeExecutionSnapshot[]> {
   const rows = await persistence.list({
     taskId: run.taskId,
@@ -5402,15 +5432,15 @@ async function priorDoneGenerationsForRun(
     (r) =>
       (r.shardKey ?? null) === (run.shardKey ?? null) &&
       r.parentNodeRunId === null &&
-      r.id < run.id,
+      compareNodeRunMintOrder(r, run) < 0,
   )
 }
 
 /**
  * RFC-026: look up the opencode session id captured on the agent's PRIOR
  * clarify round. RFC-074 PR-C: the retired `clarifyIteration` counter is
- * replaced by id-order — the prior generation is simply the freshest top-level
- * `done` row for this node minted BEFORE the current run (id < beforeId),
+ * replaced by mint order — the prior generation is simply the freshest top-level
+ * `done` row for this node minted BEFORE the current run (earlier mint seq),
  * scoped to the same (taskId, nodeId, iteration, shardKey). That row emitted
  * the `<workflow-clarify>` envelope the user just answered. Returns null when
  * nothing matches (will then degrade to isolated via `decideResumeSessionId`).
@@ -5422,7 +5452,7 @@ async function readPriorAgentSessionId(
     agentNodeId: string
     shardKey: string | null
     iteration: number
-    beforeId: string
+    before: NodeRunOrderKey
   },
 ): Promise<string | null> {
   const rows = [
@@ -5432,14 +5462,16 @@ async function readPriorAgentSessionId(
       iteration: args.iteration,
       status: 'done',
     })),
-  ].sort((a, b) => (a.id > b.id ? -1 : a.id < b.id ? 1 : 0))
+  ].sort((a, b) => compareNodeRunMintOrder(b, a))
   // shardKey is filtered in memory because drizzle's IS NULL handling
   // varies; the result set is tiny (one row per prior attempt). Walk newest
-  // first (largest id) and return the first prior generation that captured a
+  // first (largest seq) and return the first prior generation that captured a
   // session id.
   const filtered = rows.filter(
     (r) =>
-      (r.shardKey ?? null) === args.shardKey && r.parentNodeRunId === null && r.id < args.beforeId,
+      (r.shardKey ?? null) === args.shardKey &&
+      r.parentNodeRunId === null &&
+      compareNodeRunMintOrder(r, args.before) < 0,
   )
   for (const r of filtered) {
     if (r.opencodeSessionId !== null && r.opencodeSessionId !== '') {

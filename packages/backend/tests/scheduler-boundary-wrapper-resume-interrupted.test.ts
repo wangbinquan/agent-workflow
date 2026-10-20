@@ -1,3 +1,5 @@
+// RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
+import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 // Regression: resuming a wrapper node from 'interrupted' (post daemon restart)
 // throws ConflictError -> runTask rejects -> task stuck status='running'.
 //
@@ -203,6 +205,7 @@ function registerCases(provider: ProviderHarness) {
     const taskId = await seedWorkflowAndTask(h, def)
     await seedInterruptedWrapperRun(h, taskId, 'loop')
 
+    await catchUpLegacySequenceTask(h.db, taskId)
     let threw = false
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ findings: '' }) }, () =>
       runTask({
@@ -234,6 +237,7 @@ function registerCases(provider: ProviderHarness) {
     const taskId = await seedWorkflowAndTask(h, def)
     await seedInterruptedWrapperRun(h, taskId, 'wrap')
 
+    await catchUpLegacySequenceTask(h.db, taskId)
     let threw = false
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'ok' }) }, () =>
       runTask({
@@ -288,6 +292,7 @@ function registerCases(provider: ProviderHarness) {
     const taskId = await seedWorkflowAndTask(h, def, { docs: 'a.md\nb.md' })
     await seedInterruptedWrapperRun(h, taskId, 'fan')
 
+    await catchUpLegacySequenceTask(h.db, taskId)
     let threw = false
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ result: 'done' }) }, () =>
       runTask({

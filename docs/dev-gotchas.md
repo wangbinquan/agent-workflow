@@ -3782,6 +3782,12 @@ git show HEAD:architecture/ledger-baselines.json | grep -c '"allowGrowth"'   # �
   错误方向排查。正解是让导出上限的函数**自钳**到一个显著低于保险丝的天花板，使保险丝
   在任何配置组合下不可达，并用一条测试锁住两个常量的大小关系。
 
+## RFC-374：NodeRun 的 seq、种子夹具与 V8 加列
+
+`seq` 是同事务铸造分配的顺序；手工种子行没有 `seq` 时，比较器把它视为比任何非 NULL 行更旧，两行都为 NULL 才按 id 回退。测试需要代表较新一代时，应经 mint 工厂铸造；直接 `insert(nodeRuns)` 的夹具用 `tests/helpers/rfc374Fixtures.ts` 的 `allocateNodeRunSeq` 从 identity 表取号（与 mint 同源；手写的 `seq` 数值可能高于分配表，启动追平会以 `node-run-seq-allocator-behind` 拒绝启动），不要依靠更大的 ULID。SQL 升序写 `engineOf(db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id)`；降序写 `engineOf(db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id)`。已有的 `retryIndex` / `startedAt` 主排序键保留，seq 替换原 id 平局位置。
+
+给已有 KEEP 表加列时，把列追加在 schema 的末尾，使用可空列或字面量默认值；V8 不接受主键、identity、具名唯一列或外键，新增唯一索引必须包含同一步追加的列。先用 `db:generate` 生成新 SQLite 迁移，再用 `db:rfc349-postgresql-schema --append <新编号_名称>` 生成 V8 SQL / upgrade.json，最后运行 `db:rfc349-contract`。旧归档恢复沿用源列清单，新可空列得到 NULL；冻结旧迁移的测试也必须用显式旧列清单的 raw INSERT，不能通过 HEAD drizzle 写不存在的新列。历史迁移不可改写。
+
 ## 迁移（Drizzle + bun:sqlite）
 
 - **SQLite 的 partial index「蕴含判断」不认 `col = 'x'` ⊂ `col IN ('x','y')`**（2026-08-18 RFC-311 实测）：给 `node_runs` 建 `WHERE status IN ('pending','running')` 的 partial 索引后，`WHERE status = 'running'` 的查询**不会**用它（EXPLAIN 仍 SCAN）——SQLite 只认查询谓词与索引 WHERE **字面等价**或非常有限的蕴含形式。partial 索引想被命中，查询侧谓词要与索引 WHERE 写成同一字面（`= 'pending'` 对 `WHERE decision='pending'` ✓）；谓词形态多样的列（等值/IN 混用）老实建普通复合索引。每个新索引配一条 `EXPLAIN QUERY PLAN` 断言（`rfc311-perf-foundation.test.ts` 模式，先例 `migration-0128-…`），别靠肉眼确信。

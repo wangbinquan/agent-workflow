@@ -41,6 +41,7 @@ export function createFrameBackfillStore(db: ProviderNeutralDatabase): FrameBack
       const runs: FrameBackfillRunRow[] = await db
         .select({
           id: nodeRuns.id,
+          seq: nodeRuns.seq,
           nodeId: nodeRuns.nodeId,
           iteration: nodeRuns.iteration,
           parentNodeRunId: nodeRuns.parentNodeRunId,

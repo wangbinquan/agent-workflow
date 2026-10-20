@@ -1,5 +1,6 @@
 // RFC-359 W4-B4 —— 记忆蒸馏工作存储：一份实现，两个 provider 共用。
 
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -306,8 +307,8 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
    * RFC-366：任务里每个节点的终态一览。
    *
    * 一个节点在一个任务里可能有很多行（重试 / loop 每轮 / fanout 每分片），这里按
-   * id 逆序取每个 (task, node) 的**最新一行**——node_run id 是 ULID，id 序即时间序
-   * （`isFresherNodeRun` 用的也是这条判据），所以不需要再按 finishedAt 排序，后者
+   * seq 逆序取每个 (task, node) 的**最新一行**（RFC-374；NULL 行保留 id 回退），
+   * 与 `isFresherNodeRun` 使用同一铸造顺序，所以不需要再按 finishedAt 排序，后者
    * 在未结算的行上还是 null。
    */
   async listTaskNodeStatuses(taskIds: readonly string[]) {
@@ -323,7 +324,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
       })
       .from(nodeRuns)
       .where(inArray(nodeRuns.taskId, [...taskIds]))
-      .orderBy(desc(nodeRuns.id))
+      .orderBy(engineOf(this.db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
     const seen = new Set<string>()
     const latest: {
       taskId: string

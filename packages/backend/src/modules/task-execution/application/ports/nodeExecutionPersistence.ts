@@ -8,6 +8,7 @@ import type { TaskExecutionContextRef } from './taskExecutionTopology'
  * record before it crosses the application seam.
  */
 export interface NodeExecutionSnapshot {
+  readonly seq: number | null
   readonly id: string
   readonly taskId: string
   readonly nodeId: string

@@ -1,3 +1,4 @@
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { acceptDurableRepositoryWorkspace } from './durableRepositoryPreparation'
 import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
 import {
@@ -229,7 +230,11 @@ async function loadRetrySnapshot(
     .select({ id: nodeRuns.id, retryIndex: nodeRuns.retryIndex, status: nodeRuns.status })
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
-    .orderBy(desc(nodeRuns.retryIndex), desc(nodeRuns.id))
+    .orderBy(
+      desc(nodeRuns.retryIndex),
+      engineOf(dependencies.db).descNullsLast(nodeRuns.seq),
+      desc(nodeRuns.id),
+    )
     .limit(1)
   const prep = prepRows[0]
   if (prep === undefined) {

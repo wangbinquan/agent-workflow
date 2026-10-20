@@ -4,7 +4,7 @@
 //
 // 1. 后果链（stale → 重派 → 新 wrapper 代）：上游节点 rerun（这里用直接插入
 //    更新代 done 行模拟 clarify 答复后的 rerun——freshness 机器只看行形态，
-//    不关心铸行者）后，loop/git wrapper 的 done 行因 fresh-mint 时写入的
+//    不关心铸行者；RFC-374 起「更新代」= seq 更大，直接插入时从 identity 表分配）后，loop/git wrapper 的 done 行因 fresh-mint 时写入的
 //    consumedUpstreamRunsJson 判 stale → 重派 → findResumableWrapperRun 视
 //    done 为 terminal → 铸全新 wrapper 行：loop 从 iteration 0 整体重跑、git
 //    重抓 baseline（progress.baseline 换成新 HEAD）。S-7 修复前 consumed 恒
@@ -37,6 +37,7 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import { allocateNodeRunSeq } from './helpers/rfc374Fixtures'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 import { runGit } from '../src/util/git'
 
@@ -160,6 +161,7 @@ async function mintFresherUpstreamDone(
   await h.db.insert(nodeRuns).values({
     id,
     taskId,
+    seq: await allocateNodeRunSeq(h.db, taskId, id),
     nodeId,
     status: 'done',
     retryIndex: 0,

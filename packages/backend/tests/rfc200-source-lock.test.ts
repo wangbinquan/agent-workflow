@@ -71,8 +71,10 @@ describe('RFC-200 source wiring locks', () => {
     expect(wrapperMechanics).toContain('composePriorOutputBlock(')
     expect(nodeMechanics).toContain('state.opts.persistence.nodeRuns.loadEnvelopeNonce(nodeRunId)')
     expect(wrapperMechanics).toContain(
-      "(await state.opts.persistence.nodeExecution.read(aggRunId))?.envelopeNonce ?? ''",
+      'const aggRun = await state.opts.persistence.nodeExecution.read(aggRunId)',
     )
+
+    expect(wrapperMechanics).toContain("aggRun?.envelopeNonce ?? ''")
 
     const memory = read('packages/backend/src/modules/memory/domain/injectionRendering.ts')
     // RFC-317 T39（CC-13）—— 围栏的 nonce 现在来自**必传的判别式**而不是默认参数：

@@ -624,6 +624,7 @@ describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () =
   type Run = typeof nodeRunsTable.$inferSelect
   const mkRun = (over: Partial<Run>): Run =>
     ({
+      seq: null,
       id: 'r',
       taskId: 't',
       nodeId: WG_MEMBER_NODE_ID,

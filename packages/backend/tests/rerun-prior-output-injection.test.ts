@@ -117,6 +117,7 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+      seq: null,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -139,6 +140,7 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+      seq: null,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -153,6 +155,7 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const db = harness.db
     const taskId = await seedTask(db)
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+      seq: null,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -171,6 +174,7 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
 
     // Current run is at iteration 1 → the iteration-0 output must NOT leak in.
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+      seq: null,
       taskId,
       nodeId: 'agent',
       iteration: 1,
@@ -190,6 +194,7 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+      seq: null,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -210,6 +215,7 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+      seq: null,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -236,6 +242,7 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+      seq: null,
       taskId,
       nodeId: 'aggnode',
       iteration: 0,
@@ -265,6 +272,7 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
 
     // Looking up shardKey 'fileA' must return the fileA child, NOT fileB.
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+      seq: null,
       taskId,
       nodeId: 'inner',
       iteration: 0,
@@ -284,6 +292,7 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+      seq: null,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -370,6 +379,7 @@ describeEachProvider(
       const currentId = seedUlid()
 
       const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+        seq: null,
         taskId,
         nodeId: 'agent',
         iteration: 0,
@@ -404,6 +414,7 @@ describeEachProvider(
       const currentId = seedUlid()
 
       const found = await freshestPriorRunWithOutput(nodePersistence(db), {
+        seq: null,
         taskId,
         nodeId: 'agent',
         iteration: 0,

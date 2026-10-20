@@ -275,6 +275,7 @@ function resolveDispatchedEntryHandler(
     runs: runs.map(
       (r): RunLineageView => ({
         id: r.id,
+        seq: r.seq,
         nodeId: r.nodeId,
         iteration: r.iteration,
         loopIter: 0,
@@ -587,6 +588,7 @@ function partitionUndispatchedParkTargets(
   const lineageViews = runs.map(
     (r): RunLineageView => ({
       id: r.id,
+      seq: r.seq,
       nodeId: r.nodeId,
       iteration: r.iteration,
       loopIter: 0,

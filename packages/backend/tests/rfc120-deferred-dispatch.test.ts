@@ -31,6 +31,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
+import { mintSequenceRun } from './helpers/rfc374Fixtures'
 import { expectDatabaseFailure } from './helpers/databaseFailure'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -1612,17 +1613,14 @@ describeEachProviderHttpApplication(
       expect(await phaseOf()).toBe('processing')
 
       // The scheduler mints a technical process-retry (same node + iteration, cause
-      // 'process-retry', fresh ULID > anchor) which succeeds with output.
-      const retryId = ulid()
-      await db.insert(nodeRuns).values({
-        id: retryId,
-        taskId,
+      // 'process-retry', minted after the anchor) which succeeds with output.
+      const retryId = await mintSequenceRun(db, taskId, {
         nodeId: DESIGNER,
         status: 'done',
         retryIndex: 1,
         iteration: anchorRow.iteration,
-        rerunCause: 'process-retry',
-        startedAt: Date.now(),
+        cause: 'process-retry',
+        overrides: { startedAt: Date.now() },
       })
       await db
         .insert(nodeRunOutputs)

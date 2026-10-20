@@ -147,6 +147,7 @@ describeEachProviderHttpApplication(
         },
         {
           id: 'rr-done-0001',
+          seq: 1,
           taskId,
           nodeId: 'writer',
           status: 'done',
@@ -158,6 +159,7 @@ describeEachProviderHttpApplication(
         },
         {
           id: 'rr-review-0001',
+          seq: 2,
           taskId,
           nodeId: 'writer',
           status: 'awaiting_review',
@@ -206,6 +208,9 @@ describeEachProviderHttpApplication(
         '未开始的那条必须排在最前（两个引擎的 NULL 默认落位相反）',
       ).toEqual(['rr-pending-0001', 'rr-done-0001', 'rr-review-0001'])
 
+      // RFC-374: the GET wire includes both legacy NULL and allocated mint order.
+      expect(runs[0]!['seq']).toBeNull()
+      expect(runs[1]!['seq']).toBeLessThan(runs[2]!['seq'] as number)
       projected.set(scope.harness.capabilities.provider, comparableRuns(body))
       if (projected.size < 2) return
       expect(

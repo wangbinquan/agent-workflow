@@ -9,6 +9,7 @@ export interface TaskDagParkEntry {
 
 export interface TaskDagNodeRun {
   readonly id: string
+  readonly seq: number | null
   readonly nodeId: string
   readonly iteration: number
   readonly rerunCause: string | null
@@ -31,6 +32,7 @@ export function partitionTaskDagParkTargets(
   if (entries.length === 0) return new Set()
   const lineageViews: RunLineageView[] = runs.map((run) => ({
     id: run.id,
+    seq: run.seq,
     nodeId: run.nodeId,
     iteration: run.iteration,
     loopIter: 0,

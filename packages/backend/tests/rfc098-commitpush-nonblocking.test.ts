@@ -27,6 +27,7 @@
 //   (incl. the commit container + its session child) is settled — nothing
 //   left 'running'/'pending'.
 
+import { mintSequenceRun } from './helpers/rfc374Fixtures'
 import type { CommitPushMeta, WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -486,14 +487,13 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
 
       // Same node + same iteration, matching the real out-of-band clarify/review
       // redispatch shape. The fresh row id is the one-shot release token.
-      await h.db.insert(nodeRuns).values({
+      await mintSequenceRun(h.db, taskId, {
         id: ulid(),
-        taskId,
         nodeId: 'n1',
         status: 'pending',
         retryIndex: 0,
         iteration: 0,
-        rerunCause: 'clarify-answer',
+        cause: 'clarify-answer',
       })
       writeFileSync(join(h.stateDir, releaseN2), 'go')
 

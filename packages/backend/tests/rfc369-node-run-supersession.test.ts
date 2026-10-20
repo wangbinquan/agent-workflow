@@ -11,7 +11,7 @@
 //   ⑤ AC-7 收紧情形（ULID 不单调的晚提交行、遗留行）与 AC-8 调度器跳过已被取代的 pending 行。
 
 import { describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { IllegalMergeStateTransition, type MergeStateOrNull } from '@agent-workflow/shared'
 import type { NodeRunStatus } from '@agent-workflow/shared'
@@ -54,6 +54,7 @@ function row(
 ): SupersessionRow {
   return {
     id: mkId(n),
+    seq: opts.seq ?? null,
     nodeId: opts.nodeId ?? 'n',
     iteration: opts.iteration ?? 0,
     containerRunId: opts.containerRunId ?? null,
@@ -158,6 +159,7 @@ async function seedRun(
 ): Promise<string> {
   await db.insert(nodeRuns).values({
     id: r.id,
+    seq: r.seq,
     taskId,
     nodeId: r.nodeId,
     iteration: r.iteration,
@@ -198,6 +200,7 @@ describeEachProvider('RFC-369 §3 判据：生产 SQL 谓词与纯函数对拍',
         const parent = rows.length > 0 && random() < 0.3 ? pick(rows).id : null
         const r: SupersessionRow = {
           id: mkId(seed * 1000 + n),
+          seq: random() < 0.3 ? null : seed * 1000 + 31 - n,
           nodeId: pick(['a', 'b']),
           iteration: pick([0, 1]),
           containerRunId: rows.length > 0 && random() < 0.35 ? pick(rows).id : null,
@@ -270,6 +273,12 @@ describeEachProvider('RFC-369 AC-2 —— 同任务并发铸造不再互相中�
       await mintIn('b', mkId(11))
     }
     expect(bodyRuns).toEqual({ a: 1, b: 1 })
+    const allocated = await db
+      .select({ seq: nodeRuns.seq })
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.id, [mkId(10), mkId(11)])))
+    expect(allocated.every((run) => run.seq !== null)).toBe(true)
+    expect(new Set(allocated.map((run) => run.seq)).size).toBe(2)
     expect(
       (await db.select({ id: nodeRuns.id }).from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
         .length,
@@ -452,6 +461,7 @@ function candidate(
   } = {},
 ): FakeRow {
   return {
+    seq: null,
     id: mkId(n),
     nodeId: 'n',
     status,

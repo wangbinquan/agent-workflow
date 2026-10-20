@@ -1,8 +1,10 @@
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { and, desc, eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { z } from 'zod'
 
 import {
+  newestNodeRun,
   DAEMON_RESTART_ERROR_SUMMARY,
   isTerminalTaskStatus,
   type StartTask,
@@ -284,7 +286,7 @@ export async function inspectDigitalEmployeeHumanReviewSnapshot(
         eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID),
       ),
     )
-    .orderBy(desc(nodeRuns.id))
+    .orderBy(engineOf(db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
     .get()
   if (reviewRun?.status === 'awaiting_review') return 'waiting'
   if (reviewRun?.status === 'done') return 'approved'
@@ -707,21 +709,17 @@ function buildDigitalEmployeeExecution(
     const planPrompt = task.inputs[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]
     if (typeof planPrompt === 'string') {
       const expectedPath = parsedPlanOutputPath(planPrompt)
-      const planRunIds = new Set(
-        outcome.runs
-          .filter(
-            (run) => run.nodeId === DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID && run.status === 'done',
-          )
-          .map((run) => run.id),
+      const planRun = newestNodeRun(
+        outcome.runs.filter(
+          (run) => run.nodeId === DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID && run.status === 'done',
+        ),
       )
-      const planOutput = [...outcome.outputs]
-        .reverse()
-        .find(
-          (candidate) =>
-            candidate.active &&
-            candidate.portName === 'analysis-plan' &&
-            planRunIds.has(candidate.nodeRunId),
-        )
+      const planOutput = outcome.outputs.find(
+        (candidate) =>
+          candidate.active &&
+          candidate.portName === 'analysis-plan' &&
+          candidate.nodeRunId === planRun?.id,
+      )
       if (expectedPath === null || planOutput?.content.trim() !== expectedPath) {
         return resultFailure(
           'semantic',

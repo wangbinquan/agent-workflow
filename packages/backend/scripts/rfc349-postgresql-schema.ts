@@ -18,6 +18,8 @@ import {
 import {
   assertPostgresqlMigrationHead,
   createPostgresqlAdditiveUpgrade,
+  createPostgresqlColumnUpgrade,
+  logicalColumnAdditions,
   createPostgresqlRetirementUpgrade,
   createPostgresqlCheckUpgrade,
   createPostgresqlIndexPredicateUpgrade,
@@ -148,19 +150,22 @@ export async function generatePostgresqlMigrationHistory(
   const replacesOwners = logicalOwnerReplacements(upgrade.from.contract, target.contract).length > 0
   const replacesIndexPredicates =
     logicalIndexPredicateReplacements(upgrade.from.contract, target.contract).length > 0
-  const step = replacesIndexPredicates
-    ? createPostgresqlIndexPredicateUpgrade({ ...upgrade })
-    : replacesOwners
-      ? createPostgresqlOwnershipUpgrade({ ...upgrade })
-      : replacesSourceRevision
-        ? createPostgresqlSourceRevisionUpgrade({ ...upgrade })
-        : retiresTables
-          ? createPostgresqlRetirementUpgrade({ ...upgrade })
-          : replacesChecks
-            ? createPostgresqlCheckUpgrade({ ...upgrade })
-            : addsTables
-              ? createPostgresqlAdditiveUpgrade({ ...upgrade })
-              : createPostgresqlIndexUpgrade({ ...upgrade })
+  const addsColumns = logicalColumnAdditions(upgrade.from.contract, target.contract).length > 0
+  const step = addsColumns
+    ? createPostgresqlColumnUpgrade(upgrade)
+    : replacesIndexPredicates
+      ? createPostgresqlIndexPredicateUpgrade({ ...upgrade })
+      : replacesOwners
+        ? createPostgresqlOwnershipUpgrade({ ...upgrade })
+        : replacesSourceRevision
+          ? createPostgresqlSourceRevisionUpgrade({ ...upgrade })
+          : retiresTables
+            ? createPostgresqlRetirementUpgrade({ ...upgrade })
+            : replacesChecks
+              ? createPostgresqlCheckUpgrade({ ...upgrade })
+              : addsTables
+                ? createPostgresqlAdditiveUpgrade({ ...upgrade })
+                : createPostgresqlIndexUpgrade({ ...upgrade })
   const sqlFile = resolve(folder, step.sqlFile)
   const journalFile = resolve(folder, 'meta', `${step.id}.upgrade.json`)
   if (await writeImmutable(sqlFile, renderPostgresqlUpgradeSql(step))) created.push(sqlFile)

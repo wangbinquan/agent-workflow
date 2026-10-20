@@ -305,6 +305,8 @@ const PORTABLE_SQL_FUNCTIONS: Readonly<Record<string, string>> = {
   min: 'SQL-92 聚合（单参数形态）；多参数标量形态是 SQLite 专属，那一支由 max/greatest 一路处置。',
   substr:
     'SQL-92 `SUBSTRING` 的通用简写，两侧都原生提供 `substr(text, from, count)`，且都是 **1 起算、取 count 个字符**——语义逐字相同。RFC-359 W7 引入：已提交事件出站存储的 stage 筛子要按**字节**比消费者 id 前缀，不能用 `LIKE`（SQLite 的 LIKE 对 ASCII 大小写不敏感、PG 敏感，两侧筛出来的行会和各自 JS 投影的 stage 对不上，2026-09-07 双引擎对拍实测）。两个引擎上的真实执行由 `rfc359-w7-committed-events-conformance.test.ts` 覆盖。',
+  row_number:
+    'SQL window function; both providers number each ORDER BY partition from one. RFC-374 backfill uses it only for legacy rows and has dual-provider coverage.',
   sum: 'SQL-92 聚合，两侧同名同参。（int8 归一同 avg，另有守卫。）',
 }
 

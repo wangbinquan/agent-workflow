@@ -160,6 +160,7 @@ async function hasUndispatchedDesignerQuestions(
   const runs = await db
     .select({
       id: nodeRuns.id,
+      seq: nodeRuns.seq,
       nodeId: nodeRuns.nodeId,
       iteration: nodeRuns.iteration,
       rerunCause: nodeRuns.rerunCause,
@@ -185,6 +186,7 @@ async function hasUndispatchedDesignerQuestions(
   const outputRunIds = new Set(outputRows.map((row) => row.nodeRunId))
   const lineage: readonly TaskRecoveryQuestionRunLineage[] = runs.map((run) => ({
     id: run.id,
+    seq: run.seq,
     nodeId: run.nodeId,
     iteration: run.iteration,
     loopIter: 0,
@@ -262,6 +264,7 @@ async function loadLifecycleInvariantSnapshots(
         .select({
           taskId: nodeRuns.taskId,
           id: nodeRuns.id,
+          seq: nodeRuns.seq,
           nodeId: nodeRuns.nodeId,
           status: nodeRuns.status,
           iteration: nodeRuns.iteration,
@@ -342,6 +345,7 @@ async function loadLifecycleInvariantSnapshots(
       const taskRuns = runsByTask.get(task.taskId) ?? []
       const lineage: readonly TaskRecoveryQuestionRunLineage[] = taskRuns.map((run) => ({
         id: run.id,
+        seq: run.seq,
         nodeId: run.nodeId,
         iteration: run.iteration,
         loopIter: 0,
@@ -463,6 +467,7 @@ async function loadStuckTaskSnapshots(
     const runRows = await db
       .select({
         id: nodeRuns.id,
+        seq: nodeRuns.seq,
         nodeId: nodeRuns.nodeId,
         status: nodeRuns.status,
         pid: nodeRuns.pid,
@@ -660,6 +665,7 @@ export function createTaskRecoveryOperations(
       const runs = await db
         .select({
           id: nodeRuns.id,
+          seq: nodeRuns.seq,
           taskId: nodeRuns.taskId,
           nodeId: nodeRuns.nodeId,
           status: nodeRuns.status,
@@ -737,6 +743,7 @@ export function createTaskRecoveryOperations(
         .where(inArray(tasks.status, ['running', 'pending']))
       const runProjectionFields = {
         id: nodeRuns.id,
+        seq: nodeRuns.seq,
         taskId: nodeRuns.taskId,
         nodeId: nodeRuns.nodeId,
         status: nodeRuns.status,
@@ -818,6 +825,7 @@ export function createTaskRecoveryOperations(
       const rows = await db
         .select({
           id: nodeRuns.id,
+          seq: nodeRuns.seq,
           taskId: nodeRuns.taskId,
           nodeId: nodeRuns.nodeId,
           status: nodeRuns.status,
@@ -847,6 +855,7 @@ export function createTaskRecoveryOperations(
       const rows = await db
         .select({
           id: nodeRuns.id,
+          seq: nodeRuns.seq,
           taskId: nodeRuns.taskId,
           nodeId: nodeRuns.nodeId,
           status: nodeRuns.status,

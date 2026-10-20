@@ -1267,6 +1267,7 @@ export type CommitPushMeta = z.infer<typeof CommitPushMetaSchema>
 
 export const NodeRunSchema = z.object({
   id: z.string(),
+  seq: z.number().int().nullable().default(null),
   taskId: z.string(),
   nodeId: z.string(),
   parentNodeRunId: z.string().nullable(),

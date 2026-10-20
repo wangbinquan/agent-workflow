@@ -7,8 +7,11 @@
 // (services/runner). Caveats surfaced to the caller: plain stash trees omit
 // untracked files; after worktree-GC the snapshot objects may be pruned.
 
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
+
 export interface NodeRunRef {
   id: string
+  seq: number | null
   preSnapshot: string | null
   startedAt: number | null
 }
@@ -27,7 +30,7 @@ export function resolveNodeScope(runs: NodeRunRef[], nodeRunId: string): NodeSco
 
   const writes = runs
     .filter((r) => r.preSnapshot !== null && r.preSnapshot !== '')
-    .sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0) || a.id.localeCompare(b.id))
+    .sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0) || compareNodeRunMintOrder(a, b))
   const idx = writes.findIndex((r) => r.id === nodeRunId)
   const next = writes[idx + 1]
   if (next !== undefined && next.preSnapshot !== null && next.preSnapshot !== '') {
@@ -48,7 +51,12 @@ export function resolveNodeScope(runs: NodeRunRef[], nodeRunId: string): NodeSco
  * (warn-and-continue parity with the resume rollback path in task.ts).
  */
 export function perRepoNodeRuns(
-  rows: Array<{ id: string; startedAt: number | null; preSnapshotReposJson: string | null }>,
+  rows: Array<{
+    id: string
+    seq: number | null
+    startedAt: number | null
+    preSnapshotReposJson: string | null
+  }>,
   repoDir: string,
 ): NodeRunRef[] {
   return rows.map((r) => {
@@ -62,6 +70,6 @@ export function perRepoNodeRuns(
         sha = null
       }
     }
-    return { id: r.id, preSnapshot: sha, startedAt: r.startedAt }
+    return { id: r.id, seq: r.seq, preSnapshot: sha, startedAt: r.startedAt }
   })
 }

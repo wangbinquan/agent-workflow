@@ -810,6 +810,14 @@ describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
     expect(program.match(/\.from\(nodeRuns\)/g) ?? []).toHaveLength(1)
     expect(program).toContain('.where(eq(nodeRuns.id, record.containerRunId!))')
     expect(program.match(/\.insert\(nodeRuns\)/g) ?? []).toHaveLength(1)
+    expect(program.match(/\.insert\(nodeRunSeqAllocations\)/g) ?? []).toHaveLength(1)
+    // RFC-374: the allocation is the immediately preceding database statement.
+    const allocationAt = program.indexOf('.insert(nodeRunSeqAllocations)')
+    const runAt = program.indexOf('.insert(nodeRuns)')
+    expect(allocationAt).toBeLessThan(runAt)
+    expect(
+      program.slice(allocationAt, runAt).match(/\.(?:insert|update|delete|select)\(/g),
+    ).toEqual(['.insert('])
     // 事务内工厂驱动的必须是上面这同一个 program，而不是自己再抄一份写序列。
     expect(src.slice(factoryAt)).toContain('nodeRunMintProgram(tx, input)')
     expect(src.slice(factoryAt)).not.toContain('.insert(nodeRuns)')

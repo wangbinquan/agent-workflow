@@ -550,19 +550,25 @@ export async function restoreLogicalDatabaseArtifact(input: {
         entry,
         chunkIndex,
       })
+      // RFC-374 V8: the verified source defines the INSERT column list. Appended
+      // target columns must receive their database NULL/literal default.
+      const copyTable = {
+        ...targetTable,
+        columns: targetTable.columns.slice(0, table.columns.length),
+      }
       const targetChunk = createLogicalTableChunk({
         operationId: input.restoreOperationId,
         contract: targetContract,
-        table: targetTable,
+        table: copyTable,
         chunkIndex,
         rows:
           targetContract === input.contract
             ? sourceChunk.payload.rows
             : sourceChunk.payload.rows.map((row) =>
-                encodeLogicalRow(targetTable, decodeLogicalRow(table, row)),
+                encodeLogicalRow(copyTable, decodeLogicalRow(table, row)),
               ),
       })
-      await input.target.copyChunk(targetTable, targetChunk, now())
+      await input.target.copyChunk(copyTable, targetChunk, now())
       chunksRestored += 1
       rowsRestored += targetChunk.payload.rows.length
       input.onProgress?.({

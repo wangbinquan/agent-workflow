@@ -12,6 +12,7 @@ import { agentNodeOptionsFromSnapshot, resolveNodeNameFromSnapshot } from '../sr
 
 function makeRun(id: string, nodeId: string): NodeRun {
   return {
+    seq: null,
     id,
     taskId: 't',
     nodeId,

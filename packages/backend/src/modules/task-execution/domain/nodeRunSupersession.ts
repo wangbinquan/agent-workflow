@@ -14,10 +14,12 @@
 //
 // 结构性被取代的行，只在 merge_state 处于 `SUPERSEDABLE_MERGE_STATES` 时才被围栏 / 重放排除所作用。
 
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import type { MergeStateOrNull } from '@agent-workflow/shared'
 
 export interface SupersessionRow {
   readonly id: string
+  readonly seq: number | null
   readonly nodeId: string
   readonly iteration: number
   readonly containerRunId: string | null
@@ -39,7 +41,7 @@ function supersededTopLevel(row: SupersessionRow, rows: readonly SupersessionRow
       newer.nodeId === row.nodeId &&
       newer.iteration === row.iteration &&
       newer.containerRunId === row.containerRunId &&
-      newer.id > row.id &&
+      compareNodeRunMintOrder(newer, row) > 0 &&
       (newer.shardKey === null || newer.shardKey === row.shardKey),
   )
 }

@@ -186,8 +186,10 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       // (generation row the run hangs off + derived root→here breadcrumb).
       expect(cols).toContain('container_run_id')
       expect(cols).toContain('scope_path')
+      // RFC-374 (0260): nullable per-task mint sequence.
+      expect(cols).toContain('seq')
       expect(cols.length).toBe(
-        cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 2,
+        cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 2 + 1,
       )
 
       // 4b. row count unchanged.

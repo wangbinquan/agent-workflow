@@ -110,6 +110,7 @@ export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore
     return await this.db
       .select({
         id: nodeRuns.id,
+        seq: nodeRuns.seq,
         status: nodeRuns.status,
         injectedMemoriesJson: nodeRuns.injectedMemoriesJson,
       })

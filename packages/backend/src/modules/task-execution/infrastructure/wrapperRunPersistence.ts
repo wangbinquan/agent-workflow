@@ -1,5 +1,6 @@
 // RFC-359 W4-B1 —— wrapper run 持久化：一份实现，两个 provider 共用。
 
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -29,7 +30,7 @@ export class DrizzleWrapperRunPersistence implements WrapperRunPersistence {
           eq(nodeRuns.iteration, input.iteration),
         ),
       )
-      .orderBy(desc(nodeRuns.id))
+      .orderBy(engineOf(this.db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
       .limit(1)
     const row = rows[0]
     if (

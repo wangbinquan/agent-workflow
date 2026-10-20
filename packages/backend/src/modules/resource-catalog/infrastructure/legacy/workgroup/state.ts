@@ -14,6 +14,7 @@
 // G3 grep-locks (rfc217-architecture-locks.test.ts) keep gate-field literals
 // and retired-slot accesses out of every other module.
 
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import {
   DwStateSchema,
@@ -447,7 +448,7 @@ export async function loadDbState(db: DbClient, taskId: string): Promise<EngineD
             inArray(nodeRuns.nodeId, [WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID]),
           ),
         )
-        .orderBy(asc(nodeRuns.id)),
+        .orderBy(engineOf(db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id)),
       // RFC-187 F3 (Codex design-gate P0-1) — key the leader-clarify park on the
       // clarify SESSION, not the __wg_clarify__ run's shardKey: the run is minted
       // BEFORE the session/round in a non-atomic sequence, so a crash between them

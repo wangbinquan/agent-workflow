@@ -53,7 +53,7 @@ function baseTask(overrides: Partial<OutcomeTaskRow> = {}): OutcomeTaskRow {
 }
 
 function run(over: Partial<OutcomeRunRow> & { id: string; nodeId: string }): OutcomeRunRow {
-  return { iteration: 0, parentNodeRunId: null, status: 'done', ...over }
+  return { seq: null, iteration: 0, parentNodeRunId: null, status: 'done', ...over }
 }
 
 describe('RFC-243 T4 — workflow projection (pickUpstreamSourceRun口径)', () => {

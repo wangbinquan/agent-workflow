@@ -77,8 +77,9 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
         ['', '', '/workspace', 'base-sha'],
         ['packages/api', 'api', '/workspace/packages/api', 'api-sha'],
       ],
-      [['run-1', 'pre-sha', null, 100, null]],
-      [['run-1', 'pre-sha', null, 100, '{"baselineCommit":"wrapper-sha"}']],
+      // RFC-374: the node-run projection carries `seq` right after `id`.
+      [['run-1', null, 'pre-sha', null, 100, null]],
+      [['run-1', null, 'pre-sha', null, 100, '{"baselineCommit":"wrapper-sha"}']],
     ])
     const params = createCapabilityParamRead(fake.db)
     const workspace = createCodeWorkspaceRead(fake.db)
@@ -98,6 +99,7 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
     })
     await expect(workspace.listNodeRuns('task-1')).resolves.toEqual([
       {
+        seq: null,
         id: 'run-1',
         preSnapshot: 'pre-sha',
         preSnapshotReposJson: null,

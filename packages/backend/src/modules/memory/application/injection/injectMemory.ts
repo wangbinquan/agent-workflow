@@ -6,6 +6,7 @@
 // 不从 memory public query 暴露正文。RFC-041 的 live-read 语义保持不变——每次 runNode
 // 重新取当前 approved 的行，中途新批准的记忆下一次 runNode 即生效。
 
+import { compareNodeRunMintOrder, nodeRunOrderAnchor } from '@agent-workflow/shared'
 import type { Agent, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import type { MemoryInjectionReadStore, MemoryInjectionRecord } from '../ports/injectionReadStore'
 import {
@@ -288,11 +289,12 @@ export async function loadInjectedSnapshotFromFirstAttempt(
   },
 ): Promise<InjectedMemorySnapshot[] | null> {
   const candidates = await store.listRunRecords(ctx)
-  // Walk the in-scope top-level rows up to runId in id-order; the anchor is the
+  // Walk the in-scope top-level rows up to the runId anchor in mint order; the anchor is the
   // LATEST generation start (first row, or a row whose predecessor was `done`).
+  const anchorKey = nodeRunOrderAnchor(candidates, ctx.runId)
   const upToRun = candidates
-    .filter((r) => r.id <= ctx.runId)
-    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .filter((r) => compareNodeRunMintOrder(r, anchorKey) <= 0)
+    .sort(compareNodeRunMintOrder)
   let anchor: { id: string; injectedMemoriesJson: string | null } | undefined
   let prevStatus: string | undefined
   for (const r of upToRun) {

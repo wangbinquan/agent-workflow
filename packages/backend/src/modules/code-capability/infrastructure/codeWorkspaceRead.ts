@@ -16,6 +16,7 @@ import type {
 function nodeProjection() {
   return {
     id: nodeRuns.id,
+    seq: nodeRuns.seq,
     preSnapshot: nodeRuns.preSnapshot,
     preSnapshotReposJson: nodeRuns.preSnapshotReposJson,
     startedAt: nodeRuns.startedAt,
@@ -74,7 +75,11 @@ export function createCodeWorkspaceRead(db: ProviderNeutralDatabase): CodeWorksp
         .select(nodeProjection())
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
-        .orderBy(engineOf(db).ascNullsFirst(nodeRuns.startedAt), asc(nodeRuns.id))
+        .orderBy(
+          engineOf(db).ascNullsFirst(nodeRuns.startedAt),
+          engineOf(db).ascNullsFirst(nodeRuns.seq),
+          asc(nodeRuns.id),
+        )
     },
     async findNodeRun(nodeRunId): Promise<CodeNodeRunSnapshot | null> {
       const rows = await db

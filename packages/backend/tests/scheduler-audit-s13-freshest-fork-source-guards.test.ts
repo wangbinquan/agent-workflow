@@ -205,7 +205,7 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // The scoped regex proves both occurrences are tied to __repo_prep__ and
     // the exact inventory makes any third occurrence flip red.
     const prepCausalReads = TASK_SRC.match(
-      /eq\(nodeRuns\.nodeId, REPO_PREP_NODE_ID\)\)\)\s*\.orderBy\(desc\(nodeRuns\.retryIndex\), desc\(nodeRuns\.id\)\)/g,
+      /eq\(nodeRuns\.nodeId, REPO_PREP_NODE_ID\)\)\)\s*\.orderBy\(\s*desc\(nodeRuns\.retryIndex\),\s*engineOf\([\w.]+\)\.descNullsLast\(nodeRuns\.seq\),\s*desc\(nodeRuns\.id\),?\s*\)/g,
     )
     expect(prepCausalReads).toHaveLength(2)
     expect(srcInventory(FORK_MARKER)).toEqual({

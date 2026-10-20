@@ -38,7 +38,7 @@ import type {
   WorkflowDefinition,
   NodeKind,
 } from '@agent-workflow/shared'
-import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
+import { compareNodeRunMintOrder, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 
 import type {
   TaskLifecycleInvariantScope,
@@ -372,11 +372,11 @@ function checkT3(ctx: TaskScanContext): LifecycleInvariantFinding[] {
   // `failed` output node still reports.
   const outputNodeIdSet = new Set(outputNodes)
   const outputRuns = ctx.nodeRuns.filter((run) => outputNodeIdSet.has(run.nodeId))
-  const freshestByNode = new Map<string, { id: string; status: string }>()
+  const freshestByNode = new Map<string, { id: string; seq: number | null; status: string }>()
   for (const r of outputRuns) {
     if (r.parentNodeRunId !== null) continue // shard/child rows never settle a node
     const cur = freshestByNode.get(r.nodeId)
-    if (cur === undefined || r.id > cur.id) freshestByNode.set(r.nodeId, r)
+    if (cur === undefined || compareNodeRunMintOrder(r, cur) > 0) freshestByNode.set(r.nodeId, r)
   }
   const missing = outputNodes.filter((n) => {
     const latest = freshestByNode.get(n)

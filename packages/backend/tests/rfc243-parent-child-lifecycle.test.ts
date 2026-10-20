@@ -277,9 +277,17 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
 describe('RFC-243 §4.2 — resume/rollback carve-outs', () => {
   test('selectResumeRollbackTargets excludes call rows', () => {
     const rows = [
-      { id: '01A', nodeId: 'work', parentNodeRunId: null, status: 'failed', childTaskId: null },
+      {
+        seq: null,
+        id: '01A',
+        nodeId: 'work',
+        parentNodeRunId: null,
+        status: 'failed',
+        childTaskId: null,
+      },
       {
         id: '01B',
+        seq: null,
         nodeId: 'call',
         parentNodeRunId: null,
         status: 'interrupted',

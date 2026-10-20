@@ -4,7 +4,18 @@
 // **只用在 SELECT 的 WHERE 里**：drizzle 在 UPDATE 里渲染外层列可能不带表名限定，相关子查询里的
 // 外层列会误绑到内层 alias（设计门 r2 P3-2）。
 
-import { and, eq, exists, gt, isNull, or, sql, type AnyColumn, type SQL } from 'drizzle-orm'
+import {
+  and,
+  eq,
+  exists,
+  gt,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+  type AnyColumn,
+  type SQL,
+} from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -15,6 +26,7 @@ type QueryBuilder = ProviderNeutralDatabase | DatabaseTransaction
 
 type NodeRunColumns = {
   readonly id: AnyColumn
+  readonly seq: AnyColumn
   readonly taskId: AnyColumn
   readonly nodeId: AnyColumn
   readonly iteration: AnyColumn
@@ -39,7 +51,11 @@ function newerGenerationExists(db: QueryBuilder, target: NodeRunColumns, aliasNa
           eq(newer.nodeId, target.nodeId),
           eq(newer.iteration, target.iteration),
           nullableEquals(newer.containerRunId, target.containerRunId),
-          gt(newer.id, target.id),
+          or(
+            and(isNotNull(newer.seq), or(isNull(target.seq), gt(newer.seq, target.seq))),
+            // s1-allow-id-order: NULL/NULL legacy fallback, removed by S1b.
+            and(isNull(newer.seq), isNull(target.seq), gt(newer.id, target.id)),
+          ),
           or(isNull(newer.shardKey), eq(newer.shardKey, target.shardKey)),
         ),
       ),

@@ -32,6 +32,7 @@ import { __testToFlowNodes as toFlowNodes } from '../src/components/canvas/Workf
 
 function run(over: Partial<NodeRun> & Pick<NodeRun, 'id'>): NodeRun {
   return {
+    seq: null,
     nodeId: 'clr',
     parentNodeRunId: null,
     clarifyNavKind: null,
@@ -137,7 +138,7 @@ describe('deriveClarifyNodeNav (pure freshest-run)', () => {
   })
 
   test('absent clarifyNavKind (older daemon) → not clickable', () => {
-    const runs = [{ id: '01A', nodeId: 'clr', parentNodeRunId: null } as NodeRun]
+    const runs = [{ seq: null, id: '01A', nodeId: 'clr', parentNodeRunId: null } as NodeRun]
     expect(deriveClarifyNodeNav(runs, 'clr')).toBeNull()
   })
 })

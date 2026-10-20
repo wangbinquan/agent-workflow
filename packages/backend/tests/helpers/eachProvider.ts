@@ -157,6 +157,10 @@ export interface ProviderHarness extends ProviderDatabaseHarness {
 }
 
 export interface DescribeEachProviderOptions {
+  /** Explicit fixture-source engines (for cross-provider copy tests); targets retain the environment defaults. */
+  readonly providers?: readonly TestProvider[]
+  /** Frozen SQLite migration prefix for historical-upgrade fixtures; PostgreSQL uses its own history. */
+  readonly sqliteMigrationsFolder?: string
   /** 同 `createInMemoryDb` 的 `bootstrap`：'required' 时不把 auth_login_policy 标成已 bootstrap。 */
   readonly bootstrap?: 'required'
   /** 在 setup 中创建的独立数据库数量；每个用例分别重置，默认 1。 */
@@ -475,7 +479,7 @@ export function describeEachProvider(
   if (!Number.isSafeInteger(databaseCount) || databaseCount < 1) {
     throw new RangeError('DescribeEachProviderOptions.databaseCount 必须是正安全整数')
   }
-  for (const provider of resolveTestProviders(process.env)) {
+  for (const provider of options.providers ?? resolveTestProviders(process.env)) {
     describe(`${name} [${provider}]`, () => {
       if (provider === 'sqlite') registerSqlite(body, options, databaseCount)
       else registerPostgresql(body, options, databaseCount, name)
@@ -492,7 +496,7 @@ function registerSqlite(
   let restoreProvider: (() => void) | undefined
   const restoreDatabase = (state: HarnessState) => {
     const db = createInMemoryDb(
-      MIGRATIONS,
+      options.sqliteMigrationsFolder ?? MIGRATIONS,
       options.bootstrap === undefined ? {} : { bootstrap: options.bootstrap },
     )
     state.db = db

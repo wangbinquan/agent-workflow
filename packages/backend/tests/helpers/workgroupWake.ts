@@ -71,6 +71,7 @@ function hostRunsForBudget(
     if (budgetUsed <= 0) return []
     return [
       {
+        seq: null,
         ...base,
         id: 'wake-budget-leader',
         nodeId: WORKGROUP_TURN_LEADER_NODE_ID,
@@ -81,6 +82,7 @@ function hostRunsForBudget(
   // free-collab 预算 = 成员 run 计数。
   return Array.from({ length: Math.max(0, budgetUsed) }, (_unused, index) => ({
     ...base,
+    seq: null,
     id: `wake-budget-member-${index}`,
     nodeId: WORKGROUP_TURN_MEMBER_NODE_ID,
     wgRound: null,

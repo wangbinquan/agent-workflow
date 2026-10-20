@@ -175,7 +175,7 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): Observa
         .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId, retryIndex: nodeRuns.retryIndex })
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
-        .orderBy(asc(nodeRuns.id))
+        .orderBy(engineOf(db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id))
         .limit(MAX_ATTEMPTS)
         .all()
       return rows.map((row) => ({

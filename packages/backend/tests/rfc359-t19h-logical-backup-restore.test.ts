@@ -109,6 +109,10 @@ async function historicalArtifact() {
         `INSERT INTO code_artifacts (id, repo_path, commit_sha, base_sha, digest, keep_ref, generation, ref_count, state, created_at)
          VALUES ('t19h-restored-archive', '/tmp/repo', 'old-commit', 'old-base', 'sha256:old', 'refs/keep/t19h', 1, 0, 'live', 43)`,
       )
+      // RFC-374: explicit old columns avoid asking the frozen schema for HEAD seq.
+      sqlite.exec(
+        `INSERT INTO node_runs (id, task_id, node_id, status) VALUES ('t19h-old-run', 't19h-restored-task', 'n', 'done')`,
+      )
       writeFileSync(sourcePath, sqlite.serialize())
     } finally {
       sqlite.close()
@@ -273,6 +277,9 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
       },
       now: () => 59,
     })
+    const run = receiver.chunks.find((item) => item.table.id === 'node_runs')!
+    expect(run.table.columns.some((column) => column.name === 'seq')).toBe(false)
+    expect(decodeLogicalRow(run.table, run.chunk.payload.rows[0]!).id).toBe('t19h-old-run')
     const task = receiver.chunks.find((item) => item.table.id === 'tasks')!
     const oldTask = history.root.contract.tables.find((table) => table.id === 'tasks')!
     const original = fixture.preservedArchive.readChunk(oldTask, 0)
@@ -482,6 +489,12 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
           now: () => 67,
         })
         expect(await pool.unsafe('SELECT * FROM agent_workflow.tasks ORDER BY id')).toEqual(oldRows)
+        expect(await pool.unsafe('SELECT id, seq FROM agent_workflow.node_runs')).toEqual([
+          { id: 't19h-old-run', seq: null },
+        ])
+        expect(await pool.unsafe('SELECT * FROM agent_workflow.node_run_seq_allocations')).toEqual(
+          [],
+        )
         for (const table of [
           'sc_repository_sources',
           'sc_repository_snapshots',

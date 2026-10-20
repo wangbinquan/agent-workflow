@@ -1,4 +1,5 @@
 export interface NodeActivationRunSnapshot {
+  readonly seq: number | null
   readonly id: string
   readonly nodeId: string
   readonly status: string

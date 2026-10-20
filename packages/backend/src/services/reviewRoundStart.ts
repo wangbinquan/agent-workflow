@@ -19,6 +19,7 @@
 //
 // PURE module: no DB / IO. Tested exhaustively in review-round-start.test.ts.
 
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import type { DocVersionDecision } from '@agent-workflow/shared'
 
 /** The per-version facts this module needs (a projection of a doc_versions row). */
@@ -82,11 +83,21 @@ export function deriveReviewRoundTiming(
  * `asc(started_at)` NULL-first behaviour for never-started rows).
  */
 export function compareNodeRunsForTimeline(
-  a: { id: string; startedAt: number | null; reviewRoundStartedAt?: number | null },
-  b: { id: string; startedAt: number | null; reviewRoundStartedAt?: number | null },
+  a: {
+    id: string
+    seq: number | null
+    startedAt: number | null
+    reviewRoundStartedAt?: number | null
+  },
+  b: {
+    id: string
+    seq: number | null
+    startedAt: number | null
+    reviewRoundStartedAt?: number | null
+  },
 ): number {
   const ka = a.reviewRoundStartedAt ?? a.startedAt ?? 0
   const kb = b.reviewRoundStartedAt ?? b.startedAt ?? 0
   if (ka !== kb) return ka - kb
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  return compareNodeRunMintOrder(a, b)
 }

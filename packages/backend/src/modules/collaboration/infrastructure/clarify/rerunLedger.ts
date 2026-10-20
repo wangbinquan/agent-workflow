@@ -9,13 +9,19 @@
 // dependency order (it imports only schema/shared), so any of them may import it.
 
 import type { nodeRuns, taskQuestions } from '@/db/schema'
-import { resolveHandlerRun, type RunLineageView } from '@agent-workflow/shared'
+import {
+  compareNodeRunMintOrder,
+  nodeRunOrderAnchor,
+  resolveHandlerRun,
+  type RunLineageView,
+} from '@agent-workflow/shared'
 
 // RFC-311：本 ledger 消费的运行行列合同（dispatch 侧的四处 per-task 查询按此
 // 投影，不再携带 prompt_text / iso JSON 大列;新消费列先在此登记）。
 type NodeRunRow = Pick<
   typeof nodeRuns.$inferSelect,
   | 'id'
+  | 'seq'
   | 'nodeId'
   | 'status'
   | 'iteration'
@@ -180,6 +186,7 @@ function toLineageViews(
 ): RunLineageView[] {
   return runs.map((r) => ({
     id: r.id,
+    seq: r.seq,
     nodeId: r.nodeId,
     iteration: r.iteration,
     loopIter: 0,
@@ -300,6 +307,7 @@ export function isTargetNodeConsumed(
   outputRunIds: ReadonlySet<string>,
 ): boolean {
   if (sinceRunId === null) return false
+  const anchor = nodeRunOrderAnchor(runs, sinceRunId)
   return runs.some(
     (r) =>
       r.nodeId === targetNodeId &&
@@ -319,6 +327,6 @@ export function isTargetNodeConsumed(
       // Literal ids (not the WG_*_NODE_ID consts) keep this leaf module free of a
       // workgroupLaunch import; rfc186-clarify-aging.test.ts locks the equality.
       (outputRunIds.has(r.id) || r.nodeId === '__wg_leader__' || r.nodeId === '__wg_member__') &&
-      r.id >= sinceRunId,
+      compareNodeRunMintOrder(r, anchor) >= 0,
   )
 }

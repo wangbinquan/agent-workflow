@@ -11,7 +11,7 @@
 // Pure legacy compatibility primitive: it owns a structural row projection
 // and has no DB or scheduler dependency.
 
-import type { NodeRunStatus } from '@agent-workflow/shared'
+import { isNewerNodeRun, type NodeRunOrderKey, type NodeRunStatus } from '@agent-workflow/shared'
 
 /**
  * RFC-311 — the freshness/frontier column contract. Narrowed from the full
@@ -20,7 +20,7 @@ import type { NodeRunStatus } from '@agent-workflow/shared'
  * columns; the compiler points here the moment a frontier consumer starts
  * needing a column the projections do not carry.
  */
-export interface NodeRunRow {
+export interface NodeRunRow extends NodeRunOrderKey {
   readonly id: string
   readonly nodeId: string
   readonly status: NodeRunStatus
@@ -149,36 +149,12 @@ export function computeReadyNodes<N extends { id: string }>(
   return ready
 }
 
-/**
- * Order two node_run rows by "freshness". The freshest row drives the node's
- * state in the scheduler (latestPerNode) and every shared picker below.
- *
- * RFC-074 PR-C: pure ULID-id ordering. The newest-inserted row always wins.
- * RFC-096 (audit S-13 / WP-3): moved here from scheduler.ts — the ordering
- * authority lives with the freshness primitives; the generic is widened to
- * `{ id: string }` (only the id is compared) so projected row shapes (e.g.
- * lifecycleRepair's RepairNodeRunRow) can use it too.
- *
- * Why pure id is correct (and why the old `(clarifyIteration, retryIndex, id)`
- * triple is gone):
- *   - node_run ids are ULIDs, monotonically increasing in creation order. Every
- *     rerun that should "win" — a clarify-driven rerun, a cross-clarify rerun,
- *     a single-node process retry — is by construction minted AFTER the rows it
- *     supersedes, so it always has the largest id.
- *   - `(retryIndex, id)` was considered and rejected: a retry storm on a stale
- *     row could inflate retryIndex above a later low-retry clarify rerun and
- *     wrongly shadow it. Pure id has no such failure mode.
- *
- * The PR-A baseline suite (`isfresher-noderun-baseline.test.ts`) locks that
- * this ordering is byte-equivalent to the retired triple on causally-minted
- * rows; the C-group adds the id-equivalence cross-check.
- */
-export function isFresherNodeRun<R extends { id: string }>(
+/** RFC-374: shared seq-first mint order; NULL legacy rows retain their ID order. */
+export function isFresherNodeRun<R extends NodeRunOrderKey>(
   candidate: R,
   incumbent: R | undefined,
 ): boolean {
-  if (incumbent === undefined) return true
-  return candidate.id > incumbent.id
+  return isNewerNodeRun(candidate, incumbent)
 }
 
 // RFC-354 retired `pickUpstreamSourceRun` / `pickVisibleUpstreamRun` — the
@@ -197,7 +173,7 @@ export function isFresherNodeRun<R extends { id: string }>(
  * Everything inside a task reads by frame (`pickFrameSourceRun`).
  */
 export function pickLatestSettledRun<
-  R extends { id: string; parentNodeRunId: string | null; status: string },
+  R extends NodeRunOrderKey & { id: string; parentNodeRunId: string | null; status: string },
 >(rows: readonly R[]): R | undefined {
   let run: R | undefined
   for (const r of rows) {
@@ -215,7 +191,7 @@ export function pickLatestSettledRun<
  * is not done, instead of silently reading an older done row).
  */
 export function pickLatestRunInFrame<
-  R extends {
+  R extends NodeRunOrderKey & {
     id: string
     iteration: number
     parentNodeRunId: string | null
@@ -240,7 +216,7 @@ export function pickLatestRunInFrame<
  * frame `resolveSourceFrame` (task-execution/domain/environmentChain) walked
  * to for a captured free variable / wrapper parameter. Within that frame the
  * answer is the freshest SETTLED (done ∪ skipped, RFC-306) top-level row by
- * pure id order. There is deliberately no fallback to an earlier round or a
+ * mint seq order. There is deliberately no fallback to an earlier round or a
  * neighbouring container: a value that is not in the environment is not a
  * value, and the caller surfaces `closure-binding-unresolved`.
  *
@@ -249,7 +225,7 @@ export function pickLatestRunInFrame<
  * moved to frames.
  */
 export function pickFrameSourceRun<
-  R extends {
+  R extends NodeRunOrderKey & {
     id: string
     iteration: number
     parentNodeRunId: string | null
@@ -290,7 +266,7 @@ export function isSettledRunStatus(row: { status: string }): boolean {
 
 /**
  * Pick the freshest top-level row visible to a consumer iteration, regardless
- * of status. Highest visible iteration wins, then pure ULID order. Review
+ * of status. Highest visible iteration wins, then mint seq order. Review
  * dispatch uses this form so a newer pending/failed row fails loudly instead
  * of silently falling back to an older done document; ordinary data inputs use
  * the done-only shell above.
@@ -334,11 +310,16 @@ export function consumedMapsEqual(a: Record<string, string>, b: Record<string, s
  *     scheduler-audit-s21 test 1 pre-seed hashless done children and assert
  *     zero re-spawn). Symmetrically a NULL `valueHash` (shared row / caller
  *     without a value) matches any stored hash.
- *   - freshest wins: among the surviving rows, pure ULID order
+ *   - freshest wins: among the surviving rows, mint seq order
  *     (isFresherNodeRun).
  */
 export function pickReusableShardRun<
-  R extends { id: string; status: string; shardKey: string | null; shardValueHash: string | null },
+  R extends NodeRunOrderKey & {
+    id: string
+    status: string
+    shardKey: string | null
+    shardValueHash: string | null
+  },
 >(rows: readonly R[], opts: { shardKey: string | null; valueHash: string | null }): R | undefined {
   let best: R | undefined
   for (const r of rows) {
@@ -387,7 +368,7 @@ export function buildFreshestSettledPerNode(
 
 /**
  * RFC-096 (audit S-13 / WP-3) — the ONE sanctioned way to pick "the freshest
- * run" out of a row set. Ordering is always pure ULID id (isFresherNodeRun);
+ * run" out of a row set. Ordering is always mint seq (isFresherNodeRun);
  * the only knobs are explicit filter predicates. nodeId / iteration filtering
  * belongs in the caller's SQL WHERE — this picker deliberately does not group.
  *
@@ -398,7 +379,7 @@ export function buildFreshestSettledPerNode(
  * selected; mark-running rewrites startedAt and made the order drift).
  */
 export function pickFreshestRun<
-  R extends { id: string; parentNodeRunId: string | null; status: string },
+  R extends NodeRunOrderKey & { id: string; parentNodeRunId: string | null; status: string },
 >(
   rows: readonly R[],
   opts: { topLevelOnly?: boolean; statusIn?: readonly string[] } = {},

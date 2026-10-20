@@ -123,8 +123,8 @@ describe('RFC-349 PostgreSQL runtime memory injection', () => {
     ])
     const fake = fixture([
       [
-        ['run-1', 'failed', snapshot],
-        ['run-2', 'running', null],
+        ['run-1', null, 'failed', snapshot],
+        ['run-2', null, 'running', null],
       ],
     ])
 

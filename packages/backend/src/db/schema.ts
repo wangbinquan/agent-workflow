@@ -2140,6 +2140,14 @@ export const taskSpaceNodes = sqliteTable(
 // node_runs — one row per execution of a node. Multi-process fan-out and loop
 // iterations and retries each produce additional rows.
 // -----------------------------------------------------------------------------
+// RFC-374: transaction-local identity allocation, retained independently of task archival.
+export const nodeRunSeqAllocations = sqliteTable('node_run_seq_allocations', {
+  seq: integer('seq').primaryKey({ autoIncrement: true }),
+  taskId: text('task_id').notNull(),
+  nodeRunId: text('node_run_id').notNull(),
+  allocatedAt: integer('allocated_at').notNull(),
+})
+
 export const nodeRuns = sqliteTable(
   'node_runs',
   {
@@ -2182,10 +2190,8 @@ export const nodeRuns = sqliteTable(
      * orthogonal to retryIndex (technical retries from process crash / timeout).
      */
     reviewIteration: integer('review_iteration').notNull().default(0),
-    // RFC-074 PR-C: the clarify_iteration counter is retired. Freshness is pure
-    // ULID id-order (isFresherNodeRun) and the clarify generation is derived
-    // from prior-done id-order at dispatch time; the column was dropped by
-    // migration 0041.
+    // RFC-374: freshness and clarify lineage use mint seq; legacy NULL rows
+    // retain id ordering until backfill. clarify_iteration was retired in 0041.
     status: text('status', {
       enum: [
         'pending',
@@ -2512,8 +2518,11 @@ export const nodeRuns = sqliteTable(
     lineageSlotPathJson: text('lineage_slot_path_json'),
     /** RFC-328: business re-run generation (technical retries stay in-generation). */
     operationGeneration: integer('operation_generation').notNull().default(0),
+    /** RFC-374: last physically appended column; legacy writers leave it NULL. */
+    seq: integer('seq'),
   },
   (t) => ({
+    taskSeqIdx: uniqueIndex('idx_node_runs_task_seq').on(t.taskId, t.seq),
     taskIdx: index('idx_node_runs_task').on(t.taskId, t.nodeId, t.iteration, t.retryIndex),
     parentIdx: index('idx_node_runs_parent').on(t.parentNodeRunId),
     // RFC-354: every dispatch tick lists the rows of ONE frame.

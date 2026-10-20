@@ -1,3 +1,4 @@
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import type { NodeRunStatus, RerunCause } from '@agent-workflow/shared'
 
 import { isStructurallySuperseded, type SupersessionRow } from '../domain/nodeRunSupersession'
@@ -7,6 +8,7 @@ import type { TaskExecutionContextRef } from './ports/taskExecutionTopology'
 
 export interface SchedulerRunRowCandidate {
   readonly id: string
+  readonly seq: number | null
   readonly status: NodeRunStatus
   readonly retryIndex: number
   readonly reviewIteration: number
@@ -48,10 +50,12 @@ export interface ResolvedSchedulerRunRow<R> {
   readonly adopted: boolean
 }
 
-function freshest<R extends { readonly id: string }>(rows: readonly R[]): R | undefined {
+function freshest<R extends { readonly id: string; readonly seq: number | null }>(
+  rows: readonly R[],
+): R | undefined {
   let current: R | undefined
   for (const row of rows) {
-    if (current === undefined || row.id > current.id) current = row
+    if (current === undefined || compareNodeRunMintOrder(row, current) > 0) current = row
   }
   return current
 }
@@ -84,6 +88,7 @@ export function supersededPendingRows<R extends SchedulerRunRowCandidate>(input:
 }): ReadonlySet<string> {
   const asSupersession = (row: R): SupersessionRow => ({
     id: row.id,
+    seq: row.seq,
     nodeId: input.nodeId,
     iteration: input.iteration,
     containerRunId: row.containerRunId ?? null,
@@ -144,8 +149,8 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     canceled.add(row.id)
     input.broadcastCanceled?.(row.id)
   }
-  const pendingExisting = topLevelRows.find(
-    (row) => row.status === 'pending' && !superseded.has(row.id),
+  const pendingExisting = freshest(
+    topLevelRows.filter((row) => row.status === 'pending' && !superseded.has(row.id)),
   )
   if (pendingExisting !== undefined) {
     await input.projections.patch({

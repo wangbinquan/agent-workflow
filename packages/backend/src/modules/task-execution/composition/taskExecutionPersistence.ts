@@ -1,3 +1,4 @@
+import { createNodeRunSeqBackfillStore } from '../infrastructure/nodeRunSeqBackfillStore'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
@@ -143,6 +144,7 @@ export function createTaskExecutionPersistence(
   const runtimeLifecycle = createTaskRuntimeLifecyclePersistence(db, dependencies)
   const humanGateLifecycle = new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle)
   return Object.freeze({
+    nodeRunSeqBackfill: createNodeRunSeqBackfillStore(db),
     drive: new DrizzleTaskEngineApplicationPersistence(db),
     ownership: new DrizzleTaskOwnershipPersistence(db),
     intents: new DrizzleTaskExecutionIntentPersistence(db),

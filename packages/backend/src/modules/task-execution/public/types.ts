@@ -168,6 +168,7 @@ export interface TaskExecutionOutcomeSource {
     codeRoundId: string | null
   }>
   readonly runs: readonly Readonly<{
+    seq: number | null
     id: string
     nodeId: string
     iteration: number

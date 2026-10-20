@@ -1,4 +1,5 @@
-// RFC-074 PR-C — `isFresherNodeRun` pure-id ordering, locked case-by-case.
+// RFC-074 PR-C / RFC-374 — legacy NULL-seq ID fallback, locked case-by-case.
+// The historical rationale below is retained as context; allocated rows now use mint seq.
 //
 // WHY THIS FILE EXISTS (regression intent):
 //   This file began life as the PR-A EQUIVALENCE BASELINE for the retirement
@@ -39,7 +40,7 @@ type Row = typeof nodeRuns.$inferSelect & { clarifyIteration: number }
 // We build a minimal row and cast — deliberately NOT mirroring the whole schema
 // so this baseline does not drift when unrelated node_runs columns are added.
 function row(id: string, cci = 0, retryIndex = 0): Row {
-  return { id, clarifyIteration: cci, retryIndex } as unknown as Row
+  return { id, seq: null, clarifyIteration: cci, retryIndex } as unknown as Row
 }
 
 // The comparator induces a strict weak order; the "freshest" of a set is the

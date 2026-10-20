@@ -53,33 +53,39 @@ import {
 // two of them run INSIDE the dispatch write transaction, so the big-TEXT
 // decode extended write-lock hold time. All four share this light projection;
 // the compiler flags any future consumer of a column missing here.
-const DISPATCH_RUN_COLUMNS = {
-  id: nodeRuns.id,
-  taskId: nodeRuns.taskId,
-  nodeId: nodeRuns.nodeId,
-  status: nodeRuns.status,
-  iteration: nodeRuns.iteration,
-  retryIndex: nodeRuns.retryIndex,
-  parentNodeRunId: nodeRuns.parentNodeRunId,
-  childTaskId: nodeRuns.childTaskId,
-  shardKey: nodeRuns.shardKey,
-  wgRound: nodeRuns.wgRound,
-  reviewIteration: nodeRuns.reviewIteration,
-  mergeState: nodeRuns.mergeState,
-  forceActivated: nodeRuns.forceActivated,
-  startedAt: nodeRuns.startedAt,
-  finishedAt: nodeRuns.finishedAt,
-  pid: nodeRuns.pid,
-  exitCode: nodeRuns.exitCode,
-  errorMessage: nodeRuns.errorMessage,
-  failureCode: nodeRuns.failureCode,
-  opencodeSessionId: nodeRuns.opencodeSessionId,
-  rerunCause: nodeRuns.rerunCause,
-  supersededByReview: nodeRuns.supersededByReview,
-  rolledBack: nodeRuns.rolledBack,
-} as const
+function dispatchRunColumns() {
+  return {
+    id: nodeRuns.id,
+    seq: nodeRuns.seq,
+    taskId: nodeRuns.taskId,
+    nodeId: nodeRuns.nodeId,
+    status: nodeRuns.status,
+    iteration: nodeRuns.iteration,
+    retryIndex: nodeRuns.retryIndex,
+    parentNodeRunId: nodeRuns.parentNodeRunId,
+    childTaskId: nodeRuns.childTaskId,
+    shardKey: nodeRuns.shardKey,
+    wgRound: nodeRuns.wgRound,
+    reviewIteration: nodeRuns.reviewIteration,
+    mergeState: nodeRuns.mergeState,
+    forceActivated: nodeRuns.forceActivated,
+    startedAt: nodeRuns.startedAt,
+    finishedAt: nodeRuns.finishedAt,
+    pid: nodeRuns.pid,
+    exitCode: nodeRuns.exitCode,
+    errorMessage: nodeRuns.errorMessage,
+    failureCode: nodeRuns.failureCode,
+    opencodeSessionId: nodeRuns.opencodeSessionId,
+    rerunCause: nodeRuns.rerunCause,
+    supersededByReview: nodeRuns.supersededByReview,
+    rolledBack: nodeRuns.rolledBack,
+  } as const
+}
 
-type DispatchRunRow = Pick<typeof nodeRuns.$inferSelect, keyof typeof DISPATCH_RUN_COLUMNS>
+type DispatchRunRow = Pick<
+  typeof nodeRuns.$inferSelect,
+  keyof ReturnType<typeof dispatchRunColumns>
+>
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import {
   type CauseClass,
@@ -123,6 +129,7 @@ import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/r
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
 import {
+  compareNodeRunMintOrder,
   isClarifyChannelEdge,
   isTurnEngineWorkgroupTask,
   type RunLineageView,
@@ -1348,7 +1355,7 @@ async function commitDispatchPlan(
         // committed between the prechecks and here can't slip a double-mint past. Fetch the task's
         // runs + output ids ONCE for both.
         const txRuns = await tx
-          .select(DISPATCH_RUN_COLUMNS)
+          .select(dispatchRunColumns())
           .from(nodeRuns)
           .where(eq(nodeRuns.taskId, taskId))
         const txOutputIds: ReadonlySet<string> =
@@ -1701,7 +1708,7 @@ interface OpenDispatchInputs {
       | 'sourceKind'
     >
   >
-  /** Every node_run of the task (RFC-311: the DISPATCH_RUN_COLUMNS projection —
+  /** Every node_run of the task (RFC-311: the dispatchRunColumns projection —
    *  this gate never reads the heavy prompt/iso columns). */
   runs: ReadonlyArray<DispatchRunRow>
   /** node_run ids that captured ≥1 <workflow-output> row (the "done == consumed" signal). */
@@ -1744,6 +1751,7 @@ function findOpenDispatchTarget(
 ): OpenDispatchBlocker | null {
   const lineageViews: RunLineageView[] = inputs.runs.map((r) => ({
     id: r.id,
+    seq: r.seq,
     nodeId: r.nodeId,
     iteration: r.iteration,
     loopIter: 0,
@@ -1805,7 +1813,7 @@ function findOpenDispatchTarget(
       if (r.nodeId !== target || r.parentNodeRunId !== null) continue
       const k = r.shardKey ?? null
       const cur = freshestByShard.get(k)
-      if (cur === undefined || r.id > cur.id) freshestByShard.set(k, r)
+      if (cur === undefined || compareNodeRunMintOrder(r, cur) > 0) freshestByShard.set(k, r)
     }
     const openRun = inputs.runs.find((r) => {
       if (r.nodeId !== target || r.parentNodeRunId !== null) return false
@@ -1874,7 +1882,7 @@ async function assertNoInFlightDispatch(
     )
   if (entries.length === 0) return
   const runs = await db
-    .select(DISPATCH_RUN_COLUMNS)
+    .select(dispatchRunColumns())
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
@@ -2104,7 +2112,7 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
     )
   const roundByOrigin = new Map(rounds.map((r) => [r.intermediaryNodeRunId, r]))
   const runs = await db
-    .select(DISPATCH_RUN_COLUMNS)
+    .select(dispatchRunColumns())
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, taskId))
   const runById = new Map(runs.map((r) => [r.id, r]))
@@ -2114,6 +2122,7 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
   )
   const lineageViews: RunLineageView[] = runs.map((r) => ({
     id: r.id,
+    seq: r.seq,
     nodeId: r.nodeId,
     iteration: r.iteration,
     loopIter: 0,
@@ -2200,7 +2209,7 @@ async function resolveDesignerBorrowForNode(
   if (candidates.length === 0) return CLOSED_LEDGER
 
   const runs = await db
-    .select(DISPATCH_RUN_COLUMNS)
+    .select(dispatchRunColumns())
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, taskId))
   const outputRunIds = await runIdsWithOutput(
@@ -2209,6 +2218,7 @@ async function resolveDesignerBorrowForNode(
   )
   const lineageViews: RunLineageView[] = runs.map((r) => ({
     id: r.id,
+    seq: r.seq,
     nodeId: r.nodeId,
     iteration: r.iteration,
     loopIter: 0,
@@ -2302,7 +2312,7 @@ async function assertDesignerReady(
   // each other.
   const originFrames = new Map<string, string | null>()
   for (const row of await db
-    .select({ id: nodeRuns.id, containerRunId: nodeRuns.containerRunId })
+    .select({ id: nodeRuns.id, seq: nodeRuns.seq, containerRunId: nodeRuns.containerRunId })
     .from(nodeRuns)
     .where(inArray(nodeRuns.id, [...dispatchedOrigins]))) {
     originFrames.set(row.id, row.containerRunId)

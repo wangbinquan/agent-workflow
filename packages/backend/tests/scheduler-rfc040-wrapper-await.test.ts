@@ -1,3 +1,5 @@
+// RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
+import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 // RFC-040 — wrapper-loop / wrapper-git bubble awaiting_human / awaiting_review.
 //
 // Locks the contract that prior to RFC-040 was silently broken:
@@ -363,6 +365,7 @@ function registerLoopCases(provider: ProviderHarness) {
     // Second pass simulates resumeTask: scheduler re-enters and finds the
     // wrapper parked. This time the agent emits a real output (no clarify).
     // RFC-097: runTask's entry CAS only claims pending tasks — reset first.
+    await catchUpLegacySequenceTask(h.db, taskId)
     await reenterScheduler(h.db, taskId)
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'use postgres' }) }, () =>
       runTask({

@@ -9,17 +9,18 @@
 // (never route to a 404), awaiting-vs-decided, human-vs-system decision — live
 // in the backend oracle so they can be tested against real review states and
 // stay in lock-step with what `getReviewDetail` renders. This helper is a pure
-// ULID orchestrator over the per-run stamp:
+// mint-order selector over the per-run stamp:
 //   1. any top-level run stamped 'awaiting' → open that live review round
-//      (U1: at most one awaiting_review per task; ULID-max defensively).
-//   2. otherwise the ULID-newest top-level run stamped 'decided' → replay its
+//      (U1: at most one awaiting_review per task; newest mint defensively).
+//   2. otherwise the last-minted top-level run stamped 'decided' → replay its
 //      human conclusion.
 //   3. otherwise null (not clickable).
 //
-// ULID id order (later-minted row wins) mirrors the backend's isFresherNodeRun
+// Seq-first mint order (later-minted row wins) mirrors the backend's isFresherNodeRun
 // comparator; a review row's `startedAt` is the pinned slot-open tick (RFC-078)
 // and is NOT comparable across rounds, so we never sort on it here.
 
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import type { NodeRun } from '@agent-workflow/shared'
 
 export type ReviewNodeNavKind = 'awaiting' | 'decided'
@@ -30,11 +31,10 @@ export interface ReviewNodeNav {
   nodeRunId: string
 }
 
-/** ULID-newest (later-minted) row of a non-empty list. Pure string compare on
- *  `id` — ULIDs are lexicographically time-ordered. */
-function ulidNewest(rows: NodeRun[]): NodeRun {
+/** Last-minted row of a non-empty list. Shared seq-first comparison with a legacy NULL fallback. */
+function mintNewest(rows: NodeRun[]): NodeRun {
   let best = rows[0]!
-  for (const r of rows) if (r.id > best.id) best = r
+  for (const r of rows) if (compareNodeRunMintOrder(r, best) > 0) best = r
   return best
 }
 
@@ -43,7 +43,7 @@ function ulidNewest(rows: NodeRun[]): NodeRun {
  * clickable. Considers only the node's top-level runs (fan-out shard children
  * — parentNodeRunId set — are skipped; per-shard review is RFC-005 T14).
  *
- * The node's CURRENT state is its FRESHEST (ULID-newest) top-level run — the
+ * The node's CURRENT state is its FRESHEST (last-minted) top-level run — the
  * same later-minted-row-wins rule the backend / canvas status use. We read that
  * one run's stamp; an OLDER decided run must NOT shadow a newer non-clickable
  * one. Concretely, the R3 re-park-then-supersede state stamps the current run
@@ -61,7 +61,7 @@ function ulidNewest(rows: NodeRun[]): NodeRun {
 export function deriveReviewNodeNav(runs: NodeRun[], nodeId: string): ReviewNodeNav | null {
   const topLevel = runs.filter((r) => r.nodeId === nodeId && r.parentNodeRunId === null)
   if (topLevel.length === 0) return null
-  const freshest = ulidNewest(topLevel)
+  const freshest = mintNewest(topLevel)
   if (freshest.reviewNavKind === 'awaiting') return { kind: 'awaiting', nodeRunId: freshest.id }
   if (freshest.reviewNavKind === 'decided') return { kind: 'decided', nodeRunId: freshest.id }
   return null

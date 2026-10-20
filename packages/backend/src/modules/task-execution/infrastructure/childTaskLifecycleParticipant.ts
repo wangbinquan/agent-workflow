@@ -72,6 +72,7 @@ const log = createLogger('task-execution.postgresql-child-lifecycle')
 
 type ResumeRun = Readonly<{
   id: string
+  seq: number | null
   nodeId: string
   status: NodeRunStatus
   parentNodeRunId: string | null
@@ -589,6 +590,7 @@ async function rollbackForResume(
   const rows = await dependencies.db
     .select({
       id: nodeRuns.id,
+      seq: nodeRuns.seq,
       nodeId: nodeRuns.nodeId,
       status: nodeRuns.status,
       parentNodeRunId: nodeRuns.parentNodeRunId,

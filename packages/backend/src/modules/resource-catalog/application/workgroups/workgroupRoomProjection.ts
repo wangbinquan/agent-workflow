@@ -5,6 +5,8 @@
 // grammar without either provider importing the other's infrastructure.
 
 import {
+  compareNodeRunMintOrder,
+  nodeRunOrderAnchor,
   parseBatchShardKey,
   parseMsgShardKey,
   type WorkgroupMemberCurrentRun,
@@ -20,6 +22,7 @@ import { resolveMessageTurnTriggerId } from './workgroupTurnContext'
 
 /** Minimal host-run snapshot consumed by the room projection. */
 export interface WorkgroupRoomHostRun {
+  readonly seq: number | null
   readonly id: string
   readonly nodeId: string
   readonly shardKey: string | null
@@ -143,12 +146,19 @@ function classify(
   }
 }
 
-function isBetter(candidate: WorkgroupRunEntry, incumbent: WorkgroupRunEntry): boolean {
+function isBetter(
+  candidate: WorkgroupRunEntry,
+  incumbent: WorkgroupRunEntry,
+  hostRuns: readonly WorkgroupRoomHostRun[],
+): boolean {
   const candidateRunning = candidate.status === 'running'
   const incumbentRunning = incumbent.status === 'running'
   return candidateRunning !== incumbentRunning
     ? candidateRunning
-    : candidate.nodeRunId > incumbent.nodeRunId
+    : compareNodeRunMintOrder(
+        nodeRunOrderAnchor(hostRuns, candidate.nodeRunId),
+        nodeRunOrderAnchor(hostRuns, incumbent.nodeRunId),
+      ) > 0
 }
 
 function noteOf(run: WorkgroupRoomHostRun): WorkgroupRunEntry['note'] {
@@ -156,7 +166,7 @@ function noteOf(run: WorkgroupRoomHostRun): WorkgroupRunEntry['note'] {
 }
 
 /**
- * Full execution history, ascending by node-run id. Removed members retain a
+ * Full execution history, ascending by node-run mint order. Removed members retain a
  * tombstone memberId with displayName=null.
  */
 export function deriveWorkgroupRunHistory(
@@ -183,9 +193,7 @@ export function deriveWorkgroupRunHistory(
     const entry = classify(run, leaderMemberId, assignmentIds, uniqueAgentMemberById)
     if (entry !== null) classified.push(entry)
   }
-  classified.sort((left, right) =>
-    left.run.id < right.run.id ? -1 : left.run.id > right.run.id ? 1 : 0,
-  )
+  classified.sort((left, right) => compareNodeRunMintOrder(left.run, right.run))
 
   const leaderRoundOfLegacy = (runId: string): number => {
     let maxRound = 0
@@ -240,7 +248,8 @@ export function deriveMemberCurrentRuns(
   const winners = new Map<string, WorkgroupRunEntry>()
   for (const entry of history) {
     const incumbent = winners.get(entry.memberId)
-    if (incumbent === undefined || isBetter(entry, incumbent)) winners.set(entry.memberId, entry)
+    if (incumbent === undefined || isBetter(entry, incumbent, hostRuns))
+      winners.set(entry.memberId, entry)
   }
 
   const current: Record<string, WorkgroupMemberCurrentRun | null> = {}
@@ -261,6 +270,7 @@ export function deriveMemberCurrentRuns(
 
 /** Minimal host-ledger row consumed by the round-budget projection. */
 export interface RoundLedgerRow {
+  readonly seq: number | null
   readonly id: string
   readonly nodeId: string
   readonly shardKey: string | null
@@ -279,11 +289,12 @@ const CLARIFY_CONTINUATION_CAUSES = new Set(['clarify-answer', 'cross-clarify-qu
 
 function supersededKilledClarifyIds(rows: readonly RoundLedgerRow[]): Set<string> {
   const groupKey = (row: RoundLedgerRow): string => `${row.nodeId}\x00${row.shardKey ?? ''}`
-  const maxIdByGroup = new Map<string, string>()
+  const newestByGroup = new Map<string, RoundLedgerRow>()
   for (const row of rows) {
     const key = groupKey(row)
-    const current = maxIdByGroup.get(key)
-    if (current === undefined || row.id > current) maxIdByGroup.set(key, row.id)
+    const current = newestByGroup.get(key)
+    if (current === undefined || compareNodeRunMintOrder(row, current) > 0)
+      newestByGroup.set(key, row)
   }
 
   const superseded = new Set<string>()
@@ -291,7 +302,8 @@ function supersededKilledClarifyIds(rows: readonly RoundLedgerRow[]): Set<string
     if (row.status !== 'interrupted' || !CLARIFY_CONTINUATION_CAUSES.has(row.rerunCause ?? '')) {
       continue
     }
-    if ((maxIdByGroup.get(groupKey(row)) ?? row.id) > row.id) superseded.add(row.id)
+    if (compareNodeRunMintOrder(newestByGroup.get(groupKey(row)) ?? row, row) > 0)
+      superseded.add(row.id)
   }
   return superseded
 }

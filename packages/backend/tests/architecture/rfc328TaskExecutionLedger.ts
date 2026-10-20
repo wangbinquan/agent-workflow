@@ -270,6 +270,17 @@ export function classifyTaskExecutionAuthority(input: {
   // (or from `doctor --backfill-containers`, which refuses while a daemon is
   // up), touches only rows whose frame is still unset, and is gated by the
   // `maintenance_state` completion marker — no task is claimed or driven.
+  // RFC-374: the resumable sequence catch-up is boot recovery, before any execution.
+  if (
+    /modules\/task-execution\/infrastructure\/nodeRunSeqBackfillStore\.ts#backfillTask$/.test(value)
+  ) {
+    return {
+      authorityKind: 'recovery-proof',
+      controlSubtype: null,
+      revisionPredicate: 'boot-before-recovery-and-null-seq-only-per-task-transaction',
+      requiredBrandedProof: 'ExclusiveDaemonLockProof(boot-before-scheduler)',
+    }
+  }
   if (/modules\/task-execution\/infrastructure\/frameBackfillStore\.ts/.test(value)) {
     return {
       authorityKind: 'recovery-proof',

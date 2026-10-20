@@ -7,19 +7,9 @@
 // whose real content lives on another page never opens the drawer from the
 // canvas.
 //
-// WHICH generation this routes to (design D2, user-decided "strict freshest"):
-// the node's current state is its FRESHEST top-level run, and "freshest" here is
-// NOT a locally invented "max ULID" rule — it is the repo's single freshness
-// authority `isFresherNodeRun` (services/freshness.ts, RFC-074 PR-C: pure ULID
-// id ordering, "the newest-inserted row always wins", locked by
-// isfresher-noderun-baseline.test.ts). The scheduler's latestPerNode, upstream
-// input resolution and both sibling nav oracles all read runs through it; this
-// file deliberately mirrors it, and exports the same current-run oracle for the
-// call-node canvas status projection, rather than adding a second ordering
-// assumption. (The design gate raised ULID monotonicity as a
-// P0; it is a SYSTEM-WIDE premise — if it broke, the scheduler would mis-pick
-// rows long before the canvas did — and is registered in docs/audit-backlog.md
-// as a system-level item, not patched per consumer.)
+// RFC-374: the current generation is the last-minted top-level run, using the
+// shared seq-first comparator also used by backend freshness. Legacy NULL rows
+// retain the ID fallback until S1b; timestamps are not a freshness authority here.
 //
 // A newer run with NO childTaskId therefore SHADOWS an older run that has one:
 // retryNode mints a fresh generation whose child is not launched yet
@@ -38,6 +28,7 @@
 // child is actually visible to the viewer is composed at the call site from the
 // ACL-filtered children query (design D5), exactly like ChildTaskLink does.
 
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import type { NodeRun } from '@agent-workflow/shared'
 
 /** Single-valued kind, mirroring `reviewNav` / `clarifyNav`'s shape so the
@@ -49,11 +40,11 @@ export interface CallNodeNav {
   childTaskId: string
 }
 
-/** Freshest (later-minted) row of a non-empty list — the same pure `id` compare
+/** Freshest (later-minted) row of a non-empty list — the same seq-first compare
  *  as `isFresherNodeRun` (services/freshness.ts). */
 function freshest(rows: NodeRun[]): NodeRun {
   let best = rows[0]!
-  for (const r of rows) if (r.id > best.id) best = r
+  for (const r of rows) if (compareNodeRunMintOrder(r, best) > 0) best = r
   return best
 }
 

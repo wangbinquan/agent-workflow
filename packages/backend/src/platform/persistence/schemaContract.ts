@@ -160,6 +160,7 @@ export const RFC349_SOURCE_TABLES = [
   'node_run_events',
   'node_run_outputs',
   'node_runs',
+  'node_run_seq_allocations',
   'observation_call_models',
   'observation_calls',
   'observation_prices',

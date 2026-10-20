@@ -247,6 +247,7 @@ function primeTask(qc: QueryClient, row: Task, primeNodeRuns = true): void {
 
 function nodeRun(overrides: Partial<NodeRun> = {}): NodeRun {
   return {
+    seq: null,
     id: 'run_1',
     taskId: 'parent',
     nodeId: 'call1',

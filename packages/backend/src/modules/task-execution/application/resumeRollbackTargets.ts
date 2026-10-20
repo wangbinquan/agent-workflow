@@ -1,3 +1,4 @@
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 /**
  * RFC-359 AC-1（第 10 刀）—— resume 的回滚目标选择器，**全仓唯一一份**。
  *
@@ -12,7 +13,7 @@
  *
  * 「每个节点**最新的顶层行**，且它处在 failed / interrupted，且它不是调用行」：
  *
- *   · **最新**按 ULID id 序（`r.id > prev.id`）——与调度器的取新权威同口径
+ *   · **最新**按 RFC-374 seq 序——与调度器的取新权威同口径
  *     （`isFresherNodeRun`）。retryIndex 序是错的：clarify 驱动的重跑铸出来的行
  *     retryIndex 是 0 但 id 更新，按 retryIndex 排会让一条更旧的高 retryIndex 失败行盖住它。
  *   · **顶层**（`parentNodeRunId === null`）——扇出子行不是回滚单位。
@@ -23,6 +24,7 @@
 export function selectResumeRollbackTargets<
   R extends {
     id: string
+    seq: number | null
     nodeId: string
     parentNodeRunId: string | null
     status: string
@@ -33,7 +35,8 @@ export function selectResumeRollbackTargets<
   for (const run of runs) {
     if (run.parentNodeRunId !== null) continue
     const previous = latestPerNode.get(run.nodeId)
-    if (previous === undefined || run.id > previous.id) latestPerNode.set(run.nodeId, run)
+    if (previous === undefined || compareNodeRunMintOrder(run, previous) > 0)
+      latestPerNode.set(run.nodeId, run)
   }
   return [...latestPerNode.values()].filter(
     (run) =>

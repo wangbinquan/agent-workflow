@@ -28,6 +28,7 @@ function row(
   over: Partial<Omit<FrameBackfillRunRow, 'id' | 'nodeId'>> = {},
 ): FrameBackfillRunRow {
   return {
+    seq: null,
     id,
     nodeId,
     iteration: over.iteration ?? 0,

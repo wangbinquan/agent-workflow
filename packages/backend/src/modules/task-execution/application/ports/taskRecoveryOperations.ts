@@ -185,6 +185,7 @@ export interface TaskLifecycleInvariantSnapshot {
     readonly clarifyNodeId: string
   }[]
   readonly nodeRuns: readonly {
+    readonly seq: number | null
     readonly id: string
     readonly nodeId: string
     readonly status: string

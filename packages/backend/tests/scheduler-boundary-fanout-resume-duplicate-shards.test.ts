@@ -1,3 +1,5 @@
+// RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
+import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 // Regression: wrapper-fanout RESUME re-mints all shard children (no idempotency).
 //
 // DEFECT (HIGH): on resume, runFanoutWrapperNode reuses the wrapper row (via
@@ -278,6 +280,7 @@ function registerCases(provider: ProviderHarness) {
       .set({ parentNodeRunId: wrapperRunId })
       .where(eq(nodeRuns.id, staleBId))
 
+    await catchUpLegacySequenceTask(h.db, taskId)
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ result: 'fresh' }) }, () =>
       runTask({
         taskId,

@@ -59,6 +59,7 @@ function ruleBody(selector: string): string {
 
 function makeRun(over: Partial<NodeRun>): NodeRun {
   return {
+    seq: null,
     id: 'nr1',
     taskId: 't1',
     nodeId: '__wg_member__',

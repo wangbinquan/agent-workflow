@@ -257,8 +257,18 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     const db = harness.db as unknown as ProviderNeutralDatabase
     const taskId = await seedTask(db)
     // 人回答后铸出的那条 pending 续跑，被重启的 reaper 翻成了 interrupted。
-    const killedId = ulid()
+    // RFC-374: the interrupted latest continuation has the smaller ID.
+    const killedId = 'a-killed-latest'
     await db.insert(nodeRuns).values({
+      id: 'z-older',
+      seq: -1,
+      taskId,
+      nodeId: WORKGROUP_TURN_LEADER_NODE_ID,
+      status: 'canceled',
+      rerunCause: 'initial',
+    })
+    await db.insert(nodeRuns).values({
+      seq: 0,
       id: killedId,
       taskId,
       nodeId: WORKGROUP_TURN_LEADER_NODE_ID,

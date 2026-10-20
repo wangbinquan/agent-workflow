@@ -1,4 +1,5 @@
 import {
+  newestNodeRun,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   fenceUntrusted,
   isTransientRuntimeFailure,
@@ -2504,8 +2505,8 @@ async function reviveKilledClarifyContinuations(
   }
   const operations: WorkgroupTurnLedgerOperation[] = []
   for (const group of groups.values()) {
-    // hostRuns 按 id 升序装载，最后一条即最新。
-    const latest = group[group.length - 1]
+    // Explicit mint order also covers snapshots supplied in a different order.
+    const latest = newestNodeRun(group)
     if (latest === undefined || !isKilledClarifyContinuation(latest)) continue
     const runId = ulid()
     operations.push({
@@ -2550,7 +2551,7 @@ async function reconcileRunningAssignments(
     const byShard = snapshot.hostRuns.filter(
       (run) => run.nodeId === WORKGROUP_TURN_MEMBER_NODE_ID && run.shardKey === assignment.id,
     )
-    const latest = direct ?? byShard[byShard.length - 1]
+    const latest = direct ?? newestNodeRun(byShard)
     const verdict = decideAssignmentReconcile(latest?.status)
     if (verdict === 'none') continue
     operations.push(

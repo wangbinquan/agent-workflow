@@ -24,6 +24,7 @@ export interface CodeWorkspaceTask {
 
 export interface CodeNodeRunSnapshot {
   readonly id: string
+  readonly seq: number | null
   readonly preSnapshot: string | null
   readonly preSnapshotReposJson: string | null
   readonly startedAt: number | null

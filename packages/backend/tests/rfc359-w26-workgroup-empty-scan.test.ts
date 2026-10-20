@@ -23,7 +23,8 @@ import {
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import type { RecordedStatement } from './helpers/statementRecorder'
 
-const ORIGINAL_SOURCE_HASH = '9fae8c66954bdf6dd39d25c452679c081c5f6d830df9ba3beaccf0a793a87492'
+// RFC-374: the participant's two node-run projections also carry `seq` (outside the probe).
+const ORIGINAL_SOURCE_HASH = 'ed7d245f305e06073fe7210cd93085a977d2c2a551294f5fca496f684f35c74e'
 const SOURCE_PATH = resolve(
   import.meta.dir,
   '../src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',

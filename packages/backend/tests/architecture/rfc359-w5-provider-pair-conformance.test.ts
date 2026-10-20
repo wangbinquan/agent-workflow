@@ -151,7 +151,7 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // RFC-359 W8：判**读出 / 编码面该合、冻结围栏面不该合**（两侧都是活的生产代码，逐条见对拍
   // 文件头）。本刀只补对拍并把两条实测差异按强侧抬齐（SQLite 关闭后的裸驱动错误、PG 的引用式
   // 快照判等）；围栏本身是文件代号 vs 活跃生成代两台机器，作为能力差异留在账本里。
-  'platform/persistence/LogicalSource: sqlite + postgresql — verified by rfc359-w8-logical-source-conformance.test.ts, rfc372-task-schema.test.ts',
+  'platform/persistence/LogicalSource: sqlite + postgresql — verified by rfc359-w8-logical-source-conformance.test.ts, rfc372-task-schema.test.ts, rfc374-node-run-seq-copy.test.ts',
   // RFC-359 W8：**见证补上了**，AC-1 的成对面至此全部有对拍。
   // 这一对不合一是对的——两侧是机制本身不同的两份实现：一侧把编号 SQL 文件逐条喂给 bun:sqlite
   // （还要重写历史上的有序 JSON 聚合），另一侧在 advisory lock 下按 drizzle 声明准备 schema 并记
@@ -165,7 +165,7 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // 判据落在**用户可见契约**那一层（AC-1 的要求）：跑完之后这个库真的实现了应用声明的那份 schema
   // ——每张声明的表、每一列都问各自引擎的目录表（`PRAGMA table_info` / `information_schema.columns`），
   // 少一表或少一列都红。
-  'platform/persistence/Migrator: sqlite + postgresql — verified by rfc359-w8-migrator-conformance.test.ts',
+  'platform/persistence/Migrator: sqlite + postgresql — verified by rfc359-w8-migrator-conformance.test.ts, rfc374-node-run-seq-migration.test.ts',
 ]
 
 /**

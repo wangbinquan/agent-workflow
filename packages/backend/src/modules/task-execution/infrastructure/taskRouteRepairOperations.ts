@@ -1,4 +1,6 @@
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import {
+  compareNodeRunMintOrder,
   CANCELABLE_TASK_STATUSES,
   REPAIR_OPTION_IDS,
   WorkflowDefinitionSchema,
@@ -93,6 +95,7 @@ interface RepairTask {
 }
 
 interface RepairNodeRun {
+  readonly seq: number | null
   readonly id: string
   readonly taskId: string
   readonly nodeId: string
@@ -437,14 +440,16 @@ function latestCandidate(
   }
   let candidate: RepairNodeRun | null = null
   for (const group of groups.values()) {
-    const latest = group.reduce((left, right) => (right.id > left.id ? right : left))
+    const latest = group.reduce((left, right) =>
+      compareNodeRunMintOrder(right, left) > 0 ? right : left,
+    )
     // 评审看整组，澄清只看最新那一代。
     if (
       grouping === 'review' ? group.some((run) => run.status === 'done') : latest.status === 'done'
     )
       continue
     if (!TERMINAL_NON_DONE_SET.has(latest.status)) continue
-    if (candidate === null || latest.id > candidate.id) candidate = latest
+    if (candidate === null || compareNodeRunMintOrder(latest, candidate) > 0) candidate = latest
   }
   return candidate
 }
@@ -519,6 +524,7 @@ async function loadNodeRun(
   const row = await db
     .select({
       id: nodeRuns.id,
+      seq: nodeRuns.seq,
       taskId: nodeRuns.taskId,
       nodeId: nodeRuns.nodeId,
       status: nodeRuns.status,
@@ -540,6 +546,7 @@ async function loadNodeRuns(
   return await db
     .select({
       id: nodeRuns.id,
+      seq: nodeRuns.seq,
       taskId: nodeRuns.taskId,
       nodeId: nodeRuns.nodeId,
       status: nodeRuns.status,
@@ -596,10 +603,10 @@ async function deriveScopeRoot(
   const wrapperId = buildContainerMap(ctx.definition).get(reviewNodeId)
   if (wrapperId === undefined) return taskWorktreePath
   const rows = await dependencies.db
-    .select({ id: nodeRuns.id, isoWorktreePath: nodeRuns.isoWorktreePath })
+    .select({ id: nodeRuns.id, seq: nodeRuns.seq, isoWorktreePath: nodeRuns.isoWorktreePath })
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, ctx.task.id), eq(nodeRuns.nodeId, wrapperId)))
-    .orderBy(desc(nodeRuns.id))
+    .orderBy(engineOf(dependencies.db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
     .limit(1)
   const wrapperRun = rows[0]
   if (wrapperRun === undefined) return taskWorktreePath
@@ -867,12 +874,12 @@ async function preflight(
         return unavailable('diagnose.repair.U1.unavailable.detailMissingIds')
       }
       const rows = await dependencies.db
-        .select({ id: nodeRuns.id, status: nodeRuns.status })
+        .select({ id: nodeRuns.id, seq: nodeRuns.seq, status: nodeRuns.status })
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, ctx.task.id), inArray(nodeRuns.id, [...ids])))
       const active = rows
         .filter((row) => row.status === 'awaiting_review' || row.status === 'awaiting_human')
-        .sort((left, right) => left.id.localeCompare(right.id))
+        .sort((left, right) => compareNodeRunMintOrder(left, right))
       if (active.length < 2) {
         return unavailable('diagnose.repair.U1.unavailable.notMultipleActive')
       }
@@ -946,7 +953,7 @@ async function preflight(
       if (reviewIds.size === 0) return unavailable('diagnose.repair.S1.unavailable.noReviewNode')
       const candidates = (await loadNodeRuns(dependencies.db, ctx.task.id))
         .filter((run) => run.status === 'awaiting_review' && reviewIds.has(run.nodeId))
-        .sort((left, right) => right.id.localeCompare(left.id))
+        .sort((left, right) => compareNodeRunMintOrder(right, left))
       const run =
         (hinted === null ? undefined : candidates.find((candidate) => candidate.id === hinted)) ??
         candidates[0]
@@ -1007,7 +1014,7 @@ async function preflight(
       if (run === null) {
         const rows = (await loadNodeRuns(dependencies.db, ctx.task.id))
           .filter((candidate) => candidate.status === 'awaiting_human')
-          .sort((left, right) => right.id.localeCompare(left.id))
+          .sort((left, right) => compareNodeRunMintOrder(right, left))
         run = rows[0] ?? null
       }
       if (run === null || run.status !== 'awaiting_human') {

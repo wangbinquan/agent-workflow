@@ -28,6 +28,7 @@ import { __testToFlowNodes as toFlowNodes } from '../src/components/canvas/Workf
 
 function run(over: Partial<NodeRun> & Pick<NodeRun, 'id'>): NodeRun {
   return {
+    seq: null,
     nodeId: 'rev',
     parentNodeRunId: null,
     reviewNavKind: null,
@@ -102,7 +103,7 @@ describe('deriveReviewNodeNav', () => {
   })
 
   test('absent reviewNavKind (older daemon) → not clickable', () => {
-    const runs = [{ id: '01A', nodeId: 'rev', parentNodeRunId: null } as NodeRun]
+    const runs = [{ seq: null, id: '01A', nodeId: 'rev', parentNodeRunId: null } as NodeRun]
     expect(deriveReviewNodeNav(runs, 'rev')).toBeNull()
   })
 })

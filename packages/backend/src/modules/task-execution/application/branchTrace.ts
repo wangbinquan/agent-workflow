@@ -18,6 +18,7 @@
 // boolean that is wrong either way.
 
 import {
+  compareNodeRunMintOrder,
   WorkflowDefinitionSchema,
   buildWorkflowScopeParentMap,
   resolveWorkflowSourceRef,
@@ -55,7 +56,7 @@ function latestSettledPerNode(rows: readonly RunRow[]): Map<string, RunRow> {
     if (
       cur === undefined ||
       r.iteration > cur.iteration ||
-      (r.iteration === cur.iteration && r.id > cur.id)
+      (r.iteration === cur.iteration && compareNodeRunMintOrder(r, cur) > 0)
     ) {
       m.set(r.nodeId, r)
     }

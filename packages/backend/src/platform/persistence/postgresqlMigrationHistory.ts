@@ -267,7 +267,19 @@ const UpgradeSchema: z.ZodType<PostgresqlIndexUpgrade> = z
       z.literal(5),
       z.literal(6),
       z.literal(7),
+      z.literal(8),
     ]),
+    logicalColumns: z
+      .array(
+        z
+          .object({
+            tableId: z.string(),
+            position: z.number().int().nonnegative(),
+            column: ColumnSchema,
+          })
+          .strict(),
+      )
+      .optional(),
     logicalIndexPredicates: z
       .array(
         z

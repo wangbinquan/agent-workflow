@@ -27,12 +27,12 @@ describe('RFC-349 PostgreSQL schema projection', () => {
     // added the hosted configuration document, external identity and skill content tables; RFC-370
     // M1 added the hosted execution control, binding and task workspace tables; RFC-370 v3 V11
     // squashed every unreleased hosted table into one 0035 migration.
-    expect(tables).toHaveLength(210)
+    expect(tables).toHaveLength(211)
     expect(tables.some((table) => table.logicalId === 'task_execution_observation_sources')).toBe(
       false,
     )
     expect(tables.some((table) => table.logicalId === 'observation_calls')).toBe(true)
-    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(210)
+    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(211)
     expect(
       tables
         .map((statement) => statement.logicalId)

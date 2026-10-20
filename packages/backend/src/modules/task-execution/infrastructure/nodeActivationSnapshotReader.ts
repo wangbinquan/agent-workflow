@@ -13,6 +13,7 @@ export class DrizzleNodeActivationSnapshotReader implements NodeActivationSnapsh
     return await this.db
       .select({
         id: nodeRuns.id,
+        seq: nodeRuns.seq,
         nodeId: nodeRuns.nodeId,
         status: nodeRuns.status,
         iteration: nodeRuns.iteration,
@@ -27,6 +28,7 @@ export class DrizzleNodeActivationSnapshotReader implements NodeActivationSnapsh
     const rows = await this.db
       .select({
         id: nodeRuns.id,
+        seq: nodeRuns.seq,
         nodeId: nodeRuns.nodeId,
         status: nodeRuns.status,
         iteration: nodeRuns.iteration,

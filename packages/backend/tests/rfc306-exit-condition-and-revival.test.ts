@@ -73,6 +73,7 @@ describe('RFC-306 §8 — exit conditions vs an inactive port', () => {
 describe('RFC-306 D10 — a skip is reversible, not terminal', () => {
   const row = (over: Partial<Row> = {}): Row =>
     ({
+      seq: null,
       id: '01A',
       status: 'skipped',
       consumedUpstreamRunsJson: null,

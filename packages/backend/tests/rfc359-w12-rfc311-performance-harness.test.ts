@@ -159,15 +159,16 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
     expect(receipt.expectedDigests).toEqual(OLD_NATIVE_DIGESTS)
     expect(receipt.actualDigests).toEqual(OLD_NATIVE_DIGESTS)
     expect(receipt.matchesExpected).toBe(true)
+    // RFC-374 appends a nullable column; preserve the frozen legacy-column oracle.
+    const persistedRuns = await harness.db.select().from(nodeRuns).orderBy(nodeRuns.id).all()
+    expect(persistedRuns.every((row) => row.seq === null)).toBe(true)
     // Independent old physical-row goldens also cover every omitted schema default.
     expect({
       cachedRepos: allColumnDigest(
         await harness.db.select().from(cachedRepos).orderBy(cachedRepos.id).all(),
       ),
       tasks: allColumnDigest(await harness.db.select().from(tasks).orderBy(tasks.id).all()),
-      nodeRuns: allColumnDigest(
-        await harness.db.select().from(nodeRuns).orderBy(nodeRuns.id).all(),
-      ),
+      nodeRuns: allColumnDigest(persistedRuns.map(({ seq: _seq, ...legacy }) => legacy)),
       nodeRunEvents: allColumnDigest(
         await harness.db.select().from(nodeRunEvents).orderBy(nodeRunEvents.id).all(),
       ),

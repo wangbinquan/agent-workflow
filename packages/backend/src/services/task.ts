@@ -45,7 +45,7 @@ import type {
 } from '@agent-workflow/shared'
 import type { DwState } from '@agent-workflow/shared'
 // RFC-359 W10：workgroup 运行态行的 INSERT 内联进任务铸行事务后，校验 schema 直接取用。
-import { DwStateSchema } from '@agent-workflow/shared'
+import { compareNodeRunMintOrder, DwStateSchema } from '@agent-workflow/shared'
 import {
   isRetryableGitFailure,
   DAEMON_SHUTDOWN_ABORT_REASON,
@@ -1058,7 +1058,13 @@ export { selectResumeRollbackTargets }
  * work. resume never hits this branch (no canceled in its status set).
  */
 export function selectSyncRollbackTargets<
-  R extends { id: string; nodeId: string; parentNodeRunId: string | null; status: string },
+  R extends {
+    id: string
+    seq: number | null
+    nodeId: string
+    parentNodeRunId: string | null
+    status: string
+  },
 >(
   runs: readonly R[],
   statuses: readonly string[],
@@ -1068,7 +1074,7 @@ export function selectSyncRollbackTargets<
   for (const r of runs) {
     if (r.parentNodeRunId !== null) continue
     const prev = latestPerNode.get(r.nodeId)
-    if (prev === undefined || r.id > prev.id) latestPerNode.set(r.nodeId, r)
+    if (prev === undefined || compareNodeRunMintOrder(r, prev) > 0) latestPerNode.set(r.nodeId, r)
   }
   return [...latestPerNode.values()].filter((r) => {
     if (!statuses.includes(r.status)) return false
@@ -1398,7 +1404,11 @@ function createPersistedRepositoryPreparationStep(input: {
           .select({ id: nodeRuns.id })
           .from(nodeRuns)
           .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
-          .orderBy(desc(nodeRuns.retryIndex), desc(nodeRuns.id))
+          .orderBy(
+            desc(nodeRuns.retryIndex),
+            engineOf(input.deps.db).descNullsLast(nodeRuns.seq),
+            desc(nodeRuns.id),
+          )
           .limit(1)
       )[0]
       const source =
@@ -4086,7 +4096,7 @@ export async function retryRepositoryPreparation(
     .select({ id: nodeRuns.id })
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
-    .orderBy(desc(nodeRuns.retryIndex), desc(nodeRuns.id))
+    .orderBy(desc(nodeRuns.retryIndex), engineOf(db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
     .limit(1)
     .all()[0]
   if (latest === undefined) {
@@ -4744,6 +4754,7 @@ export async function loadTaskFailureCodes(
       taskId: nodeRuns.taskId,
       nodeId: nodeRuns.nodeId,
       id: nodeRuns.id,
+      seq: nodeRuns.seq,
       parentNodeRunId: nodeRuns.parentNodeRunId,
       status: nodeRuns.status,
       failureCode: nodeRuns.failureCode,
@@ -4788,6 +4799,7 @@ export async function getTaskNodeRuns(
   const runRows = await db
     .select({
       id: nodeRuns.id,
+      seq: nodeRuns.seq,
       taskId: nodeRuns.taskId,
       nodeId: nodeRuns.nodeId,
       status: nodeRuns.status,
@@ -4825,7 +4837,11 @@ export async function getTaskNodeRuns(
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, taskId))
     // 未启动的 run（started_at NULL）两个引擎都排最前：SQLite 的缺省，PG 须显式 nulls first。
-    .orderBy(engineOf(db).ascNullsFirst(nodeRuns.startedAt), asc(nodeRuns.id))
+    .orderBy(
+      engineOf(db).ascNullsFirst(nodeRuns.startedAt),
+      engineOf(db).ascNullsFirst(nodeRuns.seq),
+      asc(nodeRuns.id),
+    )
 
   // RFC-078: group the task's doc_versions by review node_run so we can derive
   // each review row's content-anchored "this round started" timestamp instead
@@ -4923,6 +4939,7 @@ export async function getTaskNodeRuns(
       if (clarifyNavKind === 'awaiting' && clarifyTaskDead) clarifyNavKind = null
       return {
         id: r.id,
+        seq: r.seq ?? null,
         taskId: r.taskId,
         nodeId: r.nodeId,
         parentNodeRunId: r.parentNodeRunId,

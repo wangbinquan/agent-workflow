@@ -29,7 +29,7 @@ const members: MemberLite[] = [
 ]
 
 function leaderRun(id: string, status: string, cause = 'wg-leader-round'): HostRunLite {
-  return { id, nodeId: WG_LEADER_NODE_ID, shardKey: null, status, rerunCause: cause }
+  return { seq: null, id, nodeId: WG_LEADER_NODE_ID, shardKey: null, status, rerunCause: cause }
 }
 function assignRun(
   id: string,
@@ -38,6 +38,7 @@ function assignRun(
   agentOverrideId = 'ag-a1',
 ): HostRunLite {
   return {
+    seq: null,
     id,
     nodeId: WG_MEMBER_NODE_ID,
     shardKey,
@@ -47,7 +48,14 @@ function assignRun(
   }
 }
 function msgRun(id: string, shardKey: string, status: string): HostRunLite {
-  return { id, nodeId: WG_MEMBER_NODE_ID, shardKey, status, rerunCause: 'wg-message-turn' }
+  return {
+    seq: null,
+    id,
+    nodeId: WG_MEMBER_NODE_ID,
+    shardKey,
+    status,
+    rerunCause: 'wg-message-turn',
+  }
 }
 
 describe('deriveMemberCurrentRuns (RFC-179)', () => {
@@ -266,6 +274,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
     const assignments = [{ id: 'ASG1', assigneeMemberId: A1 }]
     const runs: HostRunLite[] = [
       {
+        seq: null,
         id: 'R1',
         nodeId: WG_MEMBER_NODE_ID,
         shardKey: 'ASG1',
@@ -275,6 +284,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
       },
       // 答完反问后的续跑：cause 变 clarify-answer、shard 不变。
       {
+        seq: null,
         id: 'R2',
         nodeId: WG_MEMBER_NODE_ID,
         shardKey: 'ASG1',
@@ -283,6 +293,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
         agentOverrideId: 'ag-a1',
       },
       {
+        seq: null,
         id: 'R3',
         nodeId: WG_MEMBER_NODE_ID,
         shardKey: `msg:${A2}:0`,
@@ -308,6 +319,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
       leaderRun('A1-run', 'failed'), // 协议重试第一次尝试
       leaderRun('A2-run', 'done'), // 同一逻辑轮的重试成功——共享 round 1
       {
+        seq: null,
         id: 'A3-run',
         nodeId: WG_LEADER_NODE_ID,
         shardKey: null,
@@ -344,6 +356,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
     const assignments = [{ id: 'ASG9', assigneeMemberId: 'M_gone' }]
     const runs: HostRunLite[] = [
       {
+        seq: null,
         id: 'R1',
         nodeId: WG_MEMBER_NODE_ID,
         shardKey: 'ASG9',
@@ -371,6 +384,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
     const messages = [{ id: 'MSG5', authorMemberId: null, mentionMemberIds: [A2] }]
     const runs: HostRunLite[] = [
       {
+        seq: null,
         id: 'R1',
         nodeId: WG_MEMBER_NODE_ID,
         shardKey: 'ASG1',
@@ -381,6 +395,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
         finishedAt: 250,
       },
       {
+        seq: null,
         id: 'R2',
         nodeId: WG_MEMBER_NODE_ID,
         shardKey: `msg:${A2}:MSG5`,
@@ -444,6 +459,7 @@ describe('RFC-182 实现门 P2 — fc 卡回收后的历史归属', () => {
     const assignments = [{ id: 'ASG1', assigneeMemberId: null }]
     const runs: HostRunLite[] = [
       {
+        seq: null,
         id: 'R1',
         nodeId: WG_MEMBER_NODE_ID,
         shardKey: 'ASG1',
@@ -466,6 +482,7 @@ describe('RFC-182 实现门 P2 — fc 卡回收后的历史归属', () => {
       [
         ...runs,
         {
+          seq: null,
           id: 'R2',
           nodeId: WG_MEMBER_NODE_ID,
           shardKey: 'ASG1',

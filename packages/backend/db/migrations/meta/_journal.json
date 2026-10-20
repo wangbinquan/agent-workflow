@@ -1814,6 +1814,13 @@
       "when": 1792191462027,
       "tag": "0259_rfc370_hosted_deployment",
       "breakpoints": true
+    },
+    {
+      "idx": 259,
+      "version": "6",
+      "when": 1792277862027,
+      "tag": "0260_rfc374_node_run_seq",
+      "breakpoints": true
     }
   ]
 }

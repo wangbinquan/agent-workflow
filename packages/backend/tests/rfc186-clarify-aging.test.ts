@@ -15,6 +15,7 @@ import {
 type Row = Parameters<typeof isTargetNodeConsumed>[3][number]
 function run(over: Partial<Row>): Row {
   return {
+    seq: null,
     nodeId: 'n1',
     iteration: 0,
     parentNodeRunId: null,

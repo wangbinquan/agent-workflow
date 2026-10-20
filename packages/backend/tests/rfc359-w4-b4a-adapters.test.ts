@@ -299,7 +299,7 @@ describeEachProvider('RFC-359 W4-B4a —— 记忆注入读存储与终态工作
       shardKey: null,
       reviewIteration: 0,
     })
-    expect(runs).toEqual([{ id: runId, status: 'done', injectedMemoriesJson: '[]' }])
+    expect(runs).toEqual([{ seq: null, id: runId, status: 'done', injectedMemoriesJson: '[]' }])
 
     const attribution = createWebhookTerminalWorkspaceAttributionQueries(db)
     expect(await attribution.load(taskId)).toEqual({

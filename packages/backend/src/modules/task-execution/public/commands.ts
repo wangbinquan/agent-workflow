@@ -150,6 +150,7 @@ export const WORKGROUP_TURN_LEADER_NODE_ID = '__wg_leader__'
 export const WORKGROUP_TURN_MEMBER_NODE_ID = '__wg_member__'
 
 export interface WorkgroupHostLedgerRun {
+  readonly seq: number | null
   readonly id: string
   readonly nodeId: string
   readonly shardKey: string | null
@@ -251,6 +252,7 @@ export interface WorkgroupTaskRoomTaskSnapshot {
 }
 
 export interface WorkgroupTaskRoomHostRunSnapshot {
+  readonly seq: number | null
   readonly id: string
   readonly nodeId: string
   readonly shardKey: string | null

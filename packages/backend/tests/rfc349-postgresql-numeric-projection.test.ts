@@ -64,6 +64,13 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
       'repositoryWorkspaceSqlStore.cachedRepoFacets 的调用点对 all/referenced/attention ' +
       '三个字段都套了 Number()（`unused` 也是由解码后的两个数相减）',
   },
+  // RFC-374：两处都不把聚合值交回 JS。
+  'modules/task-execution/infrastructure/nodeRunSeqBackfillStore.ts': {
+    id:
+      '追平的 `ROW_NUMBER() - COUNT(*) OVER ()` 只在 UPDATE … FROM 里给 seq 赋值（tx.run，无投影）；' +
+      '分配表清理的 `MAX(seq)` 子查询只决定删哪些候选，调用点只数删除行数。' +
+      '数值读取走 drizzle 的 min()/max()（按列 mapper 解码为 number）。',
+  },
 }
 
 /**

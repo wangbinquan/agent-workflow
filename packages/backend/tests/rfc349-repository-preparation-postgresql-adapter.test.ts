@@ -104,6 +104,10 @@ function postgresqlFixture(trace: string[]) {
       return sqlRows({ values: [[2]], count: 1 })
     }
     if (normalized.includes('from "agent_workflow"."node_runs"')) return sqlRows()
+    // RFC-374: the mint program allocates the run's seq from the identity table first.
+    if (normalized.startsWith('insert into "agent_workflow"."node_run_seq_allocations"')) {
+      return sqlRows({ objects: [{ seq: 1 }], values: [[1]], count: 1 })
+    }
     if (normalized.startsWith('insert into "agent_workflow"."node_runs"')) {
       trace.push('prep:insert')
       return sqlRows({ count: 1 })

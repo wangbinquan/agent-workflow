@@ -103,6 +103,8 @@ function postgresqlFixture() {
       // 每新增一处读新列的生产代码，它就会静默喂错值。两个 null 表示「任务尚无血缘前缀」，
       // 正是根任务的真实形状；本用例断言的是**语句落在同一条预留连接上**，不是血缘取值。
       values = [[null, null]]
+    } else if (normalized.includes('insert into "agent_workflow"."node_run_seq_allocations"')) {
+      values = [[1]] // The allocator's RETURNING projection, before inserting the run.
     } else if (normalized.includes('from "agent_workflow"."tasks"')) {
       values = [[TASK_ID]]
     } else if (
@@ -227,6 +229,10 @@ describeEachProvider('RFC-349 task transaction participants', (harness) => {
     expect(sqlText).not.toContain('update "agent_workflow"."node_runs"')
     expect(sqlText).not.toContain('from "agent_workflow"."node_runs"')
     expect(sqlText).toContain('insert into "agent_workflow"."node_runs"')
+    const inserts = fixture.statements.filter(({ sql }) => /insert into/i.test(sql))
+    expect(
+      inserts.map(({ sql }) => sql.match(/insert into "agent_workflow"\."([^"]+)/i)?.[1]),
+    ).toEqual(['node_run_seq_allocations', 'node_runs'])
     expect(
       fixture.statements.filter((statement) => /^begin\b/i.test(statement.sql.trim())),
     ).toHaveLength(1)

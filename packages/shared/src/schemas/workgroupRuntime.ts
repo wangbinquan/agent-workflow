@@ -325,7 +325,7 @@ export type WorkgroupMemberCurrentRun = z.infer<typeof WorkgroupMemberCurrentRun
 
 /**
  * RFC-182 — one host turn in the room's full execution history (`runHistory`
- * on the room aggregate, ascending by nodeRunId = mint order). Derived +
+ * on the room aggregate, ascending by NodeRun mint seq (legacy NULL rows use id)). Derived +
  * read-only; NEVER enters a prompt. `memberRuns` is a projection of this list
  * (running wins, else newest), so the two can never drift.
  */

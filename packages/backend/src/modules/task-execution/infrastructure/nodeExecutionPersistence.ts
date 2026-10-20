@@ -98,7 +98,7 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
         .select()
         .from(nodeRuns)
         .where(whereQuery(this.db, input))
-        .orderBy(asc(nodeRuns.id))
+        .orderBy(engineOf(this.db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id))
     ).map(snapshotOf)
   }
 

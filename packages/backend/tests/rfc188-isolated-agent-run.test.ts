@@ -1,3 +1,5 @@
+// RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
+import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 // RFC-188 — isolatedAgentRun 原语单测 + 装配单源锁。
 //
 // 背景：「一次隔离 agent 执行」的装配序列曾在 scheduler.ts 手抄五处
@@ -242,6 +244,7 @@ describeEachProvider(
         .update(nodeRuns)
         .set({ mergeState: 'pending-merge', isoNodeTree: nodeTree })
         .where(eq(nodeRuns.id, runId))
+      await catchUpLegacySequenceTask(db, taskId)
       await discardNodeIso(iso)
 
       const settle = await mergeBackAndSettle({

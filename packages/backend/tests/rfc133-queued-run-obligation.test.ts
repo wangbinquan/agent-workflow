@@ -31,6 +31,7 @@ const TARGET = 'agent_target'
 
 function mkRun(over: Partial<NodeRunRow>): NodeRunRow {
   return {
+    seq: null,
     id: 'run',
     nodeId: TARGET,
     iteration: 0,
@@ -43,6 +44,7 @@ function mkRun(over: Partial<NodeRunRow>): NodeRunRow {
 
 function mkLineage(over: Partial<RunLineageView>): RunLineageView {
   return {
+    seq: null,
     id: 'h1',
     nodeId: TARGET,
     iteration: 0,

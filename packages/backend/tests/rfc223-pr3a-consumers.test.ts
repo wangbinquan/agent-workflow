@@ -61,6 +61,7 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
     // Card ASG1 was re-claimed by A2 (mutable), but the run was minted under A1.
     const assignments = [{ id: 'ASG1', assigneeMemberId: 'mA2' }]
     const run: HostRunLite = {
+      seq: null,
       id: 'R1',
       nodeId: WG_MEMBER_NODE_ID,
       shardKey: 'ASG1',
@@ -77,6 +78,7 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
     // must not inherit that mutable current assignee.
     const assignments = [{ id: 'ASG1', assigneeMemberId: 'mA2' }]
     const run: HostRunLite = {
+      seq: null,
       id: 'R2',
       nodeId: WG_MEMBER_NODE_ID,
       shardKey: 'ASG1',
@@ -99,6 +101,7 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
     ]
     const assignments = [{ id: 'ASG9', assigneeMemberId: null }]
     const run: HostRunLite = {
+      seq: null,
       id: 'R3',
       nodeId: WG_MEMBER_NODE_ID,
       shardKey: 'ASG9',

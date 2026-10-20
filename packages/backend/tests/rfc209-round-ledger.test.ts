@@ -37,6 +37,7 @@ let seq = 0
 function row(p: Partial<RoundLedgerRow> & { nodeId: string }): RoundLedgerRow {
   seq += 1
   return {
+    seq: null,
     id: `01ROW${String(seq).padStart(21, '0')}`,
     shardKey: null,
     status: 'done',

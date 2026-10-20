@@ -19,6 +19,7 @@ export class DrizzleBranchTraceSnapshotReader implements BranchTraceSnapshotRead
     const runs = await this.db
       .select({
         id: nodeRuns.id,
+        seq: nodeRuns.seq,
         nodeId: nodeRuns.nodeId,
         status: nodeRuns.status,
         iteration: nodeRuns.iteration,

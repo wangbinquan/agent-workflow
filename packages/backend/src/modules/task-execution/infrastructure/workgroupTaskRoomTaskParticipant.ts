@@ -73,7 +73,7 @@ async function closeHolders(
         eq(nodeRuns.status, 'awaiting_review'),
       ),
     )
-    .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
+    .returning({ id: nodeRuns.id, seq: nodeRuns.seq, nodeId: nodeRuns.nodeId })
 }
 
 export function createWorkgroupTaskRoomTaskParticipantInTx(
@@ -163,6 +163,7 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
       const rows = await tx
         .select({
           id: nodeRuns.id,
+          seq: nodeRuns.seq,
           nodeId: nodeRuns.nodeId,
           shardKey: nodeRuns.shardKey,
           status: nodeRuns.status,

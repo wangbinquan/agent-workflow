@@ -1,5 +1,6 @@
 // RFC-359 W4-B1 —— task-execution 读模型：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { isWorkgroupTask } from '@agent-workflow/shared'
 import { and, asc, desc, eq } from 'drizzle-orm'
 
@@ -214,6 +215,7 @@ export function createTaskExecutionReadModels(
           ? await db
               .select({
                 id: nodeRuns.id,
+                seq: nodeRuns.seq,
                 nodeId: nodeRuns.nodeId,
                 iteration: nodeRuns.iteration,
                 parentNodeRunId: nodeRuns.parentNodeRunId,
@@ -402,7 +404,7 @@ export function createTaskExecutionReadModels(
                   eq(nodeRuns.opencodeSessionId, run.opencodeSessionId),
                 ),
               )
-              .orderBy(asc(nodeRuns.id))
+              .orderBy(engineOf(db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id))
       const lineage = siblings.length === 0 ? [run] : siblings
       const eventColumns = {
         id: nodeRunEvents.id,

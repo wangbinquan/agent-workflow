@@ -10,7 +10,7 @@
 // awaiting-vs-answered, orphaned-awaiting suppression on a dead task — live in
 // the backend oracle. This helper is a PURE freshest-run orchestrator, the same
 // shape as deriveReviewNodeNav (review-node-nav.ts): the node's current state is
-// its ULID-newest run; we read that one run's stamp. An OLDER answered/awaiting
+// its last-minted run; we read that one run's stamp. An OLDER answered/awaiting
 // run must NOT shadow a newer non-clickable one (a persistent-stop guard run or a
 // canceled round), and a stale orphaned awaiting must NOT be reached past a newer
 // null run — freshest-run is immune to both because it only ever reads the current
@@ -21,10 +21,11 @@
 // parentNodeRunId; the backend clarifyNavKind stamp (null for non-session runs) is
 // the safety gate.
 //
-// ULID id order (later-minted row wins) mirrors the backend's isFresherNodeRun
+// Seq-first mint order (later-minted row wins) mirrors the backend's isFresherNodeRun
 // comparator; a clarify run's `startedAt` is the createClarifySession mint tick and
-// is monotonic with the ULID, so ULID-newest and the canvas' startedAt-latest agree.
+// may differ from mint order; the remaining timestamp-first selectors belong to S1b.
 
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import type { NodeRun } from '@agent-workflow/shared'
 
 export type ClarifyNodeNavKind = 'awaiting' | 'answered'
@@ -35,18 +36,17 @@ export interface ClarifyNodeNav {
   nodeRunId: string
 }
 
-/** ULID-newest (later-minted) row of a non-empty list. Pure string compare on
- *  `id` — ULIDs are lexicographically time-ordered. */
-function ulidNewest(rows: NodeRun[]): NodeRun {
+/** last-minted (later-minted) row of a non-empty list. Shared seq-first comparison with a legacy NULL fallback. */
+function mintNewest(rows: NodeRun[]): NodeRun {
   let best = rows[0]!
-  for (const r of rows) if (r.id > best.id) best = r
+  for (const r of rows) if (compareNodeRunMintOrder(r, best) > 0) best = r
   return best
 }
 
 /**
  * The click target for one clarify / cross-clarify workflow node, or null if it
  * should not be clickable. Pure freshest-run: the node's current state is its
- * ULID-newest run for this nodeId; we read that run's backend stamp.
+ * last-minted run for this nodeId; we read that run's backend stamp.
  *
  * `clarifyNavKind` is matched with strict `===` so an older daemon that never
  * stamped it (undefined) — or a null stamp — collapses to "not clickable" rather
@@ -55,7 +55,7 @@ function ulidNewest(rows: NodeRun[]): NodeRun {
 export function deriveClarifyNodeNav(runs: NodeRun[], nodeId: string): ClarifyNodeNav | null {
   const mine = runs.filter((r) => r.nodeId === nodeId)
   if (mine.length === 0) return null
-  const freshest = ulidNewest(mine)
+  const freshest = mintNewest(mine)
   if (freshest.clarifyNavKind === 'awaiting') return { kind: 'awaiting', nodeRunId: freshest.id }
   if (freshest.clarifyNavKind === 'answered') return { kind: 'answered', nodeRunId: freshest.id }
   return null
