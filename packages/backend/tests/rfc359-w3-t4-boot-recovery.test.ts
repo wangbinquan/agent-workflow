@@ -1,3 +1,4 @@
+import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-359 W3-T4（P0-3 / P0-4）—— daemon 启动期的任务执行恢复四步，两个引擎各跑一遍。
 //
 // dual-provider-parity-audit-2026-09-04 P0-3：boot 恢复四步只在 cli/start.ts 的 SQLite 分支里，
@@ -286,28 +287,24 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
   })
 })
 
-test('源码锁：两个 daemon 入口都在 HTTP 之前跑同一段 boot 恢复，且在 delete 认领续做之前', () => {
+test('both provider recovery bindings follow skill gates and precede task deletion before listening', () => {
   const cli = resolve(import.meta.dir, '..', 'src', 'cli')
-  const start = readFileSync(resolve(cli, 'start.ts'), 'utf8')
-  expect(start).toContain('await runTaskExecutionBootRecovery({')
-  expect(start).not.toContain('createExclusiveDaemonLockProof(')
-  expect(start).toMatch(
-    /await recoverInterruptedTaskDeletes\(\s*db,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/,
-  )
-  expect(start.indexOf('await runTaskExecutionBootRecovery({')).toBeLessThan(
-    start.indexOf('await recoverInterruptedTaskDeletes('),
-  )
-  const daemon = readFileSync(resolve(cli, 'postgresqlDaemonApplication.ts'), 'utf8')
-  expect(daemon).toMatch(
-    /await recoverInterruptedTaskDeletes\(\s*input\.db,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/,
-  )
-  const gate = daemon.indexOf('skillCatalogBoot.activateAvailabilityGate()')
-  const recovery = daemon.indexOf('await runTaskExecutionBootRecovery({', gate)
-  const deleteRecovery = daemon.indexOf('await recoverInterruptedTaskDeletes(', recovery)
-  const httpCreate = daemon.indexOf('const app = createComposedApp', deleteRecovery)
-  expect(gate).toBeGreaterThan(-1)
-  expect(recovery).toBeGreaterThan(gate)
-  expect(deleteRecovery).toBeGreaterThan(recovery)
-  expect(httpCreate).toBeGreaterThan(deleteRecovery)
-  expect(daemon).not.toContain('createExclusiveDaemonLockProof(')
+  expectBootOrder(['skill-availability-gate', 'task-execution-recovery', 'task-delete-recovery'])
+  expect(bootDeclaration('task-execution-recovery')).toMatchObject({
+    phase: 'execution-recovery',
+    failure: 'fail-closed',
+  })
+  for (const [file, database] of [
+    ['start.ts', 'db'],
+    ['postgresqlDaemonApplication.ts', 'input.db'],
+  ] as const) {
+    const source = readFileSync(resolve(cli, file), 'utf8')
+    expect(bootImplementation(source, 'task-execution-recovery')).toContain(
+      'await runTaskExecutionBootRecovery({',
+    )
+    expect(bootImplementation(source, 'task-delete-recovery').replace(/\s/g, '')).toContain(
+      `awaitrecoverInterruptedTaskDeletes(${database},undefined,input.taskDeletionEffects,)`,
+    )
+    expect(source).not.toContain('createExclusiveDaemonLockProof(')
+  }
 })

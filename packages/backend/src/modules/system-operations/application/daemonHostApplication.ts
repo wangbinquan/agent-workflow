@@ -5,6 +5,7 @@ export interface DaemonHostApplicationOptions {
   readonly host: DaemonHostLifecyclePort
   readonly databaseProvider: string
   readonly readyInfo: () => Parameters<DaemonHostLifecyclePort['publishReady']>[0]
+  readonly postReady?: () => Promise<void>
   readonly readBootstrapRequired: () => boolean | Promise<boolean>
   readonly readyBrowserUrl: (bootstrapRequired: boolean) => string
   readonly stopListener: () => void | Promise<void>
@@ -116,6 +117,7 @@ export async function runDaemonHostApplication(
       readinessInFlight.delete(readinessPublication)
     }
     if (shuttingDown) return await waitForHostExit()
+    await input.postReady?.()
     const bootstrapRequired = await input.readBootstrapRequired()
     if (shuttingDown) return await waitForHostExit()
     const browserUrl = input.readyBrowserUrl(bootstrapRequired)

@@ -35,6 +35,9 @@ import type {
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 
+import { DAEMON_BACKGROUND_JOBS } from '../src/cli/daemonLifecycleProgram'
+import { propertyBodies } from './helpers/daemonProgramSource'
+
 function guards(abortRevoked: () => number | Promise<number>): MrLaunchGuardCoordinator {
   return {
     supervisor: { abortAll: () => [] },
@@ -146,13 +149,14 @@ describe('RFC-349 terminal-control worker inside the provider fence', () => {
   test('both daemon bootstraps register the worker as a paused provider writer', () => {
     const start = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
 
-    // SQLite bootstrap: the source session of every cutover.
-    expect(start).toContain('webhookTerminalControlRuntimeFactory')
-    expect(start).toMatch(
-      /const providerBackgroundWriterFactories = Object\.freeze\(\[\s*\n\s*webhookTerminalControlRuntimeFactory,/,
-    )
-
-    // PostgreSQL bootstrap: the target session, and the source of any later switch.
-    expect(start).toMatch(/backgroundWriterFactories: \[\s*\n\s*webhookTerminalRuntimeFactory,/)
+    expect(DAEMON_BACKGROUND_JOBS[0].id).toBe('webhook-terminal-control')
+    const records = propertyBodies(start, 'backgroundJobs')
+    expect(records).toHaveLength(2)
+    expect(propertyBodies(records[0]!, 'webhook-terminal-control')).toEqual([
+      'webhookTerminalRuntimeFactory',
+    ])
+    expect(propertyBodies(records[1]!, 'webhook-terminal-control')).toEqual([
+      'webhookTerminalControlRuntimeFactory',
+    ])
   })
 })

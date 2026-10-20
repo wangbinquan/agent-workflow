@@ -16,7 +16,7 @@ import type {
 import type { EventCenterModule } from '../src/modules/event-center/composition'
 import { createWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeWebhookIngressPersistenceFor } from '../src/modules/integration/composition/webhookIngress'
-import { composeEventCenter } from '../src/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import {
   createCodeHostWebhookDeliveryConsumer,
   createCodeHostWebhookRoutingDirectory,

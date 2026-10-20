@@ -55,6 +55,7 @@ export { selectLocalCustomObserverProgramFactory }
 export type { CustomObserverProgramFactory }
 
 export interface EventCenterModule {
+  readonly initialize: () => Promise<void>
   readonly commands: EventObservationCommandPort
   readonly participant: EventCenterParticipant
   readonly observerControl: EventObserverControlParticipant
@@ -148,6 +149,9 @@ export function deferEventCenterModule(pending: Promise<EventCenterModule>): Eve
   }
 
   const deferred: EventCenterModule = {
+    initialize: async () => {
+      await (await resolve()).initialize()
+    },
     commands: {
       observe: async (input) => await participant.observe(input),
     },
@@ -363,7 +367,6 @@ export async function composeEventCenterWithPorts(
     ...(options.observerLeaseMs === undefined ? {} : { observerLeaseMs: options.observerLeaseMs }),
     ...(options.deliveryLeaseMs === undefined ? {} : { deliveryLeaseMs: options.deliveryLeaseMs }),
   })
-  await service.initialize()
 
   const participant: EventCenterParticipant = {
     subscribe: async (input) => await service.subscribe(input),
@@ -385,7 +388,9 @@ export async function composeEventCenterWithPorts(
     acceptDelivery: async (deliveryId) => await service.acceptDelivery(deliveryId),
   }
 
+  let initialization: Promise<void> | undefined
   return {
+    initialize: () => (initialization ??= service.initialize()),
     commands: { observe: participant.observe },
     participant,
     observerControl: { nudgeSource: async (sourceRef) => await service.nudgeSource(sourceRef) },

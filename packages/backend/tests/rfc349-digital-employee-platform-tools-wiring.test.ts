@@ -1,3 +1,4 @@
+import { bootImplementation, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-349 回归防护 —— HTTP 授权面必须和 OS 运行时读同一份平台工具目录。
 //
 // 为什么这条测试存在：RFC-349 把内置工具目录的组装改成 provider-bound 且异步，
@@ -53,6 +54,11 @@ describe('RFC-349 digital employee platform tool wiring', () => {
       typeRef: { typeId: string; revision: number }
     }
     typeRef = `${descriptor.typeRef.typeId}@${descriptor.typeRef.revision}`
+    const digitalEmployeePlatformTools = composeDigitalEmployeeBuiltinToolCatalog({
+      agentTemplates: templates,
+      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+    })
+    await digitalEmployeePlatformTools.load()
     composition = composeSqliteAppDeps({
       secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
       token: 'd'.repeat(64),
@@ -61,10 +67,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
       dbVersion: 1,
       db,
       appHome,
-      digitalEmployeePlatformTools: await composeDigitalEmployeeBuiltinToolCatalog({
-        agentTemplates: templates,
-        typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
-      }),
+      digitalEmployeePlatformTools,
     })
     app = createComposedApp(composition)
     const admin = await createUser(db, {
@@ -105,7 +108,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     const source = readFileSync(resolve(backendRoot, 'src/cli/start.ts'), 'utf8')
     // 目录必须先于 app 组装建好，并**同时**交给 app 与 employeeOs。
     expect(source).toMatch(
-      /const digitalEmployeePlatformTools = await composeDigitalEmployeeBuiltinToolCatalog\(/,
+      /const digitalEmployeePlatformTools = composeDigitalEmployeeBuiltinToolCatalog\(/,
     )
     // RFC-370 adds required composition fields before this catalog. Bind the
     // exact argument member instead of relying on its character distance.
@@ -134,6 +137,10 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     expect(catalogMembers).toHaveLength(1)
     expect(ts.isShorthandPropertyAssignment(catalogMembers[0]!)).toBe(true)
     expect(source).toContain('platformTools: digitalEmployeePlatformTools,')
+    expect(bootImplementation(source, 'employee-tool-catalog')).toContain(
+      'await digitalEmployeePlatformTools.load()',
+    )
+    expectBootOrder(['employee-agent-templates', 'employee-tool-catalog'])
     // 单一实例：不允许再出现第二次组装（两份目录 = 两种真值）。
     expect(source.split('composeDigitalEmployeeBuiltinToolCatalog(').length - 1).toBe(1)
   })

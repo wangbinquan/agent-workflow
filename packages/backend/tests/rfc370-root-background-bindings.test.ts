@@ -70,7 +70,7 @@ for (const [name, query, notificationKey] of [
     test('maintenance and Task background select the same live query', () => {
       const maintenance = namedVariable(root, 'maintenanceConfiguration')
       expect(compact(maintenance.initializer!, start)).toBe(`await${query}.read()`)
-      const create = calls(root, start, 'startMaintenanceService')
+      const create = calls(root, start, 'createMaintenanceService')
       expect(create).toHaveLength(1)
       expect(maintenance.pos).toBeLessThan(create[0]!.pos)
       expect(compact(create[0]!, start)).toContain('loadConfig:()=>maintenanceConfiguration,')

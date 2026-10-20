@@ -88,7 +88,7 @@ function declaredDispatchRoutes(value: unknown) {
       }>)
 }
 
-export async function composeDigitalEmployeeBuiltinToolCatalog(input: {
+async function loadDigitalEmployeeBuiltinToolCatalog(input: {
   readonly agentTemplates: DigitalEmployeeAgentTemplateCatalogParticipant
   readonly typePackageDescriptorJsons: readonly string[]
 }): Promise<DigitalEmployeePlatformToolCatalogParticipant> {
@@ -312,4 +312,58 @@ export async function composeDigitalEmployeeBuiltinToolCatalog(input: {
     isPlatformTool: (toolId) => toolId.startsWith(prefix),
   }
   return Object.freeze(catalog)
+}
+
+interface BuiltinToolCatalogInput {
+  readonly agentTemplates: DigitalEmployeeAgentTemplateCatalogParticipant
+  readonly typePackageDescriptorJsons: readonly string[] | (() => Promise<readonly string[]>)
+}
+
+/** A complete catalog participant with an explicit, idempotent loading lifecycle. */
+class LoadableBuiltinToolCatalog implements DigitalEmployeePlatformToolCatalogParticipant {
+  #catalog: DigitalEmployeePlatformToolCatalogParticipant | undefined
+  #loading: Promise<void> | undefined
+  constructor(private readonly input: BuiltinToolCatalogInput) {}
+  load(): Promise<void> {
+    return (this.#loading ??= (async () => {
+      this.#catalog = await loadDigitalEmployeeBuiltinToolCatalog({
+        agentTemplates: this.input.agentTemplates,
+        typePackageDescriptorJsons:
+          typeof this.input.typePackageDescriptorJsons === 'function'
+            ? await this.input.typePackageDescriptorJsons()
+            : this.input.typePackageDescriptorJsons,
+      })
+    })())
+  }
+  #current(): DigitalEmployeePlatformToolCatalogParticipant {
+    if (this.#catalog === undefined) throw new Error('digital-employee-tool-catalog-not-loaded')
+    return this.#catalog
+  }
+  listJson(...args: Parameters<DigitalEmployeePlatformToolCatalogParticipant['listJson']>) {
+    return this.#current().listJson(...args)
+  }
+  getRevisionJson(
+    ...args: Parameters<DigitalEmployeePlatformToolCatalogParticipant['getRevisionJson']>
+  ) {
+    return this.#current().getRevisionJson(...args)
+  }
+  resolveCompatibleRevisionJson(
+    ...args: Parameters<
+      NonNullable<DigitalEmployeePlatformToolCatalogParticipant['resolveCompatibleRevisionJson']>
+    >
+  ) {
+    return this.#current().resolveCompatibleRevisionJson?.(...args) ?? null
+  }
+  isPlatformTool(
+    ...args: Parameters<DigitalEmployeePlatformToolCatalogParticipant['isPlatformTool']>
+  ) {
+    return this.#current().isPlatformTool(...args)
+  }
+}
+
+/** RFC-379: construction is passive; templates are seeded before the program calls load(). */
+export function composeDigitalEmployeeBuiltinToolCatalog(
+  input: BuiltinToolCatalogInput,
+): DigitalEmployeePlatformToolCatalogParticipant & { load(): Promise<void> } {
+  return Object.freeze(new LoadableBuiltinToolCatalog(input))
 }

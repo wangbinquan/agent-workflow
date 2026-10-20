@@ -19,7 +19,6 @@ import {
   enqueueDistillJob,
   recoverRunning,
   retryFailedJob,
-  startMemoryDistillLoop,
 } from './application/distill/schedule'
 
 // RFC-352 T7：bootstrap 只经 composition 取 memory 的东西，不深入 application。
@@ -87,15 +86,6 @@ function composeMemoryOperations(input: {
     distillWorker: Object.freeze({
       tick: async (options: Omit<MemoryDistillWorkerOptions, 'enabled' | 'intervalMs'> = {}) =>
         await distillTick({
-          ...options,
-          store: input.workStore,
-          reviewedArtifacts: input.reviewedArtifacts,
-          nodeRunPrompts: input.nodeRunPrompts,
-          runtimeResolver: input.runtimeResolver,
-          systemAgents: input.systemAgents,
-        }),
-      start: (options: MemoryDistillWorkerOptions = {}) =>
-        startMemoryDistillLoop({
           ...options,
           store: input.workStore,
           reviewedArtifacts: input.reviewedArtifacts,

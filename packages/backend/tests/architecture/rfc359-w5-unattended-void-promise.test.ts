@@ -146,7 +146,7 @@ export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   // RFC-370 v3 V9: the hosted maintenance Worker wiring left the PostgreSQL root (3 → 2).
   'cli/postgresqlDaemonApplication.ts: 2',
   // RFC-370: all three host shutdown callbacks now report rejection through the selected adapter.
-  'cli/start.ts: 3',
+  'cli/start.ts: 2',
   'mcp/server.ts: 1',
   // RFC-370 H8: the existing observer nudge moved out of the HTTP transport unchanged.
   'modules/integration/application/verifiedWebhookIngress.ts: 1',
@@ -156,7 +156,7 @@ export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   'platform/background/maintenanceWorker.ts: 3',
   'platform/events/committed/workerDefinitions.ts: 1',
   'platform/execution/local/managedProcess.ts: 4',
-  'server.ts: 4',
+  'server.ts: 3',
   'services/controlListener.ts: 1',
   'services/repoBatchImport.ts: 2',
   'services/reviewMutationCoordinator.ts: 1',

@@ -1,3 +1,4 @@
+import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-359 W1-T7d（P0-11）—— PostgreSQL daemon 也装配技能启动屏障。
 //
 // dual-provider-parity-audit-2026-09-04 P0-11：`composePostgresqlSkillCatalogBoot` 零生产调用方——
@@ -39,23 +40,43 @@ test('PostgreSQL daemon：屏障紧跟 restore、fail-closed、闸在 HTTP 之�
   )
   const restore = source.indexOf('await core.systemOperations.applyPendingRestore()')
   const compose = source.indexOf('composeSkillCatalogBoot({', restore)
-  const barrier = source.indexOf('skillCatalogBoot.runIdentityMigrationBarrier()', compose)
-  const gate = source.indexOf('skillCatalogBoot.activateAvailabilityGate()', barrier)
-  const reconcile = source.indexOf('skillCatalogBoot.reconcileLiveFiles()', gate)
-  const httpCreate = source.indexOf('const app = createComposedApp', gate)
-  const backfill = source.indexOf('skillCatalogBoot.backfillLegacyVersions()', httpCreate)
-  const reverify = source.indexOf('skillCatalogBoot.reverifySnapshots()', backfill)
   expect(restore).toBeGreaterThan(-1)
   expect(compose).toBeGreaterThan(restore)
-  expect(barrier).toBeGreaterThan(compose)
-  expect(gate).toBeGreaterThan(barrier)
-  expect(reconcile).toBeGreaterThan(gate)
-  expect(httpCreate).toBeGreaterThan(reconcile)
-  expect(backfill).toBeGreaterThan(httpCreate)
-  expect(reverify).toBeGreaterThan(backfill)
-  // 屏障与闸之间不许有 best-effort 兜底：身份证明失败不能变成一个活着的 daemon。
-  expect(source.slice(restore, gate)).not.toContain('try {')
-  expect(source.slice(restore, gate)).not.toContain('catch')
+  expectBootOrder([
+    'skill-identity-barrier',
+    'skill-availability-gate',
+    'skill-live-files',
+    'task-execution-recovery',
+    'resource-reverify',
+  ])
+  expect(bootDeclaration('skill-identity-barrier')).toMatchObject({
+    phase: 'prepare',
+    failure: 'fail-closed',
+  })
+  expect(bootDeclaration('skill-availability-gate')).toMatchObject({
+    phase: 'prepare',
+    failure: 'fail-closed',
+  })
+  expect(bootDeclaration('resource-reverify')).toMatchObject({
+    phase: 'post-ready',
+    failure: 'tracked-detached',
+  })
+  for (const [id, call] of [
+    ['skill-identity-barrier', 'runIdentityMigrationBarrier'],
+    ['skill-availability-gate', 'activateAvailabilityGate'],
+    ['skill-live-files', 'reconcileLiveFiles'],
+  ] as const) {
+    const body = bootImplementation(source, id)
+    expect(body).toContain(`skillCatalogBoot.${call}()`)
+    if (id !== 'skill-live-files') {
+      expect(body).not.toContain('try {')
+      expect(body).not.toContain('catch')
+    }
+  }
+  const reverify = bootImplementation(source, 'resource-reverify')
+  const backfill = reverify.indexOf('skillCatalogBoot.backfillLegacyVersions()')
+  expect(backfill).toBeGreaterThan(-1)
+  expect(reverify.indexOf('skillCatalogBoot.reverifySnapshots()')).toBeGreaterThan(backfill)
 })
 
 describeEachProvider('RFC-359 T7d —— 技能启动屏障在两个引擎上各跑一遍', (harness) => {

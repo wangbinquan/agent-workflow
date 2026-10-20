@@ -32,7 +32,7 @@ import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
 } from './helpers/integrationTriggerResourceBinding'
-import { composeEventCenter } from '../src/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import {
   createCodeHostWebhookDeliveryConsumer,
   createCodeHostWebhookRoutingDirectory,

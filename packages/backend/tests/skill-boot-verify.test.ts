@@ -1,3 +1,4 @@
+import { bootDeclaration } from './helpers/daemonProgramSource'
 // RFC-170 §invariant④ / §10 (T-BOOT) — managed snapshot integrity reverify +
 // the isSkillAvailableThisBoot gate. A durable 'snapshot-authoritative' flag is
 // NOT enough (G6-4): a snapshot corrupted offline must be caught THIS boot and
@@ -383,13 +384,16 @@ test('resolveInjection fails closed on a non-injectable managed skill (source lo
   expect(src).toMatch(/SkillQuarantinedError\(row\.name\)/)
 })
 
-test('boot pass backfills legacy skills BEFORE the reverify (source lock)', async () => {
-  const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
-  // The legacy v1 backfill (+ husk sweep — backfillLegacySkillVersions) must
-  // precede runBootSnapshotReverify (so a backfilled skill is
-  // authoritative+verified when the gate activates).
-  const backfillIdx = src.indexOf('skillCatalogBoot.backfillLegacyVersions()')
-  const reverifyIdx = src.indexOf('skillCatalogBoot.reverifySnapshots()')
-  expect(backfillIdx).toBeGreaterThan(0)
-  expect(backfillIdx).toBeLessThan(reverifyIdx)
+test('post-ready boot pass backfills legacy skills BEFORE reverify on both providers', () => {
+  expect(bootDeclaration('resource-reverify')).toMatchObject({
+    phase: 'post-ready',
+    failure: 'tracked-detached',
+  })
+  for (const file of ['start.ts', 'postgresqlDaemonApplication.ts']) {
+    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', file), 'utf8')
+    const backfillIdx = src.indexOf('skillCatalogBoot.backfillLegacyVersions()')
+    const reverifyIdx = src.indexOf('skillCatalogBoot.reverifySnapshots()')
+    expect(backfillIdx).toBeGreaterThan(0)
+    expect(backfillIdx).toBeLessThan(reverifyIdx)
+  }
 })

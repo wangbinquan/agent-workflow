@@ -167,7 +167,12 @@ describe('RFC-349 daemon provider runtime router', () => {
     })
     const router = createDaemonProviderRuntimeRouter<TestWebSocket>(controller)
 
-    expect(sqlite.state()).toEqual({ phase: 'frozen', activeHandleIds: [] })
+    expect(sqlite.state()).toMatchObject({
+      phase: 'frozen',
+      activeHandleIds: [],
+      steps: [],
+      jobs: expect.any(Array),
+    })
     expect(Object.isFrozen(sqlite.runtime)).toBe(true)
     expect(Object.hasOwn(sqlite.runtime, 'client')).toBe(false)
     expect(Object.keys(sqlite.runtime).sort()).toEqual(['fetch', 'tryUpgrade', 'websocketHandlers'])

@@ -825,6 +825,7 @@ describeEachProviderHttpApplication(
             developmentEmployeeTypePackage.descriptorJson,
           ],
         })
+        await catalog.load()
         const classifierTools = JSON.parse(
           catalog.listJson(
             JSON.stringify({ typeId: 'development', revision: 11 }),

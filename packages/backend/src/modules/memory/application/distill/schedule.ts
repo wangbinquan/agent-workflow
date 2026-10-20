@@ -7,7 +7,7 @@
 //
 // The scheduler is intentionally minimal:
 //   - `enqueueDistillJob` is a one-shot DB insert + WS broadcast.
-//   - `startMemoryDistillLoop` sets up a setInterval that, on each tick,
+//   - The daemon lifecycle polling adapter, on each tick,
 //     SELECTs at most 5 pending jobs whose `next_run_at <= now`, merges
 //     them with any siblings sharing the same debounce_key, hands the
 //     bundle to `runDistill`, and applies exponential backoff on error.
@@ -417,7 +417,7 @@ export interface DistillTickOptions {
  * backoff on failure.
  *
  * Exported so tests can drive the loop synchronously without booting
- * setInterval. Production callers use `startMemoryDistillLoop`.
+ * timers. Production calls this through the daemon lifecycle polling adapter.
  */
 export async function distillTick(options: DistillTickOptions): Promise<{
   picked: number
@@ -512,95 +512,6 @@ export async function distillTick(options: DistillTickOptions): Promise<{
 // ---------------------------------------------------------------------------
 // Daemon-side loop
 // ---------------------------------------------------------------------------
-
-export interface StartLoopOptions {
-  store: MemoryDistillWorkStore
-  reviewedArtifacts: MemoryDistillReviewedArtifactReader
-  nodeRunPrompts: NodeRunPromptReader
-  runtimeResolver: MemoryDistillRuntimeResolver
-  readonly systemAgents: RunDistillOptions['systemAgents']
-  /** Settings.memoryDistillerEnabled — when false, ticker is a no-op shell. */
-  enabled?: boolean
-  /** Default 1000ms (1Hz). Tests can shorten / lengthen. */
-  intervalMs?: number
-  /** RFC-117 — runtime profile NAME (config.memoryDistillRuntime); wins over `model`. */
-  runtimeName?: string | null
-  /** RFC-117 — global default runtime name (config.defaultRuntime) for inheritance. */
-  defaultRuntime?: string | null
-  /** @deprecated RFC-117 — transition fallback (config.memoryDistillModel). */
-  model?: string | null
-  /** RFC-044: forwarded to distillTick → runDistill on every tick. */
-  sourceContextBudget?: SourceContextBudget
-  /** Forwarded to distillTick → runDistill on every tick (config.memoryDistillTimeoutMs). */
-  timeoutMs?: number
-}
-
-export interface DistillLoopHandle {
-  stop: () => void
-}
-
-/**
- * Spin up the daemon-side worker. Returns a `.stop()`-able handle. On
- * stop, any rows still marked `running` (left over from a crashed tick
- * mid-await) are flipped back to `pending` so the next start picks them
- * up. Tests should call `.stop()` to keep the handle out of the JS event
- * loop after the case finishes.
- */
-export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHandle {
-  if (options.enabled === false) {
-    return { stop: () => {} }
-  }
-  // Recover any rows left as 'running' from a crashed prior tick.
-  recoverRunning(options.store).catch((err) => {
-    log.warn('startup recovery failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  })
-  const interval = options.intervalMs ?? 1000
-  // Reentrancy guard — mirrors the sibling tickers (gc.ts, eventsArchive.ts).
-  // distillTick is async and awaits a real LLM spawn (runDistill) that can take
-  // seconds, while the interval is 1Hz. Without this guard, tick N+1 fires while
-  // tick N is still awaiting: both SELECT the same `pending` rows before either
-  // has UPDATE'd them to `running` (there are awaits between the SELECT at the
-  // top of distillTick and the per-head claim), so the same debounce_key gets
-  // distilled twice — duplicate memory candidates + double token spend +
-  // attempts/lastError clobbering each other. Single-process deployment (flock
-  // single-instance) means this in-process guard fully closes the overlap.
-  // See design/test-guard-audit-2026-07-21 gap B6-data-4 / Top-16.
-  let running = false
-  const handle = setInterval(() => {
-    if (running) return
-    running = true
-    distillTick({
-      store: options.store,
-      reviewedArtifacts: options.reviewedArtifacts,
-      nodeRunPrompts: options.nodeRunPrompts,
-      runtimeResolver: options.runtimeResolver,
-      systemAgents: options.systemAgents,
-      runtimeName: options.runtimeName,
-      defaultRuntime: options.defaultRuntime,
-      model: options.model,
-      sourceContextBudget: options.sourceContextBudget,
-      timeoutMs: options.timeoutMs,
-    })
-      .catch((err) => {
-        log.warn('tick threw', { error: err instanceof Error ? err.message : String(err) })
-      })
-      .finally(() => {
-        running = false
-      })
-  }, interval)
-  return {
-    stop: () => {
-      clearInterval(handle)
-      // Best-effort restore on stop too so a developer-side daemon restart
-      // doesn't strand rows in 'running'.
-      recoverRunning(options.store).catch(() => {
-        // ignore
-      })
-    },
-  }
-}
 
 export async function recoverRunning(
   store: MemoryDistillWorkStore,

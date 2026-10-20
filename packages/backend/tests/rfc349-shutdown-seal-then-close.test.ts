@@ -75,7 +75,7 @@ describe('RFC-349 shutdown seals task execution before the provider session clos
     expect(() => gate.enter()).not.toThrow()
   })
 
-  test('closing the session after shutdown sealed the gate still closes the provider', async () => {
+  test('session-owned shutdown pauses before sealing and closes the provider', async () => {
     const gate = new TaskClaimGate('generation-1')
     const events: string[] = []
 
@@ -98,6 +98,7 @@ describe('RFC-349 shutdown seals task execution before the provider session clos
     const closeParticipant: DaemonProviderCloseParticipant = {
       id: 'task-execution-final-close',
       close() {
+        gate.seal()
         events.push('participant:close')
       },
     }
@@ -122,8 +123,7 @@ describe('RFC-349 shutdown seals task execution before the provider session clos
     })
     await session.resume(lifecycle)
 
-    // Graceful shutdown drains and seals task execution first.
-    gate.seal()
+    // RFC-379: runtime stop/drain precedes the final-close participant that seals.
 
     await session.close({ reason: 'daemon-shutdown' })
 
@@ -134,6 +134,7 @@ describe('RFC-349 shutdown seals task execution before the provider session clos
       'identity:shutdown',
       'provider:close',
     ])
+    expect(gate.isSealed).toBe(true)
     expect(session.state().phase).toBe('closed')
   })
 })

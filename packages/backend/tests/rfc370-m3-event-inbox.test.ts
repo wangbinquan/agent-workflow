@@ -29,7 +29,7 @@ import {
   webhookEndpoints,
   webhookMrStreamStates,
 } from '@/db/schema'
-import { composeEventCenter } from '@/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import type {
   EventObservationInput,
   EventObservationReceipt,

@@ -287,7 +287,8 @@ export class DigitalEmployeeAuthoringService {
   readonly #pendingAutomaticToolRevalidations = new Map<string, PendingAutomaticToolRevalidation>()
   readonly #automaticToolRevalidationFailures = new Map<string, AutomaticTypeUpgradeError>()
   readonly #automaticToolRevalidatedSuccessors = new Map<string, ExactResourceRef>()
-  readonly #ready: Promise<void>
+  #ready: Promise<void> | undefined
+  readonly #typePackages: readonly EmployeeTypeRuntimePackage[]
 
   constructor(deps: DigitalEmployeeAuthoringServiceDependencies) {
     this.#store = deps.store
@@ -319,11 +320,7 @@ export class DigitalEmployeeAuthoringService {
       this.#registeredTypeKeys.add(key)
     }
 
-    this.#ready = this.#initialize(deps.typePackages)
-    // 初始化失败由第一个等 #ready 的调用方（启动装配的 ready() / settleAutomaticUpgrades()，或任一请求）收到；
-    // 这里只标记「已有人接手」，避免装配后还没人来得及等它（例如测试关库、进程退出）时被当成 unhandled
-    // rejection 击穿进程。
-    this.#ready.catch(() => undefined)
+    this.#typePackages = deps.typePackages
   }
 
   /**
@@ -331,8 +328,13 @@ export class DigitalEmployeeAuthoringService {
    * execution policy ensured. Boot awaits it so a broken registration fails the daemon loudly
    * instead of surfacing on the first request.
    */
+  initialize(): Promise<void> {
+    this.#ready ??= this.#initialize(this.#typePackages)
+    return this.#ready
+  }
+
   async ready(): Promise<void> {
-    await this.#ready
+    await this.initialize()
   }
 
   async #initialize(typePackages: readonly EmployeeTypeRuntimePackage[]): Promise<void> {
@@ -383,7 +385,7 @@ export class DigitalEmployeeAuthoringService {
    * frozen and the owning job/employee closures are retried.
    */
   async settleAutomaticUpgrades(): Promise<void> {
-    await this.#ready
+    await this.ready()
     const attempted = new Set<string>()
     while (this.#pendingAutomaticToolRevalidations.size > 0) {
       const pending = [...this.#pendingAutomaticToolRevalidations.entries()].sort(
@@ -470,7 +472,7 @@ export class DigitalEmployeeAuthoringService {
   }
 
   async listTypes(): Promise<EmployeeTypePackageDescriptor[]> {
-    await this.#ready
+    await this.ready()
     const latest = new Map<string, EmployeeTypePackageDescriptor>()
     for (const record of await this.#store.listTypePackages()) {
       if (record.state !== 'published') continue
@@ -483,12 +485,12 @@ export class DigitalEmployeeAuthoringService {
   }
 
   async getType(ref: EmployeeTypeRef): Promise<EmployeeTypePackageDescriptor> {
-    await this.#ready
+    await this.ready()
     return await this.#descriptor(ref)
   }
 
   async getAuthoringManifest(ref: EmployeeTypeRef) {
-    await this.#ready
+    await this.ready()
     return (await this.#descriptor(ref)).authoringManifest
   }
 
@@ -1794,7 +1796,7 @@ export class DigitalEmployeeAuthoringService {
   }
 
   async listTools(typeRef: EmployeeTypeRef, workItemRef: string): Promise<ToolDraftRecord[]> {
-    await this.#ready
+    await this.ready()
     // Store-backed on purpose: a Case frozen on an older revision deep-links
     // this panel, and listing rows needs the frozen descriptor, not a codec.
     const item = findWorkItem(await this.#descriptor(typeRef), workItemRef)
@@ -2430,7 +2432,7 @@ export class DigitalEmployeeAuthoringService {
     ownerUserId: string | null
     adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
   }): Promise<JobTemplateRecord> {
-    await this.#ready
+    await this.ready()
     this.#runtime(input.typeRef)
     const body = createJobTemplateBodySchema.parse(input.body)
     for (const binding of body.defaultToolBindings) {
@@ -2483,7 +2485,7 @@ export class DigitalEmployeeAuthoringService {
     body: unknown
     adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
   }): Promise<JobTemplateRecord> {
-    await this.#ready
+    await this.ready()
     const existing = await this.#store.getJobTemplate(input.id)
     if (existing === null || existing.archivedAt !== null) {
       throw new NotFoundError(
@@ -2526,7 +2528,7 @@ export class DigitalEmployeeAuthoringService {
   }
 
   async listJobTemplates(typeRef: EmployeeTypeRef): Promise<JobTemplateRecord[]> {
-    await this.#ready
+    await this.ready()
     await this.#descriptor(typeRef)
     return await this.#store.listJobTemplates(typeRef)
   }
@@ -2536,7 +2538,7 @@ export class DigitalEmployeeAuthoringService {
     actorUserId: string | null
     adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
   }): Promise<ExactResourceRef> {
-    await this.#ready
+    await this.ready()
     const template = await this.#store.getJobTemplate(input.id)
     if (template === null || template.archivedAt !== null) {
       throw new NotFoundError(
@@ -2621,7 +2623,7 @@ export class DigitalEmployeeAuthoringService {
     ownerUserId: string | null
     adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
   }): Promise<EmployeeDefinitionRecord> {
-    await this.#ready
+    await this.ready()
     const runtime = this.#runtime(input.typeRef)
     const body = createEmployeeDefinitionBodySchema.parse(input.body)
     const template = await this.#store.getJobTemplateRevision(body.jobTemplateRef)
@@ -2678,7 +2680,7 @@ export class DigitalEmployeeAuthoringService {
     actorUserId: string | null
     adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
   }): Promise<EmployeeDefinitionRecord> {
-    await this.#ready
+    await this.ready()
     const existing = await this.#store.getEmployeeDefinition(input.id)
     if (existing === null || existing.archivedAt !== null) {
       throw new NotFoundError('employee-definition-not-found', `employee not found: ${input.id}`)
@@ -2734,7 +2736,7 @@ export class DigitalEmployeeAuthoringService {
   }
 
   async listEmployeeDefinitions(typeRef?: EmployeeTypeRef): Promise<EmployeeDefinitionRecord[]> {
-    await this.#ready
+    await this.ready()
     if (typeRef !== undefined) await this.#descriptor(typeRef)
     return (await this.#store.listEmployeeDefinitions(typeRef)).filter(
       (employee) => employee.currentRevision !== null,
@@ -2742,7 +2744,7 @@ export class DigitalEmployeeAuthoringService {
   }
 
   async listLaunchableEmployeeDefinitions(): Promise<EmployeeDefinitionRecord[]> {
-    await this.#ready
+    await this.ready()
     const currentTypeRevisions = new Map(
       (await this.listTypes()).map((descriptor) => [
         descriptor.typeRef.typeId,
@@ -2770,7 +2772,7 @@ export class DigitalEmployeeAuthoringService {
   }
 
   async getEmployeeDefinition(id: string): Promise<EmployeeDefinitionRecord> {
-    await this.#ready
+    await this.ready()
     const record = await this.#store.getEmployeeDefinition(id)
     if (record === null || record.archivedAt !== null || record.currentRevision === null) {
       throw new NotFoundError('employee-definition-not-found', `employee not found: ${id}`)
@@ -2926,7 +2928,7 @@ export class DigitalEmployeeAuthoringService {
   }
 
   async getExecutionPolicy() {
-    await this.#ready
+    await this.ready()
     const current = await this.#store.getCurrentExecutionPolicy()
     if (current === null) throw new Error('global execution policy was not seeded')
     return current
@@ -2941,7 +2943,7 @@ export class DigitalEmployeeAuthoringService {
     readonly defaultNodeRetries: number
     readonly sessionRestartBudget: number
   }) {
-    await this.#ready
+    await this.ready()
     const content = globalExecutionPolicySchema.parse({
       ...DEFAULT_GLOBAL_EXECUTION_POLICY,
       sameSceneAttempts: input.defaultNodeRetries,

@@ -1,3 +1,4 @@
+import { bootImplementation, bootDeclaration } from './helpers/daemonProgramSource'
 // RFC-321 T19 — repository publication boundary ratchet.
 //
 // The ledger closes over real call sites: persisted ownership, single-session
@@ -281,10 +282,14 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     ).toBeGreaterThanOrEqual(4)
     expect(cli).toContain('const repositoryTransportModule = composeRepositoryTransportCredentials')
     expect(cli).toContain('repositoryTransport: repositoryTransportModule.adminConnections')
-    expect(
-      cli.indexOf('reconcileRepositoryTransportConnectionProjections(') <
-        cli.indexOf('const repositoryPublicationTransport = createRepositoryPublicationTransport'),
-    ).toBe(true)
+    expect(bootDeclaration('transport-projections')).toMatchObject({
+      phase: 'prepare',
+      failure: 'fail-closed',
+    })
+    expect(bootImplementation(cli, 'transport-projections')).toContain(
+      'reconcileRepositoryTransportConnectionProjections(',
+    )
+    expect(cli).toContain('await lifecycleProgram.initialize(input.initializeExecution)')
     expect(
       server.match(/publicationTransport: repositoryPublicationTransport/g)?.length,
     ).toBeGreaterThanOrEqual(3)

@@ -13,13 +13,18 @@ const restore = (text: string) => inverseRfc213DevStartupRoot(parse(text)).text
 
 test('the approved dev startup delta restores the original self-check and preparation boundaries', () => {
   const original = restore(current)
-  expect(Buffer.byteLength(current) - Buffer.byteLength(original)).toBe(340)
+  expect(Buffer.byteLength(current) - Buffer.byteLength(original)).toBe(154)
   expect(original).toContain("import { getRuntimeDriver } from '@/services/runtime'\n")
   expect(original).toContain(
-    "    const { assertRuntimeDeclarations } = await import('@/services/runtime/selfCheck')\n" +
-      "    const { getRuntimeDriver, RUNTIME_KINDS } = await import('@/services/runtime')\n" +
-      '    const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))',
+    "        const { assertRuntimeDeclarations } = await import('@/services/runtime/selfCheck')\n" +
+      "        const { getRuntimeDriver, RUNTIME_KINDS } = await import('@/services/runtime')\n" +
+      '        const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))',
   )
+  expect(
+    original.split(
+      "const { assertRuntimeDeclarations } = await import('@/services/runtime/selfCheck')",
+    ),
+  ).toHaveLength(3)
   expect(original).not.toContain('developmentIntegrity')
   expect(original).not.toContain('agent-workflow-http:')
   expect(original).toContain('  const server = Bun.serve({\n    port: input.bindPort,\n')

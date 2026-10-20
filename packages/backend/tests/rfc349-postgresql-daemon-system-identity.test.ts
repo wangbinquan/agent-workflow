@@ -1,3 +1,4 @@
+import { bootImplementation, bootDeclaration } from './helpers/daemonProgramSource'
 // RFC-349 回归防护 —— PostgreSQL daemon 自用的「系统身份」必须由 identity-access 注册表
 // **铸**出来，不能手捏。
 //
@@ -120,15 +121,14 @@ describeEachProvider('RFC-349 — PostgreSQL daemon 的系统身份', (harness) 
 
   test('daemon 组合根不再手捏系统 actor', () => {
     const source = readFileSync(DAEMON_SOURCE, 'utf8')
-    const at = source.indexOf('const systemActor')
-    expect(
-      at,
-      'postgresqlDaemonApplication.ts 里找不到 systemActor 的绑定（结构变了？）',
-    ).toBeGreaterThan(-1)
-    expect(
-      source.slice(at, at + 200),
-      'systemActor 不再来自被 admit 的身份 ⇒ 四条 daemon 自用路径又会抛 foreign-legacy-actor-projection',
-    ).toContain('actorOfDirectAuthority(systemIdentity)')
+    const body = bootImplementation(source, 'daemon-identity')
+    expect(bootDeclaration('daemon-identity')).toMatchObject({
+      phase: 'prepare',
+      failure: 'fail-closed',
+      providers: ['postgresql'],
+    })
+    expect(body).toContain('await admitDaemonIdentity(identityAccess)')
+    expect(body).toContain('systemActor = actorOfDirectAuthority(systemIdentity)')
     expect(
       source.includes('buildActor('),
       'daemon 组合根又手捏 actor 了 ⇒ 注册表不认它，交给 authorityFor / resourceAuthorityFor 必炸',

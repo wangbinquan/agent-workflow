@@ -5,11 +5,11 @@ import { developmentEmployeeTypePackage } from '@/modules/development-automation
 import { encodeDevelopmentApprovalSubject } from '@/modules/development-automation/public/types'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import {
-  composeEventCenter,
   selectLocalCustomObserverProgramFactory,
   type ComposeEventCenterOptions,
   type EventCenterAutomationCapability,
 } from '@/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import type {
   EventAutomationDelegatedContext,
   EventAutomationDelegatedContextFactory,

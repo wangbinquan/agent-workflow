@@ -1,5 +1,6 @@
 import type { Config } from '@agent-workflow/shared'
 import {
+  DAEMON_SHUTDOWN_ABORT_REASON,
   PROVIDER_SESSION_CLOSE_ABORT_REASON,
   PROVIDER_SESSION_PAUSE_ABORT_REASON,
 } from '@agent-workflow/shared'
@@ -50,7 +51,7 @@ export interface TaskExecutionProviderBackgroundControl {
   /** Bind and start every TaskExecution-owned provider-session loop exactly once. */
   start(dependencies: TaskExecutionProviderBackgroundStartDependencies): Promise<void>
   /** Reversible admission freeze; waits for loop work and runtime handles to drain. */
-  pause(): Promise<void>
+  pause(reason?: 'provider-switch' | 'daemon-shutdown'): Promise<void>
   /** Re-arm the same provider-bound loops and execution module. */
   resume(): Promise<void>
   /** One-way terminal stop; drains loops before sealing the execution module. */
@@ -348,11 +349,18 @@ export function composeTaskExecutionProviderBackground(
       // A read failure propagates here; the drain promise observes it as well.
       await currentRead
     },
-    async pause() {
+    async pause(reason?: 'provider-switch' | 'daemon-shutdown') {
+      // Signal drivers before waiting for loops that may themselves await them.
+      const tickets =
+        reason === 'daemon-shutdown'
+          ? runtime.module.pause(DAEMON_SHUTDOWN_ABORT_REASON)
+          : undefined
       await queue(async () => {
         await Promise.all(loops.map((loop) => loop.pause()))
         if (startupRun !== null) await startupRun
-        await drainTickets(await runtime.module.pause(PROVIDER_SESSION_PAUSE_ABORT_REASON))
+        await drainTickets(
+          await (tickets ?? runtime.module.pause(PROVIDER_SESSION_PAUSE_ABORT_REASON)),
+        )
       })
     },
     async resume() {

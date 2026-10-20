@@ -4,7 +4,7 @@ import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
 
 import { eventRecords, eventTypeCatalog } from '@/db/schema'
-import { composeEventCenter } from '@/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import {
   TASK_LIFECYCLE_SOURCE_REF,
   TASK_STATUS_CHANGED_EVENT_REF,

@@ -9,69 +9,75 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { DAEMON_BOOT_STEPS } from '../src/cli/daemonLifecycleProgram'
+import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
+
 const cli = resolve(import.meta.dir, '..', 'src', 'cli')
 const SQLITE_ENTRY = readFileSync(resolve(cli, 'start.ts'), 'utf8')
 const POSTGRESQL_ENTRY = readFileSync(resolve(cli, 'postgresqlDaemonApplication.ts'), 'utf8')
 
-/** 两个入口都必须出现、且相对顺序必须一致的 boot 标记（按 cli/start.ts 的顺序列出）。 */
-const ORDERED_BOOT_MARKERS = [
-  'registerTerminalWorkspacePrunePolicy(',
-  'cleanupOrphanedGitCredentialLeases(',
-  'skillCatalogBoot.runIdentityMigrationBarrier()',
-  'repairFusionProvenance(',
-  'await runTaskExecutionBootRecovery({',
-  'await recoverInterruptedTaskDeletes(',
-  'archive.recover({',
-  'Maintenance.recover({',
-  'healScheduledLaunchPayloads(',
-  'recoverFusionDecisions(',
-  'seedFusionResources(',
-  'await ensureDigitalEmployeeAgentTemplates(',
-  'seedDemoContent({',
-  'const app = createComposedApp',
-] as const
+test('both providers bind the common boot program to the original operations', () => {
+  const bindings = {
+    'process-registrations': 'registerTerminalWorkspacePrunePolicy(',
+    'git-credential-lease-cleanup': 'cleanupOrphanedGitCredentialLeases(',
+    'skill-identity-barrier': 'skillCatalogBoot.runIdentityMigrationBarrier()',
+    'fusion-provenance': 'repairFusionProvenance(',
+    'task-execution-recovery': 'runTaskExecutionBootRecovery({',
+    'task-delete-recovery': 'recoverInterruptedTaskDeletes(',
+    'archive-recovery': 'archive.recover({',
+    'workspace-maintenance-recovery': 'Maintenance.recover({',
+    'scheduled-payload-heal': 'healScheduledLaunchPayloads(',
+    'fusion-decision-recovery': 'recoverFusionDecisions(',
+    'fusion-resource-seed': 'seedFusionResources(',
+    'employee-agent-templates': 'ensureDigitalEmployeeAgentTemplates(',
+    'demo-seed': 'seedDemoContent({',
+  } as const
+  const sqlite = SQLITE_ENTRY.slice(
+    SQLITE_ENTRY.indexOf('async function composeSqliteProviderSession('),
+  )
+  for (const source of [sqlite, POSTGRESQL_ENTRY]) {
+    for (const [id, operation] of Object.entries(bindings))
+      expect(bootImplementation(source, id as keyof typeof bindings)).toContain(operation)
+  }
+  expectBootOrder([
+    'process-registrations',
+    'git-credential-lease-cleanup',
+    'skill-identity-barrier',
+    'fusion-provenance',
+    'employee-agent-templates',
+    'scheduled-payload-heal',
+    'fusion-resource-seed',
+    'demo-seed',
+    'task-execution-recovery',
+    'task-delete-recovery',
+    'archive-recovery',
+    'workspace-maintenance-recovery',
+    'fusion-decision-recovery',
+  ])
+})
 
-function positions(source: string, markers: readonly string[]): number[] {
-  return markers.map((marker) => {
-    const at = source.indexOf(marker)
-    expect(at, `missing boot marker: ${marker}`).toBeGreaterThan(-1)
-    return at
+test('delivery recovery directly follows MR terminal reconciliation inside execution recovery', () => {
+  const mr = DAEMON_BOOT_STEPS.findIndex((step) => step.id === 'mr-terminal-reconcile')
+  expect(DAEMON_BOOT_STEPS[mr + 1]).toMatchObject({
+    id: 'webhook-delivery-recovery',
+    phase: 'execution-recovery',
   })
-}
-
-function isStrictlyIncreasing(values: readonly number[]): boolean {
-  return values.every((value, index) => index === 0 || value > values[index - 1]!)
-}
-
-test('cli/start.ts（SQLite）按登记顺序跑这些 boot 步骤', () => {
-  expect(isStrictlyIncreasing(positions(SQLITE_ENTRY, ORDERED_BOOT_MARKERS))).toBe(true)
-})
-
-test('postgresqlDaemonApplication.ts 跑同一组 boot 步骤，且相对顺序与 SQLite 一致', () => {
-  expect(isStrictlyIncreasing(positions(POSTGRESQL_ENTRY, ORDERED_BOOT_MARKERS))).toBe(true)
-})
-
-test('webhook 投递恢复紧跟终态控制 reconcileOnBoot，两个入口同形', () => {
   for (const source of [SQLITE_ENTRY, POSTGRESQL_ENTRY]) {
-    const reconcile = source.indexOf('await webhookTerminalControl.reconcileOnBoot()')
-    const deliveries = source.indexOf('await recoverInterruptedDeliveries(', reconcile)
-    const httpCreate = source.indexOf('const app = createComposedApp')
-    expect(reconcile).toBeGreaterThan(-1)
-    expect(deliveries).toBeGreaterThan(reconcile)
-    expect(httpCreate).toBeGreaterThan(deliveries)
+    expect(bootImplementation(source, 'mr-terminal-reconcile')).toContain(
+      'await webhookTerminalControl.reconcileOnBoot()',
+    )
+    expect(bootImplementation(source, 'webhook-delivery-recovery')).toContain(
+      'await recoverInterruptedDeliveries(',
+    )
   }
 })
 
-test('PG daemon：融合 provenance 修复 fail-closed（不包 try），且在任何融合恢复 / 播种之前', () => {
-  const repair = POSTGRESQL_ENTRY.indexOf('repairFusionProvenance(')
-  const block = POSTGRESQL_ENTRY.slice(
-    POSTGRESQL_ENTRY.lastIndexOf('\n  {', repair),
-    POSTGRESQL_ENTRY.indexOf('\n  }', repair) + 4,
-  )
-  expect(block).not.toContain('try {')
-  expect(block).not.toContain('catch')
-  expect(POSTGRESQL_ENTRY.indexOf('recoverFusionDecisions(')).toBeGreaterThan(repair)
-  expect(POSTGRESQL_ENTRY.indexOf('seedFusionResources(')).toBeGreaterThan(repair)
+test('fusion provenance stays fail-closed and precedes recovery and seeding', () => {
+  expect(bootDeclaration('fusion-provenance').failure).toBe('fail-closed')
+  const body = bootImplementation(POSTGRESQL_ENTRY, 'fusion-provenance')
+  expect(body).not.toContain('try {')
+  expect(body).not.toContain('catch')
+  expectBootOrder(['fusion-provenance', 'fusion-resource-seed', 'fusion-decision-recovery'])
 })
 
 test('runtime 注册表 boot 每条 provider 路径恰好一次：SQLite 在 start.ts 主路径，PG 在 provider 会话建立时', () => {

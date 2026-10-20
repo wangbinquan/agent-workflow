@@ -14,9 +14,7 @@ import {
 } from '@/modules/memory/application/distill/memoryDistiller'
 import {
   distillTick as selectedDistillTick,
-  startMemoryDistillLoop as startSelectedMemoryDistillLoop,
   type DistillTickOptions,
-  type StartLoopOptions,
 } from '@/modules/memory/application/distill/schedule'
 import type { NativeMemoryDistillRuntimeResolver } from '@/modules/memory/application/ports/distillWorkStore'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
@@ -42,12 +40,6 @@ type NativeTickOptions = Omit<DistillTickOptions, 'systemAgents' | 'runtimeResol
   readonly runFn?: NativeRunFixture
   readonly runtimeResolver: NativeMemoryDistillRuntimeResolver
 }
-type NativeLoopOptions = Omit<StartLoopOptions, 'systemAgents' | 'runtimeResolver'> & {
-  readonly runFn?: NativeRunFixture
-  readonly runtimeResolver: NativeMemoryDistillRuntimeResolver
-}
-
-/** Getters retain original read boundaries and the actual source receiver. */
 function forwardOptions<T>(
   source: object,
   fields: readonly string[],
@@ -106,10 +98,7 @@ export function runDistill(options: RunDistillOptions): ReturnType<typeof runSel
   )
 }
 
-function nativeScheduleOptions<T>(
-  options: NativeTickOptions | NativeLoopOptions,
-  fields: readonly string[],
-): T {
+function nativeScheduleOptions<T>(options: NativeTickOptions, fields: readonly string[]): T {
   const { binding, family } = nativeMemoryFixtureBinding(options)
   return forwardOptions<T>(options, fields, {
     systemAgents: { enumerable: true, get: family },
@@ -139,25 +128,6 @@ export function distillTick(options: NativeTickOptions): ReturnType<typeof selec
       'sourceContextBudget',
       'timeoutMs',
       'now',
-    ]),
-  )
-}
-
-export function startMemoryDistillLoop(
-  options: NativeLoopOptions,
-): ReturnType<typeof startSelectedMemoryDistillLoop> {
-  return startSelectedMemoryDistillLoop(
-    nativeScheduleOptions<StartLoopOptions>(options, [
-      'store',
-      'reviewedArtifacts',
-      'nodeRunPrompts',
-      'enabled',
-      'intervalMs',
-      'runtimeName',
-      'defaultRuntime',
-      'model',
-      'sourceContextBudget',
-      'timeoutMs',
     ]),
   )
 }

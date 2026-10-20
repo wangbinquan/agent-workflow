@@ -634,7 +634,6 @@ import {
   composeSqliteRepositoryWorkspaceStore,
   createRepositoryPublicationTransport,
   PostgresqlRepositoryTransportCredentialRepository,
-  reconcileRepositoryTransportConnectionProjections,
   SQLiteRepositoryTransportCredentialRepository,
   type RepositoryTransportCredentialModule,
   type RepositoryTransportCredentialRepository,
@@ -1939,7 +1938,11 @@ function composeApplicationEventCenter(
       },
     },
   })
-  void unstarted?.trackReady(initialization)
+  void unstarted?.trackReady(
+    initialization.then(async (module) => {
+      await module.initialize()
+    }),
+  )
   return deferEventCenterModule(initialization)
 }
 
@@ -2016,12 +2019,6 @@ function composeRepositoryBootstrap(
     new SQLiteRepositoryTransportCredentialRepository(deps.db)
   const repositoryTransport =
     deps.repositoryTransport ?? composeRepositoryTransportCredentials(repository, deps.secretBox)
-  if (repositoryTransport !== null) {
-    void reconcileRepositoryTransportConnectionProjections(
-      repository,
-      repositoryTransport.adminConnections,
-    )
-  }
   const codeHostConnections =
     repositoryTransport === null
       ? null

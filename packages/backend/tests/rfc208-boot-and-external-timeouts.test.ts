@@ -23,10 +23,11 @@ const gitVersionSource = readFileSync(
 
 describe('RFC-208 / RFC-226 · boot probes', () => {
   test('OpenCode is absent from the daemon boot gate', () => {
-    const boot = startSource.slice(
-      startSource.indexOf('export async function startCommand'),
-      startSource.indexOf('const gitCaps = await detectGitCapabilities()'),
-    )
+    const begin = startSource.indexOf('export async function startCommand')
+    const end = startSource.indexOf('async function composeSqliteProviderSession(', begin)
+    expect(begin).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(begin)
+    const boot = startSource.slice(begin, end)
     expect(boot).not.toContain("getRuntimeDriver('opencode')")
     expect(boot).not.toContain('ocDriver.probe')
     expect(boot).not.toContain('opencode probe ok')

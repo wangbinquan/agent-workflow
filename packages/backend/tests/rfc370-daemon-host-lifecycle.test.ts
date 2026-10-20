@@ -20,6 +20,7 @@ import type { Logger } from '../src/util/log'
 
 function hostFixture(
   options: {
+    postReady?: () => Promise<void>
     holdSubscription?: boolean
     holdFinalWithdrawal?: boolean
     subscriptionFailure?: boolean
@@ -173,6 +174,7 @@ function hostFixture(
         },
       },
       daemonHost: host,
+      postReady: options.postReady,
       log,
     })
   const requestShutdown = (reason = 'control-shutdown') => {
@@ -408,5 +410,35 @@ test('selected lifecycle and query keep the same prototype receiver; local readi
     expect(await selectDaemonRuntimeQueries(undefined, { infoPath }).readCurrent()).toBeNull()
   } finally {
     rmSync(root, { recursive: true, force: true })
+  }
+})
+
+// RFC-379: post-ready steps cannot race ahead of the host's readiness ACK.
+test('lifecycle post-ready follows readiness publication and precedes announcement', async () => {
+  let entered = false
+  const f = hostFixture({
+    postReady: async () => {
+      entered = true
+      f.events.push('lifecycle-post-ready')
+    },
+  })
+  const failure = Promise.withResolvers<unknown>()
+  void f.start('sqlite').catch(failure.resolve)
+  try {
+    await Promise.race([
+      f.publishing.promise,
+      failure.promise.then((error) => {
+        throw error
+      }),
+    ])
+    expect(entered).toBe(false)
+    f.publishAck.resolve()
+    await f.announced.promise
+    expect(f.events.indexOf('lifecycle-post-ready')).toBeGreaterThan(
+      f.events.indexOf('publish:ack'),
+    )
+    expect(f.events.indexOf('lifecycle-post-ready')).toBeLessThan(f.events.indexOf('announce'))
+  } finally {
+    await f.cleanup()
   }
 })

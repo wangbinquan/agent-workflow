@@ -39,7 +39,7 @@ import {
 } from './helpers/integrationTriggerResourceBinding'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
-import { createApp } from '../src/server'
+import { composeSqliteUnstartedApplication } from './helpers/providerHttpApplication'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { finishClaimedWebhookWorkspacePrune } from '../src/services/gc'
 import { registerTerminalWorkspacePrunePolicy, setTaskStatus } from '../src/services/lifecycle'
@@ -525,6 +525,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     taskTermination: composeTaskSourceTermination({ db }),
   })
   await terminalControl.reconcileOnBoot()
+  terminalControl.resume()
   const identityDependencies = integrationTriggerWebhookAuthorityDependencies(
     db,
     createIdentityAccessRuntime({ db }),
@@ -545,7 +546,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     getDefaultRuntime: async () => null,
     terminalControl,
   })
-  const app = createApp({
+  const application = await composeSqliteUnstartedApplication({
     token: 'a'.repeat(64),
     configPath,
     opencodeVersion: '1.14.25',
@@ -556,6 +557,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     webhookTerminalControl: terminalControl,
   })
 
+  const app = application.app
   const mrBody = (action: 'open' | 'close') =>
     JSON.stringify({
       object_kind: 'merge_request',
@@ -649,5 +651,6 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     expect(registry).not.toContain(final.worktreePath)
   } finally {
     await terminalControl.stop()
+    await application.dispose()
   }
 })

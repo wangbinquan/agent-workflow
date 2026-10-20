@@ -43,7 +43,7 @@ import {
   MAX_CHILD_INVOCATIONS_PER_CASE,
   MAX_EMPLOYEE_INVOCATION_DEPTH,
 } from '@/modules/digital-employee/domain/runtimeModel'
-import { composeEventCenter } from '@/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import { parsePersistedEmployeeTypePackageDescriptor } from '@/modules/digital-employee/domain/model'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 

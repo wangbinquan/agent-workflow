@@ -116,7 +116,11 @@ export function createCommittedEventDispatcherWorkerDefinition(input: {
 export function startManagedWorkerDefinition(
   definition: Readonly<ManagedWorkerDefinition>,
   daemonGeneration: string,
-): Readonly<{ stop(reason?: string): Promise<void>; done: Promise<void> }> {
+): Readonly<{
+  stop(reason?: string): Promise<void>
+  done: Promise<void>
+  health: ManagedWorkerDefinition['health']
+}> {
   const controller = new AbortController()
   // `start` 是点火、`run` 才是可 join 的那一半（下面作为 `done` 返回）——这里的不等待是刻意的。
   void definition.start({ signal: controller.signal, daemonGeneration })
@@ -128,5 +132,6 @@ export function startManagedWorkerDefinition(
       await done
     },
     done,
+    health: definition.health,
   }
 }

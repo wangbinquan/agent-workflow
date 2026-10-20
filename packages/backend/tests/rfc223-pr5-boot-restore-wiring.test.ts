@@ -1,3 +1,4 @@
+import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-223 PR-5 — boot/restore placement and real backup forward-restore proof.
 //
 // The barrier is the first post-migration production behavior and is not wrapped
@@ -34,26 +35,25 @@ const tmps: string[] = []
 describe('RFC-223 PR-5 boot/restore source ordering', () => {
   test('boot barrier is fail-closed immediately after db-ready and before every consumer', () => {
     const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf-8')
-    const dbReady = source.indexOf("log.info('db ready'")
-    const barrier = source.indexOf('skillCatalogBoot.runIdentityMigrationBarrier()', dbReady)
-    const gate = source.indexOf('skillCatalogBoot.activateAvailabilityGate()', barrier)
-    // RFC-359 W3-T4：孤儿收割是 boot 恢复四步（runTaskExecutionBootRecovery）的第二步，两个 daemon 入口共用。
-    const orphanReap = source.indexOf('runTaskExecutionBootRecovery(', barrier)
-    const fusionRecovery = source.indexOf('recoverFusionDecisions', barrier)
-    const liveReconcile = source.indexOf('skillCatalogBoot.reconcileLiveFiles()', barrier)
-    const fusionSeeder = source.indexOf('seedFusionResources', barrier)
-    const httpCreate = source.indexOf('const app = createComposedApp', barrier)
-    expect(dbReady).toBeGreaterThan(-1)
-    expect(barrier).toBeGreaterThan(dbReady)
-    expect(gate).toBeGreaterThan(barrier)
-    for (const later of [orphanReap, fusionRecovery, liveReconcile, fusionSeeder, httpCreate]) {
-      expect(later).toBeGreaterThan(barrier)
+    expect(source).toContain("log.info('db ready'")
+    expectBootOrder([
+      'skill-identity-barrier',
+      'skill-availability-gate',
+      'skill-live-files',
+      'fusion-resource-seed',
+      'task-execution-recovery',
+      'fusion-decision-recovery',
+    ])
+    for (const [id, call] of [
+      ['skill-identity-barrier', 'runIdentityMigrationBarrier'],
+      ['skill-availability-gate', 'activateAvailabilityGate'],
+    ] as const) {
+      expect(bootDeclaration(id)).toMatchObject({ phase: 'prepare', failure: 'fail-closed' })
+      const body = bootImplementation(source, id)
+      expect(body).toContain(`skillCatalogBoot.${call}()`)
+      expect(body).not.toContain('try {')
+      expect(body).not.toContain('catch')
     }
-    expect(httpCreate).toBeGreaterThan(gate)
-    // No best-effort catch can turn a failed identity proof into a live daemon.
-    const nextStep = source.indexOf('// RFC-036 bootstrap hint', barrier)
-    expect(source.slice(dbReady, nextStep)).not.toContain('try {')
-    expect(source.slice(dbReady, nextStep)).not.toContain('catch')
   })
 
   test('restore copies FS then runs the barrier before restored-state consumers', () => {

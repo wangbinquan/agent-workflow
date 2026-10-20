@@ -27,7 +27,7 @@ import {
   DEFAULT_REFRESH_INTERVAL_MS,
   refreshDueRepos,
   selectDueRepos,
-  startSubmoduleRefreshLoop,
+  startConfiguredSubmoduleRefreshLoop,
 } from '@/services/submoduleRefresh'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 
@@ -142,11 +142,13 @@ describeEachProvider('RFC-210 background refresh — loop contract', (harness) =
   test('returns a stop handle and does not fire synchronously', async () => {
     const db = harness.db
     let ticks = 0
-    const loop = startSubmoduleRefreshLoop(
+    const loop = await startConfiguredSubmoduleRefreshLoop(
       composeSqliteRepositoryWorkspaceStore(db),
-      () => {
-        ticks += 1
-        return { submoduleAutoRefresh: { enabled: false } }
+      {
+        read: () => {
+          ticks += 1
+          return { submoduleAutoRefresh: { enabled: false } }
+        },
       },
       50,
     )
@@ -166,13 +168,15 @@ describeEachProvider('RFC-210 background refresh — loop contract', (harness) =
     const db = harness.db
     let ticks = 0
     let enabled = true
-    const loop = startSubmoduleRefreshLoop(
+    const loop = await startConfiguredSubmoduleRefreshLoop(
       composeSqliteRepositoryWorkspaceStore(db),
-      () => {
-        ticks += 1
-        return {
-          submoduleAutoRefresh: { enabled, intervalMs: 20, onlyRecentDays: 30 },
-        }
+      {
+        read: () => {
+          ticks += 1
+          return {
+            submoduleAutoRefresh: { enabled, intervalMs: 20, onlyRecentDays: 30 },
+          }
+        },
       },
       20,
     )
@@ -181,7 +185,7 @@ describeEachProvider('RFC-210 background refresh — loop contract', (harness) =
       expect(ticks).toBeGreaterThan(0)
 
       enabled = false
-      expect(loop.reconfigure()).toBe(true)
+      expect(await loop.reconfigure()).toBe(true)
       const afterDisable = ticks
       await new Promise((r) => setTimeout(r, 55))
       expect(ticks).toBe(afterDisable)

@@ -1,8 +1,5 @@
-import {
-  distillTick,
-  startMemoryDistillLoop,
-  type RunDistillOptions,
-} from './helpers/memoryDistill'
+import { createPollingDaemonRuntimeHandleFactory } from '../src/cli/daemonProviderRuntimeHandles'
+import { distillTick, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-041 — distill scheduler tests (PR2 scope).
@@ -782,9 +779,9 @@ describeEachProvider('recoverRunning + manual control', (harness) => {
 // 1Hz loop must not run two ticks concurrently. distillTick awaits a real LLM
 // spawn mid-tick; without a reentrancy guard, tick N+1 fires while tick N is
 // still awaiting and claims a row tick N has not yet flipped to `running`,
-// distilling the same debounce_key twice. startMemoryDistillLoop had ZERO test
+// distilling the same debounce_key twice. The retired timer wrapper had ZERO test
 // coverage before this.
-describeEachProvider('startMemoryDistillLoop reentrancy', (harness) => {
+describeEachProvider('daemon lifecycle memory-distill polling reentrancy', (harness) => {
   let db: ProviderNeutralDatabase
   let memory: MemoryTestContext
   beforeEach(() => {
@@ -831,10 +828,19 @@ describeEachProvider('startMemoryDistillLoop reentrancy', (harness) => {
       return okRun(opts)
     }
 
-    const loop = startMemoryDistillLoop({
-      ...workerDeps(memory),
-      runFn: slowRun,
+    const loop = await createPollingDaemonRuntimeHandleFactory({
+      id: 'memory-distill',
       intervalMs: 5,
+      run: async () => {
+        await distillTick({ ...workerDeps(memory), runFn: slowRun })
+      },
+      onError: (error) => {
+        throw error
+      },
+    }).start({
+      operationId: 'test',
+      provider: harness.applicationBinding.provider,
+      generationId: 'test',
     })
     try {
       // Two waits, and they are NOT the same kind — conflating them is what made
@@ -885,7 +891,8 @@ describeEachProvider('startMemoryDistillLoop reentrancy', (harness) => {
       expect(maxInFlight).toBe(1)
       expect(calls).toBe(2)
     } finally {
-      loop.stop()
+      await loop.stop()
+      await loop.drain()
       release()
     }
 

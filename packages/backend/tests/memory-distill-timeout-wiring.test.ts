@@ -21,9 +21,14 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
+import ts from 'typescript'
+
+import { DAEMON_BACKGROUND_JOBS } from '../src/cli/daemonLifecycleProgram'
+import { propertyBodies } from './helpers/daemonProgramSource'
 
 const START = readFileSync(resolve(__dirname, '..', 'src', 'cli', 'start.ts'), 'utf8')
-const CODE = START.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
+const parsed = ts.createSourceFile('start.ts', START, ts.ScriptTarget.Latest, true)
+const CODE = ts.createPrinter({ removeComments: true }).printFile(parsed)
 
 function count(needle: string): number {
   return CODE.split(needle).length - 1
@@ -51,7 +56,10 @@ function distillFactoryBodies(): string[] {
 
 describe('memory distill worker wiring (start.ts)', () => {
   test('both deployment paths exist and are the only ones', () => {
-    expect(count(`id: 'memory-distill'`)).toBe(2)
+    expect(DAEMON_BACKGROUND_JOBS.filter((job) => job.id === 'memory-distill')).toHaveLength(1)
+    const records = propertyBodies(START, 'backgroundJobs')
+    expect(records).toHaveLength(2)
+    for (const record of records) expect(propertyBodies(record, 'memory-distill')).toHaveLength(1)
   })
 
   test('neither path snapshots config at boot', () => {
@@ -66,9 +74,10 @@ describe('memory distill worker wiring (start.ts)', () => {
       'const current = await configuration.read()',
     ]
     for (const [index, body] of bodies.entries()) {
-      expect(body, `distill factory #${index} must re-read config inside run()`).toContain(
-        `async run() {\n      ${selectedReads[index]}`,
-      )
+      expect(
+        body.replace(/\s+/g, ' '),
+        `distill factory #${index} must re-read config inside run()`,
+      ).toContain(`async run() { ${selectedReads[index]}`)
       expect(body, `distill factory #${index} must forward the timeout knob`).toContain(
         'timeoutMs: current.memoryDistillTimeoutMs',
       )

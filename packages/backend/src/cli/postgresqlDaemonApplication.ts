@@ -1,3 +1,4 @@
+import { NotApplicable, type DaemonBootSteps } from './daemonLifecycleProgram'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { TaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
 import type { TaskRecoveryDeploymentSelection } from '@/modules/task-execution/composition/taskRecoverySelection'
@@ -651,6 +652,10 @@ export type PostgresqlApplicationPhase =
   | { readonly kind: 'unstarted'; readonly scope: UnstartedApplicationScope }
 
 export interface PostgresqlDaemonApplication {
+  readonly lifecycleSteps: Omit<
+    DaemonBootSteps,
+    'runtime-declarations' | 'runtime-registry' | 'maintenance-boot-snapshot'
+  >
   readonly core: SelectedDaemonProviderCore<'postgresql'>
   readonly app: ReturnType<typeof createComposedApp>
   readonly webSocket: ReturnType<typeof buildWebSocketAdapter>
@@ -814,20 +819,6 @@ export async function composePostgresqlApplication(
   // coordinator; bootstrap never drops or aliases the active schema.
   if (phase.kind === 'daemon') {
     await core.systemOperations.applyPendingRestore()
-
-    // RFC-300 / RFC-359 W3-T15（P1-12）：终态工作区回收策略——integration 判 Webhook 归属，lifecycle 在终态
-    // CAS 里写认领，GC 物理删除；每次转移时读配置，开关热生效。此前 PG daemon 从未注册，
-    // `webhookTaskWorkspaceAutoCleanup` 在 PG 上完全无效、worktree 永不回收。
-    registerTerminalWorkspacePrunePolicy(
-      composeWebhookTerminalWorkspacePrunePolicy({
-        db: input.db,
-        enabled: async () => (await configuration.read()).webhookTaskWorkspaceAutoCleanup,
-      }),
-    )
-    const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(input.appHome)
-    if (removedCredentialLeases > 0) {
-      log.info('orphaned git credential leases removed', { count: removedCredentialLeases })
-    }
   }
 
   // RFC-223 PR-5 / RFC-359 W1-T7d（P0-11）：技能身份屏障是 DB 就绪后的第一件事——恢复遗留结构操作、
@@ -837,16 +828,6 @@ export async function composePostgresqlApplication(
     db: input.db,
     ...selectSkillContentDependencies(input.skillContent, input.appHome),
   })
-  if (phase.kind === 'daemon') {
-    {
-      const report = await skillCatalogBoot.runIdentityMigrationBarrier()
-      if (report.recoveredOperations > 0 || report.removedHusks > 0 || report.migratedSkills > 0) {
-        log.info('skill identity migration barrier complete', { ...report })
-      }
-    }
-    // 启动期可用性闸：每个技能先隐藏，逐个 reverify 通过后才放行（bootReverifyActivated）。
-    skillCatalogBoot.activateAvailabilityGate()
-  }
 
   const identityAccess = core.identityAccess
   // daemon 自用的系统身份也必须由注册表**铸**出来。授权句柄按对象引用从
@@ -856,9 +837,7 @@ export async function composePostgresqlApplication(
   // `loadExistingAgentIds`、数字员工执行的 `agents.get` / `workflows.get` 与
   // `resourceAuthorityFor`）全都吃这一对句柄。`__system__` 由迁移 0018 播种且不可禁用，
   // admit 不出来说明这个库根本没法用，宁可在启动时带名字失败。
-  const systemIdentity = await admitDaemonIdentity(identityAccess)
-  if (systemIdentity === null) throw new Error('postgresql-daemon-system-identity-not-admitted')
-  const systemActor = actorOfDirectAuthority(systemIdentity)
+  let systemActor: ReturnType<typeof actorOfDirectAuthority>
   const resourceCatalog = composeResourceCatalogFor({
     db: input.db,
     lifecycle: mcpAclRuntimeTestLifecycle(),
@@ -1016,12 +995,6 @@ export async function composePostgresqlApplication(
     repositoryTransportRepository,
     input.secretBox,
   )
-  if (phase.kind === 'daemon') {
-    await reconcileRepositoryTransportConnectionProjections(
-      repositoryTransportRepository,
-      repositoryTransport.adminConnections,
-    )
-  }
   const codeHostConnections = createCodeHostConnectionsService({
     secretBox: input.secretBox,
     repositoryTransport: repositoryTransport.adminConnections,
@@ -1596,16 +1569,6 @@ export async function composePostgresqlApplication(
   })
   // RFC-223 PR-4 / RFC-359 W3-T15：融合 provenance 修复必须在任何融合恢复 / 播种 / HTTP 观察到历史
   // name-only 行之前完成。fail-closed：不包 try，修复失败即 daemon 不起（与 cli/start.ts 同）。
-  if (phase.kind === 'daemon') {
-    {
-      const { repairFusionProvenance } =
-        await import('@/modules/knowledge-evolution/public/operations')
-      const report = await repairFusionProvenance(fusionOperations.persistence)
-      if (Object.values(report).some((count) => count > 0)) {
-        log.info('fusion provenance repair complete', { ...report })
-      }
-    }
-  }
   const taskExecutionCatalogSources = composeTaskExecutionCatalogSources(
     // RFC-357：目录源不再经 `routes.tasks.listItems` 把行拉进内存，改用与 SQLite 共用的
     // 下推页查询；owner 身份由这里注入（模块自己去 compose 别的 context 是被判红的形状）。
@@ -1711,35 +1674,6 @@ export async function composePostgresqlApplication(
       finalizeWithoutDriver: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
     }),
   })
-  if (phase.kind === 'daemon') {
-    {
-      await webhookTerminalControl.reconcileOnBoot()
-      const recoveredDeliveries = await recoverInterruptedDeliveries(
-        composeWebhookDeliveryPersistenceFor(input.db),
-      )
-      if (recoveredDeliveries > 0) {
-        log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
-      }
-      // RFC-354 T4 — one-shot frame backfill for rows minted before frames existed
-      // (marker-gated; a single maintenance_state read on every later boot).
-      try {
-        const backfill = await runFrameBackfillOnBoot({ db: input.db })
-        if (!backfill.skipped) {
-          log.info('rfc354 frame backfill completed on boot', {
-            tasks: backfill.tasks,
-            rowsUpdated: backfill.rowsUpdated,
-            roundsUpdated: backfill.roundsUpdated,
-            unreadableTasks: backfill.unreadableTasks.length,
-            unresolvedRows: backfill.unresolvedRows,
-          })
-        }
-      } catch (err) {
-        log.warn('rfc354 frame backfill on boot failed', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-  }
   const composedWebhookDispatcher = createWebhookDispatcher({
     persistence: composeWebhookDispatchPersistenceFor(input.db),
     deliveryPersistence: composeWebhookDeliveryPersistenceFor(input.db),
@@ -1949,21 +1883,19 @@ export async function composePostgresqlApplication(
     workspace: employeeWorkspace,
     executionContracts,
   })
-  const persistedTypePackages = await composeDigitalEmployeeBootstrapReadsFor(
-    input.db,
-  ).listTypePackageDescriptorJsons()
+  const digitalEmployeePlatformTools = composeDigitalEmployeeBuiltinToolCatalog({
+    agentTemplates: digitalEmployeeAgentTemplates,
+    typePackageDescriptorJsons: async () => [
+      ...(await composeDigitalEmployeeBootstrapReadsFor(input.db).listTypePackageDescriptorJsons()),
+      developmentEmployeeTypePackage.descriptorJson,
+    ],
+  })
   const digitalEmployee = composeDigitalEmployee({
     db: input.db,
     appHome: input.appHome,
     programArtifacts: input.employeePrograms,
     typePackages: [developmentEmployeeTypePackage],
-    platformTools: await composeDigitalEmployeeBuiltinToolCatalog({
-      agentTemplates: digitalEmployeeAgentTemplates,
-      typePackageDescriptorJsons: [
-        ...persistedTypePackages,
-        developmentEmployeeTypePackage.descriptorJson,
-      ],
-    }),
+    platformTools: digitalEmployeePlatformTools,
     onAutomaticUpgradeIssue(issue) {
       log.warn('automatic digital employee type upgrade could not prove compatibility', {
         ...issue,
@@ -1994,14 +1926,6 @@ export async function composePostgresqlApplication(
     },
   })
   const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(input.db)
-  if (phase.kind === 'daemon') {
-    {
-      await employeeWriterCutover.activate()
-      await digitalEmployee.maintenance.settleAutomaticUpgrades()
-    }
-  } else {
-    await phase.scope.trackReady(digitalEmployee.maintenance.ready())
-  }
   // RFC-359 W11：worker 是必填实参，装配到此为止；此前是 `createDevelopmentActivityWorkerBinding()`
   // 加下一行一句 `.bind(...)`，两行之间那段「已经能被调用但还没装配」的窗口从来没有用处。
   const developmentActivityOperations = composeDevelopmentActivityOperations(
@@ -2703,199 +2627,226 @@ export async function composePostgresqlApplication(
   // RFC-359 W3-T4（P0-3 / P0-4）：boot 恢复四步与 SQLite 同一段序列（composition/bootRecovery.ts）——
   // 撤销旧 daemon 的 owner → 收割孤儿 run → 修 runtime session lease → 清算 effect 并释放 / 闭合 owner。
   // 必须在 HTTP 与任何自动续跑之前；此前 PG daemon 从未跑过，重启一次就把上一代任务永久卡在 running。
-  const initializeExecution = async () => {
-    await runTaskExecutionBootRecovery({
-      recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
-      persistence: taskExecutionPersistence,
-      runtimeSessionLeases: createRuntimeSessionLeaseOperations(input.db),
-      lockProof:
-        input.daemonStartupLease === undefined
-          ? createDaemonLockProof({
-              lockPath: input.lockPath,
-              lockPid: process.pid,
-              daemonGeneration: input.provider.runtime.generationId,
-            })
-          : createDaemonRecoveryAuthorityProof(
-              await readDaemonStartupRecoveryAuthority(
-                input.daemonStartupLease,
-                input.provider.runtime.generationId,
-              ),
-            ),
-      codeHostProbe: (descriptor) =>
-        probeCodeHostMutation({
-          descriptor,
-          resolveConnection: (provider) => codeHostConnections.resolve(provider),
+  const lifecycleSteps: PostgresqlDaemonApplication['lifecycleSteps'] = {
+    'process-registrations': async () => {
+      registerTerminalWorkspacePrunePolicy(
+        composeWebhookTerminalWorkspacePrunePolicy({
+          db: input.db,
+          enabled: async () => (await configuration.read()).webhookTaskWorkspaceAutoCleanup,
         }),
-      log,
-    })
-    // RFC-371 v2: calls still running from before this boot can no longer report.
-    const interruptedCalls = await observationCalls.repairInterrupted(Date.now())
-    if (interruptedCalls > 0) log.info('observation calls interrupted', { count: interruptedCalls })
-    {
-      // RFC-328 / RFC-359 W1-T7c：终态维护认领是持久的、比任务行活得久——崩溃留下的 delete 认领要在
-      // 任何自动续跑打开之前续做完（成员任务在此之前一直被占位）。一份 provider 中立实现，与
-      // cli/start.ts 同一段；其余三步 boot 恢复（owner / archive / workspace-gc）随 W3 统一启动序列接入。
-      try {
-        const deleteRecovery = await recoverInterruptedTaskDeletes(
-          input.db,
-          undefined,
-          input.taskDeletionEffects,
-        )
-        if (
-          deleteRecovery.completed.length > 0 ||
-          deleteRecovery.cleanupPending.length > 0 ||
-          deleteRecovery.recoveryRequired.length > 0
-        ) {
-          log.info('terminal task delete recovery', { ...deleteRecovery })
-        }
-      } catch (err) {
-        log.warn('terminal task delete recovery failed', {
-          error: err instanceof Error ? err.message : String(err),
+      )
+    },
+    'repository-url-sealing': NotApplicable,
+    'transport-projections': async () => {
+      await reconcileRepositoryTransportConnectionProjections(
+        repositoryTransportRepository,
+        repositoryTransport.adminConnections,
+      )
+    },
+    'git-credential-lease-cleanup': async () => {
+      const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(input.appHome)
+      if (removedCredentialLeases > 0) {
+        log.info('orphaned git credential leases removed', { count: removedCredentialLeases })
+      }
+    },
+    'daemon-identity': async () => {
+      const systemIdentity = await admitDaemonIdentity(identityAccess)
+      if (systemIdentity === null) throw new Error('postgresql-daemon-system-identity-not-admitted')
+      systemActor = actorOfDirectAuthority(systemIdentity)
+    },
+    'skill-identity-barrier': async () => {
+      const report = await skillCatalogBoot.runIdentityMigrationBarrier()
+      if (report.recoveredOperations > 0 || report.removedHusks > 0 || report.migratedSkills > 0) {
+        log.info('skill identity migration barrier complete', { ...report })
+      }
+    },
+    'fusion-provenance': async () => {
+      const { repairFusionProvenance } =
+        await import('@/modules/knowledge-evolution/public/operations')
+      const report = await repairFusionProvenance(fusionOperations.persistence)
+      if (Object.values(report).some((count) => count > 0)) {
+        log.info('fusion provenance repair complete', { ...report })
+      }
+    },
+    'skill-availability-gate': async () => {
+      skillCatalogBoot.activateAvailabilityGate()
+    },
+    'skill-live-files': async () => {
+      await skillCatalogBoot.reconcileLiveFiles()
+    },
+    'task-delete-recovery': async () => {
+      const deleteRecovery = await recoverInterruptedTaskDeletes(
+        input.db,
+        undefined,
+        input.taskDeletionEffects,
+      )
+      if (
+        deleteRecovery.completed.length > 0 ||
+        deleteRecovery.cleanupPending.length > 0 ||
+        deleteRecovery.recoveryRequired.length > 0
+      ) {
+        log.info('terminal task delete recovery', { ...deleteRecovery })
+      }
+    },
+    'archive-recovery': async () => {
+      const archiveRecovery = await taskExecutionProvider.archive.recover({
+        archiveDir: Paths.taskArchiveDir,
+        runsDir: Paths.runsDir,
+        logsDir: Paths.logsDir,
+      })
+      if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {
+        log.info('terminal task archive recovery', { ...archiveRecovery })
+      }
+    },
+    'workspace-maintenance-recovery': async () => {
+      const workspaceRecovery = await workspaceMaintenance.recover({
+        activeTaskIds: [],
+        webhookClaims: 'all',
+      })
+      if (
+        workspaceRecovery.completed > 0 ||
+        workspaceRecovery.failed > 0 ||
+        workspaceRecovery.healed > 0
+      ) {
+        log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })
+      }
+    },
+    'frame-backfill': async () => {
+      const backfill = await runFrameBackfillOnBoot({ db: input.db })
+      if (!backfill.skipped) {
+        log.info('rfc354 frame backfill completed on boot', {
+          tasks: backfill.tasks,
+          rowsUpdated: backfill.rowsUpdated,
+          roundsUpdated: backfill.roundsUpdated,
+          unreadableTasks: backfill.unreadableTasks.length,
+          unresolvedRows: backfill.unresolvedRows,
         })
       }
-
-      // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步，
-      // 与 cli/start.ts 同一段命令面。
-      try {
-        const archiveRecovery = await taskExecutionProvider.archive.recover({
-          archiveDir: Paths.taskArchiveDir,
-          runsDir: Paths.runsDir,
-          logsDir: Paths.logsDir,
-        })
-        if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {
-          log.info('terminal task archive recovery', { ...archiveRecovery })
-        }
-      } catch (err) {
-        log.warn('terminal task archive recovery failed', {
-          error: err instanceof Error ? err.message : String(err),
-        })
+    },
+    'scheduled-payload-heal': async () => {
+      const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')
+      const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)
+      if (healed.converted > 0 || healed.disabled > 0) {
+        log.info('scheduled launch payloads healed', healed)
       }
-      try {
-        const workspaceRecovery = await workspaceMaintenance.recover({
-          activeTaskIds: [],
-          webhookClaims: 'all',
-        })
-        if (
-          workspaceRecovery.completed > 0 ||
-          workspaceRecovery.failed > 0 ||
-          workspaceRecovery.healed > 0
-        ) {
-          log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })
-        }
-      } catch (err) {
-        log.warn('terminal workspace maintenance recovery failed', {
-          error: err instanceof Error ? err.message : String(err),
-        })
+    },
+    'fusion-decision-recovery': async () => {
+      const { recoverFusionDecisions } =
+        await import('@/modules/knowledge-evolution/public/operations')
+      const r = await recoverFusionDecisions(fusionOperations.persistence)
+      if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {
+        log.info('fusion decision recovery on boot', { ...r })
       }
-
-      // RFC-359 W3-T15：以下 boot 步骤与 cli/start.ts 同序、同一份实现；此前 PG daemon 一步都没跑
-      //（终态维护恢复里的 archive / workspace-gc / webhook prune / legacy pruned 四步仍是 SQLite 专属实现，归 T15-B）。
-      // 5b5. RFC-165 §9：把存量 path-mode 定时启动载荷治愈成当前形状——幂等 + best-effort。
-      try {
-        const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')
-        const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)
-        if (healed.converted > 0 || healed.disabled > 0) {
-          log.info('scheduled launch payloads healed', healed)
-        }
-      } catch (err) {
-        log.warn('scheduled payload heal on boot failed', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-
-      // 5b5. RFC-170 T6：恢复崩溃留下的融合 DECISION 半状态（多事务决定）——best-effort。
-      try {
-        const { recoverFusionDecisions } =
-          await import('@/modules/knowledge-evolution/public/operations')
-        const r = await recoverFusionDecisions(fusionOperations.persistence)
-        if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {
-          log.info('fusion decision recovery on boot', { ...r })
-        }
-      } catch (err) {
-        log.warn('fusion decision recovery on boot failed', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-
-    // 5e. RFC-101：内置 skill-fusion agent + workflow 幂等播种。
-    try {
+    },
+    'fusion-resource-seed': async () => {
       const { seedFusionResources } =
         await import('@/modules/knowledge-evolution/public/operations')
       await seedFusionResources(fusionOperations.persistence)
-    } catch (err) {
-      log.warn('fusion resource seed on boot failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-
-    // RFC-310：业务模板是平台资源，不是 schema 数据；DB 准入后播种。
-    await ensureDigitalEmployeeAgentTemplates(digitalEmployeeAgentTemplates)
-
-    // 5e-bis. RFC-307：示例内容，每次安装只提供一次（marker 门控）；从不致命。
-    try {
+    },
+    'demo-seed': async () => {
       const { seedDemoContent } = await import('@/services/demoSeed')
       const result = await seedDemoContent({
         resourceCatalog: composeDemoResourceCatalogSeedParticipant(input.db),
         codeCapability: composeCodeCapabilityDemoSeedParticipant(input.db),
       })
       if (result.seeded) log.info('demo content seeded (delete it and it stays deleted)')
-    } catch (err) {
-      log.warn('demo content seed on boot failed', {
-        error: err instanceof Error ? err.message : String(err),
+    },
+    'event-catalog': async () => {
+      await eventCenter.initialize()
+    },
+    'employee-agent-templates': async () => {
+      await ensureDigitalEmployeeAgentTemplates(digitalEmployeeAgentTemplates)
+    },
+    'employee-tool-catalog': async () => {
+      await digitalEmployeePlatformTools.load()
+    },
+    'employee-authoring-ready': async () => {
+      await digitalEmployee.maintenance.ready()
+    },
+    'employee-writer-state': async () => {
+      await employeeWriterCutover.activate()
+    },
+    'task-execution-recovery': async () => {
+      await runTaskExecutionBootRecovery({
+        recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
+        persistence: taskExecutionPersistence,
+        runtimeSessionLeases: createRuntimeSessionLeaseOperations(input.db),
+        lockProof:
+          input.daemonStartupLease === undefined
+            ? createDaemonLockProof({
+                lockPath: input.lockPath,
+                lockPid: process.pid,
+                daemonGeneration: input.provider.runtime.generationId,
+              })
+            : createDaemonRecoveryAuthorityProof(
+                await readDaemonStartupRecoveryAuthority(
+                  input.daemonStartupLease,
+                  input.provider.runtime.generationId,
+                ),
+              ),
+        codeHostProbe: (descriptor) =>
+          probeCodeHostMutation({
+            descriptor,
+            resolveConnection: (provider) => codeHostConnections.resolve(provider),
+          }),
+        log,
       })
-    }
-
-    // 5f（runtime 注册表 boot）不在这里：PG 路径由 cli/start.ts 的 composePostgresqlProviderSession
-    // 在 provider 会话建立时跑过一次（rfc359-w3-t15 锁住「恰好一次」）。
-
-    // RFC-101 / RFC-359 T7d：HTTP 起来之前把版本快照与 live files 对齐（best-effort）。
-    try {
-      await skillCatalogBoot.reconcileLiveFiles()
-    } catch (err) {
-      log.warn('skill-version reconcile on boot failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-    const recoveredTaskIds = input.recoveredExecutionTaskIds?.() ?? []
-    if (recoveredTaskIds.length > 0) {
-      await taskExecutionProvider.autoResume.run({
-        taskIds: recoveredTaskIds,
-        breaker: {
-          maxPerWindow: input.config.maxAutoRecoveriesPerWindow,
-          windowMs: input.config.autoRecoveryWindowMs,
-        },
-      })
-    }
-  }
-  if (phase.kind === 'daemon') {
-    if (input.initializeExecution === undefined) await initializeExecution()
-    else await input.initializeExecution(initializeExecution)
-  }
-  const app = createComposedApp(composePostgresqlAppDeps(composition))
-  // RFC-170 T4a / RFC-359 T7d：后台回填遗留 v1 快照并逐技能 reverify，放行可用性闸。
-  if (phase.kind === 'daemon') {
-    const reverifyResourceContent = async () => {
-      try {
-        const bf = await skillCatalogBoot.backfillLegacyVersions()
-        const r = await skillCatalogBoot.reverifySnapshots()
-        log.info('boot snapshot reverify', {
-          ...r,
-          legacyBackfilled: bf.backfilled,
-          husksRemoved: bf.husksRemoved,
-        })
-      } catch (err) {
-        log.warn('boot snapshot reverify failed', {
-          error: err instanceof Error ? err.message : String(err),
+    },
+    'observation-interrupt': async () => {
+      const interruptedCalls = await observationCalls.repairInterrupted(Date.now())
+      if (interruptedCalls > 0)
+        log.info('observation calls interrupted', { count: interruptedCalls })
+    },
+    'mr-terminal-reconcile': async () => {
+      await webhookTerminalControl.reconcileOnBoot()
+    },
+    'webhook-delivery-recovery': async () => {
+      const recoveredDeliveries = await recoverInterruptedDeliveries(
+        composeWebhookDeliveryPersistenceFor(input.db),
+      )
+      if (recoveredDeliveries > 0) {
+        log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
+      }
+    },
+    'legacy-mission-recovery': NotApplicable,
+    'employee-upgrade-settlement': async () => {
+      await digitalEmployee.maintenance.settleAutomaticUpgrades()
+    },
+    'hosted-targeted-resume': async () => {
+      const recoveredTaskIds = input.recoveredExecutionTaskIds?.() ?? []
+      if (recoveredTaskIds.length > 0) {
+        await taskExecutionProvider.autoResume.run({
+          taskIds: recoveredTaskIds,
+          breaker: {
+            maxPerWindow: input.config.maxAutoRecoveriesPerWindow,
+            windowMs: input.config.autoRecoveryWindowMs,
+          },
         })
       }
-    }
-    void (input.executionAuthority?.whenActive() ?? Promise.resolve())
-      .then(reverifyResourceContent)
-      .catch((error: unknown) => {
-        log.warn('resource verification activation failed', { error: String(error) })
+    },
+    'resource-reverify': async () => {
+      const bf = await skillCatalogBoot.backfillLegacyVersions()
+      const r = await skillCatalogBoot.reverifySnapshots()
+      log.info('boot snapshot reverify', {
+        ...r,
+        legacyBackfilled: bf.backfilled,
+        husksRemoved: bf.husksRemoved,
       })
+    },
+    'bootstrap-admin-hint': async () => {
+      if (await core.authRuntime.isBootstrapRequired())
+        log.info(
+          'first multi-user run? create your admin via `agent-workflow user create --admin --username <name>`',
+        )
+    },
   }
+  if (phase.kind === 'unstarted') {
+    await (lifecycleSteps['daemon-identity'] as () => Promise<void>)()
+    await eventCenter.initialize()
+    await digitalEmployeePlatformTools.load()
+    await phase.scope.trackReady(digitalEmployee.maintenance.ready())
+  }
+  const app = createComposedApp(composePostgresqlAppDeps(composition))
   const webSocket = buildWebSocketAdapter({
     realtime: core.realtime,
     identityAccess: core.identityAccess,
@@ -2936,5 +2887,5 @@ export async function composePostgresqlApplication(
       coordinator: taskDriveCoordinator,
     }),
   })
-  return Object.freeze({ core, app, webSocket, runtime })
+  return Object.freeze({ core, app, webSocket, runtime, lifecycleSteps })
 }

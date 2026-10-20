@@ -1,3 +1,4 @@
+import type { TaskExecutionShutdownController } from './application/ports/taskExecutionShutdownOperations'
 import { createTaskWorkspaceQueries } from './application/workspaceRead'
 export { createFileTaskOperationConfiguration } from './infrastructure/local/fileTaskOperationConfiguration'
 import {
@@ -202,4 +203,38 @@ export function composeTaskWorkspaceQueries(input: TaskWorkspaceReadDependencies
     close(): void
   }> = (taskId) => bindTaskWorkspaceReadScope(input, taskId)
   return createTaskWorkspaceQueries(bind)
+}
+
+/** Bind shutdown to the exact provider module, including PostgreSQL's private registry. */
+export function createTaskExecutionShutdownController(
+  module: TaskExecutionModule,
+): TaskExecutionShutdownController {
+  return {
+    async shutdownActive(reason, budgetMs) {
+      module.seal()
+      // The runtime handle has already spent its grace waiting for driver drain.
+      // With no remaining budget, signal survivors without re-entering that wait.
+      if (budgetMs <= 0) {
+        module.runtimeRegistry.abortAll(reason)
+        return module.runtimeRegistry.activeTokens().map((token) => token.taskId)
+      }
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        await Promise.race([
+          module
+            .dispose(reason)
+            .then((tickets) =>
+              Promise.all(tickets.map((ticket) => module.runtimeRegistry.awaitStopped(ticket))),
+            ),
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, budgetMs)
+          }),
+        ])
+      } finally {
+        if (timer !== undefined) clearTimeout(timer)
+      }
+      module.runtimeRegistry.abortAll(reason)
+      return module.runtimeRegistry.activeTokens().map((token) => token.taskId)
+    },
+  }
 }

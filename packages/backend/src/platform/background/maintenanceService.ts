@@ -111,6 +111,8 @@ export type MaintenanceServiceOptions = MaintenanceServiceCommonOptions &
   }>
 
 export interface MaintenanceService {
+  readonly captureBootSnapshot: () => Promise<void>
+  readonly start: () => Promise<void>
   readonly status: () => MaintenanceStatus
   readonly reconfigure: () => void
   readonly runSoon: (job: MaintenanceJobKey) => void
@@ -312,7 +314,57 @@ function fixedSlot(job: MaintenanceJobKey, intervalMs: number, now: number): Cle
   }
 }
 
-export function startMaintenanceService(options: MaintenanceServiceOptions): MaintenanceService {
+/** RFC-379: construction owns no timers, connections, snapshots or Workers. */
+export function createMaintenanceService(options: MaintenanceServiceOptions): MaintenanceService {
+  let running: ReturnType<typeof startMaintenanceService> | undefined
+  let snapshot: readonly string[] | undefined
+  let stopped = false
+  return {
+    async captureBootSnapshot() {
+      snapshot ??= await options.payloadSources.bootIntentTurnIds()
+    },
+    async start() {
+      if (stopped) throw new Error('maintenance-service-stopped')
+      if (running !== undefined) return
+      if (snapshot === undefined) throw new Error('maintenance-boot-snapshot-missing')
+      running = startMaintenanceService(options, snapshot)
+    },
+    reconfigure: () => running?.reconfigure(),
+    runSoon: (job) => running?.runSoon(job),
+    pause: async () => {
+      await running?.pause()
+    },
+    resume: async () => {
+      await running?.resume()
+    },
+    stop: async () => {
+      stopped = true
+      await running?.stop()
+    },
+    status: () =>
+      running?.status() ?? {
+        version: 1,
+        worker: { state: 'stopped', lastHeartbeatAt: null, error: null },
+        eventLoop: {
+          samplePeriodMs: EVENT_LOOP_SAMPLE_MS,
+          windowMs: EVENT_LOOP_WINDOW_MS,
+          sampleCount: 0,
+          maxGapMs: 0,
+        },
+        schedule: options.loadConfig().maintenanceSchedule,
+        nextRunAt: null,
+        active: null,
+        last: null,
+        backlog: [],
+      },
+  }
+}
+
+// Only the passive facade may activate timers, admission and the Worker.
+function startMaintenanceService(
+  options: MaintenanceServiceOptions,
+  snapshot: readonly string[] | Promise<readonly string[]>,
+): Omit<MaintenanceService, 'captureBootSnapshot' | 'start'> {
   let currentConfig = options.loadConfig()
   let stopped = false
   let paused = false
@@ -354,7 +406,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
   const admissionStore = options.openAdmissionStore(currentConfig)
   const store = admissionStore.store
   const payloadSources = options.payloadSources
-  const bootIntentTurnIds = Promise.resolve(payloadSources.bootIntentTurnIds())
+  const bootIntentTurnIds = Promise.resolve(snapshot)
 
   let projection: Awaited<ReturnType<MaintenanceRunStore['readProjection']>> = {
     active: null,

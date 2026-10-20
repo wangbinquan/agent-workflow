@@ -44,7 +44,7 @@ import {
 } from '../src/modules/integration/infrastructure/mrTerminalControlPersistence'
 import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
 import type { MrTerminalControl } from '../src/modules/integration/public/mrTerminalControl'
-import { composeEventCenter } from '../src/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import {
   createCodeHostWebhookDeliveryConsumer,
   createCodeHostWebhookRoutingDirectory,

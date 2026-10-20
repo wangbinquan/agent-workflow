@@ -14,10 +14,10 @@ import {
 import { createEmployeeAutomationWorkStartProvider } from '@/modules/digital-employee/composition'
 import type { EventAutomationWorkIntentStorePort } from '@/modules/event-center/application/ports/eventAutomationWorkIntentStore'
 import {
-  composeEventCenter,
   createEventAutomationWorkIntentStore,
   type EventCenterAutomationCapability,
 } from '@/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import type {
   EmployeeAutomationWorkStartV1,
   EventAutomationDelegatedContext,

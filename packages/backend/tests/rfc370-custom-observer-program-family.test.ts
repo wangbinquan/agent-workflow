@@ -1,7 +1,7 @@
 // RFC-370: preserve the legacy factory getter timing and publish's second validation.
 import { describe, expect, test } from 'bun:test'
 import { canonicalJson } from '@agent-workflow/shared'
-import { composeEventCenter } from '@/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import { composeCustomEventObserverProgram } from '@/modules/event-center/composition/customObserverProgram'
 import { selectLocalCustomObserverProgramFactory } from '@/modules/event-center/composition/localCustomObserverProgram'
 import { executeCustomObserverProgram } from '@/modules/event-center/application/customObserverProgram'

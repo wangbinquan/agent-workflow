@@ -4,6 +4,7 @@ type Change = {
   readonly current: string
   readonly previous: string
   readonly uniqueMarker?: string
+  readonly occurrences?: number
 }
 
 const preparation: readonly Change[] = [
@@ -43,14 +44,15 @@ const declarationCheck: readonly Change[] = [
     uniqueMarker: "import { assertRuntimeDeclarations } from '@/services/runtime/selfCheck'\n",
   },
   {
+    occurrences: 2,
     current:
-      '  {\n' +
-      '    const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))\n',
+      "      'runtime-declarations': async () => {\n" +
+      '        const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))\n',
     previous:
-      '  {\n' +
-      "    const { assertRuntimeDeclarations } = await import('@/services/runtime/selfCheck')\n" +
-      "    const { getRuntimeDriver, RUNTIME_KINDS } = await import('@/services/runtime')\n" +
-      '    const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))\n',
+      "      'runtime-declarations': async () => {\n" +
+      "        const { assertRuntimeDeclarations } = await import('@/services/runtime/selfCheck')\n" +
+      "        const { getRuntimeDriver, RUNTIME_KINDS } = await import('@/services/runtime')\n" +
+      '        const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))\n',
   },
 ]
 
@@ -58,16 +60,27 @@ function inverseRevision(text: string, changes: readonly Change[]): string {
   const count = (fragment: string) => text.split(fragment).length - 1
   if (changes.some((change) => change.uniqueMarker && count(change.uniqueMarker) > 1))
     throw new Error('dev startup root inverse unreviewed or incomplete revision')
-  if (changes.every((change) => count(change.current) === 0 && count(change.previous) === 1))
+  if (
+    changes.every(
+      (change) =>
+        count(change.current) === 0 && count(change.previous) === (change.occurrences ?? 1),
+    )
+  )
     return text
-  if (!changes.every((change) => count(change.current) === 1 && count(change.previous) === 0))
+  if (
+    !changes.every(
+      (change) =>
+        count(change.current) === (change.occurrences ?? 1) && count(change.previous) === 0,
+    )
+  )
     throw new Error('dev startup root inverse unreviewed or incomplete revision')
-  for (const change of changes) text = text.replace(change.current, change.previous)
+  for (const change of changes) text = text.replaceAll(change.current, change.previous)
   return text
 }
 
 // Test-only inverse of the approved development preparation and static self-check
-// imports. Preserve every other byte, including concurrent host/observation edits.
+// imports in both RFC-379 provider bindings. Preserve every other byte, including
+// concurrent host/observation edits; a partial or changed binding must fail closed.
 export function inverseRfc213DevStartupRoot(source: ts.SourceFile): ts.SourceFile {
   if (!('/' + source.fileName.replaceAll('\\', '/')).endsWith('/cli/start.ts')) return source
   const text = inverseRevision(inverseRevision(source.text, declarationCheck), preparation)

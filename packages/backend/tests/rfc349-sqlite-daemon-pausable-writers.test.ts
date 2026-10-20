@@ -18,6 +18,9 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { DAEMON_BACKGROUND_JOBS } from '../src/cli/daemonLifecycleProgram'
+import { propertyBodies } from './helpers/daemonProgramSource'
+
 const backendRoot = resolve(import.meta.dir, '..')
 const START = readFileSync(resolve(backendRoot, 'src/cli/start.ts'), 'utf8')
 
@@ -37,18 +40,12 @@ const PAUSABLE_WRITERS = [
   { id: 'after-commit-event-pump', factory: 'afterCommitPumpFactory' },
 ] as const
 
-/** The array literal passed as `backgroundWriterFactories` / `providerBackgroundWriterFactories`. */
-function writerListAfter(marker: string): string {
-  const at = START.indexOf(marker)
-  expect(at, `${marker} 不在 start.ts 里（组装结构变了？）`).toBeGreaterThan(-1)
-  const open = START.indexOf('[', at)
-  const close = START.indexOf(']', open)
-  return START.slice(open, close)
-}
-
 describe('RFC-349 SQLite daemon periodic writers are provider-session handles', () => {
   test('the SQLite session owns all four periodic writers', () => {
-    const sqliteList = writerListAfter('const providerBackgroundWriterFactories = Object.freeze([')
+    expect(propertyBodies(START, 'backgroundJobs')).toHaveLength(2)
+    for (const writer of PAUSABLE_WRITERS)
+      expect(DAEMON_BACKGROUND_JOBS.filter((job) => job.id === writer.id)).toHaveLength(1)
+    const sqliteList = propertyBodies(START, 'backgroundJobs')[1]!
     for (const writer of PAUSABLE_WRITERS) {
       expect(
         sqliteList,
@@ -59,21 +56,24 @@ describe('RFC-349 SQLite daemon periodic writers are provider-session handles', 
   })
 
   test('both daemons compose the same four pausable writers', () => {
-    const postgresqlList = writerListAfter('backgroundWriterFactories: [')
+    const postgresqlList = propertyBodies(START, 'backgroundJobs')[0]!
     for (const writer of PAUSABLE_WRITERS) {
       expect(
         postgresqlList,
         `${writer.id} 不在 PostgreSQL 那份清单里 ⇒ 两侧的冻结保证不对称`,
       ).toContain(writer.factory)
-      expect(
-        START.split(`id: '${writer.id}'`).length - 1,
-        `${writer.id} 的 handle id 不是两个 daemon 各一次 ⇒ 有一侧没组装成 handle`,
-      ).toBe(2)
+      expect(DAEMON_BACKGROUND_JOBS.filter((job) => job.id === writer.id)).toHaveLength(1)
+      expect(propertyBodies(postgresqlList, writer.id)).toEqual([writer.factory])
     }
   })
 
   test('shutdown no longer stops them by hand: the session owns their lifecycle', () => {
-    const shutdown = START.slice(START.indexOf('const shutdown = async (signal: string)'))
+    const begin = START.indexOf('async function serveDaemon(')
+    const end = START.indexOf('const MAX_DEV_LOCK_HANDOFF_MS', begin)
+    expect(begin).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(begin)
+    const shutdown = START.slice(begin, end)
+    expect(shutdown).toContain('await input.bootstrap.stop()')
     for (const ticker of [
       'limitsTicker.stop()',
       'backupTicker.stop()',

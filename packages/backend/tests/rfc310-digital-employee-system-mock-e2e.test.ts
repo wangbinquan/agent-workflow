@@ -87,10 +87,8 @@ import {
 import type { ReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
 import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/infrastructure/inputArtifactStore'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
-import {
-  composeEventCenter,
-  createEventAutomationWorkIntentStore,
-} from '@/modules/event-center/composition'
+import { createEventAutomationWorkIntentStore } from '@/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

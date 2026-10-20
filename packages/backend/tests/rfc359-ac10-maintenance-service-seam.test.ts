@@ -10,7 +10,7 @@
 //   · 准入真的落在装配方交出的那个 store 上（`runSoon` → `enqueue`）；
 //   · 监工的 delta / event 真的接回服务的回调；
 //   · `stop()` 会关掉准入连接，而「没有本地连接可关」的形态（外部服务器）不会因此崩。
-import { expect, test } from 'bun:test'
+import { expect, test, spyOn } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,7 +18,7 @@ import type { Config } from '@agent-workflow/shared'
 
 import { loadConfig } from '@/config'
 import {
-  startMaintenanceService,
+  createMaintenanceService,
   type MaintenanceServiceOptions,
 } from '@/platform/background/maintenanceService'
 import type { MaintenanceRunStore } from '@/platform/background/maintenanceRunStorePort'
@@ -34,7 +34,7 @@ function configFixture(): { path: string; config: Config } {
 }
 
 interface Harness {
-  readonly service: ReturnType<typeof startMaintenanceService>
+  readonly service: ReturnType<typeof createMaintenanceService>
   readonly enqueued: string[]
   readonly closed: { count: number }
   readonly seams: {
@@ -45,15 +45,16 @@ interface Harness {
   readonly supervisorStops: { count: number }
 }
 
-function startHarness(
+async function startHarness(
   overrides: {
+    readonly passive?: boolean
     readonly provider?: MaintenanceServiceOptions['provider']
     /** 外部服务器形态没有本地连接可关，`close` 省略。 */
     readonly withClose?: boolean
     readonly onLifecycleDelta?: MaintenanceServiceOptions['onLifecycleDelta']
     readonly onIntentQueued?: MaintenanceServiceOptions['onIntentQueued']
   } = {},
-): Harness {
+): Promise<Harness> {
   const { path, config } = configFixture()
   const enqueued: string[] = []
   const closed = { count: 0 }
@@ -89,7 +90,7 @@ function startHarness(
     drain: async () => undefined,
   }
 
-  const service = startMaintenanceService({
+  const service = createMaintenanceService({
     provider: overrides.provider ?? 'sqlite',
     appHome: join(path, '..'),
     configPath: path,
@@ -122,12 +123,16 @@ function startHarness(
       : { onLifecycleDelta: overrides.onLifecycleDelta }),
     ...(overrides.onIntentQueued === undefined ? {} : { onIntentQueued: overrides.onIntentQueued }),
   })
+  if (!overrides.passive) {
+    await service.captureBootSnapshot()
+    await service.start()
+  }
   void config
   return { service, enqueued, closed, seams, supervisorStops }
 }
 
 test('两个接缝各被调用一次，并且拿到的是同一份 live config', async () => {
-  const harness = startHarness()
+  const harness = await startHarness()
   try {
     expect(harness.seams.admissionConfigs).toHaveLength(1)
     expect(harness.seams.supervisorConfigs).toHaveLength(1)
@@ -143,7 +148,7 @@ test('两个接缝各被调用一次，并且拿到的是同一份 live config',
 })
 
 test('准入落在装配方交出的那个 store 上：runSoon 的作业进它的 enqueue', async () => {
-  const harness = startHarness()
+  const harness = await startHarness()
   try {
     harness.service.runSoon('backupPrune')
     // 只断言「它到了注入的那个 store」——同一批里还会有开机延迟作业
@@ -164,7 +169,7 @@ test('准入落在装配方交出的那个 store 上：runSoon 的作业进它�
 test('监工交回的 delta / event 接到服务的回调上', async () => {
   const alerts: MaintenanceWorkerDelta[] = []
   const intentSessions: string[][] = []
-  const harness = startHarness({
+  const harness = await startHarness({
     onLifecycleDelta: (delta) => alerts.push(delta),
     onIntentQueued: (sessionIds) => intentSessions.push([...sessionIds]),
   })
@@ -188,23 +193,51 @@ test('监工交回的 delta / event 接到服务的回调上', async () => {
 })
 
 test('stop() 关掉准入连接并停掉监工；没有本地连接可关的形态照样停得下来', async () => {
-  const local = startHarness()
+  const local = await startHarness()
   await local.service.stop()
   expect(local.closed.count).toBe(1)
   expect(local.supervisorStops.count).toBe(1)
 
   // 外部服务器形态：store 组在已验证代上，没有本地连接，`close` 整个省略。
   // 这一条锁的就是「省略不等于崩」——`admissionStore.close?.()` 的那个可选调用。
-  const remote = startHarness({ provider: 'postgresql', withClose: false })
+  const remote = await startHarness({ provider: 'postgresql', withClose: false })
   await remote.service.stop()
   expect(remote.closed.count).toBe(0)
   expect(remote.supervisorStops.count).toBe(1)
 })
 
 test('stop() 幂等：重复调用只停一次监工、只关一次连接', async () => {
-  const harness = startHarness()
+  const harness = await startHarness()
   await harness.service.stop()
   await harness.service.stop()
   expect(harness.closed.count).toBe(1)
   expect(harness.supervisorStops.count).toBe(1)
+})
+
+// RFC-379: frozen construction must not open a connection, create a Worker or arm timers.
+test('passive maintenance is idle until snapshot and explicit start', async () => {
+  const intervals = spyOn(globalThis, 'setInterval')
+  const timers = spyOn(globalThis, 'setTimeout')
+  const harness = await startHarness({ passive: true })
+  expect(intervals).not.toHaveBeenCalled()
+  expect(timers).not.toHaveBeenCalled()
+  intervals.mockRestore()
+  timers.mockRestore()
+  const service = harness.service as ReturnType<typeof createMaintenanceService>
+  expect(harness.seams.admissionConfigs).toEqual([])
+  expect(harness.seams.supervisorConfigs).toEqual([])
+  expect(service.status().worker.state).toBe('stopped')
+  expect(service.status().eventLoop?.sampleCount).toBe(0)
+  expect(harness.enqueued).toEqual([])
+  await expect(service.start()).rejects.toThrow('maintenance-boot-snapshot-missing')
+  await service.captureBootSnapshot()
+  expect(harness.seams.supervisorConfigs).toEqual([])
+  try {
+    await service.start()
+    await service.start()
+    expect(harness.seams.supervisorConfigs).toHaveLength(1)
+    expect(service.status().worker.state).toBe('ready')
+  } finally {
+    await service.stop()
+  }
 })

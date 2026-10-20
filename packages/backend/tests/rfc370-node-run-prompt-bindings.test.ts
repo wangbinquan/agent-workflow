@@ -1,3 +1,4 @@
+import { createPollingDaemonRuntimeHandleFactory } from '../src/cli/daemonProviderRuntimeHandles'
 import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -325,7 +326,16 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
         }
       },
     )
-    const loop = memory.distillWorker.start({ intervalMs: 10 })
+    const loop = await createPollingDaemonRuntimeHandleFactory({
+      id: 'memory-distill',
+      intervalMs: 10,
+      run: () => memory.distillWorker.tick({}).then(() => undefined),
+      onError: (error) => failure.resolve(String(error)),
+    }).start({
+      operationId: 'test',
+      provider: harness.applicationBinding.provider,
+      generationId: 'fixture',
+    })
     try {
       await Promise.race([
         entered.promise,
@@ -343,7 +353,8 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       ).toMatchObject({ status: 'pending', attempts: 1, lastError: reason })
     } finally {
       ack.resolve(undefined)
-      loop.stop()
+      await loop.stop()
+      await loop.drain()
       unsubscribe()
     }
   })

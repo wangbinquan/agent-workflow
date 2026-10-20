@@ -10,6 +10,9 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { DAEMON_CLOSE_PARTICIPANTS } from '../src/cli/daemonLifecycleProgram'
+import { propertyBodies } from './helpers/daemonProgramSource'
+
 const START = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
 
 function closeParticipantIds(section: string): string[] {
@@ -76,19 +79,18 @@ test('两个 provider 会话声明同一组关闭参与者、同一顺序', () =
   ]
   expect(closeParticipantIds(pg)).toEqual(expected)
   expect(closeParticipantIds(sqlite)).toEqual(expected)
-  // 两侧的 providerCloseParticipants 列表同序（绑定型参与者 + 三个本地声明）。
-  const listOf = (section: string): string[] => {
-    const at = section.indexOf('providerCloseParticipants')
-    const open = section.indexOf('[', at)
-    const close = section.indexOf(']', open)
-    return section
-      .slice(open + 1, close)
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0)
-      .map((entry) =>
-        entry.replace(/^\w+(Bindings|RuntimeBindings|BackgroundBindings)\./, '<bindings>.'),
-      )
+  expect(DAEMON_CLOSE_PARTICIPANTS.map((item) => item.id)).toEqual([
+    'memory-distill-recover-running',
+    'task-execution-final-close',
+    'maintenance-final-close',
+    'mcp-runtime-tests-final-close',
+    'task-execution-graceful-shutdown',
+    'webhook-terminal-control',
+  ])
+  for (const section of [sqlite, pg]) {
+    const record = propertyBodies(section, 'closeParticipants')
+    expect(record).toHaveLength(1)
+    for (const { id } of DAEMON_CLOSE_PARTICIPANTS)
+      expect(propertyBodies(record[0]!, id)).toHaveLength(1)
   }
-  expect(listOf(sqlite)).toEqual(listOf(pg))
 })

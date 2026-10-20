@@ -50,7 +50,6 @@ export interface MemoryDistillWorker {
     failed: number
     candidatesCreated: number
   }>
-  start(options?: MemoryDistillWorkerOptions): { stop(): void }
   recoverRunning(): Promise<{ recovered: number }>
   listJobs(filter?: { readonly status?: string }): Promise<MemoryDistillJob[]>
 }

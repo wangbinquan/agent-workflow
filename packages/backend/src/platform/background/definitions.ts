@@ -29,12 +29,6 @@ interface ManagedBackgroundDefinition {
   readonly health: () => Promise<BackgroundHealth> | BackgroundHealth
 }
 
-export interface BackgroundJobDefinition extends ManagedBackgroundDefinition {
-  readonly kind: 'periodic'
-  readonly cadenceMs: number
-  readonly run: (context: BackgroundLifecycleContext) => Promise<void> | void
-}
-
 export interface ManagedWorkerDefinition extends ManagedBackgroundDefinition {
   readonly kind: 'long-running'
   readonly run: (context: BackgroundLifecycleContext) => Promise<void>
@@ -45,12 +39,6 @@ function freezeDefinition<T extends ManagedBackgroundDefinition>(definition: T):
     ...definition,
     dependencies: Object.freeze([...definition.dependencies]),
   })
-}
-
-export function defineBackgroundJob(
-  definition: BackgroundJobDefinition,
-): Readonly<BackgroundJobDefinition> {
-  return freezeDefinition(definition)
 }
 
 export function defineManagedWorker(

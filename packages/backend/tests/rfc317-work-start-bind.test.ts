@@ -1,3 +1,5 @@
+import { DAEMON_BACKGROUND_JOBS } from '../src/cli/daemonLifecycleProgram'
+import { propertyBodies } from './helpers/daemonProgramSource'
 // RFC-317 T54 / RFC-359 W12 —— WorkStart keeps the HTTP employee instance for
 // the lifetime of the daemon. RFC-359 removes the deferred bind object entirely;
 // bootstrap passes complete ports whose closures resolve the completed owner.
@@ -34,7 +36,10 @@ describe('RFC-359 W12 —— WorkStart is complete at construction', () => {
     expect(sqlite.slice(portAt, dispatcherAt)).not.toContain('employeeOs')
     expect(sqlite).toContain('const app = createComposedApp(appComposition)')
     expect(sqlite).toContain('runDigitalEmployeeOsCycle({ runtime: employeeOs.runtime.worker })')
-    expect(sqlite).toContain('    employeeOsRuntimeFactory,')
+    expect(DAEMON_BACKGROUND_JOBS.filter((job) => job.id === 'digital-employee-os')).toHaveLength(1)
+    expect(propertyBodies(sqlite, 'backgroundJobs')[1]).toContain(
+      "'digital-employee-os': employeeOsRuntimeFactory",
+    )
     expect(sqlite).not.toContain('digitalEmployeeWorkStart.bind(')
     expect(sqlite).not.toContain('digitalEmployeeWorkStart.participant')
   })

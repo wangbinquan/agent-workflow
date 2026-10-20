@@ -1,3 +1,4 @@
+import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-359 W1-T7c —— 任务删除认领的崩溃恢复，两个引擎各跑一遍。
 //
 // dual-provider-parity-audit-2026-09-04 T7c：`recoverInterruptedTaskDeletes` 形参是
@@ -206,16 +207,14 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
 test('源码锁：PG daemon 在可用性闸之后、HTTP 之前续做 delete 认领；services/taskDelete 只再导出', () => {
   const src = resolve(import.meta.dir, '..', 'src')
   const daemon = readFileSync(resolve(src, 'cli', 'postgresqlDaemonApplication.ts'), 'utf8')
-  const gate = daemon.indexOf('skillCatalogBoot.activateAvailabilityGate()')
-  const recoveryCall =
-    /await recoverInterruptedTaskDeletes\(\s*input\.db,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/.exec(
-      daemon.slice(gate),
-    )
-  const recovery = recoveryCall === null ? -1 : gate + recoveryCall.index
-  const httpCreate = daemon.indexOf('const app = createComposedApp', recovery)
-  expect(gate).toBeGreaterThan(-1)
-  expect(recovery).toBeGreaterThan(gate)
-  expect(httpCreate).toBeGreaterThan(recovery)
+  expectBootOrder(['skill-availability-gate', 'task-execution-recovery', 'task-delete-recovery'])
+  expect(bootDeclaration('task-delete-recovery')).toMatchObject({
+    phase: 'execution-recovery',
+    failure: 'best-effort',
+  })
+  expect(bootImplementation(daemon, 'task-delete-recovery')).toMatch(
+    /await recoverInterruptedTaskDeletes\(\s*input\.db,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/,
+  )
   const service = readFileSync(resolve(src, 'services', 'taskDelete.ts'), 'utf8')
   expect(service).toContain("from '@/modules/task-execution/infrastructure/taskDeleteRecovery'")
   expect(service).not.toContain('export async function recoverInterruptedTaskDeletes(')

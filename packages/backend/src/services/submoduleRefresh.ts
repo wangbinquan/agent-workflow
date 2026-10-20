@@ -150,22 +150,6 @@ export async function refreshDueRepos(
   return { refreshed, failed }
 }
 
-/**
- * Start the background refresh ticker. `loadConfig` runs each tick so a settings
- * change applies without restarting the daemon, matching the other tickers.
- */
-export function startSubmoduleRefreshLoop(
-  store: RepositoryWorkspaceStore,
-  loadConfig: () => RefreshConfig,
-  intervalMs: number = HOUR_MS,
-  appHome?: string,
-  secretBox?: SecretBox,
-): { stop: () => void; reconfigure: () => boolean; awaitIdle: () => Promise<void> } {
-  const loop = createSubmoduleRefreshLoop(store, loadConfig, intervalMs, appHome, secretBox)
-  // The legacy callback is synchronous; its reconfiguration remains synchronous.
-  return { ...loop, reconfigure: () => loop.reconfigure() as boolean }
-}
-
 /** Select a live asynchronous source before arming the default cadence. */
 export async function startConfiguredSubmoduleRefreshLoop(
   store: RepositoryWorkspaceStore,

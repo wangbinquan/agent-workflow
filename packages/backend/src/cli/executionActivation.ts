@@ -17,7 +17,7 @@ export function startOnExecutionActive(
 ): DaemonProviderRuntimeHandleFactory {
   if (authority.current().kind === 'active') return factory
   return Object.freeze({
-    id: factory.id,
+    ...factory,
     start(input) {
       let phase: 'waiting' | 'starting' | 'started' | 'stopped' = 'waiting'
       let handle: DaemonProviderRuntimeHandle | undefined
@@ -26,19 +26,21 @@ export function startOnExecutionActive(
         phase = 'starting'
         try {
           handle = await factory.start(input)
+          await handle.ready
           if (phase === 'starting') phase = 'started'
         } catch (error) {
           onActivationFailure(error)
         }
       })
       return Object.freeze({
-        async stop() {
+        health: () => handle?.health?.() ?? {},
+        async stop(reason) {
           const previous = phase
           phase = 'stopped'
           // A handle still waiting for authority never started; one that is
           // starting finishes before it is stopped.
           if (previous === 'starting') await starting
-          await handle?.stop()
+          await handle?.stop(reason)
         },
         async drain() {
           if (phase === 'starting') await starting

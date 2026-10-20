@@ -120,14 +120,19 @@ describe('RFC-349 concrete daemon provider runtime session', () => {
       closeProvider: append(events, 'provider:close'),
     })
 
-    expect(session.state()).toEqual({ phase: 'frozen', activeHandleIds: [] })
+    expect(session.state()).toMatchObject({
+      phase: 'frozen',
+      activeHandleIds: [],
+      steps: [],
+      jobs: expect.any(Array),
+    })
     expect('db' in session.runtime).toBe(false)
     expect(events).toEqual(['admission:writer:close', 'admission:ws:close'])
 
     events.length = 0
     await session.resume(lifecycle)
     await session.resume(lifecycle)
-    expect(session.state()).toEqual({
+    expect(session.state()).toMatchObject({
       phase: 'running',
       activeHandleIds: ['runtime', 'background'],
     })
@@ -141,7 +146,12 @@ describe('RFC-349 concrete daemon provider runtime session', () => {
     events.length = 0
     await session.pause(lifecycle)
     await session.pause(lifecycle)
-    expect(session.state()).toEqual({ phase: 'frozen', activeHandleIds: [] })
+    expect(session.state()).toMatchObject({
+      phase: 'frozen',
+      activeHandleIds: [],
+      steps: [],
+      jobs: expect.any(Array),
+    })
     expect(events).toEqual([
       'admission:writer:close',
       'admission:ws:close',
@@ -186,7 +196,12 @@ describe('RFC-349 concrete daemon provider runtime session', () => {
     events.length = 0
 
     await expect(session.resume(lifecycle)).rejects.toThrow('background-start-failed')
-    expect(session.state()).toEqual({ phase: 'frozen', activeHandleIds: [] })
+    expect(session.state()).toMatchObject({
+      phase: 'frozen',
+      activeHandleIds: [],
+      steps: [],
+      jobs: expect.any(Array),
+    })
     expect(events).toEqual([
       'start:runtime-1',
       'start:background',
@@ -196,7 +211,7 @@ describe('RFC-349 concrete daemon provider runtime session', () => {
 
     events.length = 0
     await session.resume(lifecycle)
-    expect(session.state()).toEqual({
+    expect(session.state()).toMatchObject({
       phase: 'running',
       activeHandleIds: ['runtime', 'background'],
     })
@@ -271,7 +286,12 @@ describe('RFC-349 concrete daemon provider runtime session', () => {
     events.length = 0
     await session.close({ reason: 'daemon-shutdown' })
     await session.close({ reason: 'daemon-shutdown' })
-    expect(session.state()).toEqual({ phase: 'closed', activeHandleIds: [] })
+    expect(session.state()).toMatchObject({
+      phase: 'closed',
+      activeHandleIds: [],
+      steps: [],
+      jobs: expect.any(Array),
+    })
     expect(events).toEqual(['provider:close'])
     await expect(session.resume(lifecycle)).rejects.toMatchObject({
       code: 'daemon-provider-runtime-session-closing',

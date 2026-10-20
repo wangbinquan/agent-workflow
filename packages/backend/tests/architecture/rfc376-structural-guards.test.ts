@@ -378,7 +378,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
   ],
   'direct-setinterval-sites': [
     'packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#MrTerminalControlWorker.start#setInterval#1',
-    'packages/backend/src/modules/memory/application/distill/schedule.ts#startMemoryDistillLoop.handle#setInterval#1',
     'packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts#createCrewStationMcpDiagnosticsEffects.setInterval.timer#setInterval#1',
     'packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#createLocalMcpDiagnosticsEffects.setInterval.timer#setInterval#1',
     'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runCallWorkflowNode.obsTimer#setInterval#1',

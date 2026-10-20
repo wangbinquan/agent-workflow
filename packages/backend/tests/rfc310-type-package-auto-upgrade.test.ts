@@ -35,7 +35,7 @@ import type {
   EmployeeTypePackageRegistration,
 } from '@/modules/digital-employee/public/types'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
-import { composeEventCenter } from '@/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import { and, eq } from 'drizzle-orm'
 import { designEmployeeTypePackage } from './fixtures/digitalEmployeeTypePackages'
 

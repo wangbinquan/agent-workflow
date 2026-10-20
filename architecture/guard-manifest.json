@@ -1434,7 +1434,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc321-repository-publication-ratchet.test.ts",
       "id": "rfc321-repository-publication-ratchet",
-      "lines": 498,
+      "lines": 503,
       "mechanism": "ast",
       "minCorpusFiles": 750,
       "negativeFixture": true,
@@ -1530,7 +1530,7 @@
       "corpusScanner": false,
       "file": "packages/backend/tests/rfc338-maintenance-architecture.test.ts",
       "id": "rfc338-maintenance-architecture",
-      "lines": 116,
+      "lines": 127,
       "mechanism": "source-text",
       "minCorpusFiles": null,
       "negativeFixture": false,
@@ -2183,7 +2183,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1265
+      "lines": 1260
     },
     {
       "assertsAbsence": true,
@@ -2194,6 +2194,18 @@
       "lines": 104,
       "mechanism": "ast",
       "minCorpusFiles": null,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc379-daemon-lifecycle-guard.test.ts",
+      "id": "rfc379-daemon-lifecycle-guard",
+      "lines": 192,
+      "mechanism": "source-text",
+      "minCorpusFiles": 2000,
       "negativeFixture": true,
       "runner": "bun"
     },

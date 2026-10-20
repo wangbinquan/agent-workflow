@@ -1,3 +1,4 @@
+import { DAEMON_RUNTIME_JOBS } from '../src/cli/daemonLifecycleProgram'
 // Queued admission must await the selected reader and settle before provider
 // close. These controls do not start an Intent turn, daemon, or local process.
 import { describe, expect, test } from 'bun:test'
@@ -455,6 +456,7 @@ describeEachProvider('RFC-370 queued admission selected database', (harness) => 
 })
 
 test('both actual provider roots wire frozen notifications and one complete selected lifetime', () => {
+  expect(DAEMON_RUNTIME_JOBS[0].id).toBe('intent-queued-resumption')
   const file = ts.createSourceFile(
     'start.ts',
     readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8'),
@@ -463,8 +465,8 @@ test('both actual provider roots wire frozen notifications and one complete sele
   )
   const compact = (node: ts.Node): string => node.getText(file).replace(/\s/g, '')
   for (const [name, query, firstRuntime] of [
-    ['composePostgresqlProviderSession', 'configuration:input.configuration', 'runtimeFactories'],
-    ['composeSqliteProviderSession', 'configuration,', 'providerRuntimeFactories'],
+    ['composePostgresqlProviderSession', 'configuration:input.configuration', 'runtimeJobs'],
+    ['composeSqliteProviderSession', 'configuration,', 'runtimeJobs'],
   ] as const) {
     const root = file.statements.find(
       (node): node is ts.FunctionDeclaration =>
@@ -486,7 +488,7 @@ test('both actual provider roots wire frozen notifications and one complete sele
     expect(compact(selected[0]!)).not.toContain('loadConfig(')
     const maintenance = nodes.filter(
       (node): node is ts.CallExpression =>
-        ts.isCallExpression(node) && compact(node.expression) === 'startMaintenanceService',
+        ts.isCallExpression(node) && compact(node.expression) === 'createMaintenanceService',
     )
     expect(maintenance).toHaveLength(1)
     if (name === 'composeSqliteProviderSession') {
@@ -518,7 +520,9 @@ test('both actual provider roots wire frozen notifications and one complete sele
         node.name.getText(file) === firstRuntime,
     )
     expect(factories).toHaveLength(1)
-    expect(compact(factories[0]!)).toContain('[intentQueuedResumption.runtimeFactory,')
+    expect(compact(factories[0]!)).toContain(
+      "'intent-queued-resumption':intentQueuedResumption.runtimeFactory",
+    )
     expect(compact(root.body)).not.toContain('pendingIntentSessionIds')
     expect(compact(root.body)).not.toContain('loadConfig(Paths.config)')
   }

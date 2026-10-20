@@ -15,7 +15,7 @@ import {
   developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
-import { composeEventCenter } from '@/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 
 const roots: string[] = []

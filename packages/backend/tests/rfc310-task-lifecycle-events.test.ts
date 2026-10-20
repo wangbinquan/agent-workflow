@@ -12,7 +12,7 @@ import {
   tasks,
   workflows,
 } from '@/db/schema'
-import { composeEventCenter } from '@/modules/event-center/composition'
+import { composeEventCenter } from './helpers/eventCenter'
 import {
   createTaskLifecycleDurableConsumerDefinitions,
   taskLifecycleCommittedEventCodec,

@@ -4,6 +4,7 @@
 
 import type { DaemonProviderSessionLifecycleInput } from './daemonProviderSession'
 import type {
+  DaemonJobHealth,
   DaemonProviderCloseParticipant,
   DaemonProviderRuntimeHandle,
   DaemonProviderRuntimeHandleFactory,
@@ -14,6 +15,7 @@ type MaybePromise<T> = T | Promise<T>
 export interface ManagedWorkerRuntime {
   readonly stop: (reason?: string) => Promise<void>
   readonly done: Promise<void>
+  readonly health?: () => DaemonJobHealth | Promise<DaemonJobHealth>
 }
 
 export interface ManagedWorkerRuntimeHandleFactoryInput {
@@ -23,7 +25,7 @@ export interface ManagedWorkerRuntimeHandleFactoryInput {
 }
 
 export interface PausableDaemonRuntimeService {
-  readonly pause: () => Promise<void>
+  readonly pause: (reason?: 'provider-switch' | 'daemon-shutdown') => Promise<void>
   readonly resume: () => Promise<void>
   readonly stop: () => Promise<void>
 }
@@ -76,7 +78,19 @@ export function createManagedWorkerRuntimeHandleFactory(
       const worker = await input.start(lifecycleInput)
       let stopPromise: Promise<void> | null = null
 
+      let health: DaemonJobHealth = {}
       const handle: DaemonProviderRuntimeHandle = {
+        health() {
+          const value = worker.health?.()
+          if (value instanceof Promise)
+            void value
+              .then((next) => {
+                health = next
+              })
+              .catch(() => undefined)
+          else if (value !== undefined) health = value
+          return health
+        },
         stop() {
           if (stopPromise === null) {
             stopPromise = invokeAsPromise(() => worker.stop(input.stopReason))
@@ -125,14 +139,26 @@ export function createPollingDaemonRuntimeHandleFactory(
     async start(lifecycleInput: DaemonProviderSessionLifecycleInput) {
       await input.beforeStart?.(lifecycleInput)
       const controller = new AbortController()
+      let health: DaemonJobHealth = { consecutiveFailures: 0 }
       const done = (async (): Promise<void> => {
         if (input.runImmediately !== true) {
           await waitForPollingInterval(input.intervalMs, controller.signal)
         }
         while (!controller.signal.aborted) {
+          health = { ...health, lastRunAt: Date.now() }
           try {
             await input.run(lifecycleInput)
+            health = {
+              lastRunAt: health.lastRunAt,
+              lastSuccessAt: Date.now(),
+              consecutiveFailures: 0,
+            }
           } catch (error) {
+            health = {
+              ...health,
+              lastError: String(error),
+              consecutiveFailures: (health.consecutiveFailures ?? 0) + 1,
+            }
             await input.onError(error, lifecycleInput)
           }
           await waitForPollingInterval(input.intervalMs, controller.signal)
@@ -140,6 +166,7 @@ export function createPollingDaemonRuntimeHandleFactory(
       })()
       let stopped = false
       return Object.freeze({
+        health: () => ({ ...health }),
         stop() {
           if (!stopped) {
             stopped = true
@@ -194,10 +221,10 @@ export async function createPausableDaemonRuntimeServiceBindings(
       let pausePromise: Promise<void> | null = null
 
       const handle: DaemonProviderRuntimeHandle = {
-        stop() {
+        stop(reason?: 'provider-switch' | 'daemon-shutdown') {
           if (pausePromise !== null) return pausePromise
 
-          const attempt = invokeAsPromise(() => input.service.pause())
+          const attempt = invokeAsPromise(() => input.service.pause(reason))
           pausePromise = attempt
           void attempt.then(
             () => undefined,
@@ -274,9 +301,9 @@ export function createLazyPausableDaemonRuntimeServiceBindings(
 
       let pausePromise: Promise<void> | null = null
       const handle: DaemonProviderRuntimeHandle = Object.freeze({
-        stop() {
+        stop(reason?: 'provider-switch' | 'daemon-shutdown') {
           if (pausePromise !== null) return pausePromise
-          const attempt = invokeAsPromise(() => input.service.pause())
+          const attempt = invokeAsPromise(() => input.service.pause(reason))
           pausePromise = attempt
           void attempt.then(
             () => undefined,

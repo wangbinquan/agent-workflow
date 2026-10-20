@@ -82,7 +82,6 @@ export class MrTerminalControlWorker {
   async reconcileOnBoot(): Promise<void> {
     await this.launchGuards.reconcileStaleOnBoot()
     await this.drainAllDue()
-    this.start()
   }
 
   async stop(): Promise<void> {
@@ -205,7 +204,10 @@ export class MrTerminalControlWorker {
       ...state,
       now: Date.now(),
     })
-    if (state.status === 'waiting-launches' || state.status === 'retryable') {
+    if (
+      this.timer !== null &&
+      (state.status === 'waiting-launches' || state.status === 'retryable')
+    ) {
       const delay = Math.max(0, state.nextAttemptAt - Date.now())
       const timeout = setTimeout(() => this.wake(effectId), delay)
       timeout.unref?.()

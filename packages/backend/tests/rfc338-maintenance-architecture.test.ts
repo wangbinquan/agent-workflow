@@ -41,12 +41,12 @@ describe('RFC-338 maintenance architecture', () => {
 
   test('each selected provider owns one maintenance service and keeps only memory GC on main', () => {
     const start = readBackend('src/cli/start.ts')
-    expect(start.match(/startMaintenanceService\(\{/g)).toHaveLength(2)
+    expect(start.match(/createMaintenanceService\(\{/g)).toHaveLength(2)
     expect(start).toMatch(
-      /startMaintenanceService\(\{[\s\S]*?provider: 'postgresql',[\s\S]*?createMaintenanceRunStore\(db\)/u,
+      /createMaintenanceService\(\{[\s\S]*?provider: 'postgresql',[\s\S]*?createMaintenanceRunStore\(db\)/u,
     )
     expect(start).toMatch(
-      /startMaintenanceService\(\{[\s\S]*?dbPath: Paths\.db,[\s\S]*?migrationsFolder/u,
+      /createMaintenanceService\(\{[\s\S]*?dbPath: Paths\.db,[\s\S]*?migrationsFolder/u,
     )
     expect(start).toContain('maintenanceStatus: maintenanceService.status')
     expect(start).toContain("maintenanceService.runSoon('backupPrune')")
@@ -95,7 +95,7 @@ describe('RFC-338 maintenance architecture', () => {
     expect(service).not.toContain('runMaintenanceJob(')
     expect(service).toContain('payloadSources = options.payloadSources')
     expect(service).not.toContain('@/modules/intent/infrastructure/')
-    // RFC-359 AC-10：准入连接从服务体内搬走了（`startMaintenanceService` 不再按 provider
+    // RFC-359 AC-10：准入连接从服务体内搬走了（`createMaintenanceService` 不再按 provider
     // 自己开连接，改由装配方的 `openAdmissionStore` 交出），而**开库这件事落在
     // `platform/persistence/`**——`cli/start.ts` 不得 import `@/db/client`，那是
     // `rfc349-provider-cutover` 的既有规则（provider factory owns SQLite）。

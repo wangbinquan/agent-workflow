@@ -31,7 +31,8 @@ function session(
   const result = Object.freeze<TestSession>({
     provider,
     generationId,
-    state: () => ({ phase, activeHandleIds: [] }),
+    state: () => ({ phase, activeHandleIds: [], jobs: [], steps: [] }),
+    postReady: async () => {},
     runtime: Object.freeze({
       fetch: async () => new Response(`${provider}:${generationId}`),
       tryUpgrade: async () => false as const,

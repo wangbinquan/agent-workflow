@@ -1,3 +1,12 @@
+import {
+  taskExecutionModule,
+  createTaskExecutionShutdownController,
+} from '@/modules/task-execution/composition'
+import {
+  composeDaemonLifecycle,
+  NotApplicable,
+  type DaemonLifecycle,
+} from './daemonLifecycleProgram'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { TaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
 import type { TaskRecoveryDeploymentSelection } from '@/modules/task-execution/composition/taskRecoverySelection'
@@ -87,7 +96,7 @@ import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/c
 import { createSecretBox, type SecretBox } from '@/auth/secretBox'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
-import { createExecutionExitRequests, startOnExecutionActive } from './executionActivation'
+import { createExecutionExitRequests } from './executionActivation'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import type { loadConfig } from '@/config'
@@ -198,7 +207,6 @@ import {
   activeTaskIdsSnapshot,
   isTaskActive,
   retryRepositoryPreparation,
-  shutdownActiveTaskExecutions,
 } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
@@ -268,7 +276,7 @@ import { buildWebSocketAdapter } from '@/ws/server'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
-import { startMaintenanceService } from '@/platform/background/maintenanceService'
+import { createMaintenanceService } from '@/platform/background/maintenanceService'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
 import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
@@ -426,7 +434,6 @@ import {
 import {
   createLazyPausableDaemonRuntimeServiceBindings,
   createManagedWorkerRuntimeHandleFactory,
-  createPausableDaemonRuntimeServiceBindings,
   createPollingDaemonRuntimeHandleFactory,
   createSignalledDaemonRuntimeHandleFactory,
   type SignalledDaemonRuntimeOwner,
@@ -652,9 +659,8 @@ interface DaemonProviderRuntimeComposition {
   readonly generationId: string
   readonly app: Pick<ReturnType<typeof createComposedApp>, 'fetch'>
   readonly webSocket: ReturnType<typeof buildWebSocketAdapter>
-  readonly runtimeFactories?: readonly DaemonProviderRuntimeHandleFactory[]
-  readonly backgroundWriterFactories?: readonly DaemonProviderRuntimeHandleFactory[]
-  readonly providerCloseParticipants?: readonly DaemonProviderCloseParticipant[]
+  readonly lifecycle: DaemonLifecycle
+  readonly readyOnResume?: boolean
   readonly shutdownIdentity: () => void | Promise<void>
   readonly closeProvider: () => void | Promise<void>
   /** RFC-370 v2 §3.2 — background handles start when this authority is first active. */
@@ -700,15 +706,6 @@ async function _createComposedDaemonProviderRuntimeSession(
   input: DaemonProviderRuntimeComposition,
 ) {
   const httpAdmission = createDaemonProviderHttpAdmission()
-  const execution = input.execution
-  const gated = (factories: readonly DaemonProviderRuntimeHandleFactory[] | undefined) =>
-    factories === undefined || execution === undefined
-      ? factories
-      : factories.map((factory) =>
-          startOnExecutionActive(execution.authority, factory, execution.onActivationFailure),
-        )
-  const runtimeFactories = gated(input.runtimeFactories)
-  const backgroundWriterFactories = gated(input.backgroundWriterFactories)
   return await createDaemonProviderRuntimeSession({
     provider: input.provider,
     generationId: input.generationId,
@@ -723,11 +720,8 @@ async function _createComposedDaemonProviderRuntimeSession(
       closeWebSocketAdmission: input.webSocket.admission.close,
       openWebSocketAdmission: input.webSocket.admission.open,
     }),
-    ...(runtimeFactories === undefined ? {} : { runtimeFactories }),
-    ...(backgroundWriterFactories === undefined ? {} : { backgroundWriterFactories }),
-    ...(input.providerCloseParticipants === undefined
-      ? {}
-      : { providerCloseParticipants: input.providerCloseParticipants }),
+    ...input.lifecycle.sessionOptions(input.execution),
+    readyOnResume: input.readyOnResume,
     shutdownIdentity: input.shutdownIdentity,
     closeProvider: input.closeProvider,
   })
@@ -856,16 +850,6 @@ async function composePostgresqlProviderSession(
     dbVersion: input.dbVersion,
     maintenanceStatus: () => maintenanceService.status(),
   })
-  await initializeRuntimeRegistryBoot({
-    operations: application.core.runtimeRegistry,
-    config: input.config,
-    legacyConfiguration: input.runtimeLegacyConfiguration,
-    onRecoverableFailure(error) {
-      input.log.warn('builtin runtime seed/migration on boot failed', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-    },
-  })
   const runtime = application.runtime
   const intentQueuedResumption = composeIntentQueuedResumption({
     configuration: input.configuration,
@@ -878,7 +862,7 @@ async function composePostgresqlProviderSession(
   })
 
   const maintenanceConfiguration = await input.configuration.read()
-  const maintenanceService: ReturnType<typeof startMaintenanceService> = startMaintenanceService({
+  const maintenanceService: ReturnType<typeof createMaintenanceService> = createMaintenanceService({
     provider: 'postgresql',
     // 外部服务器的存储在服务端，没有「本地文件快照」这回事——恒为 false 与原行为逐字一致
     // （原来写的是 `options.provider !== 'postgresql' && isDbSnapshotInProgress()`，PG 侧从不跳过）。
@@ -928,7 +912,8 @@ async function composePostgresqlProviderSession(
     },
   })
 
-  const maintenanceBindings = await createPausableDaemonRuntimeServiceBindings({
+  const maintenanceBindings = createLazyPausableDaemonRuntimeServiceBindings({
+    start: () => maintenanceService.start(),
     runtimeId: 'maintenance',
     closeParticipantId: 'maintenance-final-close',
     service: maintenanceService,
@@ -946,7 +931,11 @@ async function composePostgresqlProviderSession(
       await runtime.mcpRuntimeTests.pause()
       await runtime.mcpRuntimeTests.resume()
     },
-    service: runtime.mcpRuntimeTests,
+    service: {
+      pause: () => runtime.mcpRuntimeTests.pause(),
+      resume: () => runtime.mcpRuntimeTests.resume(),
+      stop: () => runtime.mcpRuntimeTests.stop(),
+    },
   })
   const taskExecutionBindings = await _bindTaskExecutionProviderBackground(
     runtime.taskExecution.background,
@@ -1091,13 +1080,6 @@ async function composePostgresqlProviderSession(
   // setter and its own `loadConfig` call, registered right here in BOTH engine
   // compositions — four registration sites for two knobs that are read at the
   // same instant, from the same file, by the same function. One provider now.
-  setMemoryDistillPolicyProvider(async () => {
-    try {
-      return resolveDistillPolicy(await input.configuration.read())
-    } catch {
-      return DEFAULT_DISTILL_POLICY
-    }
-  })
   const memoryDistillRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'memory-distill',
     intervalMs: 1_000,
@@ -1301,15 +1283,16 @@ async function composePostgresqlProviderSession(
   })
   const gracefulTaskShutdown: DaemonProviderCloseParticipant = Object.freeze({
     id: 'task-execution-graceful-shutdown',
-    async close() {
+    async close({ reason }: Parameters<DaemonProviderCloseParticipant['close']>[0]) {
+      if (reason !== 'daemon-shutdown') return
       const { gracefulShutdown } = await import('@/services/shutdown')
       await gracefulShutdown(
         {
-          controller: { shutdownActive: shutdownActiveTaskExecutions },
+          controller: createTaskExecutionShutdownController(runtime.taskExecution.executionModule),
           operations: runtime.taskExecution.shutdown,
           recovery: runtime.taskExecution.recovery,
         },
-        30_000,
+        0,
       )
     },
   })
@@ -1339,45 +1322,88 @@ async function composePostgresqlProviderSession(
     },
   })
 
+  const lifecycleProgram = composeDaemonLifecycle({
+    provider: 'postgresql',
+    profile: input.executionAuthority?.mode,
+    log: input.log,
+    steps: {
+      ...application.lifecycleSteps,
+      'runtime-declarations': async () => {
+        const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))
+        if (notModeled.length > 0) {
+          input.log.info('runtime declaration self-check: not-modeled dispositions', { notModeled })
+        }
+      },
+      'runtime-registry': async () => {
+        await initializeRuntimeRegistryBoot({
+          operations: application.core.runtimeRegistry,
+          config: input.config,
+          legacyConfiguration: input.runtimeLegacyConfiguration,
+          onRecoverableFailure(error) {
+            input.log.warn('builtin runtime seed/migration on boot failed', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          },
+        })
+      },
+      'process-registrations': async () => {
+        const register = application.lifecycleSteps['process-registrations']
+        if (register !== NotApplicable) await register()
+        setMemoryDistillPolicyProvider(async () => {
+          try {
+            return resolveDistillPolicy(await input.configuration.read())
+          } catch {
+            return DEFAULT_DISTILL_POLICY
+          }
+        })
+      },
+      'maintenance-boot-snapshot': async () => {
+        await maintenanceService.captureBootSnapshot()
+      },
+    },
+    runtimeJobs: {
+      'intent-queued-resumption': intentQueuedResumption.runtimeFactory,
+      'task-execution': taskExecutionBindings.runtimeFactory,
+      maintenance: maintenanceBindings.runtimeFactory,
+      'mcp-runtime-tests': mcpRuntimeBindings.runtimeFactory,
+    },
+    backgroundJobs: {
+      'webhook-terminal-control': webhookTerminalRuntimeFactory,
+      'after-commit-event-pump': afterCommitPumpFactory,
+      'human-gate-continuation': humanGateRuntimeFactory,
+      'committed-event-dispatcher': committedEventRuntimeFactory,
+      'memory-distill': memoryDistillRuntimeFactory,
+      'development-wake': developmentWakeRuntimeFactory,
+      'digital-employee-os': digitalEmployeeRuntimeFactory,
+      'event-center': eventCenterRuntimeFactory,
+      'fusion-reconcile': fusionRuntimeFactory,
+      'resource-limits': limitsRuntimeFactory,
+      'task-idle-timeout': idleTimeoutRuntimeFactory,
+      'scheduled-backup': backupRuntimeFactory,
+      'submodule-refresh': submoduleRefreshRuntimeFactory,
+      'batch-import-gc': batchImportRuntimeFactory,
+    },
+    closeParticipants: {
+      'memory-distill-recover-running': memoryDistillRecoverOnClose,
+      'task-execution-final-close': taskExecutionBindings.closeParticipant,
+      'maintenance-final-close': maintenanceBindings.closeParticipant,
+      'mcp-runtime-tests-final-close': mcpRuntimeBindings.closeParticipant,
+      'task-execution-graceful-shutdown': gracefulTaskShutdown,
+      'webhook-terminal-control': webhookTerminalClose,
+    },
+    profileJobs: (input.hostedBackgroundOwners ?? []).map((owner) =>
+      createSignalledDaemonRuntimeHandleFactory(owner, DAEMON_SHUTDOWN_ABORT_REASON),
+    ),
+  })
+  await lifecycleProgram.initialize(input.initializeExecution)
   const session = await _createComposedDaemonProviderRuntimeSession({
     provider: 'postgresql',
     generationId: input.provider.generation.payload.generationId,
     ...executionActivationOf(input),
     app: application.app,
     webSocket: application.webSocket,
-    runtimeFactories: [
-      intentQueuedResumption.runtimeFactory,
-      taskExecutionBindings.runtimeFactory,
-      maintenanceBindings.runtimeFactory,
-      mcpRuntimeBindings.runtimeFactory,
-    ],
-    backgroundWriterFactories: [
-      webhookTerminalRuntimeFactory,
-      afterCommitPumpFactory,
-      humanGateRuntimeFactory,
-      committedEventRuntimeFactory,
-      memoryDistillRuntimeFactory,
-      developmentWakeRuntimeFactory,
-      digitalEmployeeRuntimeFactory,
-      eventCenterRuntimeFactory,
-      fusionRuntimeFactory,
-      limitsRuntimeFactory,
-      idleTimeoutRuntimeFactory,
-      backupRuntimeFactory,
-      submoduleRefreshRuntimeFactory,
-      batchImportRuntimeFactory,
-      ...(input.hostedBackgroundOwners ?? []).map((owner) =>
-        createSignalledDaemonRuntimeHandleFactory(owner, DAEMON_SHUTDOWN_ABORT_REASON),
-      ),
-    ],
-    providerCloseParticipants: [
-      memoryDistillRecoverOnClose,
-      taskExecutionBindings.closeParticipant,
-      maintenanceBindings.closeParticipant,
-      mcpRuntimeBindings.closeParticipant,
-      gracefulTaskShutdown,
-      webhookTerminalClose,
-    ],
+    lifecycle: lifecycleProgram,
+    readyOnResume: input.lifecycle.operationId !== 'daemon-start',
     shutdownIdentity: () => application.core.identityAccess.shutdown(),
     closeProvider: () => input.provider.close(),
   })
@@ -1563,6 +1589,7 @@ export async function serveDaemon(input: {
     PostgresqlDaemonApplication['core']['authRuntime'],
     'isBootstrapRequired'
   >
+  readonly postReady?: () => Promise<void>
   readonly databaseProvider: DatabaseProvider
   readonly token: string
   readonly bindHost: string
@@ -1594,6 +1621,7 @@ export async function serveDaemon(input: {
 
   const application = composeDaemonHostApplication({
     host: input.daemonHost,
+    postReady: input.postReady,
     databaseProvider: input.databaseProvider,
     log: input.log,
     describeFailure: describeDaemonProviderSessionFailure,
@@ -2113,6 +2141,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     await serveDaemon({
       bootstrap: daemonProviderBootstrap,
       authRuntime: initial.application.core.authRuntime,
+      postReady: () => initial.session.postReady?.() ?? Promise.resolve(),
       databaseProvider: databaseProvider.provider,
       token,
       bindHost,
@@ -2187,12 +2216,6 @@ async function composeSqliteProviderSession(
   // RFC-300 composition: integration owns the direct-Webhook attribution
   // predicate; lifecycle owns the atomic terminal status+claim write; GC owns
   // physical deletion. Read config at each transition so the setting is hot.
-  registerTerminalWorkspacePrunePolicy(
-    composeWebhookTerminalWorkspacePrunePolicy({
-      db,
-      enabled: async () => (await configuration.read()).webhookTaskWorkspaceAutoCleanup,
-    }),
-  )
   log.info('db ready', { path: Paths.db, dbVersion })
 
   // RFC-282 §4.3 — runtime declaration self-check, before any business
@@ -2200,12 +2223,6 @@ async function composeSqliteProviderSession(
   // face (a declared-but-unimplemented face makes the verification layer
   // believe it is verifying — RFC-247 rationale). 'not-modeled' policy rows
   // are reported separately so the gap stays visible.
-  {
-    const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))
-    if (notModeled.length > 0) {
-      log.info('runtime declaration self-check: not-modeled dispositions', { notModeled })
-    }
-  }
 
   // RFC-279: migration 0147 can leave a direct-upgrade legacy URL under a
   // closed escrow prefix. Converge credentials immediately after openDb,
@@ -2253,14 +2270,9 @@ async function composeSqliteProviderSession(
   })
   const repositoryWorkspaceStore = providerCore.repositoryWorkspaceStore
   const repositoryTransportRepository = providerCore.repositoryTransportCredentialRepository
-  await ensureCredentialsSealed(repositoryWorkspaceStore, secretBox)
   const repositoryTransportModule = composeRepositoryTransportCredentials(
     repositoryTransportRepository,
     secretBox,
-  )
-  await reconcileRepositoryTransportConnectionProjections(
-    repositoryTransportRepository,
-    repositoryTransportModule.adminConnections,
   )
   const repositoryMetadataConnections = createCodeHostConnectionsService({
     secretBox,
@@ -2740,269 +2752,14 @@ async function composeSqliteProviderSession(
     memories: memoryCatalog,
     tasks: taskExecutionProvider.fusion,
   })
-  {
-    const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)
-    if (removedCredentialLeases > 0) {
-      log.info('orphaned git credential leases removed', { count: removedCredentialLeases })
-    }
-  }
-
-  // 5a. RFC-223 PR-5: the ONE fail-closed skill identity barrier. It must be
-  // the first skill DB/FS behavior after credential convergence: recover every
-  // legacy/current structural op while locks remain evidence, migrate
-  // skills/{name} -> skills/{id}, and prove DB/FS/FK consistency before users,
-  // orphan reaping, reconcilers, seeders, schedulers, fusion, or HTTP can run.
   const skillCatalogBoot: SkillCatalogBootParticipant = composeSkillCatalogBoot({
     db,
     ...selectSkillContentDependencies(input.skillContent, Paths.root),
   })
-  {
-    const report = await skillCatalogBoot.runIdentityMigrationBarrier()
-    if (report.recoveredOperations > 0 || report.removedHusks > 0 || report.migratedSkills > 0) {
-      log.info('skill identity migration barrier complete', { ...report })
-    }
-  }
-  // RFC-223 PR-4: finish provenance recovery before any fusion recovery,
-  // seeder, scheduler, or HTTP path can observe a historical name-only row.
-  // Fail CLOSED: an unexpected repair error aborts boot rather than serving a
-  // database whose fusion identity is ambiguous.
-  {
-    const { repairFusionProvenance } =
-      await import('@/modules/knowledge-evolution/public/operations')
-    const report = await repairFusionProvenance(fusionOperations.persistence)
-    if (Object.values(report).some((count) => count > 0)) {
-      log.info('fusion provenance repair complete', { ...report })
-    }
-  }
-  // Activate the boot-epoch availability gate while its verified set is still
-  // empty. Every persisted skill stays hidden from all consumers and HTTP until
-  // the per-skill background reverify explicitly admits it (or quarantines it).
-  skillCatalogBoot.activateAvailabilityGate()
-
-  // RFC-036 bootstrap hint: if no real user has been created yet, log a
-  // one-shot pointer to the CLI so admins know how to leave single-user mode.
-  try {
-    if (await providerCore.authRuntime.isBootstrapRequired()) {
-      log.info(
-        'first multi-user run? create your admin via `agent-workflow user create --admin --username <name>`',
-      )
-    }
-  } catch {
-    /* users service may not be available in degraded mode; ignore */
-  }
-
-  // 5b. RFC-359 W3-T4：boot 恢复四步（撤销旧 owner → 收割孤儿 run → 修 lease → 清算 effect 并释放 owner）
-  // 是 provider 中立的一份序列（composition/bootRecovery.ts），PostgreSQL daemon 跑的是同一段。
-  const taskExecutionLockProof = createDaemonRecoveryAuthorityProof(
-    await readDaemonStartupRecoveryAuthority(lock, DAEMON_GENERATION),
-  )
-  await runTaskExecutionBootRecovery({
-    recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
-    persistence: taskExecutionPersistence,
-    runtimeSessionLeases,
-    lockProof: taskExecutionLockProof,
-    codeHostProbe: (descriptor) =>
-      probeCodeHostMutation({
-        descriptor,
-        resolveConnection: (provider) => repositoryMetadataConnections.resolve(provider),
-      }),
-    log,
-  })
-  // RFC-371 v2: calls still running from before this boot can no longer report.
-  const interruptedCalls = await observationCalls.repairInterrupted(Date.now())
-  if (interruptedCalls > 0) log.info('observation calls interrupted', { count: interruptedCalls })
-  {
-    // RFC-328 terminal maintenance is durable and outlives task-row deletion.
-    // Resume exact delete claims before any automatic continuation is opened.
-    try {
-      const deleteRecovery = await recoverInterruptedTaskDeletes(
-        db,
-        undefined,
-        input.taskDeletionEffects,
-      )
-      if (
-        deleteRecovery.completed.length > 0 ||
-        deleteRecovery.cleanupPending.length > 0 ||
-        deleteRecovery.recoveryRequired.length > 0
-      ) {
-        log.info('terminal task delete recovery', { ...deleteRecovery })
-      }
-    } catch (err) {
-      log.warn('terminal task delete recovery failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-    // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步
-    // 走 provider 中立的命令面（归档命令 recover + 工作区维护 recover），PostgreSQL daemon 跑的是同一段。
-    try {
-      const archiveRecovery = await taskExecutionProvider.archive.recover({
-        archiveDir: Paths.taskArchiveDir,
-        runsDir: Paths.runsDir,
-        logsDir: Paths.logsDir,
-      })
-      if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {
-        log.info('terminal task archive recovery', { ...archiveRecovery })
-      }
-    } catch (err) {
-      log.warn('terminal task archive recovery failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-
-    // RFC-300：单实例锁 + 孤儿收割证明上一代 daemon 不再持有这些工作区，boot 接管全部 webhook-terminal
-    // 认领（周期 ticker 只接管过期租约）；RFC-165 R3-2-r4 的 legacy pruned tombstone 回填同在其中。
-    const bootWorkspaceMaintenance = composeWorkspaceMaintenanceCommand({
-      filesystem: input.workspaceMaintenanceFilesystem,
-      db,
-      appHome: Paths.root,
-      terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
-      isMaterializingTask: () => false,
-      invalidateWorkspacePath: invalidateCallGraphIndex,
-    })
-    try {
-      const workspaceRecovery = await bootWorkspaceMaintenance.recover({
-        activeTaskIds: [],
-        webhookClaims: 'all',
-      })
-      if (
-        workspaceRecovery.completed > 0 ||
-        workspaceRecovery.failed > 0 ||
-        workspaceRecovery.healed > 0
-      ) {
-        log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })
-      }
-    } catch (err) {
-      log.warn('terminal workspace maintenance recovery failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-
-    // 5b2/5b3（已退役）—— RFC-132 的两个 boot 垫片（legacy immediate rounds /
-    // legacy cross stop）由 RFC-217 T8 收编为一次性 migration 0107（垫片模块
-    // 随之删除）；migration 恰好一次的语义取代 boot-once 幂等重放。
-
-    // 5b4b. RFC-354 T4: one-shot frame backfill for node_runs rows minted before
-    // frames existed (migration 0223 adds the columns, only the daemon can fill
-    // them — it needs each task's frozen snapshot). Marker-gated: every later boot
-    // is a single maintenance_state read. Must run BEFORE auto-resume (step 8+)
-    // so a resumed nested wrapper sees its body rows in the right generation.
-    try {
-      const { runFrameBackfillOnBoot } =
-        await import('@/modules/task-execution/composition/frameBackfill')
-      const backfill = await runFrameBackfillOnBoot({ db })
-      if (!backfill.skipped) {
-        log.info('rfc354 frame backfill completed on boot', {
-          tasks: backfill.tasks,
-          rowsUpdated: backfill.rowsUpdated,
-          roundsUpdated: backfill.roundsUpdated,
-          unreadableTasks: backfill.unreadableTasks.length,
-          unresolvedRows: backfill.unresolvedRows,
-        })
-      }
-    } catch (err) {
-      log.warn('rfc354 frame backfill on boot failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-
-    // 5b5. RFC-165 (§9): heal stored path-mode scheduled launch payloads to their
-    // faithful file:// form (fetchBeforeLaunch:true / missing dirs → disabled with
-    // an explanatory lastError). MUST run before the HTTP server serves the
-    // scheduled read/edit routes AND before the scheduler ticker fires — 幂等 +
-    // best-effort.
-    try {
-      const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')
-      const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)
-      if (healed.converted > 0 || healed.disabled > 0) {
-        log.info('scheduled launch payloads healed', healed)
-      }
-    } catch (err) {
-      log.warn('scheduled payload heal on boot failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-
-    // 5b5. RFC-170 T6 (Codex re-review F9): recover fusion DECISION half-states left
-    // by a crash mid-approve/mid-reject (multi-tx decisions). Roll forward an
-    // 'applying' whose version already committed, roll back the rest, and fail a
-    // 'running'+currentTaskId=null (reject that never attached its task). Best-effort.
-    try {
-      const { recoverFusionDecisions } =
-        await import('@/modules/knowledge-evolution/public/operations')
-      const r = await recoverFusionDecisions(fusionOperations.persistence)
-      if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {
-        log.info('fusion decision recovery on boot', { ...r })
-      }
-    } catch (err) {
-      log.warn('fusion decision recovery on boot failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
-
-  // 5c. RFC-101: backfill a v1 snapshot for any managed skill predating skill
-  // versioning, and re-sync a live files/ left stale by a crash between the
-  // version-archive tx and the live-files copy. Idempotent + best-effort.
-  try {
-    await skillCatalogBoot.reconcileLiveFiles()
-  } catch (err) {
-    log.warn('skill-version reconcile on boot failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-
-  // 5e. RFC-101: ensure the built-in skill-fusion agent + workflow exist (so a
-  // fusion launch never has to seed them on the hot path, and they show up in
-  // the workflows list). Idempotent; createFusion also lazy-seeds defensively.
-  try {
-    const { seedFusionResources } = await import('@/modules/knowledge-evolution/public/operations')
-    await seedFusionResources(fusionOperations.persistence)
-  } catch (err) {
-    log.warn('fusion resource seed on boot failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-
-  // RFC-310: business templates are platform resources, not schema data. Seed
-  // them after DB admission so pure migrations remain free of resource rows.
   const digitalEmployeeAgentTemplates = composeDigitalEmployeeAgentTemplateCatalogFor(
     db,
     composeDigitalEmployeeAgentTemplateCatalogParticipant,
   )
-  await ensureDigitalEmployeeAgentTemplates(digitalEmployeeAgentTemplates)
-
-  // 5e-bis. RFC-307: sample content, ONCE per install. Marker-gated rather
-  // than existence-gated — a user who deletes the samples means it, and
-  // re-seeding on the next restart would be the platform arguing. Never fatal:
-  // no samples is exactly the state every install before this RFC was in.
-  try {
-    const { seedDemoContent } = await import('@/services/demoSeed')
-    const result = await seedDemoContent({
-      resourceCatalog: composeDemoResourceCatalogSeedParticipant(db),
-      codeCapability: composeCodeCapabilityDemoSeedParticipant(db),
-    })
-    if (result.seeded) log.info('demo content seeded (delete it and it stays deleted)')
-  } catch (err) {
-    log.warn('demo content seed on boot failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-
-  // 5f. RFC-112/153: on FIRST startup (empty runtimes table) seed opencode /
-  // claude-code as ordinary rows so agents / config.defaultRuntime can reference
-  // them by name and the Settings list shows them out of the box. RFC-153: they
-  // are editable + deletable now; a deleted row is NOT re-seeded (seed no-ops on a
-  // non-empty table). migrateConfigIntoBuiltins then backfills binary from config.
-  await initializeRuntimeRegistryBoot({
-    operations: runtimeRegistry,
-    config,
-    legacyConfiguration: runtimeLegacyConfiguration,
-    onRecoverableFailure(error) {
-      log.warn('builtin runtime seed/migration on boot failed', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-    },
-  })
 
   // RFC-238 — complete boot recovery before accepting a playground request.
   // The routes receive this same explicit application-owned instance.
@@ -3126,10 +2883,18 @@ async function composeSqliteProviderSession(
     developmentAdapterConfigOperations,
     developmentConfigAccess,
   )
-  const mcpRuntimeTestBindings = await createPausableDaemonRuntimeServiceBindings({
+  const mcpRuntimeTestBindings = createLazyPausableDaemonRuntimeServiceBindings({
+    start: async () => {
+      await mcpRuntimeTests.pause()
+      await mcpRuntimeTests.resume()
+    },
     runtimeId: 'mcp-runtime-tests',
     closeParticipantId: 'mcp-runtime-tests-final-close',
-    service: mcpRuntimeTests,
+    service: {
+      pause: () => mcpRuntimeTests.pause(),
+      resume: () => mcpRuntimeTests.resume(),
+      stop: () => mcpRuntimeTests.stop(),
+    },
   })
 
   // RFC-257 — webhook 分流器 + 三段式重启恢复：上个进程遗留的 received/
@@ -3151,14 +2916,7 @@ async function composeSqliteProviderSession(
       },
     }),
   })
-  await webhookTerminalControl.reconcileOnBoot()
   const webhookDeliveryPersistence = composeWebhookDeliveryPersistenceFor(db)
-  {
-    const recoveredDeliveries = await recoverInterruptedDeliveries(webhookDeliveryPersistence)
-    if (recoveredDeliveries > 0) {
-      log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
-    }
-  }
   // RFC-310 PR-10 T104：legacy code-capability 的四个启动恢复钩子（lease 回收/
   // publish section 清理/publish intent 对账/supersede 续跑）随 writer 一并
   // 移除——Mission 面的恢复由 development-automation 的 recover sweep 承担。
@@ -3200,8 +2958,7 @@ async function composeSqliteProviderSession(
   )
   const missionEventContinuation = createMissionCodeHostEventContinuation(db)
   const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(db)
-  const employeeWriterState = await employeeWriterCutover.activate()
-  log.info('digital employee writer activated', { ...employeeWriterState })
+  let employeeWriterState: Awaited<ReturnType<typeof employeeWriterCutover.activate>> | undefined
 
   // RFC-310 PR-3/PR-4 + RFC-344 —— bootstrap owns exactly one
   // development-automation composition. HTTP and MCP receive this participant;
@@ -3611,17 +3368,15 @@ async function composeSqliteProviderSession(
   // the old body on this HTTP event loop.
   // RFC-359 —— 「本进程正在跑哪些 intent apply」同样来自 apply 引擎自己（与 PostgreSQL 同一条）。
   // 引擎在下面的 `composeSqliteAppDeps` 里装出来，而维护服务先起——这里晚绑定。
-  let intentApplyActivity: (() => readonly string[]) | null = null
   const intentMaintenanceSnapshots = composeIntentMaintenanceSnapshotQueriesFor({
     db,
-    activity: { activeJournalIds: () => intentApplyActivity?.() ?? [] },
+    activity: { activeJournalIds: () => appComposition.intentApplyActivity.activeJournalIds() },
   })
   // RFC-359 —— 「本进程正在跑哪些 apply」的来源是 apply 引擎自己（与 PostgreSQL 同一条），
   // 不再是 legacy `services/bundle/apply` 的模块级集合。引擎在下面的 `composeSqliteAppDeps`
   // 里装出来，而维护服务先起——这里晚绑定：payload 每个 tick 才求值，那时装配早已完成。
-  let resourcePackageApplyActivity: (() => readonly string[]) | null = null
   const maintenanceConfiguration = await configuration.read()
-  const maintenanceService: ReturnType<typeof startMaintenanceService> = startMaintenanceService({
+  const maintenanceService: ReturnType<typeof createMaintenanceService> = createMaintenanceService({
     // RFC-359 AC-10：装配方本来就知道自己在装哪个 provider，写出来。
     // 此前这里不写、由 `options.provider ?? 'sqlite'` 静默兜底——那是「落进 else」的另一种写法。
     provider: 'sqlite',
@@ -3660,7 +3415,8 @@ async function composeSqliteProviderSession(
     payloadSources: Object.freeze({
       activeTaskIds: activeTaskIdsSnapshot,
       activeIntentApplyJournalIds: intentMaintenanceSnapshots.activeApplyJournalIds,
-      activeResourceBundleApplyIds: () => resourcePackageApplyActivity?.() ?? [],
+      activeResourceBundleApplyIds: () =>
+        appComposition.resourcePackageApplyActivity.activeApplyIds(),
       bootIntentTurnIds: intentMaintenanceSnapshots.bootTurnIds,
     }),
     onLifecycleDelta: (delta) => {
@@ -3673,7 +3429,8 @@ async function composeSqliteProviderSession(
     },
     onIntentQueued: intentQueuedNotifications.enqueue,
   })
-  const maintenanceRuntimeBindings = await createPausableDaemonRuntimeServiceBindings({
+  const maintenanceRuntimeBindings = createLazyPausableDaemonRuntimeServiceBindings({
+    start: () => maintenanceService.start(),
     runtimeId: 'maintenance',
     closeParticipantId: 'maintenance-final-close',
     service: maintenanceService,
@@ -3712,9 +3469,9 @@ async function composeSqliteProviderSession(
   // catalog built later (for `employeeOs` alone) leaves every
   // `/work-items/:ref/tools` response empty and the job-template editor with no
   // built-in tool to bind.
-  const digitalEmployeePlatformTools = await composeDigitalEmployeeBuiltinToolCatalog({
+  const digitalEmployeePlatformTools = composeDigitalEmployeeBuiltinToolCatalog({
     agentTemplates: digitalEmployeeAgentTemplates,
-    typePackageDescriptorJsons: [
+    typePackageDescriptorJsons: async () => [
       ...(await readPersistedDigitalEmployeeTypePackageDescriptorJsons(db)),
       developmentEmployeeTypePackage.descriptorJson,
     ],
@@ -3789,8 +3546,6 @@ async function composeSqliteProviderSession(
     digitalEmployeeCaseDetailProjection: employeeCaseDetailProjection,
     digitalEmployeeTypePackageDriftPolicy,
   })
-  resourcePackageApplyActivity = () => appComposition.resourcePackageApplyActivity.activeApplyIds()
-  intentApplyActivity = () => appComposition.intentApplyActivity.activeJournalIds()
   const app = createComposedApp(appComposition)
 
   const ws = buildWebSocketAdapter({
@@ -3824,9 +3579,9 @@ async function composeSqliteProviderSession(
       log.warn('boot snapshot reverify failed', {
         error: err instanceof Error ? err.message : String(err),
       })
+      throw err
     }
   }
-  void reverifyResourceContent()
 
   // 8. Background loops. RFC-338 owns every DB/FS-heavy maintenance cadence;
   // limits and the in-memory batch-import Map remain lightweight on main.
@@ -3972,13 +3727,6 @@ async function composeSqliteProviderSession(
   // setter and its own `loadConfig` call, registered right here in BOTH engine
   // compositions — four registration sites for two knobs that are read at the
   // same instant, from the same file, by the same function. One provider now.
-  setMemoryDistillPolicyProvider(async () => {
-    try {
-      return resolveDistillPolicy(await configuration.read())
-    } catch {
-      return DEFAULT_DISTILL_POLICY
-    }
-  })
 
   // distill 的这几项**每 tick 重读**，与 PostgreSQL 路径（同文件 memory-distill
   // factory）逐字一致：之前这里是引导期快照（`distillBootConfig`），于是同一个设置
@@ -4017,25 +3765,6 @@ async function composeSqliteProviderSession(
   // above are the only work handed back to main.
   // This recovery/driver section consumes the bootstrap-owned participant
   // above; routes never assemble a second daemon instance.
-  if (
-    employeeWriterState &&
-    (employeeWriterState.mode === 'legacy-draining' || employeeWriterState.legacyAdmissionsEnabled)
-  ) {
-    try {
-      const recovered = await developmentAutomation.recover()
-      if (
-        recovered.settledFences > 0 ||
-        recovered.invalidatedEffects > 0 ||
-        recovered.firedWakes > 0
-      ) {
-        log.info('draining legacy development mission recovery on boot', recovered)
-      }
-    } catch (err) {
-      log.warn('legacy development mission boot recovery failed', {
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
   const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'development-wake',
     intervalMs: DAEMON_CADENCE.developmentWakeSweep,
@@ -4170,7 +3899,6 @@ async function composeSqliteProviderSession(
       }),
     },
   })
-  await employeeOs.maintenance.settleAutomaticUpgrades()
   const intentAuthorityFor = (actor: Actor) =>
     directOperationAuthority(identityAccess.directAuthority, actor)
   const intentCatalogActors = new WeakMap<object, Actor>()
@@ -4334,12 +4062,6 @@ async function composeSqliteProviderSession(
       },
     },
   )
-  const providerRuntimeFactories = Object.freeze([
-    intentQueuedResumption.runtimeFactory,
-    taskExecutionBackgroundBindings.runtimeFactory,
-    maintenanceRuntimeBindings.runtimeFactory,
-    mcpRuntimeTestBindings.runtimeFactory,
-  ] satisfies readonly DaemonProviderRuntimeHandleFactory[])
   // RFC-349 — the MR terminal-control worker owns an interval timer and a
   // fire-and-forget drain against the SQLite client. A migration freeze must
   // stop it before `selectDatabaseSchemaProvider('postgresql')` re-points the
@@ -4350,9 +4072,7 @@ async function composeSqliteProviderSession(
   const webhookTerminalControlRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'webhook-terminal-control',
     start() {
-      // Boot already armed the worker through `reconcileOnBoot`; this call only
-      // matters on the rollback path, where the frozen source session takes its
-      // own writers back after a failed cutover.
+      // Boot reconciliation is passive; arm the timer only on session resume.
       webhookTerminalControl.resume()
       let stopping: Promise<void> | null = null
       return Object.freeze({
@@ -4367,22 +4087,6 @@ async function composeSqliteProviderSession(
       })
     },
   })
-  const providerBackgroundWriterFactories = Object.freeze([
-    webhookTerminalControlRuntimeFactory,
-    afterCommitPumpFactory,
-    limitsRuntimeFactory,
-    idleTimeoutRuntimeFactory,
-    backupRuntimeFactory,
-    submoduleRefreshRuntimeFactory,
-    batchImportRuntimeFactory,
-    humanGateContinuationRuntimeFactory,
-    committedEventRuntimeFactory,
-    memoryDistillRuntimeFactory,
-    developmentWakeRuntimeFactory,
-    employeeOsRuntimeFactory,
-    eventCenterRuntimeFactory,
-    fusionReconcileRuntimeFactory,
-  ] satisfies readonly DaemonProviderRuntimeHandleFactory[])
   // RFC-359 W3-T14：与 PostgreSQL 会话同一组关闭参与者、同一顺序。此前这几步写在监听器的
   // `shutdown()` 里（先于 `bootstrap.stop()`），两条 serve 序列合一为 `serveDaemon` 后只剩会话这一种放法。
   const memoryDistillRecoverOnClose: DaemonProviderCloseParticipant = Object.freeze({
@@ -4393,15 +4097,16 @@ async function composeSqliteProviderSession(
   })
   const gracefulTaskShutdown: DaemonProviderCloseParticipant = Object.freeze({
     id: 'task-execution-graceful-shutdown',
-    async close() {
+    async close({ reason }: Parameters<DaemonProviderCloseParticipant['close']>[0]) {
+      if (reason !== 'daemon-shutdown') return
       const { gracefulShutdown } = await import('@/services/shutdown')
       await gracefulShutdown(
         {
-          controller: { shutdownActive: shutdownActiveTaskExecutions },
+          controller: createTaskExecutionShutdownController(taskExecutionModule),
           operations: taskExecutionPersistence.shutdown,
           recovery: taskExecutionPersistence.recoveryAdministration,
         },
-        30_000,
+        0,
       )
     },
   })
@@ -4409,23 +4114,290 @@ async function composeSqliteProviderSession(
     id: 'webhook-terminal-control',
     close: () => webhookTerminalControl.stop(),
   })
-  const providerCloseParticipants = Object.freeze([
-    memoryDistillRecoverOnClose,
-    taskExecutionBackgroundBindings.closeParticipant,
-    maintenanceRuntimeBindings.closeParticipant,
-    mcpRuntimeTestBindings.closeParticipant,
-    gracefulTaskShutdown,
-    webhookTerminalClose,
-  ] satisfies readonly DaemonProviderCloseParticipant[])
+  const lifecycleProgram = composeDaemonLifecycle({
+    provider: 'sqlite',
+    profile: input.executionAuthority?.mode,
+    log: input.log,
+    steps: {
+      'runtime-declarations': async () => {
+        const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))
+        if (notModeled.length > 0) {
+          log.info('runtime declaration self-check: not-modeled dispositions', { notModeled })
+        }
+      },
+      'process-registrations': async () => {
+        registerTerminalWorkspacePrunePolicy(
+          composeWebhookTerminalWorkspacePrunePolicy({
+            db,
+            enabled: async () => (await configuration.read()).webhookTaskWorkspaceAutoCleanup,
+          }),
+        )
+        setMemoryDistillPolicyProvider(async () => {
+          try {
+            return resolveDistillPolicy(await configuration.read())
+          } catch {
+            return DEFAULT_DISTILL_POLICY
+          }
+        })
+      },
+      'repository-url-sealing': async () => {
+        await ensureCredentialsSealed(repositoryWorkspaceStore, secretBox)
+      },
+      'transport-projections': async () => {
+        await reconcileRepositoryTransportConnectionProjections(
+          repositoryTransportRepository,
+          repositoryTransportModule.adminConnections,
+        )
+      },
+      'git-credential-lease-cleanup': async () => {
+        const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)
+        if (removedCredentialLeases > 0) {
+          log.info('orphaned git credential leases removed', { count: removedCredentialLeases })
+        }
+      },
+      'daemon-identity': NotApplicable,
+      'skill-identity-barrier': async () => {
+        const report = await skillCatalogBoot.runIdentityMigrationBarrier()
+        if (
+          report.recoveredOperations > 0 ||
+          report.removedHusks > 0 ||
+          report.migratedSkills > 0
+        ) {
+          log.info('skill identity migration barrier complete', { ...report })
+        }
+      },
+      'fusion-provenance': async () => {
+        const { repairFusionProvenance } =
+          await import('@/modules/knowledge-evolution/public/operations')
+        const report = await repairFusionProvenance(fusionOperations.persistence)
+        if (Object.values(report).some((count) => count > 0)) {
+          log.info('fusion provenance repair complete', { ...report })
+        }
+      },
+      'skill-availability-gate': async () => {
+        skillCatalogBoot.activateAvailabilityGate()
+      },
+      'skill-live-files': async () => {
+        await skillCatalogBoot.reconcileLiveFiles()
+      },
+      'task-delete-recovery': async () => {
+        const deleteRecovery = await recoverInterruptedTaskDeletes(
+          db,
+          undefined,
+          input.taskDeletionEffects,
+        )
+        if (
+          deleteRecovery.completed.length > 0 ||
+          deleteRecovery.cleanupPending.length > 0 ||
+          deleteRecovery.recoveryRequired.length > 0
+        ) {
+          log.info('terminal task delete recovery', { ...deleteRecovery })
+        }
+      },
+      'archive-recovery': async () => {
+        const archiveRecovery = await taskExecutionProvider.archive.recover({
+          archiveDir: Paths.taskArchiveDir,
+          runsDir: Paths.runsDir,
+          logsDir: Paths.logsDir,
+        })
+        if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {
+          log.info('terminal task archive recovery', { ...archiveRecovery })
+        }
+      },
+      'frame-backfill': async () => {
+        const { runFrameBackfillOnBoot } =
+          await import('@/modules/task-execution/composition/frameBackfill')
+        const backfill = await runFrameBackfillOnBoot({ db })
+        if (!backfill.skipped) {
+          log.info('rfc354 frame backfill completed on boot', {
+            tasks: backfill.tasks,
+            rowsUpdated: backfill.rowsUpdated,
+            roundsUpdated: backfill.roundsUpdated,
+            unreadableTasks: backfill.unreadableTasks.length,
+            unresolvedRows: backfill.unresolvedRows,
+          })
+        }
+      },
+      'scheduled-payload-heal': async () => {
+        const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')
+        const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)
+        if (healed.converted > 0 || healed.disabled > 0) {
+          log.info('scheduled launch payloads healed', healed)
+        }
+      },
+      'fusion-decision-recovery': async () => {
+        const { recoverFusionDecisions } =
+          await import('@/modules/knowledge-evolution/public/operations')
+        const r = await recoverFusionDecisions(fusionOperations.persistence)
+        if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {
+          log.info('fusion decision recovery on boot', { ...r })
+        }
+      },
+      'fusion-resource-seed': async () => {
+        const { seedFusionResources } =
+          await import('@/modules/knowledge-evolution/public/operations')
+        await seedFusionResources(fusionOperations.persistence)
+      },
+      'demo-seed': async () => {
+        const { seedDemoContent } = await import('@/services/demoSeed')
+        const result = await seedDemoContent({
+          resourceCatalog: composeDemoResourceCatalogSeedParticipant(db),
+          codeCapability: composeCodeCapabilityDemoSeedParticipant(db),
+        })
+        if (result.seeded) log.info('demo content seeded (delete it and it stays deleted)')
+      },
+      'runtime-registry': async () => {
+        await initializeRuntimeRegistryBoot({
+          operations: runtimeRegistry,
+          config,
+          legacyConfiguration: runtimeLegacyConfiguration,
+          onRecoverableFailure(error) {
+            log.warn('builtin runtime seed/migration on boot failed', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          },
+        })
+      },
+      'event-catalog': async () => {
+        await employeeHttpEventCenter.initialize()
+      },
+      'employee-agent-templates': async () => {
+        await ensureDigitalEmployeeAgentTemplates(digitalEmployeeAgentTemplates)
+      },
+      'employee-tool-catalog': async () => {
+        await digitalEmployeePlatformTools.load()
+      },
+      'employee-authoring-ready': async () => {
+        await employeeOs.maintenance.ready()
+      },
+      'employee-writer-state': async () => {
+        employeeWriterState = await employeeWriterCutover.activate()
+        log.info('digital employee writer activated', { ...employeeWriterState })
+      },
+      'task-execution-recovery': async () => {
+        const taskExecutionLockProof = createDaemonRecoveryAuthorityProof(
+          await readDaemonStartupRecoveryAuthority(lock, DAEMON_GENERATION),
+        )
+        await runTaskExecutionBootRecovery({
+          recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
+          persistence: taskExecutionPersistence,
+          runtimeSessionLeases,
+          lockProof: taskExecutionLockProof,
+          codeHostProbe: (descriptor) =>
+            probeCodeHostMutation({
+              descriptor,
+              resolveConnection: (provider) => repositoryMetadataConnections.resolve(provider),
+            }),
+          log,
+        })
+      },
+      'observation-interrupt': async () => {
+        const interruptedCalls = await observationCalls.repairInterrupted(Date.now())
+        if (interruptedCalls > 0)
+          log.info('observation calls interrupted', { count: interruptedCalls })
+      },
+      'workspace-maintenance-recovery': async () => {
+        const bootWorkspaceMaintenance = composeWorkspaceMaintenanceCommand({
+          filesystem: input.workspaceMaintenanceFilesystem,
+          db,
+          appHome: Paths.root,
+          terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
+          isMaterializingTask: () => false,
+          invalidateWorkspacePath: invalidateCallGraphIndex,
+        })
+        const workspaceRecovery = await bootWorkspaceMaintenance.recover({
+          activeTaskIds: [],
+          webhookClaims: 'all',
+        })
+        if (
+          workspaceRecovery.completed > 0 ||
+          workspaceRecovery.failed > 0 ||
+          workspaceRecovery.healed > 0
+        ) {
+          log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })
+        }
+      },
+      'mr-terminal-reconcile': async () => {
+        await webhookTerminalControl.reconcileOnBoot()
+      },
+      'webhook-delivery-recovery': async () => {
+        const recoveredDeliveries = await recoverInterruptedDeliveries(webhookDeliveryPersistence)
+        if (recoveredDeliveries > 0) {
+          log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
+        }
+      },
+      'legacy-mission-recovery': async () => {
+        if (
+          employeeWriterState &&
+          (employeeWriterState.mode === 'legacy-draining' ||
+            employeeWriterState.legacyAdmissionsEnabled)
+        ) {
+          const recovered = await developmentAutomation.recover()
+          if (
+            recovered.settledFences > 0 ||
+            recovered.invalidatedEffects > 0 ||
+            recovered.firedWakes > 0
+          )
+            log.info('draining legacy development mission recovery on boot', recovered)
+        }
+      },
+      'employee-upgrade-settlement': async () => {
+        await employeeOs.maintenance.settleAutomaticUpgrades()
+      },
+      'maintenance-boot-snapshot': async () => {
+        await maintenanceService.captureBootSnapshot()
+      },
+      'hosted-targeted-resume': async () => {
+        /* The crewstation profile cannot select SQLite. */
+      },
+      'resource-reverify': reverifyResourceContent,
+      'bootstrap-admin-hint': async () => {
+        if (await providerCore.authRuntime.isBootstrapRequired())
+          log.info(
+            'first multi-user run? create your admin via `agent-workflow user create --admin --username <name>`',
+          )
+      },
+    },
+    runtimeJobs: {
+      'intent-queued-resumption': intentQueuedResumption.runtimeFactory,
+      'task-execution': taskExecutionBackgroundBindings.runtimeFactory,
+      maintenance: maintenanceRuntimeBindings.runtimeFactory,
+      'mcp-runtime-tests': mcpRuntimeTestBindings.runtimeFactory,
+    },
+    backgroundJobs: {
+      'webhook-terminal-control': webhookTerminalControlRuntimeFactory,
+      'after-commit-event-pump': afterCommitPumpFactory,
+      'human-gate-continuation': humanGateContinuationRuntimeFactory,
+      'committed-event-dispatcher': committedEventRuntimeFactory,
+      'memory-distill': memoryDistillRuntimeFactory,
+      'development-wake': developmentWakeRuntimeFactory,
+      'digital-employee-os': employeeOsRuntimeFactory,
+      'event-center': eventCenterRuntimeFactory,
+      'fusion-reconcile': fusionReconcileRuntimeFactory,
+      'resource-limits': limitsRuntimeFactory,
+      'task-idle-timeout': idleTimeoutRuntimeFactory,
+      'scheduled-backup': backupRuntimeFactory,
+      'submodule-refresh': submoduleRefreshRuntimeFactory,
+      'batch-import-gc': batchImportRuntimeFactory,
+    },
+    closeParticipants: {
+      'memory-distill-recover-running': memoryDistillRecoverOnClose,
+      'task-execution-final-close': taskExecutionBackgroundBindings.closeParticipant,
+      'maintenance-final-close': maintenanceRuntimeBindings.closeParticipant,
+      'mcp-runtime-tests-final-close': mcpRuntimeTestBindings.closeParticipant,
+      'task-execution-graceful-shutdown': gracefulTaskShutdown,
+      'webhook-terminal-control': webhookTerminalClose,
+    },
+  })
+  await lifecycleProgram.initialize(input.initializeExecution)
   const initialProviderSession = await _createComposedDaemonProviderRuntimeSession({
     provider: 'sqlite',
     generationId: lifecycle.generationId,
     ...executionActivationOf(input),
     app,
     webSocket: ws,
-    runtimeFactories: providerRuntimeFactories,
-    backgroundWriterFactories: providerBackgroundWriterFactories,
-    providerCloseParticipants,
+    lifecycle: lifecycleProgram,
+    readyOnResume: input.lifecycle.operationId !== 'daemon-start',
     shutdownIdentity: () => identityAccess.shutdown(),
     closeProvider: () => databaseProvider.close(),
   })
