@@ -102,3 +102,8 @@ f3ab372d9e42604b3041759e91470bffb5a20f36:packages/system-mocks/src/runtime/fixtu
 # Secret by its resource UUID (`passwordSecretId`); it is a reference, not a
 # credential. The line also carries `gitleaks:allow`.
 166e918bdf5584a1d2b8773d5d2a145386a14f93:packages/backend/tests/rfc370-m1-agent-material.test.ts:generic-api-key:149
+# RFC-380 — the owned-resource ACL test named its fixture resource with a
+# `KEY` constant (`'rfc380-acl-notification'`, a resource name, not a
+# credential); the constant is renamed RESOURCE_NAME, this exempts only the
+# fingerprint already in history.
+99944c201326544111573ca468861fb93c51f987:packages/backend/tests/rfc380-owned-resource-acl.test.ts:generic-api-key:17

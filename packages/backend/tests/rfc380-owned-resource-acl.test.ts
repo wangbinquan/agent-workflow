@@ -14,13 +14,13 @@ import { registerRevalidationTrigger, type RevocationReason } from '@/ws/revalid
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 const now = 1700000000000
-const KEY = 'rfc380-acl-notification'
+const RESOURCE_NAME = 'rfc380-acl-notification'
 const resources = [
   {
     type: 'capability_template',
     base: '/api/capability-templates',
     seed: async (db: ProviderNeutralDatabase, ownerUserId: string) => {
-      const row = { id: ulid(), name: KEY }
+      const row = { id: ulid(), name: RESOURCE_NAME }
       await db.insert(capabilityTemplates).values({
         ...row,
         description: 'acl matrix subject',
@@ -45,7 +45,7 @@ const resources = [
     type: 'action_template',
     base: '/api/code/action-templates',
     seed: async (db: ProviderNeutralDatabase, ownerUserId: string) => {
-      const row = { id: ulid(), name: KEY }
+      const row = { id: ulid(), name: RESOURCE_NAME }
       await db.insert(actionTemplates).values({
         ...row,
         capabilityId: 'acl-matrix-capability',
@@ -63,7 +63,7 @@ const resources = [
     type: 'verification_profile',
     base: '/api/code/verification-profiles',
     seed: async (db: ProviderNeutralDatabase, ownerUserId: string) => {
-      const row = { id: ulid(), name: KEY }
+      const row = { id: ulid(), name: RESOURCE_NAME }
       await db.insert(verificationProfiles).values({
         ...row,
         draftJson: '{}',
@@ -80,7 +80,7 @@ const resources = [
     type: 'digital_employee',
     base: '/api/code/digital-employees',
     seed: async (db: ProviderNeutralDatabase, ownerUserId: string) => {
-      const row = { id: ulid(), name: KEY }
+      const row = { id: ulid(), name: RESOURCE_NAME }
       await db.insert(digitalEmployees).values({
         ...row,
         draftJson: '{}',
@@ -97,7 +97,7 @@ const resources = [
     type: 'automation_policy',
     base: '/api/code/automation-policies',
     seed: async (db: ProviderNeutralDatabase, ownerUserId: string) => {
-      const row = { id: ulid(), name: KEY }
+      const row = { id: ulid(), name: RESOURCE_NAME }
       await db.insert(automationPolicies).values({
         ...row,
         draftJson: '{}',
