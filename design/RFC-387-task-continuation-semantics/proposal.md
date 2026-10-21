@@ -1,7 +1,7 @@
 # RFC-387 任务续跑语义统一：门控唤醒、房间续跑、仓库准备重试与融合走会话驱动（RFC-294 S2b）
 
-- **状态**：Draft（2026-10-21 落档。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与实现门；
-  规则取舍由本会话按推荐决定，见 §6。在 RFC-386 提交后派发）
+- **状态**：In Progress（2026-10-21 落档；RFC-386 提交（`3450e6872`）后派发 Codex 实施。用户 2026-10-20「按你推荐继续推进」：由本会话
+  设计、交 Codex 实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b）；前置
   [RFC-382](../RFC-382-daemon-task-execution-bundle/proposal.md)、[RFC-386](../RFC-386-task-drive-coordinator-factory/proposal.md)
 - **基线**：HEAD `9382675a0` 的 task-execution 模块与 `services/task.ts`（研究基线；行号仅作定位提示，以实施时源码为准）

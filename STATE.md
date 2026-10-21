@@ -1,3 +1,9 @@
+## 2026-10-21 RFC-294 后继 S2b：RFC-386 Done，RFC-387 In Progress
+
+**RFC-386 Done**：`3450e6872`（Codex 实施、本会话审核），主 CI `39556503354` success，windows-platform `39556503352` success。会话组合只构造一次 `createTaskDriveCoordinatorFactory`（`packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts`）：`session` 即原会话协调器，`coordinatorFor(profile)` 按画像（父任务可继承配置、续跑回滚前置、失败字样、引擎）给出每次调用的协调器；子任务启动与根 / 子任务续跑改经工厂。用户可见变化：调用节点 / 动态工作流的子任务，其内建提交 / 合并 Agent 遵守设置页并按现行策略做记忆提炼（子任务配置 = 实时会话配置 + 父任务可继承键，父值优先；是否提交、推送仍由工作流决定）；PostgreSQL 门控续跑重建工作区排除配置；失败原因名去掉 provider 字样（`child-launch` / `task-resume`）。认领结果带出执行意图类型，`shouldRebuildWorkspaceProfiles`（task-execution `domain/executionIntent.ts`）按类型决定是否重建。「旧接线」对照在真实 PostgreSQL 上确认了修复前的两处差异。**对其他会话的影响**：工厂之外不得再 `new DefaultTaskDriveCoordinator(`（`rfc386-drive-factory` 结构锁；`createTaskDriveCoordinator` 与 PostgreSQL 融合适配器两处豁免由 RFC-387 移除），每次调用的驱动一律经 `coordinatorFactory.coordinatorFor(profile)`。另：本机 SQLite 全量里 `rfc370-skill-identity-content` 的一条重启用例在 4 分片满载时卡 47 秒超时（平时 18ms，不经本次改动的代码，单独重跑通过），若在 CI 上再现可留意。
+
+**S2b 余下**：[RFC-387](design/RFC-387-task-continuation-semantics/proposal.md)（续跑语义统一、删除 `createTaskDriveCoordinator`，In Progress，Codex 实施中）→ [RFC-388](design/RFC-388-task-execution-runtime-merge/proposal.md)（运行时函数合一，纯重构，Draft）→ RFC-389（SQLite HTTP 装配并入中立挂载表、删除测试回退、Worker 根迁出 platform；前期只读研究进行中，task-execution 内部的测试回退待 RFC-387/388 落地后补研）→ S2c。
+
 ## 2026-10-21 RFC-294 后继 S2b：RFC-385 Done，RFC-386 In Progress；S2b 余下为 RFC-386～389
 
 **RFC-385 Done**：`f495e8e76`（Codex 实施、本会话审核），主 CI `39545680585` success。两个 provider 的执行世代都改为每进程一个的 `DAEMON_GENERATION`（执行模块、运行配置与子任务继承、融合配置、单机锁证明）；数据库世代号只留给写围栏，托管的启动租约证明不变。「旧接线」对照在真实 PostgreSQL 上确认了修复前的两条缺陷：单机 PostgreSQL 有运行中任务时崩溃，重启时启动恢复在 finalize 之前抛 `task-execution-stale-owner`，守护进程无法启动；关停超时留下的 `recovery-required` owner 被跳过，任务无法续跑。**对其他会话的影响**：执行世代与数据库世代不得混用（`rfc385-execution-generation-guard` 结构锁，`docs/dev-gotchas.md` 已记）；任务执行适配器表不再有 `daemonGeneration` 条目。

@@ -1,7 +1,8 @@
 # RFC-386 任务驱动协调器工厂：子任务启动与续跑共用会话的驱动设施（RFC-294 S2b）
 
-- **状态**：In Progress（2026-10-21 落档并派发。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与
-  实现门；规则取舍由本会话按推荐决定，见 §6。RFC-385 提交（`f495e8e76`）且主 CI 全绿后派发）
+- **状态**：Done（2026-10-21：`3450e6872`，主 CI `39556503354` success，windows-platform `39556503352` success。「旧接线」对照在
+  真实 PostgreSQL 上确认修复前：子任务的内建提交 / 合并 Agent 不读设置页、不做记忆提炼；PostgreSQL 门控续跑不修复被改动的排除
+  配置。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与实现门；规则取舍见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b）；前置
   [RFC-382](../RFC-382-daemon-task-execution-bundle/proposal.md)（会话协调器与实时运行配置）、
   [RFC-385](../RFC-385-daemon-execution-generation/proposal.md)
