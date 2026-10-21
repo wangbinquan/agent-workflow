@@ -19,5 +19,5 @@
 
 ## 验收清单
 
-- [ ] proposal AC-1～AC-4
-- [ ] 推送后 exact SHA 的 CI 全绿（含 PostgreSQL 分片）
+- [x] proposal AC-1～AC-4
+- [x] 推送后 exact SHA 的 CI 全绿（含 PostgreSQL 分片）：`f495e8e76` 主 CI `39545680585` success

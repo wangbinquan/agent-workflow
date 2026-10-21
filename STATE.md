@@ -1,3 +1,9 @@
+## 2026-10-21 RFC-294 后继 S2b：RFC-385 Done，RFC-386 In Progress；S2b 余下为 RFC-386～389
+
+**RFC-385 Done**：`f495e8e76`（Codex 实施、本会话审核），主 CI `39545680585` success。两个 provider 的执行世代都改为每进程一个的 `DAEMON_GENERATION`（执行模块、运行配置与子任务继承、融合配置、单机锁证明）；数据库世代号只留给写围栏，托管的启动租约证明不变。「旧接线」对照在真实 PostgreSQL 上确认了修复前的两条缺陷：单机 PostgreSQL 有运行中任务时崩溃，重启时启动恢复在 finalize 之前抛 `task-execution-stale-owner`，守护进程无法启动；关停超时留下的 `recovery-required` owner 被跳过，任务无法续跑。**对其他会话的影响**：执行世代与数据库世代不得混用（`rfc385-execution-generation-guard` 结构锁，`docs/dev-gotchas.md` 已记）；任务执行适配器表不再有 `daemonGeneration` 条目。
+
+**S2b 余下**：[RFC-386](design/RFC-386-task-drive-coordinator-factory/proposal.md)（协调器工厂，In Progress，Codex 实施中：子任务沿用会话实时配置——遵守提交 / 合并 Agent 设置并做记忆提炼，按意图类型重建工作区排除配置——补 PostgreSQL 门控续跑，失败上报统一按认领世代）→ [RFC-387](design/RFC-387-task-continuation-semantics/proposal.md)（续跑语义统一、删除 `createTaskDriveCoordinator`，Draft）→ [RFC-388](design/RFC-388-task-execution-runtime-merge/proposal.md)（运行时函数合一，纯重构，Draft）→ RFC-389（SQLite HTTP 挂载表、删除测试回退）→ S2c。
+
 ## 2026-10-21 RFC-294 后继 S2b：RFC-384 Done，RFC-385 In Progress；S2b 余下拆为 RFC-385～388
 
 **RFC-384 Done**：`1f60faa5d`（Codex 实施、本会话审核），主 CI `39537057781` success。意图由 `packages/backend/src/cli/daemonModules/intent.ts` 每会话构造一次，SQLite 两套意图图合一（保留工作者 / HTTP 两个系统 Agent 运行族）；两边都在维护服务之前构造意图组，维护直接读同一个应用引擎；删除 SQLite 的通知收件箱与 `intentApplyActivity` 迟绑定；转储辅助默认运行时实时读取；无功能变化。R1 删除 9 条（inboundEdges 275→266）。**对其他会话的影响**：入口根不得再深入 intent 的 `application/` 与 `inbound/`，改用 `modules/intent/composition/{resourceCatalog,dispatch,routes}.ts`；`application/queuedNotifications.ts` 已删除；P 的 `runtime.intentMaintenance` / `resumeIntentSessions` 改为 `runtime.intentModules`。
