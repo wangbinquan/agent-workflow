@@ -3058,6 +3058,14 @@ resolve：进程 0% CPU 挂了 2.5 小时，日志只剩心跳 WARN。加上 `--
 长时间的本地命令给一个墙钟上限，挂起时能自己退出（macOS 没有 `timeout`，可用
 `perl -e 'alarm 3000; exec @ARGV' bun test --isolate …`）。
 
+**本地只开 PostgreSQL lane（`AW_TEST_PROVIDERS=postgresql`）补跑时的两种已知假红**（2026-10-21 RFC-389 实撞）：
+
+- `rfc311-perf-guards` 的收尾检查要求 SQLite 与 PostgreSQL **两条 lane 同跑**做跨引擎对比，只开 PostgreSQL 必报
+  `AC-11 只完成了 0 / 8 条路径的跨引擎对比`（未命名失败）。这个文件要用 `AW_TEST_PROVIDERS=sqlite,postgresql` 单独跑。
+  同理，`rfc359-w5-composition-root-route-surface` 只有两条 lane 都到齐才逐字比对路由面，单 lane 会「绿」但没比。
+- `rfc359-w6-t26-postgresql-plan-audit` 的「热计数走 index-only scan」在多组 `bun test` 并发压同一个 PostgreSQL 时，可能退回
+  `Bitmap Heap Scan`（用例自己执行 `vacuum analyze`，并发负载下可见性映射没跟上）。单独重跑即过；归因时先单跑这个文件，别据此怀疑改动。
+
 ## `GIT_DIR` 会**盖过 `git -C`**：一轮带它的 `bun test` 把测试夹具的提交打进了真仓库（2026-09-10 实撞）
 
 **损失**：main 上凭空多出一笔提交，作者 `Execution Chain Fixture <execution-chain@example.test>`，
