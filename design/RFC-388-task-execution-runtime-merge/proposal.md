@@ -1,7 +1,8 @@
 # RFC-388 任务执行 provider 运行时函数合一（RFC-294 S2b）
 
-- **状态**：In Progress（2026-10-21 落档；RFC-387 提交（`684972dbb`）后派发 Codex 实施。用户 2026-10-20「按你推荐继续推进」：由本会话
-  设计、交 Codex 实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6）
+- **状态**：Done（2026-10-21：`8186c9852`，主 CI `39583800149` success，windows-platform `39583800091` success。纯重构；本机 SQLite
+  全量与 722 个 PostgreSQL 相关文件全绿。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与
+  实现门；规则取舍见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b）；前置
   [RFC-382](../RFC-382-daemon-task-execution-bundle/proposal.md)、[RFC-387](../RFC-387-task-continuation-semantics/proposal.md)
 - **基线**：HEAD `9382675a0` 的 `modules/task-execution/composition/providerRuntime.ts`（研究基线；行号仅作定位提示，以实施时源码为准）
