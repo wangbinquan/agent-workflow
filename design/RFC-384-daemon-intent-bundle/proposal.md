@@ -1,7 +1,7 @@
 # RFC-384 守护进程模块组第五批：意图（RFC-294 S2b）
 
-- **状态**：In Progress（2026-10-21 落档并派发。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与
-  实现门；规则取舍由本会话按推荐决定，见 §6。RFC-383 提交（`e9fcfc58a`）且主 CI 全绿后派发）
+- **状态**：Done（2026-10-21：`1f60faa5d`，主 CI `39537057781` success。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex
+  实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b）、design §10.2；前置
   [RFC-380](../RFC-380-daemon-module-bundles/proposal.md)～[RFC-383](../RFC-383-daemon-employee-automation-bundles/proposal.md)
 - **基线**：HEAD `64a15d085` 加 RFC-383 工作树（RFC-383 已原样提交为 `e9fcfc58a`；行号仅作定位提示，以实施时源码为准）

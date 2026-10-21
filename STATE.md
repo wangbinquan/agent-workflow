@@ -1,3 +1,11 @@
+## 2026-10-21 RFC-294 后继 S2b：RFC-384 Done，RFC-385 In Progress；S2b 余下拆为 RFC-385～388
+
+**RFC-384 Done**：`1f60faa5d`（Codex 实施、本会话审核），主 CI `39537057781` success。意图由 `packages/backend/src/cli/daemonModules/intent.ts` 每会话构造一次，SQLite 两套意图图合一（保留工作者 / HTTP 两个系统 Agent 运行族）；两边都在维护服务之前构造意图组，维护直接读同一个应用引擎；删除 SQLite 的通知收件箱与 `intentApplyActivity` 迟绑定；转储辅助默认运行时实时读取；无功能变化。R1 删除 9 条（inboundEdges 275→266）。**对其他会话的影响**：入口根不得再深入 intent 的 `application/` 与 `inbound/`，改用 `modules/intent/composition/{resourceCatalog,dispatch,routes}.ts`；`application/queuedNotifications.ts` 已删除；P 的 `runtime.intentMaintenance` / `resumeIntentSessions` 改为 `runtime.intentModules`。
+
+**S2b 余下的拆分**（2026-10-21 两路只读研究后调整）：[RFC-385](design/RFC-385-daemon-execution-generation/proposal.md)（执行世代按进程划分）→ RFC-386（每次调用的协调器改经工厂端口：子任务启动与续跑、按意图类型重建工作区排除配置、统一按认领世代的失败上报、子任务沿用会话运行配置）→ RFC-387（门控唤醒、房间续跑、仓库准备重试、融合适配器语义统一，驱动释放收尾，两个 provider 运行时函数合一，`createTaskDriveCoordinator` 不再有生产调用方）→ RFC-388（SQLite HTTP 装配并入中立挂载表、删除测试回退、Worker 根迁出 platform）→ S2c。研究要点存于各 RFC 落档时的设计文档。
+
+**RFC-385 In Progress**（Codex 实施中）：研究发现单机 PostgreSQL 把数据库世代号（重启前后不变）兼作执行世代，启动恢复只回收世代不同的执行认领，于是崩溃留下的 `claimed` 与关停超时留下的 `recovery-required` owner 永远不被回收，任务卡住，启动可能失败（托管用实例 id 作证明，不受影响）。改为两个 provider 都用每进程一个的执行世代；先写「旧接线」对照用例，在真实 PostgreSQL 上确认修复前的行为。
+
 ## 2026-10-21 RFC-294 后继 S2b：RFC-383 Done，RFC-384 In Progress
 
 **RFC-383 Done**：`e9fcfc58a`（Codex 实施、本会话审核），主 CI `39526517282` success。数字员工与开发自动化由 `packages/backend/src/cli/daemonModules/{digitalEmployee,developmentAutomation}.ts` 每会话构造一次，SQLite 统一为一个数字员工实例（推翻 RFC-359 W12 的两实例决定）。行为变化：SQLite 的数字员工 HTTP 使用启动时初始化的实例（不再首个请求时重复初始化、不再缓存初始化失败）；PostgreSQL 迁移状态随周期刷新、切换完成后 MR 重开不再生出遗留任务、崩溃后恢复遗留任务、启动记录写者状态、开发用类型包覆盖可用（均由「旧接线」对照用例在真实 PostgreSQL 上确认）；守护身份每次调用准入（删除 P 的 `let systemActor`，PostgreSQL 保留启动检查）；宿主任务环境由任务执行组输出 `hostTasks`。**对其他会话的影响**：入口根不得直接调用 `composeDigitalEmployee(` / `composeDevelopmentAutomation(` / `composeReactionExecutionProvider(` 等（结构锁）；`composeDigitalEmployeeRoutePersistence` 已迁到 `cli/daemonModules/digitalEmployee.ts`；`composeFallbackDevelopmentAutomation` 已删除；守护身份用 `providerCore.daemonActor()`。
