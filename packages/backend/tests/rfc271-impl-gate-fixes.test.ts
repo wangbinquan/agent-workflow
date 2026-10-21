@@ -100,7 +100,7 @@ describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
     // daemon 会永久留下插件 generation / 暂存技能目录，且那个 importId 每次重放都答
     // `bundle-apply-unsettled`。
     const runner = read('src/platform/background/maintenanceJobRunner.ts')
-    const worker = read('src/platform/background/maintenanceWorker.ts')
+    const worker = read('src/bootstrap/maintenanceWorkerGraph.ts')
     const catalog = read('src/platform/background/maintenanceCatalog.ts')
     expect(runner).toContain("case 'intentRecovery'")
     expect(worker).toContain('composeSqliteResourcePackageApplyMaintenance')

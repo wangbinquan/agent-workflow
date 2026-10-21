@@ -25,7 +25,7 @@ export const ARCHITECTURE_FILES = [
 export const BINARY_ENTRIES = [
   'main.ts',
   'services/backupVacuumWorker.ts',
-  'platform/background/maintenanceWorker.ts',
+  'bootstrap/maintenanceWorker.ts',
   'bootstrap/maintenanceWorkerEntry.ts',
   'platform/persistence/sqliteLogicalSourceWorker.ts',
   'platform/execution/local/managedProcessLauncher.ts',
@@ -849,6 +849,39 @@ function exhaustivenessFence(node: ts.Node): boolean {
   }
   return false
 }
+/** RFC-389: a literal Worker entry path is not a deployment selection import.
+ * Recognize only the exact two passive declarations; any added import, call or
+ * changed initializer restores the ordinary bootstrap dependency diagnostic. */
+export function isMaintenanceWorkerEntryPathModule(unit: SourceUnit | undefined): boolean {
+  if (unit?.path !== BACKEND_PREFIX + 'bootstrap/maintenanceWorkerEntries.ts') return false
+  const statements = unit.source.statements
+  if (statements.length !== 2) return false
+  const declarations = statements.map((statement) => {
+    if (
+      !ts.isVariableStatement(statement) ||
+      (statement.declarationList.flags & ts.NodeFlags.Const) === 0 ||
+      statement.declarationList.declarations.length !== 1
+    )
+      return undefined
+    return { statement, declaration: statement.declarationList.declarations[0]! }
+  })
+  const flag = declarations[0],
+    entry = declarations[1]
+  return (
+    flag !== undefined &&
+    entry !== undefined &&
+    flag.statement.modifiers?.length === 1 &&
+    flag.statement.modifiers[0]?.kind === ts.SyntaxKind.DeclareKeyword &&
+    flag.declaration.name.getText() === 'AW_COMPILED_BUILD' &&
+    flag.declaration.initializer === undefined &&
+    entry.statement.modifiers?.length === 1 &&
+    entry.statement.modifiers[0]?.kind === ts.SyntaxKind.ExportKeyword &&
+    entry.declaration.name.getText() === 'MAINTENANCE_WORKER_ENTRY' &&
+    entry.declaration.initializer?.getText().replace(/\s+/g, '') ===
+      "typeofAW_COMPILED_BUILD==='boolean'&&AW_COMPILED_BUILD?'./bootstrap/maintenanceWorker.ts':newURL('./maintenanceWorker.ts',import.meta.url).href"
+  )
+}
+
 export function deploymentBranchSites(corpus: GateCorpus): string[] {
   const sites: string[] = [],
     modes = new Set(['standalone', 'crewstation'])
@@ -865,6 +898,12 @@ export function deploymentBranchSites(corpus: GateCorpus): string[] {
     const record = siteRecorder(unit.path)
     for (const edge of corpus.imports.get(unit.path) ?? []) {
       if (unit.path === BACKEND_PREFIX + 'main.ts') continue
+      if (
+        isMaintenanceWorkerEntryPathModule(
+          corpus.backend.find((target) => target.path === edge.target),
+        )
+      )
+        continue
       if (/^packages\/backend\/src\/(?:cli\/deployment(?:\.ts)?$|bootstrap\/)/.test(edge.target))
         sites.push(`${unit.path}#$file#import:${edge.target}#1`)
     }

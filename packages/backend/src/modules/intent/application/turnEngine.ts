@@ -59,7 +59,7 @@ import type {
 import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
 
 export const INTENT_BUILDER_AGENT_NAME = 'aw-intent-builder'
-export const INTENT_SCRATCH_DIRNAME = 'intent-scratch'
+export { INTENT_SCRATCH_DIRNAME } from '../domain/scratchDirectory'
 
 /** Frozen in source (distiller precedent — memoryDistiller.ts DISTILLER_SYSTEM_PROMPT).
  *  Deliberately English-only and short: INTENT.md carries the full contract. */

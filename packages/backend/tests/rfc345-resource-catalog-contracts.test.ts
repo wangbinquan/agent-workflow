@@ -2073,7 +2073,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const maintenanceWorker = readFileSync(
-      resolve(sourceRoot, 'platform/background/maintenanceWorker.ts'),
+      resolve(sourceRoot, 'bootstrap/maintenanceWorkerGraph.ts'),
       'utf8',
     )
     const daemonStart = readFileSync(resolve(sourceRoot, 'cli/start.ts'), 'utf8')

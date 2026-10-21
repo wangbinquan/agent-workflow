@@ -265,25 +265,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/platform/background/maintenanceJobRunner.ts -> packages/backend/src/modules/system-operations/public/commands.ts',
     'packages/backend/src/platform/background/maintenanceJobRunner.ts -> packages/backend/src/modules/task-execution/application/ports/taskArchiveMaintenanceCommand.ts',
     'packages/backend/src/platform/background/maintenanceJobRunner.ts -> packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/development-automation/composition.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/digital-employee/composition.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/integration/composition/maintenance.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/integration/composition/webhookDelivery.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/integration/public/commands.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/intent/application/turnEngine.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/intent/composition/maintenance.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/intent/public/commands.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/resource-catalog/composition/resourcePackageMaintenance.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/resource-catalog/public/commands.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/source-control/composition/repositoryPreparation.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/source-control/composition/workspaceMaintenance.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/source-control/public/commands.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/task-execution/application/ports/taskArchiveMaintenanceCommand.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/task-execution/composition/taskArchiveMaintenance.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts',
-    'packages/backend/src/platform/background/maintenanceWorker.ts -> packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts',
     'packages/backend/src/platform/background/maintenanceWorkerEffects.ts -> packages/backend/src/modules/intent/public/types.ts',
     'packages/backend/src/platform/background/maintenanceWorkerEffects.ts -> packages/backend/src/modules/resource-catalog/public/types.ts',
     'packages/backend/src/platform/background/maintenanceWorkerEffects.ts -> packages/backend/src/modules/source-control/public/types.ts',
@@ -381,8 +362,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startOwnerHeartbeat.timer#setInterval#1',
     'packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService.checkpointTimer#setInterval#1',
     'packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService.eventLoopTimer#setInterval#1',
-    'packages/backend/src/platform/background/maintenanceWorker.ts#initialise#setInterval#1',
-    'packages/backend/src/platform/background/maintenanceWorker.ts#initialise#setInterval#2',
+    'packages/backend/src/platform/background/maintenanceWorkerRuntime.ts#runMaintenanceWorker.initialise#setInterval#1',
+    'packages/backend/src/platform/background/maintenanceWorkerRuntime.ts#runMaintenanceWorker.initialise#setInterval#2',
     'packages/backend/src/platform/background/providerBackupScheduler.ts#startBackupScheduler.handle#setInterval#1',
     'packages/backend/src/services/execution/childBudget.ts#ChildTaskBudget.ensureWarnTimer#setInterval#1',
     'packages/backend/src/services/execution/executionWatch.ts#watchTaskTerminal.timer#setInterval#1',
@@ -1013,6 +994,40 @@ describe('RFC-376 G9 deployment branches', () => {
     expect(deploymentBranchSites(fixture(path, "if (mode === 'crewstation') run()"))).toHaveLength(
       1,
     )
+  })
+  test('RFC-389 literal Worker entry paths are passive, while any extra effect remains a deployment import', () => {
+    const entryPath = 'bootstrap/maintenanceWorkerEntries.ts'
+    const passive = `declare const AW_COMPILED_BUILD: boolean | undefined
+      export const MAINTENANCE_WORKER_ENTRY = typeof AW_COMPILED_BUILD === 'boolean' && AW_COMPILED_BUILD
+        ? './bootstrap/maintenanceWorker.ts'
+        : new URL('./maintenanceWorker.ts', import.meta.url).href`
+    const source = "import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'"
+    expect(
+      deploymentBranchSites(fixture('cli/start.ts', source, [unit(entryPath, passive)])),
+    ).toEqual([])
+    for (const mutated of [
+      passive + "\nimport '@/bootstrap/crewstation'",
+      passive + '\nstartWorker()',
+      passive.replace(
+        "new URL('./maintenanceWorker.ts', import.meta.url).href",
+        'selectDeployment()',
+      ),
+      passive.replace(
+        'declare const AW_COMPILED_BUILD: boolean | undefined',
+        'const AW_COMPILED_BUILD = selectDeployment()',
+      ),
+    ]) {
+      expect(
+        deploymentBranchSites(fixture('cli/start.ts', source, [unit(entryPath, mutated)])),
+      ).toHaveLength(1)
+    }
+    expect(
+      deploymentBranchSites(
+        fixture('cli/start.ts', "import '@/bootstrap/otherEntries'", [
+          unit('bootstrap/otherEntries.ts', passive),
+        ]),
+      ),
+    ).toHaveLength(1)
   })
   test('literal port contracts count, ordinary value literals do not', () => {
     expect(

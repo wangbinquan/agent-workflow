@@ -52,7 +52,7 @@ const gitCredentialHelperEntry = join(backendSrc, 'util', 'gitCredentialHelper.t
 // 迁移读取器明确 fail-closed，绝不能因 Worker 丢失而把 184 表扫描退回 daemon 主线程。
 const WORKER_ENTRIES = [
   join(backendSrc, 'services', 'backupVacuumWorker.ts'),
-  join(backendSrc, 'platform', 'background', 'maintenanceWorker.ts'),
+  join(backendSrc, 'bootstrap', 'maintenanceWorker.ts'),
   // RFC-370 §9.2 V9: the hosted deployment's Worker entry (registers its effects).
   join(backendSrc, 'bootstrap', 'maintenanceWorkerEntry.ts'),
   join(backendSrc, 'platform', 'persistence', 'sqliteLogicalSourceWorker.ts'),

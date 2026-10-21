@@ -14,6 +14,7 @@
 // the supervisor's post-`ready` wake. No `drained` receipt ever arrived, so
 // every boot burned the full 10s pause timeout: 08:33:23.940 lock acquired ->
 // 08:33:36.281 listening, against 1.7s on a healthy build.
+import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 
@@ -102,7 +103,7 @@ describe('RFC-338 maintenance Worker boot drain', () => {
 
   test('the Worker never routes a raw frame into initialise()', () => {
     const source = readFileSync(
-      new URL('../src/platform/background/maintenanceWorker.ts', import.meta.url),
+      new URL('../src/platform/background/maintenanceWorkerRuntime.ts', import.meta.url),
       'utf8',
     )
     expect(source).not.toContain('initialise(event.data)')
@@ -114,6 +115,7 @@ describe('RFC-338 maintenance Worker boot drain', () => {
     const second = new FakeWorker()
     const workers: FakeWorker[] = [first, second]
     const supervisor = startMaintenanceWorkerSupervisor({
+      workerEntry: MAINTENANCE_WORKER_ENTRY,
       appHome: '/tmp/rfc338-boot-drain',
       databaseInit: {
         dbPath: '/tmp/rfc338-boot-drain.sqlite',

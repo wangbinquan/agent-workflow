@@ -1,3 +1,4 @@
+import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'
 import { openDb } from '@/db/client'
 import type { MaintenanceWorkerEvent } from '@/platform/background/maintenanceProtocol'
 import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
@@ -42,6 +43,7 @@ const completed = new Promise<MaintenanceWorkerEvent>((resolve) => {
   complete = resolve
 })
 const supervisor = startMaintenanceWorkerSupervisor({
+  workerEntry: MAINTENANCE_WORKER_ENTRY,
   appHome: input.appHome,
   databaseInit: {
     dbPath: input.dbPath,

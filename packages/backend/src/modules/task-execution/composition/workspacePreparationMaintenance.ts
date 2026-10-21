@@ -78,3 +78,23 @@ export function composeWorkspacePreparationMaintenance(input: {
     },
   })
 }
+
+/** Worker payload supplies the active materialization snapshot for each GC phase. */
+export function createWorkerWorkspaceMaintenanceCommand(
+  factory: (isMaterializingTask: (taskId: string) => boolean) => WorkspaceMaintenanceCommand,
+): WorkspaceMaintenanceCommand {
+  let protectedTaskIds = new Set<string>()
+  const command = factory((taskId) => protectedTaskIds.has(taskId))
+  return Object.freeze({
+    async runGcPhase(input: Parameters<WorkspaceMaintenanceCommand['runGcPhase']>[0]) {
+      protectedTaskIds = new Set(input.activeTaskIds)
+      try {
+        return await command.runGcPhase(input)
+      } finally {
+        protectedTaskIds.clear()
+      }
+    },
+    recover: (input: Parameters<WorkspaceMaintenanceCommand['recover']>[0]) =>
+      command.recover(input),
+  })
+}

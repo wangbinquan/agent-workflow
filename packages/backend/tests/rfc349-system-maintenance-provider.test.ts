@@ -1,6 +1,7 @@
 // RFC-349 T5/T6 — maintenance admission/lease transitions are Promise ports
 // and PostgreSQL writes share the live-generation transaction fence.
 
+import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'
 import { afterEach, describe, expect, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
@@ -104,6 +105,7 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
     }
 
     startMaintenanceWorkerSupervisor({
+      workerEntry: MAINTENANCE_WORKER_ENTRY,
       appHome: '/provider-owned/application-home',
       databaseInit: {
         provider: 'postgresql',

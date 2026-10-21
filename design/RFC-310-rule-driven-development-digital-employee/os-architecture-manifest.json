@@ -14,6 +14,7 @@
       "publicEntries": ["commands.ts", "events.ts", "participants.ts", "types.ts"],
       "externalImports": [
         "bootstrap/crewstation.ts -> composition",
+        "bootstrap/maintenanceWorkerGraph.ts -> composition",
         "cli/daemonModules/digitalEmployee.ts -> composition",
         "cli/daemonModules/digitalEmployee.ts -> public/types",
         "cli/daemonModules/integration.ts -> composition",
@@ -35,7 +36,6 @@
         "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/participants",
         "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/types",
         "platform/background/maintenanceJobRunner.ts -> public/commands",
-        "platform/background/maintenanceWorker.ts -> composition",
         "routes/digitalEmployees.ts -> composition",
         "server.ts -> composition",
         "server.ts -> public/participants",

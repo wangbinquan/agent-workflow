@@ -93,7 +93,7 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     what: '保留期清扫的一个切片：后台维护 worker 两个 provider 分支共用',
     fn: 'runRetentionSweepSlice',
     definedIn: `${B}platform/persistence/sqlite/systemMaintenanceRetention.ts`,
-    consumers: [`${B}platform/background/maintenanceWorker.ts`],
+    consumers: [`${B}platform/background/maintenanceSystemOperations.ts`],
     forkedFrom: [
       `${B}platform/persistence/sqlite/systemMaintenanceRetention.ts`,
       `${B}platform/persistence/postgresqlMaintenanceRetention.ts`,

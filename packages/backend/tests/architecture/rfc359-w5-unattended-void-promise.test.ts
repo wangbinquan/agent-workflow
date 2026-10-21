@@ -35,7 +35,7 @@
 //     它们最终都落到 `dispatchIntentTurn`，那个函数的头注释就写着「**全部**调用点都是
 //     fire-and-forget，所以它必须自己保证永不 reject」，并记着 2026-09-12 同一类事故
 //     （CI ubuntu shard 6/8）。
-//   · `platform/background/maintenanceWorker.ts` 的 `processQueue`：`try { … } catch { … } finally { … }`。
+//   · `platform/background/maintenanceWorkerRuntime.ts` 的 `processQueue`：`try { … } catch { … } finally { … }`。
 //   · `mcp/server.ts` / `server.ts` 的 `tokenCallAudit.record`：`insertAudit` 在 try 里，
 //     `writeDeleteSnapshot` 自身整体 try/catch，连兜底的 `markSnapshotFailed` 也包了。
 //
@@ -151,7 +151,7 @@ export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   'modules/intent/application/dispatcher.ts: 3',
   'modules/intent/inbound/intentSessionRoutes.ts: 10',
   'platform/background/maintenanceService.ts: 1',
-  'platform/background/maintenanceWorker.ts: 3',
+  'platform/background/maintenanceWorkerRuntime.ts: 3',
   'platform/events/committed/workerDefinitions.ts: 1',
   'platform/execution/local/managedProcess.ts: 4',
   'server.ts: 2',

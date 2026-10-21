@@ -1,3 +1,4 @@
+import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -479,6 +480,7 @@ test('the real supervisor sends one selected init and keeps native drain and gen
   const workers = [first, second]
   const effects = descriptor(['pluginGenerationGc'])
   const supervisor = startMaintenanceWorkerSupervisor({
+    workerEntry: MAINTENANCE_WORKER_ENTRY,
     appHome: init.appHome,
     databaseInit: {
       dbPath: init.dbPath,
@@ -507,6 +509,7 @@ test('the real supervisor sends one selected init and keeps native drain and gen
 })
 
 interface ConnectionCloseControls {
+  readonly partial?: boolean
   readonly heartbeat?: Promise<void>
   readonly effects: { dispose(): Promise<void> }
   readonly pool: { close(): Promise<void> }
@@ -520,23 +523,28 @@ interface ActualConnectionLifetime {
 
 function actualConnectionLifetime(controls: ConnectionCloseControls): ActualConnectionLifetime {
   const source = ts.createSourceFile(
-    'maintenanceWorker.ts',
+    'maintenanceWorkerRuntime.ts',
     readFileSync(
-      new URL('../src/platform/background/maintenanceWorker.ts', import.meta.url),
+      new URL('../src/platform/background/maintenanceWorkerRuntime.ts', import.meta.url),
       'utf8',
     ),
     ts.ScriptTarget.Latest,
     true,
   )
+  const runtime = source.statements.find(
+    (node): node is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(node) && node.name?.text === 'runMaintenanceWorker',
+  )
+  if (!runtime?.body) throw new Error('missing Worker runtime scope')
   const functions = ['closeConnection', 'drainIfReady'].map((name) => {
-    const declaration = source.statements.find(
+    const declaration = runtime.body!.statements.find(
       (node): node is ts.FunctionDeclaration =>
         ts.isFunctionDeclaration(node) && node.name?.text === name,
     )
     if (!declaration?.body) throw new Error(`missing original Worker lifetime: ${name}`)
     return declaration.getText(source)
   })
-  const stateNames = source.statements.flatMap((node) =>
+  const stateNames = runtime.body.statements.flatMap((node) =>
     ts.isVariableStatement(node) && (node.declarationList.flags & ts.NodeFlags.Let) !== 0
       ? node.declarationList.declarations.map((declaration) => declaration.name.getText(source))
       : [],
@@ -553,8 +561,11 @@ function actualConnectionLifetime(controls: ConnectionCloseControls): ActualConn
     `let ${stateNames.map((name) => `${name} = null`).join(', ')};
      draining = true; processing = false; initialised = true;
      heartbeatInFlight = controls.heartbeat ?? null;
-     db = {$client: {close: controls.sqliteClose ?? (() => {})}};
-     postgresqlRuntime = controls.pool;
+     connectionClose = async () => {
+       controls.sqliteClose?.();
+       await controls.pool.close();
+     };
+     graph = controls.partial ? null : {close: connectionClose};
      workerEffectsScope = controls.effects; workerEffects = {};
      const events = []; const emit = (event) => events.push(event);
      ${actual}
@@ -658,15 +669,20 @@ for (const failureAt of ['dispose', 'pool-close'] as const) {
 
 function actualWorkerErrorMessage(): (error: unknown) => string {
   const source = ts.createSourceFile(
-    'maintenanceWorker.ts',
+    'maintenanceWorkerRuntime.ts',
     readFileSync(
-      new URL('../src/platform/background/maintenanceWorker.ts', import.meta.url),
+      new URL('../src/platform/background/maintenanceWorkerRuntime.ts', import.meta.url),
       'utf8',
     ),
     ts.ScriptTarget.Latest,
     true,
   )
-  const declaration = source.statements.find(
+  const runtime = source.statements.find(
+    (node): node is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(node) && node.name?.text === 'runMaintenanceWorker',
+  )
+  if (!runtime?.body) throw new Error('missing Worker runtime scope')
+  const declaration = runtime.body.statements.find(
     (node): node is ts.FunctionDeclaration =>
       ts.isFunctionDeclaration(node) && node.name?.text === 'errorMessage',
   )
@@ -763,3 +779,38 @@ test('backup retention selects pruning and disposes incomplete providers', async
   }
   expect(disposed).toBe(2)
 })
+
+// RFC-389: partial graph construction must preserve effects-before-database cleanup.
+for (const partial of [false, true]) {
+  test(`complete/partial graph close preserves both failures (partial=${partial})`, async () => {
+    const effectsFailure = new Error('effects-close-failed')
+    const databaseFailure = new Error('database-close-failed')
+    const calls: string[] = []
+    const lifetime = actualConnectionLifetime({
+      partial,
+      effects: {
+        async dispose() {
+          calls.push('effects')
+          throw effectsFailure
+        },
+      },
+      pool: {
+        async close() {
+          calls.push('database')
+          throw databaseFailure
+        },
+      },
+    })
+    const close = lifetime.close()
+    expect(lifetime.close()).toBe(close)
+    const failure = await close.catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(AggregateError)
+    expect((failure as AggregateError).message).toBe(
+      'maintenance-worker-effects-and-database-close-failed',
+    )
+    expect((failure as AggregateError).errors).toEqual([effectsFailure, databaseFailure])
+    await expect(lifetime.drain()).rejects.toBe(failure)
+    expect(calls).toEqual(['effects', 'database'])
+    expect(lifetime.events).toEqual([])
+  })
+}

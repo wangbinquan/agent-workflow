@@ -59,7 +59,7 @@ export interface MaintenanceRunStore {
    * 恢复所有 `running` 行（Worker 启动时的唯一恢复入口）。
    *
    * RFC-359 W8：此前还有一个只按 `leaseExpiresAt < now` 恢复的 `recoverExpired`，
-   * **生产从来没有调用过它**（唯一的恢复调用点是 `maintenanceWorker.ts` 初始化时的
+   * **生产从来没有调用过它**（唯一的恢复调用点是 `maintenanceWorkerRuntime.ts` 初始化时的
    * `recoverRunning`），已随合一删除。租约过期本身仍由这条路径在下次 Worker 启动时兜住。
    */
   recoverRunning(now: number): Promise<number>

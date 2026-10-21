@@ -219,24 +219,26 @@ export async function runStuckTaskDetectorMaintenanceJob(input: {
   }
 }
 
+export interface MaintenanceOwnerCommands {
+  readonly workspace: WorkspaceMaintenanceCommand
+  readonly developmentAutomation: DevelopmentAutomationMaintenanceCommands
+  readonly digitalEmployee: DigitalEmployeeMaintenanceCommands
+  readonly intent: IntentMaintenanceCommands
+  readonly pluginGenerationGc: {
+    readonly command: PluginGenerationGcCommand
+    /** Task execution owns the live-node fence; the GC command owns catalog reads. */
+    readonly executionFence: () => Promise<'clear' | 'busy'>
+  }
+  readonly integration: IntegrationMaintenanceCommands
+  readonly taskRecovery: TaskRecoveryOperations
+  readonly taskArchive: TaskArchiveMaintenanceCommand
+  readonly tokenAudit: Pick<TokenCallAuditParticipant, 'pruneSlice'>
+  readonly system: MaintenanceSystemOperations
+}
+
 export async function runMaintenanceJob(input: {
   appHome: string
-  ownerCommands: {
-    readonly workspace: WorkspaceMaintenanceCommand
-    readonly developmentAutomation: DevelopmentAutomationMaintenanceCommands
-    readonly digitalEmployee: DigitalEmployeeMaintenanceCommands
-    readonly intent: IntentMaintenanceCommands
-    readonly pluginGenerationGc: {
-      readonly command: PluginGenerationGcCommand
-      /** Task execution owns the live-node fence; the GC command owns catalog reads. */
-      readonly executionFence: () => Promise<'clear' | 'busy'>
-    }
-    readonly integration: IntegrationMaintenanceCommands
-    readonly taskRecovery: TaskRecoveryOperations
-    readonly taskArchive: TaskArchiveMaintenanceCommand
-    readonly tokenAudit: Pick<TokenCallAuditParticipant, 'pruneSlice'>
-    readonly system: MaintenanceSystemOperations
-  }
+  ownerCommands: MaintenanceOwnerCommands
   job: MaintenanceJobKey
   payload: unknown
   cursor?: unknown

@@ -94,6 +94,9 @@ export const BOOTSTRAP_FILES = [
   // its process entry are bootstrap too (the platform layer imports neither).
   'packages/backend/src/bootstrap/crewstationMaintenance.ts',
   'packages/backend/src/bootstrap/maintenanceWorkerEntry.ts',
+  'packages/backend/src/bootstrap/maintenanceWorker.ts',
+  'packages/backend/src/bootstrap/maintenanceWorkerGraph.ts',
+  'packages/backend/src/bootstrap/maintenanceWorkerEntries.ts',
   'packages/backend/src/bootstrap/executionInitialization.ts',
   'packages/backend/src/bootstrap/workspaceTaskImage.ts',
   // Development reload assembles the same daemon host and retains its lifetime.
@@ -101,7 +104,6 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/cli/daemonProviderMigrationAdmission.ts',
   'packages/backend/src/cli/postgresqlDaemonApplication.ts',
   'packages/backend/src/cli/start.ts',
-  'packages/backend/src/platform/background/maintenanceWorker.ts',
   'packages/backend/src/server.ts',
 ] as const
 

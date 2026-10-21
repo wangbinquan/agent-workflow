@@ -7,6 +7,7 @@ import { createIntentPersistence } from '../infrastructure/intentPersistence'
 import type { IntentMaintenanceCommands } from '../public/commands'
 import type { IntentBootRecoveryInput, IntentScratchSweepInput } from '../public/commands'
 import { composeIntentApplyConvergence } from './applyMaintenance'
+import { INTENT_SCRATCH_DIRNAME } from '../domain/scratchDirectory'
 
 export interface IntentApplyConvergence {
   converge(input: {
@@ -156,7 +157,7 @@ export function composeIntentMaintenanceCommandsForAppHome(
 
 interface ProviderIntentMaintenanceCompositionInput {
   readonly appHome: string
-  readonly scratchDirectoryName: string
+  readonly scratchDirectoryName?: string
   readonly scratch?: IntentScratchStore
   readonly resourcePackages: ResourcePackageApplyConvergence
   readonly log?: Logger
@@ -181,7 +182,7 @@ export function composeIntentMaintenanceCommandsForDatabase(
   return composeIntentMaintenanceCommandsForAppHome({
     persistence: createIntentPersistence(input.db),
     appHome: input.appHome,
-    scratchDirectoryName: input.scratchDirectoryName,
+    scratchDirectoryName: input.scratchDirectoryName ?? INTENT_SCRATCH_DIRNAME,
     ...(input.scratch === undefined ? {} : { scratch: input.scratch }),
     intentApplies: composeIntentApplyConvergence({
       db: input.db,

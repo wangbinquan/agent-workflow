@@ -407,7 +407,7 @@ test('RFC-383 workspace selection reaches the three shared consumers and the HTT
 })
 
 test('both real maintenance Worker composers bind the selected recovery content without moving their database owner', () => {
-  const source = load('platform/background/maintenanceWorker.ts')
+  const source = load('bootstrap/maintenanceWorkerGraph.ts')
   for (const name of [
     'composePostgresqlResourcePackageApplyMaintenance',
     'composeSqliteResourcePackageApplyMaintenance',
@@ -419,6 +419,10 @@ test('both real maintenance Worker composers bind the selected recovery content 
     expect(compact(property(call, source, 'artifacts'), source)).toBe(
       'workerEffects?.resourcePackageRecovery',
     )
-    expect(property(call, source, 'db')).toBeDefined()
+    expect(
+      call.properties
+        .filter(ts.isShorthandPropertyAssignment)
+        .map((node) => compact(node.name, source)),
+    ).toContain('db')
   }
 })

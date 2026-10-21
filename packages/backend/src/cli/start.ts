@@ -284,6 +284,7 @@ import {
   type PostgresqlDaemonApplication,
 } from './postgresqlDaemonApplication'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
+import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'
 import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
 import type { MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'
 import type {
@@ -700,6 +701,7 @@ async function composePostgresqlProviderSession(
     openAdmissionStore: () => ({ store: createMaintenanceRunStore(db) }),
     startSupervisor: (_config, handlers) =>
       startMaintenanceWorkerSupervisor({
+        workerEntry: MAINTENANCE_WORKER_ENTRY,
         appHome: Paths.root,
         databaseInit: {
           provider: 'postgresql',
@@ -2526,6 +2528,7 @@ async function composeSqliteProviderSession(
       }),
     startSupervisor: (config, handlers) =>
       startMaintenanceWorkerSupervisor({
+        workerEntry: MAINTENANCE_WORKER_ENTRY,
         appHome: Paths.root,
         databaseInit: {
           dbPath: Paths.db,

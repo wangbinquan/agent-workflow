@@ -8766,3 +8766,10 @@ provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行�
 ## RFC-387：续跑、仓库准备重试与融合复用会话驱动
 
 门控唤醒、房间续跑、仓库准备重试与融合一律经会话的 `coordinatorFactory.session`；房间提交后尽力唤醒，worker 保留持久兜底，仓库克隆在后台准备步骤执行。`createTaskDriveCoordinator` 已删除，`DefaultTaskDriveCoordinator` 只能在 RFC-386 工厂内构造；旧的 start / wake / dynamic resume / retry 导出仅供测试，W4 删除。排除配置重建只看认领意图类型；新融合工作区由引擎的 missing-digest 路径补齐配置。驱动释放边界捕获 `finalizeClaimedWorkspace` 错误并保留认领，命令本身继续抛错，维护负责恢复。
+
+### 维护 Worker 的入口与线程图归 bootstrap（RFC-389）
+
+维护 Worker 的薄根与唯一线程内模块图放在 `bootstrap/maintenanceWorker.ts`、
+`bootstrap/maintenanceWorkerGraph.ts`；`platform/background` 只承载运行时机制与中立系统维护工厂，
+不得导入模块或写入 bootstrap 入口路径。主线程只能导入无副作用的 `maintenanceWorkerEntries.ts`，
+并显式把入口传给监督器；编译态相对入口、构建清单与架构入口清单必须一致。

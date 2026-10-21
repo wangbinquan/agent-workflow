@@ -37,7 +37,7 @@ export function openProviderMaintenanceWorkerDatabase(
           if (value !== undefined) env[key] = value
         }
         return new Worker(
-          new URL('../../src/platform/background/maintenanceWorker.ts', import.meta.url).href,
+          new URL('../../src/bootstrap/maintenanceWorker.ts', import.meta.url).href,
           { env },
         )
       },

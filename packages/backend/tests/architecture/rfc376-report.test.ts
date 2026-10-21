@@ -182,7 +182,7 @@ describe('RFC-376 corrected report inventories', () => {
     const entries = mutableSingletons([
       unit('services/state.ts', text),
       unit('bootstrap/state.ts', text),
-      unit('platform/background/maintenanceWorker.ts', text),
+      unit('bootstrap/maintenanceWorker.ts', text),
       unit('routes/registry.ts', text),
       unit('platform/operations/catalog.ts', text),
     ])

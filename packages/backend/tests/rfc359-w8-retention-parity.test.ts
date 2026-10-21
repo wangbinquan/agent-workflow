@@ -31,7 +31,7 @@
 //
 // 已知的**正当**差异：SQLite 侧另有一个 `runRetentionSweep`（把 slice 循环到 done 的
 // 每小时整趟入口），PostgreSQL 侧没有对应物——PG 的整趟循环由
-// `platform/background/maintenanceWorker.ts` 的分片调度器驱动。整趟入口不同不影响
+// `platform/background/maintenanceWorkerRuntime.ts` 的分片调度器驱动。整趟入口不同不影响
 // **每一片删什么**，本文件锁的是后者。
 
 import { expect, test } from 'bun:test'

@@ -1,3 +1,4 @@
+import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -120,6 +121,7 @@ describe('RFC-338 maintenance Worker', () => {
     const workers = [first, second]
     const timers: Array<{ fn: () => void; ms: number; cleared: boolean }> = []
     const supervisor = startMaintenanceWorkerSupervisor({
+      workerEntry: MAINTENANCE_WORKER_ENTRY,
       appHome: '/tmp/rfc338-supervisor',
       databaseInit: {
         dbPath: '/tmp/rfc338-supervisor.sqlite',
@@ -231,6 +233,7 @@ describe('RFC-338 maintenance Worker', () => {
     const workers = [first, second]
     const timers: Array<{ fn: () => void; ms: number; cleared: boolean }> = []
     const supervisor = startMaintenanceWorkerSupervisor({
+      workerEntry: MAINTENANCE_WORKER_ENTRY,
       appHome: '/tmp/rfc338-close',
       databaseInit: {
         dbPath: '/tmp/rfc338-close.sqlite',
@@ -304,6 +307,7 @@ describe('RFC-338 maintenance Worker', () => {
     const second = new FakeWorker()
     const workers = [first, second]
     const supervisor = startMaintenanceWorkerSupervisor({
+      workerEntry: MAINTENANCE_WORKER_ENTRY,
       appHome: '/tmp/rfc338-pause-resume',
       databaseInit: {
         dbPath: '/tmp/rfc338-pause-resume.sqlite',
@@ -374,6 +378,7 @@ describe('RFC-338 maintenance Worker', () => {
     const timers: Array<{ fn: () => void; ms: number; cleared: boolean }> = []
     let now = 1_000
     const supervisor = startMaintenanceWorkerSupervisor({
+      workerEntry: MAINTENANCE_WORKER_ENTRY,
       appHome: '/tmp/rfc338-heartbeat',
       databaseInit: {
         dbPath: '/tmp/rfc338-heartbeat.sqlite',
@@ -458,6 +463,7 @@ describe('RFC-338 maintenance Worker', () => {
       resolveCompleted = resolve
     })
     const supervisor = startMaintenanceWorkerSupervisor({
+      workerEntry: MAINTENANCE_WORKER_ENTRY,
       appHome,
       databaseInit: {
         dbPath,
@@ -537,6 +543,7 @@ describe('RFC-338 maintenance Worker', () => {
     let waitingForPostWakeHeartbeat = false
     const degraded: string[] = []
     const supervisor = startMaintenanceWorkerSupervisor({
+      workerEntry: MAINTENANCE_WORKER_ENTRY,
       appHome,
       databaseInit: {
         dbPath,

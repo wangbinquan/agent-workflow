@@ -5208,7 +5208,7 @@ ubuntu 分片 2/12，`services/mcpRuntimeTest.ts` 的 `scheduleIdleTimer`，已�
 `writeDeleteSnapshot` 自身整体 try/catch，连兜底的 `markSnapshotFailed` 也包了）。
 
 **未核的 45 处**分布（`packages/backend/src`，AST 扫描：`void` 语句 + 链上无 rejection handler）：
-`platform/background/maintenanceWorker.ts`(3)、`platform/background/maintenanceService.ts`(1)、
+`platform/background/maintenanceWorkerRuntime.ts`(3)、`platform/background/maintenanceService.ts`(1)、
 `platform/events/committed/workerDefinitions.ts`(1)、`mcp/server.ts`(1)、`cli/start.ts`(6)、
 `cli/postgresqlDaemonApplication.ts`(3)、`modules/digital-employee/application/osWorker.ts`(1)、
 `modules/intent/inbound/intentSessionRoutes.ts`(10)、`modules/intent/application/dispatcher.ts`(3)、
@@ -5226,7 +5226,7 @@ ubuntu 分片 2/12，`services/mcpRuntimeTest.ts` 的 `scheduleIdleTimer`，已�
 
 **已逐条核实为安全的三族**（被调函数自己兜住了，账本里留着只是因为调用点没写 `.catch`）：
 `modules/intent/**` 的 13 条（都落到 `dispatchIntentTurn`，其头注释记着 2026-09-12 同类事故）、
-`platform/background/maintenanceWorker.ts` 的 `processQueue`、`tokenCallAudit.record`。
+`platform/background/maintenanceWorkerRuntime.ts` 的 `processQueue`、`tokenCallAudit.record`。
 
 **剩下的活**：其余 ~30 处逐条核实并在调用点补 `.catch`（内部已 try/catch 的补一条永不触发的也无害，
 反而把「这里为什么安全」搬进代码），账本随之降到 0。

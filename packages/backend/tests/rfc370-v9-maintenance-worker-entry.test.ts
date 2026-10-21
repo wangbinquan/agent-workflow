@@ -23,7 +23,7 @@ const read = (relative: string) => readFileSync(join(SRC, relative), 'utf8')
 
 test('the platform Worker imports no bootstrap module', () => {
   for (const file of [
-    'platform/background/maintenanceWorker.ts',
+    'platform/background/maintenanceWorkerRuntime.ts',
     'platform/background/maintenanceWorkerEffects.ts',
     'platform/background/maintenanceWorkerSupervisor.ts',
   ])
@@ -39,9 +39,9 @@ test('a registered effect module is loaded by its symbolic name', async () => {
   expect(typeof fallback.join).toBe('function')
 })
 
-test('the hosted entry registers the module its descriptor names and runs the platform Worker', () => {
+test('the hosted entry registers the module its descriptor names and runs the shared Worker root', () => {
   const entry = read('bootstrap/maintenanceWorkerEntry.ts')
-  expect(entry).toContain("import '@/platform/background/maintenanceWorker'")
+  expect(entry).toContain("import './maintenanceWorker'")
   expect(entry).toContain("'aw:crewstation-maintenance'")
   const maintenance = read('bootstrap/crewstationMaintenance.ts')
   expect(maintenance).toContain("'./bootstrap/maintenanceWorkerEntry.ts'")

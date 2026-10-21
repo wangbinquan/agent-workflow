@@ -1,4 +1,5 @@
 // RFC-370 CI: explicitly bind the real Worker to the current per-file PG environment.
+import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -130,6 +131,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
           now: 0,
         })
         supervisor = startMaintenanceWorkerSupervisor({
+          workerEntry: MAINTENANCE_WORKER_ENTRY,
           appHome,
           databaseInit: database.databaseInit,
           workerFactory: database.workerFactory,
@@ -217,6 +219,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
     let failed: { readonly error: unknown } | undefined
     try {
       supervisor = startMaintenanceWorkerSupervisor({
+        workerEntry: MAINTENANCE_WORKER_ENTRY,
         appHome,
         databaseInit: database.databaseInit,
         workerFactory: database.workerFactory,
@@ -282,6 +285,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
           now: 0,
         })
         supervisor = startMaintenanceWorkerSupervisor({
+          workerEntry: MAINTENANCE_WORKER_ENTRY,
           appHome,
           databaseInit: database.databaseInit,
           workerFactory: database.workerFactory,
@@ -368,6 +372,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
         now: 0,
       })
       supervisor = startMaintenanceWorkerSupervisor({
+        workerEntry: MAINTENANCE_WORKER_ENTRY,
         appHome,
         databaseInit: database.databaseInit,
         workerFactory: database.workerFactory,
@@ -419,7 +424,7 @@ test('a compiled standalone entry loads an external assembly module through the 
   const outfile = join(appHome, `worker-probe${process.platform === 'win32' ? '.exe' : ''}`)
   try {
     const built = await Bun.build({
-      entrypoints: [virtualMain, join(backendSrc, 'platform/background/maintenanceWorker.ts')],
+      entrypoints: [virtualMain, join(backendSrc, 'bootstrap/maintenanceWorker.ts')],
       target: 'bun',
       define: { AW_COMPILED_BUILD: 'true' },
       compile: { outfile },

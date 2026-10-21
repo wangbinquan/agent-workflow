@@ -67,8 +67,8 @@
       "reason": "max=63: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "platform-to-modules-file-pairs": {
-      "max": 49,
-      "reason": "max=49: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 30,
+      "reason": "max=30: RFC-389 维护 Worker 根与线程图迁入 bootstrap，platform 删除 19 对模块依赖（49 -> 30）"
     },
     "repo-value-scc": {
       "max": 0,

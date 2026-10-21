@@ -11,8 +11,6 @@ import type { MaintenanceWorkerInitRequest } from './maintenanceWorkerMessageRou
 import type { MaintenanceWorkerEffectsDescriptor } from './maintenanceWorkerEffects'
 import { createMaintenanceWorkerEffectsInit } from './maintenanceWorkerEffectsProtocol'
 
-declare const AW_COMPILED_BUILD: boolean | undefined
-
 interface WorkerLike {
   onmessage: ((event: MessageEvent<unknown>) => void) | null
   onerror: ((event: ErrorEvent) => unknown) | null
@@ -33,6 +31,7 @@ export interface MaintenanceWorkerLiveState {
 }
 
 interface MaintenanceWorkerSupervisorCommonOptions {
+  readonly workerEntry: string
   readonly appHome: string
   readonly onDelta?: (runId: string, job: MaintenanceJobKey, delta: MaintenanceWorkerDelta) => void
   readonly onEvent?: (event: MaintenanceWorkerEvent) => void
@@ -97,20 +96,6 @@ export interface MaintenanceWorkerSupervisor {
   drain(timeoutMs?: number): Promise<void>
 }
 
-// In source execution an absolute file URL is reliable. In a standalone Bun
-// executable the Worker remains a separately bundled entry and MUST be opened
-// by its relative entry name: resolving it through new URL(...).href produces
-// an absolute /$bunfs/root URL that Bun 1.3 cannot map back to that entry. Keep
-// both forms explicit; otherwise every release binary degrades with
-// ModuleNotFound even though source-level Worker tests pass.
-const MAINTENANCE_WORKER_ENTRY =
-  typeof AW_COMPILED_BUILD === 'boolean' && AW_COMPILED_BUILD
-    ? './platform/background/maintenanceWorker.ts'
-    : new URL('./maintenanceWorker.ts', import.meta.url).href
-
-const DEFAULT_FACTORY = (): WorkerLike =>
-  new Worker(MAINTENANCE_WORKER_ENTRY) as unknown as WorkerLike
-
 const FAILURE_DRAIN_TIMEOUT_MS = 10_000
 
 function messageOf(error: unknown): string {
@@ -126,13 +111,9 @@ export function startMaintenanceWorkerSupervisor(
   const setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms))
   const clearTimer =
     options.clearTimer ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
-  // RFC-370 §9.2 V9: a deployment that contributes Worker effects names its
-  // own Worker entry (which registers those effects); otherwise the platform
-  // entry runs unchanged.
-  const entry = options.effectsBootstrap?.workerEntry
-  const factory =
-    options.workerFactory ??
-    (entry === undefined ? DEFAULT_FACTORY : () => new Worker(entry) as unknown as WorkerLike)
+  // Hosted effects select their registering entry before the standalone entry.
+  const entry = options.effectsBootstrap?.workerEntry ?? options.workerEntry
+  const factory = options.workerFactory ?? (() => new Worker(entry) as unknown as WorkerLike)
 
   let worker: WorkerLike | null = null
   let stopped = false

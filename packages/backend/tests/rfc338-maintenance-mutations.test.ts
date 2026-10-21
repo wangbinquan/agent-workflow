@@ -29,7 +29,7 @@ interface Sources {
 }
 
 const original: Sources = {
-  worker: readBackend('src/platform/background/maintenanceWorker.ts'),
+  worker: readBackend('src/platform/background/maintenanceWorkerRuntime.ts'),
   service: readBackend('src/platform/background/maintenanceService.ts'),
   runner: readBackend('src/platform/background/maintenanceJobRunner.ts'),
   eventArchive: readBackend('src/platform/background/eventsArchiveMaintenance.ts'),

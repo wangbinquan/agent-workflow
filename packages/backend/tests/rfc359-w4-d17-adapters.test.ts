@@ -235,7 +235,7 @@ test('源码锁：Plugin 聚合没有 provider 命名的仓库 / 装配孪生，
     expect(source, file).not.toMatch(/composePostgresqlPluginCatalog|composeSqlitePluginCatalog/)
   }
   const worker = readFileSync(
-    join(import.meta.dir, '..', 'src', 'platform', 'background', 'maintenanceWorker.ts'),
+    join(import.meta.dir, '..', 'src', 'bootstrap', 'maintenanceWorkerGraph.ts'),
     'utf8',
   )
   expect(worker).toContain('composePluginGenerationGcCommand(')
