@@ -1,3 +1,9 @@
+## 2026-10-21 RFC-294 后继 S2b：RFC-391 Done；S2b 只剩 RFC-392
+
+**RFC-391 Done**：`b1799e6bc`（Codex 实施、本会话审核）。`cli/start.ts` 的两个会话函数与 `cli/postgresqlDaemonApplication.ts` 合为 `packages/backend/src/bootstrap/` 下的被动应用图 `daemonApplication.ts`（`composeDaemonApplication(input, phase)`，含 unstarted 测试相位）、守护进程会话图 `daemonSession.ts`（全仓唯一一次 `composeDaemonLifecycle`）与 provider 适配表 `daemonSessionAdapters.ts`；`main.ts` 把会话组合函数注入 `startCommand(opts, composeSession)`，`cli/start.ts` / `cli/dev.ts` 不导入 `bootstrap/`。唯一行为变化：PostgreSQL 维护 Worker 的保护集补上正在物化的任务。CI：主 CI `39635428624` 除 macOS 外全绿（Linux e2e 3/3、Windows e2e 4/4、windows-platform、maintenance-soak、git-protocols-e2e、integration-opencode 均 success）；macOS 构建作业没分到 runner（0 个步骤）而在 15 分钟上限被取消、macOS e2e 连带失败，macOS 证据以后继提交的 CI 为准。**对其他会话的影响**：守护进程装配只能改 `bootstrap/daemon*.ts` 一份，provider 差异只进适配表（`rfc391-neutral-daemon-graph` 结构锁）；直接调 `startCommand` 的代码要传会话组合函数；本地 PostgreSQL 并发补跑请每组用独立的库（固定 schema 的集成用例会互删）。
+
+**S2b 余下**：RFC-392（删除 `server.ts` 的 SQLite 测试路径、`deps.x ?? composeX(...)` 回退与 `createApp(AppDeps)`，SQLite 测试 lane 改走应用图的 unstarted 相位，统一测试入口；之后把 `composeProviderAppComposition` 迁入 `bootstrap/`；只读研究进行中）→ S2c。
+
 ## 2026-10-21 RFC-294 后继 S2b：RFC-390 Done，RFC-391 In Progress
 
 **RFC-390 Done**：`02dae8e7f`（Codex 实施、本会话审核）。`server.ts` 新增 `composeProviderAppComposition`，PostgreSQL 根、SQLite 会话根与 SQLite 测试路径都经它进入 `composeProviderAppDeps`；删除 SQLite 的第二份路由表 `composeSqliteApiRouteMounts` 与 `composePostgresqlAppDeps`；唯一用户可见变化是 SQLite 的 `/api/maintenance/status` 带 `database` 遥测。CI：`02dae8e7f` 的主 CI `39608407556` 只红在本会话 RFC-389 新增结构锁的 5 秒超时（带覆盖率的 ubuntu 分片），`4dc728a0c` 给本会话 RFC-386/388/389 的全语料结构锁补了 30 秒超时；`4dc728a0c` 的 CI `39612132689` 只有 macOS e2e 分片 2/3 在 165 passed / 0 failed 后越过 20 分钟作业上限被取消（同分片近几次 6～20 分钟，runner 波动；仓规不因一次超时调高作业上限，见 `packages/backend/tests/root-test-entrypoint.test.ts` 的注释）。**对其他会话的影响**：SQLite 守护进程的 HTTP 只经中立绑定，不要再在 `server.ts` 写路由闭包表（`rfc390-neutral-http-binding` 结构锁）；`AppDeps` 删了 26 个零注入的逐字段覆盖。

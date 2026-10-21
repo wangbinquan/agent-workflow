@@ -1,7 +1,9 @@
 # RFC-391 中立应用图：两份守护进程会话装配合一，迁入 `bootstrap/`（RFC-294 S2b）
 
-- **状态**：In Progress（2026-10-21 落档并派发 Codex 实施。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，
-  免设计门与实现门；规则取舍由本会话按推荐决定，见 §6）
+- **状态**：Done（2026-10-21：`b1799e6bc`。主 CI `39635428624` 除 macOS 外全绿（含 Linux e2e 3/3、Windows e2e 4/4，windows-platform、
+  maintenance-soak、git-protocols-e2e、integration-opencode 均 success）；macOS 构建作业没分到 runner（0 个步骤、无日志）而在 15 分钟上限被取消，
+  三个 macOS e2e 分片因下载构建产物失败连带失败——macOS 证据以后继提交的 CI 为准。本机 SQLite 全量、809 个 PostgreSQL 相关文件与双 lane
+  起守护进程的用例全绿。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与实现门；规则取舍见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b「每模块每进程构造一次；不存在 provider 专属或
   部署专属的装配函数；图在 `bootstrap/`」）；前置 [RFC-379](../RFC-379-daemon-lifecycle-program/proposal.md)、RFC-380～390
 - **基线**：HEAD `02dae8e7f`（研究基线；行号仅作定位提示，以实施时源码为准）
