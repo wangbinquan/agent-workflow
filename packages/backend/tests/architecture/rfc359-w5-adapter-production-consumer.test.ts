@@ -427,7 +427,7 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       // RFC-359 AC-1（第 14 刀）：66 → 64。同上，源终止的参与者与装配各自合一。
       // RFC-370 内容 owner：64 → 62。既有两个 Intent 工件工厂改名为
       // `createFileIntent{Skill,Plugin}ArtifactOwner`，文件实现和生产消费者保留。
-    ).toBeGreaterThanOrEqual(56) // RFC-388 removes two provider runtimes and two SQLite launch wrappers: 60 -> 56.
+    ).toBeGreaterThanOrEqual(55) // RFC-390 retires composePostgresqlAppDeps: 56 -> 55.
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

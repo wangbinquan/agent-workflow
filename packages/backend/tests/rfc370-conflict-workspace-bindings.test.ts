@@ -116,7 +116,7 @@ test('RFC-383 shared conflict bindings and paired root selections retain the exp
   for (const name of ['actionWorkspaceEffects', 'conflictMergeWorkspaceEffects']) {
     expect(start).toContain(`${name}: opts.${name},`)
     expect(start.split(`${name}: input.${name},`)).toHaveLength(
-      name === 'actionWorkspaceEffects' ? 3 : 5,
+      name === 'actionWorkspaceEffects' ? 3 : 4,
     )
   }
 })

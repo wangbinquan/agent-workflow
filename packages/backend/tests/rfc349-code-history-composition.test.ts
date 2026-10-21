@@ -108,12 +108,10 @@ describe('RFC-349 code-history composition', () => {
 
     expect(routeSource).not.toContain('sqliteCodeHistoryFallback')
     expect(routeSource).not.toContain('deps.db')
-    expect(serverSource).toContain(
-      'codeHistoryQueries: deps.codeHistoryQueries ?? composeCodeHistoryQueries(deps.db)',
-    )
-    expect(serverSource).toContain('mountCodeRoutes(app, deps.codeHistoryQueries)')
-    expect(startSource).toContain('const codeHistoryQueries = composeCodeHistoryQueries(db)')
-    expect(startSource).toContain('codeHistoryQueries,')
+    expect(serverSource).toContain('const codeHistoryQueries = composeCodeHistoryQueries(input.db)')
+    expect(serverSource).toContain('mountCodeRoutes(app, input.code.history)')
+    expect(startSource).not.toContain('composeCodeHistoryQueries(')
+    expect(startSource).toContain('composeProviderAppComposition({')
   })
 
   test('one PostgreSQL aggregate drives all four HTTP history projections', async () => {

@@ -34,7 +34,7 @@ setDefaultTimeout(60_000)
 // A provider-neutral store alone is insufficient: both real HTTP bootstrap
 // roots must supply the generator, or PostgreSQL responds "unavailable".
 test('both daemon bootstraps bind follow-up generation into the original clarify routes', async () => {
-  for (const path of ['../src/server.ts', '../src/cli/postgresqlDaemonApplication.ts']) {
+  for (const path of ['../src/server.ts']) {
     const source = await Bun.file(new URL(path, import.meta.url)).text()
     expect(source).toMatch(
       /const collaborationRouteOperations = composeCollaborationRouteOperations\(\{\s*followupGenerator: composeClarifyFollowupGenerator\(\{[\s\S]*?registry: (?:deps|core)\.runtimeRegistry,[\s\S]*?binding: narrativeSystemAgentBinding,/,
@@ -280,4 +280,13 @@ describe('RFC-372 mindmap uses the original TaskEngine continuation', () => {
             }
         })
       }
+})
+
+test('both daemon roots route the selected observation and task bundle through the neutral follow-up owner', async () => {
+  for (const path of ['../src/cli/start.ts', '../src/cli/postgresqlDaemonApplication.ts']) {
+    const source = await Bun.file(new URL(path, import.meta.url)).text()
+    expect(source).toContain('composeProviderAppComposition({')
+    expect(source).toContain('observation: observationModules')
+    expect(source).toContain('taskExecution: taskExecutionModules')
+  }
 })

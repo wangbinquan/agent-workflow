@@ -36,7 +36,6 @@ import {
   listVisibleFusionSummaries,
   type FusionViewer,
 } from '../application/fusionViews'
-import { type TaskLaunchConfigurationQueries } from '@/modules/task-execution/public/queries'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -47,8 +46,6 @@ import { directRequestAuthority } from '@/routes/operationAuthority'
 
 export interface FusionRouteDependencies {
   readonly operations: FusionOperations
-  readonly configPath: string
-  readonly launchConfiguration?: TaskLaunchConfigurationQueries
   readonly directAuthority: DirectAuthorityBinding
 }
 

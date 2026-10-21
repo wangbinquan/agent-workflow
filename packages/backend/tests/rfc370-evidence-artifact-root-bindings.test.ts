@@ -63,7 +63,7 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
     expect(source.text).toContain('evidenceArtifacts?: EvidenceArtifactPort')
   }
   bind(start, 'composePostgresqlDaemonApplication', 'evidenceArtifacts', 'input')
-  bind(start, 'composeSqliteAppDeps', 'evidenceArtifacts', 'input')
+  bind(start, 'composeDaemonDigitalEmployeeModules', 'evidenceArtifacts', 'input')
   const development = load('cli/daemonModules/developmentAutomation.ts')
   const employee = load('cli/daemonModules/digitalEmployee.ts')
   bind(development, 'composeDevelopmentAutomation', 'evidenceArtifacts', 'developmentPurposeRoot')

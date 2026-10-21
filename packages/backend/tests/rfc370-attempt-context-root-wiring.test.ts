@@ -78,7 +78,7 @@ test('all real startup and HTTP roots forward the same selected context through 
   const consumers = calls(bundle, 'composeDevelopmentAutomation')
   expect(consumers).toHaveLength(1)
   binding(bundle, consumers[0]!, 'input')
-  const http = calls(start, 'composeSqliteAppDeps')
+  const http = calls(start, 'composeDaemonDevelopmentAutomationModules')
   expect(http).toHaveLength(1)
   binding(start, http[0]!, 'input')
   expect(start.text).toContain('attemptContext: opts.attemptContext,')

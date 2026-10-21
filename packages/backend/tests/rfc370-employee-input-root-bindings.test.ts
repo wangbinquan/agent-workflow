@@ -58,7 +58,7 @@ test('real boot and HTTP roots choose one complete input receiver for both intak
   }
   const start = load('cli/start.ts')
   expect(start.text).toContain('employeeInputArtifacts: opts.employeeInputArtifacts,')
-  expect(start.text.split('employeeInputArtifacts: input.employeeInputArtifacts,')).toHaveLength(4)
+  expect(start.text.split('employeeInputArtifacts: input.employeeInputArtifacts,')).toHaveLength(3)
   expect(start.text).toContain('readonly employeeInputArtifacts?: EmployeeInputArtifactPort')
   expect(start.text).toContain('...sessionInput,')
 })

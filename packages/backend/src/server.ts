@@ -1,3 +1,5 @@
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
+import { composeLocalExecutionAuthority } from '@/modules/system-operations/composition'
 import { composeDaemonIntentModules, type DaemonIntentModules } from './cli/daemonModules/intent'
 import {
   composeDaemonDigitalEmployeeModules,
@@ -51,7 +53,6 @@ import { batchOwnerUserId } from '@/services/repoBatchImport'
 import { redactEventPayload } from '@/services/tokenRedaction'
 import type { TaskArchivedEventsReader } from '@/modules/task-execution/public/types'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { CrewStationEventIngress } from '@/modules/integration/composition/crewstationEvents'
 import type { ReviewArtifactSelection } from '@/modules/collaboration/composition'
 import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
 import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
@@ -87,10 +88,7 @@ import type {
   IsolationWorkspaceFactory,
   RepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/types'
-import type {
-  RepositoryCandidateEffectsFactory,
-  createRepositoryPublicationTransport,
-} from '@/modules/source-control/composition'
+import type { RepositoryCandidateEffectsFactory } from '@/modules/source-control/composition'
 import {
   selectWorkspaceUploadContentFactory,
   selectIsolationWorkspaceFactory,
@@ -123,10 +121,7 @@ import {
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import type { HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'
-import {
-  composeLocalHttpAuthentication,
-  composeHttpAuthenticationMiddleware,
-} from '@/modules/identity-access/composition/authentication'
+import { composeHttpAuthenticationMiddleware } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import type {
   ApplicationConfigurationQueries,
@@ -151,9 +146,6 @@ import type {
 } from '@agent-workflow/shared'
 import { join } from 'node:path'
 import { actorOf, tryActorOf, type Actor } from '@/auth/actor'
-import type { AuthRuntime } from '@/auth/application/authRuntime'
-import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
-import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import type { SecretBox } from '@/auth/secretBox'
 import { takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
@@ -189,7 +181,6 @@ import { type WebhookDispatcher } from '@/services/webhook/dispatcherTypes'
 import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
 import {
   createEventAutomationDelegatedContextBinding,
-  type IdentityAccessModule,
   type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
 
@@ -200,39 +191,27 @@ import type {
   EmployeeInputArtifactPort,
 } from '@/modules/digital-employee/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
-import type { AgentResourceIntegrityComposition } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
-import type { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
 import { type PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
 import {
   composeWorkgroupTaskRoom,
   composeWorkgroupTaskRoomActiveUsers,
   composeWorkgroupTaskRoomDynamicWorkflow,
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
-import type { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import { type ComposedResourcePackageCatalog } from '@/modules/resource-catalog/composition/resourcePackageOperations'
 
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
-import type {
-  AgentCatalogModule,
-  McpCatalogModule,
-  PluginCatalogModule,
-  SkillCatalogModule,
-  WorkflowCatalogModule,
-  WorkgroupCatalogModule,
-} from '@/modules/resource-catalog/public/operations'
 import {
   executionStatusOf,
   type SystemOperationsModule,
 } from '@/modules/system-operations/composition'
-import type { MaintenanceDiskOperations } from '@/modules/system-operations/public/operations'
-import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
+import {
+  composeDatabaseMigrationModule,
+  type DatabaseMigrationModule,
+} from '@/modules/system-operations/composition/databaseMigration'
 import { SYSTEM_OPERATION_ALIASES } from '@/modules/system-operations/public/operations'
-import type { HealthDatabaseReadModel } from '@/modules/system-operations/public/queries'
 import {
   composeOidcIdentityOperations,
   composeOwnerIdentityQueries,
 } from '@/modules/identity-access/composition/providerOperations'
-import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
 import { createOidcProvidersService } from '@/services/oidcProviders'
 import type { LocalMcpDiagnosticsCompositionInput as McpDiagnosticsCompositionInput } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
@@ -240,7 +219,6 @@ import type { McpDiagnosticsRuntime } from '@/modules/resource-catalog/compositi
 import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
-import type { composeMemoryCatalogOperations } from '@/modules/memory/composition'
 
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import {
@@ -256,16 +234,13 @@ import {
   type RepositoryWorkspaceReadQueries,
   type WorkspacePresenceQueries,
 } from '@/modules/source-control/public/queries'
-import type { MemoryOperations } from '@/modules/memory/public/operations'
-import type { MemoryDistillCommands } from '@/modules/memory/public/commands'
-import type { MemoryDistillQueries } from '@/modules/memory/public/queries'
 import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
 import {
   readCommittedReviewArtifactBody,
   resolveCollaborationTaskAccess,
 } from '@/modules/collaboration/public/queries'
 import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
-import { mountOverviewRoutes, type OverviewRouteQuery } from '@/routes/overview'
+import { mountOverviewRoutes } from '@/routes/overview'
 import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
 import { composeSystemOverviewQuery } from '@/modules/system-operations/composition/overview'
 import { mountOidcRoutes } from '@/routes/oidc'
@@ -309,17 +284,14 @@ import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
 import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
 import { mountCodeHostRoutes } from '@/routes/codeHosts'
 import { mountAccountRepositoryTransportCredentialRoutes } from '@/routes/accountRepositoryTransportCredentials'
-import {
-  mountCapabilityTemplateRoutes,
-  type CapabilityTemplateRouteDeps,
-} from '@/routes/capabilityTemplates'
+import { mountCapabilityTemplateRoutes } from '@/routes/capabilityTemplates'
 import { mountDevelopmentConfigRoutes } from '@/routes/developmentConfig'
 import { mountDevelopmentMissionRoutes } from '@/routes/developmentMissions'
 import { mountDigitalEmployeeRoutes } from '@/routes/digitalEmployees'
 import { mountEventCenterRoutes } from '@/routes/eventCenter'
 import { mountExecutionContractRoutes } from '@/routes/executionContracts'
 import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
-import { mountCodeRoutes, type CodeHistoryRouteQueries } from '@/routes/code'
+import { mountCodeRoutes } from '@/routes/code'
 import { mountWebhookEndpointRoutes } from '@/routes/webhookEndpoints'
 import { mountWebhookTriggerRoutes } from '@/routes/webhookTriggers'
 import { mountWebhookDeliveryRoutes } from '@/routes/webhookDeliveries'
@@ -328,40 +300,21 @@ import { mountWorkgroupRoutes } from '@/routes/workgroups'
 import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
 import { Paths } from '@/util/paths'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
-import { mountWorktreeFilesRoutes, type WorktreeFilesRouteDeps } from '@/routes/worktree-files'
+import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
 import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
 import { errorHandler, ForbiddenError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 
-import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
-import type {
-  DigitalEmployeePlatformToolCatalogParticipant,
-  EmployeeCaseDetailProjectionParticipant,
-} from '@/modules/digital-employee/public/types'
+import type { DigitalEmployeePlatformToolCatalogParticipant } from '@/modules/digital-employee/public/types'
 import { type MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/composition/codeReviewArtifacts'
 import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
-import type {
-  DevelopmentConfigOperations,
-  DevelopmentMissionOperations,
-} from '@/modules/development-automation/public/operations'
 import type { composeExecutionContract } from '@/modules/execution-contract/composition'
-import {
-  type EventCenterModule,
-  type CustomObserverProgramFactory,
-} from '@/modules/event-center/composition'
+import { type CustomObserverProgramFactory } from '@/modules/event-center/composition'
 
-import type { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionRuntime'
-import {
-  createDrizzleTaskArchiveMaintenanceCommand,
-  type TaskArchiveContentBinding,
-  type TaskArchiveMaintenanceCommand,
-} from '@/modules/task-execution/composition/taskArchiveMaintenance'
-import type { createTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
-import type { RuntimeRegistryOperations } from '@/modules/runtime-management/composition/runtimeRegistry'
-import { type SchedulerDriverPort } from '@/modules/task-execution/public/commands'
+import { type TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import type {
   NodeRunPromptContentEffects,
   NodeRunPromptOperations,
@@ -372,7 +325,7 @@ import {
   composeNodeRunPromptOperations,
   selectNodeRunPromptOperations,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
-import { createSqliteCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
+import { createCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 
@@ -397,22 +350,13 @@ import {
   type EvidenceDocumentCommands,
   type EvidenceArtifactPort,
   type AttemptContextStorePort,
-  type DevelopmentAdmissionLookup,
-  type DevelopmentAutomationModule,
 } from '@/modules/development-automation/composition'
-
-import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
-
-import type { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
-
-import { type WebhookIngressPersistence } from '@/modules/integration/composition/webhookIngress'
 
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import {
   type RepositoryTransportCredentialModule,
-  type RepositoryTransportCredentialRepository,
   type RepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
@@ -468,9 +412,7 @@ export interface AppDeps {
   employeeInputArtifacts?: EmployeeInputArtifactPort
   missionInputBlobs?: MissionInputBlobPersistence
   pluginInstaller?: PluginInstallerPort
-  beforeEventObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
   archivedNodeEvents?: TaskArchivedEventsReader
-  crewStationEvents?: CrewStationEventIngress
   intentArtifacts?: IntentArtifactSelection
   evidenceArtifacts?: EvidenceArtifactPort
   resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
@@ -499,9 +441,6 @@ export interface AppDeps {
   runtimeManagement?: typeof composeLocalRuntimeManagement
   readonly reviewArtifacts?: ReviewArtifactSelection
   readonly reviewRollbackSnapshots?: WorkspaceRollbackSnapshotInspector
-  developmentWorkspaceRepositoryPreparation?: ReturnType<
-    typeof createDevelopmentWorkspaceRepositoryPreparation
-  >
   developmentPurposeRoot?: SelectedDevelopmentPurposeRoot
   workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   evidenceRead?: EvidenceReadBinding
@@ -509,8 +448,6 @@ export interface AppDeps {
   attemptContext?: AttemptContextStorePort
   /** Selected archive store for standalone HTTP composition. */
   taskArchive?: TaskArchiveContentBinding
-  /** Daemon HTTP reuses the exact archive command used by boot recovery. */
-  taskArchiveMaintenance?: TaskArchiveMaintenanceCommand
   /** SC presence facts selected once for root/child/continuation resume. */
   workspacePresence?: WorkspacePresenceQueries
   workspaceReads?: RepositoryWorkspaceReadQueries
@@ -520,24 +457,6 @@ export interface AppDeps {
    * daemon supplies this aggregate so every consumer observes one provider.
    */
   providerCore?: DaemonProviderCore
-  /** One daemon-scoped execution driver composed by server/CLI bootstrap. */
-  schedulerDriver?: SchedulerDriverPort
-  /** Read projections composed with the same task-execution runtime. */
-  taskExecutionReadModels?: TaskExecutionReadModels
-  /** Provider-selected Agent/Workgroup launch operations shared with route mounts. */
-  taskRouteLaunch?: ReturnType<typeof createTaskRouteLaunchOperations>
-  /**
-   * RFC-321 bootstrap publication transport. Task launch/continuation topologies
-   * reuse its GitHub/GitLab endpoint discovery instead of rebuilding a
-   * key-file-only transport that can only apply URL rules.
-   */
-  repositoryPublicationTransport?: ReturnType<typeof createRepositoryPublicationTransport>
-  /**
-   * RFC-344 daemon-scoped development automation participant. The CLI injects
-   * the same instance used by recovery and wake sweeps so REST and MCP cannot
-   * create an independent orchestration root.
-   */
-  developmentAutomation?: DevelopmentAutomationModule
   /**
    * RFC-317 T54 —— RFC-321 传输凭据模块，**由 bootstrap 装配**后传进来。
    *
@@ -549,10 +468,6 @@ export interface AppDeps {
    * 都表示「没有传输凭据模块」。
    */
   repositoryTransport?: RepositoryTransportCredentialModule
-  /** RFC-349 bootstrap-selected transport credential persistence. */
-  repositoryTransportCredentialRepository?: RepositoryTransportCredentialRepository
-  /** RFC-349 bootstrap-selected source-control workspace persistence. */
-  repositoryWorkspaceStore?: RepositoryWorkspaceStore
   /** Token required for /api/*. */
   token: string
   /** Absolute path to config.json (lets tests use a temp file). */
@@ -587,20 +502,8 @@ export interface AppDeps {
   dbVersion: number
   /** Legacy direct-test SQLite handle used by the compatibility wrapper. */
   db: DbClient
-  /** RFC-349 bootstrap-selected authentication runtime. */
-  authRuntime?: AuthRuntime
-  /** RFC-349 bootstrap-selected REST/MCP/maintenance audit participant. */
-  tokenCallAudit?: TokenCallAuditParticipant
-  /** RFC-349 bootstrap-selected liveness projection. */
-  healthDatabase?: HealthDatabaseReadModel
   /** RFC-349 bootstrap-selected backup/restore administration module. */
   systemOperations?: SystemOperationsModule
-  /** RFC-349 bootstrap-selected webhook ingress persistence. */
-  webhookIngressPersistence?: WebhookIngressPersistence
-  /** RFC-349 bootstrap-selected runtime registry. */
-  runtimeRegistry?: RuntimeRegistryOperations
-  /** Daemon-scoped live concurrency mutation composed by bootstrap. */
-  configConcurrencyHotApply?: ConfigConcurrencyHotApplyCommand
   /**
    * RFC-349 provider-neutral execution-contract projection. Production
    * bootstrap injects the selected provider adapter once so HTTP and the
@@ -609,25 +512,11 @@ export interface AppDeps {
    */
   executionContracts?: ReturnType<typeof composeExecutionContract>
   /**
-   * RFC-349 provider-neutral code-history projections. Production bootstrap
-   * injects the selected provider aggregate once; direct createApp tests may
-   * omit it and retain the SQLite compatibility composition.
-   */
-  codeHistoryQueries?: CodeHistoryRouteQueries
-  /** Branded selected-provider Agent template catalog shared with the employee OS. */
-  digitalEmployeeAgentTemplates?: DigitalEmployeeAgentTemplateCatalogParticipant
-  /**
    * Completed immutable platform-tool projection. Production composes this
    * asynchronously before HTTP assembly; the synchronous direct-test wrapper
    * may omit it and exercises the empty platform catalog explicitly.
    */
   digitalEmployeePlatformTools?: DigitalEmployeePlatformToolCatalogParticipant
-  /** RFC-349 bootstrap-selected admission lookup shared by reconcile and HTTP launch. */
-  developmentAdmissionLookup?: DevelopmentAdmissionLookup
-  /** RFC-349 provider-neutral distillation monitoring queries. */
-  memoryDistillQueries?: MemoryDistillQueries
-  /** RFC-349 bootstrap-selected memory command/query/worker aggregate. */
-  memoryOperations?: MemoryOperations
   /**
    * RFC-349 bootstrap-owned database migration application. Production and
    * contract harnesses inject one composition root with their own admission
@@ -638,8 +527,6 @@ export interface AppDeps {
   identityAccess?: IdentityAccessRuntime & {
     readonly taskExecutionResources?: TaskExecutionResourceBinding
   }
-  /** RFC-340 bootstrap-owned review access/config context shared by REST and MCP dispatch. */
-  collaborationContext?: CollaborationRouteContext
   /** RFC-338: indexed/live projection from the off-thread maintenance owner. */
   maintenanceStatus?: () => MaintenanceStatus
   /** RFC-349: selected-provider mechanism telemetry, kept separate from request latency. */
@@ -659,26 +546,10 @@ export interface AppDeps {
    * （`rfc221-login-policy-routes` 的注释早就把这条记成「正解是收成必填」）。
    */
   secretBox: SecretBox
-  /**
-   * RFC-257 — async webhook dispatch (the T6 fan-out engine). The public
-   * ingress route refuses to mount without BOTH this and secretBox (same
-   * self-skip discipline as OIDC) so a partially-wired app never exposes a
-   * guaranteed-500 public route.
-   */
+  /** Test override; otherwise the integration bundle supplies the dispatcher. */
   webhookDispatcher?: WebhookDispatcher
   /** RFC-303 durable launch guard + terminal effect worker. */
   webhookTerminalControl?: MrTerminalControl
-  /**
-   * RFC-310 OS: production shares this durable Event Center composition with
-   * webhook ingress so passive code-host hints can wake the subscribed poller.
-   * Route tests may omit it and use the local DB-backed composition below.
-   */
-  digitalEmployeeEventCenter?: EventCenterModule
-  /**
-   * Type-owned Case-detail projection, composed once at bootstrap so the REST
-   * and MCP route tables share the same participant.
-   */
-  digitalEmployeeCaseDetailProjection?: EmployeeCaseDetailProjectionParticipant
   /** Bun-dev only: serve the current type-package draft without rewriting its frozen DB row. */
   digitalEmployeeTypePackageDriftPolicy?: 'reject' | 'draft-overlay'
   /**
@@ -719,50 +590,7 @@ export interface AppDeps {
     appHome?: string
     capacity?: number
   }
-  /** RFC-349 bootstrap-selected MCP runtime-test service. */
-  mcpRuntimeTests?: McpDiagnosticsRuntime
 }
-
-/**
- * Route tables consume one already-composed task-execution runtime. Keeping
- * these fields required at the REST/MCP mount boundary makes every alternate
- * entry point (including direct dispatcher tests) choose an explicit bootstrap
- * composition instead of discovering a missing driver only on first request.
- */
-type SqliteAppDeps = AppDeps & { readonly db: DbClient }
-
-type RuntimeComposedAppDeps = SqliteAppDeps & {
-  readonly intentModules: DaemonIntentModules
-  readonly digitalEmployeeModules: DaemonDigitalEmployeeModules
-  readonly developmentAutomationModules: DaemonDevelopmentAutomationModules
-  readonly taskExecutionModules: DaemonTaskExecutionModules<'sqlite'>
-  readonly scheduledTaskModules: DaemonScheduledTaskModules
-  readonly integrationModules: DaemonIntegrationModules
-  readonly fusionModules: DaemonFusionModules
-  readonly observationModules: DaemonObservationModules
-  readonly resourceCatalogModules: DaemonResourceCatalogModules
-  readonly repositoryCredentials: DaemonRepositoryCredentials
-  readonly developmentPurposeRoot: SelectedDevelopmentPurposeRoot
-  readonly authRuntime: AuthRuntime
-  readonly tokenCallAudit: TokenCallAuditParticipant
-  readonly healthDatabase: HealthDatabaseReadModel
-  readonly systemOperations: SystemOperationsModule
-  readonly maintenanceDisk: MaintenanceDiskOperations
-  readonly webhookIngressPersistence: WebhookIngressPersistence
-  readonly runtimeRegistry: RuntimeRegistryOperations
-  readonly configConcurrencyHotApply: ConfigConcurrencyHotApplyCommand
-  readonly identityAccess: IntegrationTriggerIdentityAccess
-  readonly schedulerDriver: SchedulerDriverPort
-  readonly taskExecutionReadModels: TaskExecutionReadModels
-  readonly collaborationContext: CollaborationRouteContext
-  readonly executionContracts: ReturnType<typeof composeExecutionContract>
-  readonly codeHistoryQueries: CodeHistoryRouteQueries
-  readonly developmentAdmissionLookup: DevelopmentAdmissionLookup
-  readonly memoryDistillCommands: MemoryDistillCommands
-  readonly memoryDistillQueries: MemoryDistillQueries
-  readonly memoryOperations: MemoryOperations
-}
-
 export type IntegrationTriggerIdentityAccess = IdentityAccessRuntime & {
   readonly integrationTriggerResources: IntegrationTriggerResourceBinding
   readonly taskExecutionResources: TaskExecutionResourceBinding
@@ -775,18 +603,6 @@ function withIntegrationTriggerResources(
 ): IntegrationTriggerIdentityAccess {
   return Object.freeze({ ...identityAccess, integrationTriggerResources, taskExecutionResources })
 }
-
-type RepositoryBootstrap = DaemonRepositoryCredentials
-
-type SqliteComposedAppDeps = RuntimeComposedAppDeps &
-  RepositoryBootstrap & {
-    readonly workspacePresence: WorkspacePresenceQueries
-    readonly developmentAdapterAclIdentity: ReturnType<
-      typeof composeDevelopmentAdapterConfigOperationsFor
-    >['resourceAclIdentity']
-    readonly developmentConfigOperations: DevelopmentConfigOperations
-    readonly developmentMissionOperations: DevelopmentMissionOperations
-  }
 
 export type AppRouteMount = (app: Hono) => void
 
@@ -849,7 +665,7 @@ export interface AppApiRouteMounts {
   readonly webhookDeliveries: AppRouteMount
   readonly backup: AppRouteMount
   readonly restore: AppRouteMount
-  readonly databaseMigration?: AppRouteMount
+  readonly databaseMigration: AppRouteMount
   readonly worktreeFiles: AppRouteMount
   readonly portArtifacts: AppRouteMount
   readonly reviews: AppRouteMount
@@ -984,7 +800,7 @@ export interface ProviderResourceCatalogRouteComposition {
     readonly module: Parameters<typeof mountWorkflowRoutes>[2]
   }>
   readonly workgroups: Parameters<typeof mountWorkgroupRoutes>[1]
-  readonly resourcePackages: Parameters<typeof registerResourcePackageRoutes>[1] | null
+  readonly resourcePackages: Parameters<typeof registerResourcePackageRoutes>[1]
   readonly workgroupTasks: Parameters<typeof mountWorkgroupTaskRoutes>[1]
 }
 
@@ -999,7 +815,7 @@ export interface ProviderTaskExecutionRouteComposition {
 
 export interface ProviderIntegrationRouteComposition {
   readonly scheduledTasks: Parameters<typeof mountScheduledTaskRoutes>[1]
-  readonly webhookEndpoints: Parameters<typeof mountWebhookEndpointRoutes>[1] | null
+  readonly webhookEndpoints: Parameters<typeof mountWebhookEndpointRoutes>[1]
   readonly eventCenter: Parameters<typeof mountEventCenterRoutes>[1]
   readonly webhookTriggers: Readonly<{
     readonly deps: Parameters<typeof mountWebhookTriggerRoutes>[1]
@@ -1016,7 +832,7 @@ export interface ProviderSourceControlRouteComposition {
   readonly repositoryTransportCredentials: Readonly<{
     readonly runtime: Parameters<typeof mountAccountRepositoryTransportCredentialRoutes>[1]
     readonly route: Parameters<typeof mountAccountRepositoryTransportCredentialRoutes>[2]
-  }> | null
+  }>
   readonly worktreeFiles: Parameters<typeof mountWorktreeFilesRoutes>[1]
 }
 
@@ -1210,7 +1026,6 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
       ),
     workgroups: (app: Hono) => mountWorkgroupRoutes(app, input.resourceCatalog.workgroups),
     resourcePackages: (app: Hono) => {
-      if (input.resourceCatalog.resourcePackages === null) return
       registerResourcePackageRoutes(app, input.resourceCatalog.resourcePackages)
     },
     workgroupTasks: (app: Hono) =>
@@ -1221,7 +1036,6 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
     maintenanceDisk: (app: Hono) => mountMaintenanceDiskRoutes(app, input.system.maintenanceDisk),
     scheduledTasks: (app: Hono) => mountScheduledTaskRoutes(app, input.integration.scheduledTasks),
     webhookEndpoints: (app: Hono) => {
-      if (input.integration.webhookEndpoints === null) return
       mountWebhookEndpointRoutes(app, input.integration.webhookEndpoints)
     },
     codeHosts: (app: Hono) =>
@@ -1232,7 +1046,6 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
       ),
     repositoryTransportCredentials: (app: Hono) => {
       const credentials = input.sourceControl.repositoryTransportCredentials
-      if (credentials === null) return
       mountAccountRepositoryTransportCredentialRoutes(app, credentials.runtime, credentials.route)
     },
     code: (app: Hono) => mountCodeRoutes(app, input.code.history),
@@ -1323,15 +1136,607 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
 }
 
 /** Named production entry points keep provider selection explicit at bootstrap. */
-export function composePostgresqlAppDeps(
-  input: PostgresqlAppCompositionInput,
-): ProviderComposedAppDeps<'postgresql'> {
-  return composeProviderAppDeps(input)
+export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
+  readonly db: ProviderNeutralDatabase
+  readonly token: string
+  readonly appHome: string
+  readonly secretBox: SecretBox
+  readonly dbVersion: number
+  readonly opencodeVersion: string | null
+  readonly applicationConfiguration: ApplicationConfigurationBinding
+  readonly executionAuthority: ExecutionAuthorityPort
+  readonly databaseTelemetry: () => DatabaseRuntimeTelemetry
+  readonly maintenanceStatus?: () => MaintenanceStatus
+  readonly daemonRuntime?: DaemonRuntimeQueries
+  readonly daemonInfoPath: string
+  readonly databaseMigration: DatabaseMigrationModule
+  readonly portArtifacts: PortArtifactOperations
+  readonly integrationIdentityAccess: IntegrationTriggerIdentityAccess
+  readonly modules: Readonly<{
+    core: SelectedDaemonProviderCore<P>
+    repository: DaemonRepositoryCredentials
+    resourceCatalog: DaemonResourceCatalogModules
+    observation: DaemonObservationModules
+    memory: DaemonMemoryModules
+    taskExecution: DaemonTaskExecutionModules<P>
+    scheduledTasks: DaemonScheduledTaskModules
+    integration: DaemonIntegrationModules
+    fusion: DaemonFusionModules
+    digitalEmployee: DaemonDigitalEmployeeModules
+    developmentAutomation: DaemonDevelopmentAutomationModules
+    intent: DaemonIntentModules
+  }>
+  readonly selections?: Readonly<{
+    resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
+    resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
+    resourcePackageSkillContent?: SkillPackageContentReader
+    workspaceContent?: WorkspaceContentEffectsFactory
+    runtimeInventoryContent?: TaskRuntimeInventoryContent
+    repositoryRevisionContent?: ReturnType<typeof composeLocalRepositoryRevisionContent>
+    codeReviewArtifacts?: ReturnType<typeof composeLocalCodeReviewArtifacts>
+    repositoryRemote?: NonNullable<Parameters<typeof composeRepositoryMirrors>[0]['remote']>
+  }>
+  readonly testSeams?: Readonly<{
+    workflowRuntime?: ProviderResourceCatalogRouteComposition['workflows']['runtime']
+    codeHostRuntime?: ProviderSourceControlRouteComposition['codeHosts']['deps']
+    buildScheduleLaunch?: BuildScheduleLaunch
+  }>
 }
 
-function composeLegacyConfigConcurrencyHotApply(
-  daemonScope: object,
-): ConfigConcurrencyHotApplyCommand {
+/** Passive HTTP owners; the caller has already constructed all twelve session bundles. */
+export function composeProviderAppComposition<P extends DatabaseProvider>(
+  input: ProviderAppOwnerInput<P>,
+): Readonly<{
+  composition: ProviderAppCompositionInput<P>
+  resourcePackageApplyActivity: ResourcePackageApplyActivityQuery
+}> {
+  const {
+    core,
+    repository,
+    resourceCatalog: resourceCatalogModules,
+    observation,
+    memory,
+    taskExecution: taskExecutionProvider,
+    scheduledTasks,
+    integration: integrationModules,
+    fusion,
+    digitalEmployee: digitalEmployeeModules,
+    developmentAutomation,
+    intent,
+  } = input.modules
+  const identityAccess = core.identityAccess
+  const { applicationConfiguration, integrationIdentityAccess, portArtifacts } = input
+  const configuration = applicationConfiguration.queries
+  const { narrativeSystemAgentBinding, runtimeManagement, mcpRuntimeTests } = observation
+  const {
+    agentCatalog,
+    skillCatalog,
+    workflowCatalog,
+    agentResourceIntegrity,
+    mcpCatalog,
+    mcpProbeStore,
+    pluginCatalog,
+    workgroupCatalog,
+    digitalEmployeeAgentTemplates,
+    capabilityTemplateOperations,
+    capabilityTemplateAcl,
+    developmentConfigOperations: developmentConfig,
+    developmentAclRoutes,
+  } = resourceCatalogModules
+  const { repositoryTransport, codeHostConnections } = repository
+  const { memoryOperations, memoryCatalog } = memory
+  const boundCollaborationContext = taskExecutionProvider.collaboration
+  const validationContext = taskExecutionProvider.validationContext
+  const { scheduledTaskRuntime } = scheduledTasks
+  const {
+    webhookTerminalControl,
+    webhookDispatcher,
+    webhookDeliveryRuntime,
+    webhookTriggerService,
+    eventCenter,
+  } = integrationModules
+  const { fusionOperations } = fusion
+  const digitalEmployee = digitalEmployeeModules.module
+  const executionContracts = digitalEmployeeModules.executionContracts
+  const developmentActivityOperations = digitalEmployeeModules.activityOperations
+  const digitalEmployeePersistence = digitalEmployeeModules.routePersistence
+  const developmentMissions = developmentAutomation.missionOperations
+  const intentRoutes = intent.routes
+  const resourcePackageBinding = composeResourcePackageBinding(input)
+  const authorityFor = (actor: Actor) =>
+    directOperationAuthority(identityAccess.directAuthority, actor)
+  const oidcIdentities = composeOidcIdentityOperations({
+    db: input.db,
+    identityAccess,
+  })
+  const oidcProviders = createOidcProvidersService({
+    db: input.db,
+    secretBox: input.secretBox,
+  })
+  const identityUserOperations = composeIdentityUserOperations({
+    identityAccess,
+    auth: core.authRuntime,
+    afterDisabled: async () => await mcpRuntimeTests.reconcileDurableIntents(),
+  })
+
+  const codeHistoryQueries = composeCodeHistoryQueries(input.db)
+  const codeWorkspace = composeLegacyCodeReadProviders(input.db).workspace
+  const collaborationTaskAccess = createCollaborationTaskAccessPort(input.db)
+  const taskRoutes = Object.freeze({
+    configuration,
+    operations: taskExecutionProvider.routes.tasks,
+    workspaceQueries: composeTaskWorkspaceQueries({
+      load: taskExecutionProvider.routes.tasks.get,
+      contentScope: (workspaceRef) =>
+        createWorkspaceContentScope(workspaceRef, input.selections?.workspaceContent),
+    }),
+    taskExecutionReadModels: taskExecutionProvider.readModels,
+    runtimeInventoryContent: composeTaskRuntimeInventoryContent(
+      input.selections?.runtimeInventoryContent,
+    ),
+    taskRecoveryOperations: taskExecutionProvider.recovery,
+    codeWorkspace,
+    // RFC-370 §10 V16: hosted reads answer from the task volume and persist as
+    // object publications; standalone PostgreSQL keeps native worktrees and files.
+    codeReview: Object.freeze({
+      content:
+        input.selections?.repositoryRevisionContent ?? composeLocalRepositoryRevisionContent(),
+      artifacts: input.selections?.codeReviewArtifacts ?? composeLocalCodeReviewArtifacts(),
+    }),
+    repositoryWorkspace: core.repositoryWorkspaceStore,
+    changeNarrative: Object.freeze({
+      async requireMember(actor: Actor, taskId: string) {
+        const access = await resolveCollaborationTaskAccess(boundCollaborationContext, {
+          actor,
+          taskId,
+        })
+        if (access.task === null) {
+          throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+        }
+        if (access.actorRole === null) {
+          throw new ForbiddenError(
+            'not-task-member',
+            'only task members or an actor with the required global task authority can do this',
+          )
+        }
+      },
+      resolveRuntime: ({
+        runtimeName,
+        defaultRuntime,
+      }: {
+        readonly runtimeName: string | null
+        readonly defaultRuntime: string | null
+      }) =>
+        core.runtimeRegistry
+          .resolveRuntimeByName(runtimeName ?? defaultRuntime)
+          .then(narrativeSystemAgentBinding.bindRuntime),
+      systemAgents: narrativeSystemAgentBinding.family,
+    }),
+  })
+  const worktreeFiles = Object.freeze({
+    store: core.repositoryWorkspaceStore,
+    canViewTask: async (actor: Actor, task: { readonly id: string }) =>
+      (await collaborationTaskAccess.resolveTask(actor, task.id)).visible,
+    // RFC-370 §10 V15: the same content the task workspace queries read.
+    content: (workspaceRef: string) =>
+      input.selections?.workspaceContent?.bind(workspaceRef) ??
+      createFileWorkspaceContentEffects(workspaceRef),
+  })
+  const collaborationRouteOperations = composeCollaborationRouteOperations({
+    followupGenerator: composeClarifyFollowupGenerator({
+      db: input.db,
+      registry: core.runtimeRegistry,
+      binding: narrativeSystemAgentBinding,
+    }),
+    db: input.db,
+    context: boundCollaborationContext,
+  })
+  const workgroupTaskRoom = composeWorkgroupTaskRoom({
+    db: input.db,
+    taskParticipantFactory: taskExecutionProvider.workgroupTaskRoom,
+    activeUsers: composeWorkgroupTaskRoomActiveUsers({
+      userDirectory: identityAccess.userDirectory,
+    }),
+    dynamicWorkflow: composeWorkgroupTaskRoomDynamicWorkflow({
+      validationContext,
+      workflows: workflowCatalog.operations.create,
+    }),
+    systemUserId: SYSTEM_USER_ID,
+    continuation: taskExecutionProvider.roomContinuation,
+    broadcast(taskId, event) {
+      taskBroadcaster.broadcast(TASK_CHANNEL(taskId), { id: -1, ...event })
+    },
+  })
+
+  const integrationRoutes: ProviderAppCompositionInput<P>['integration'] = Object.freeze({
+    scheduledTasks: Object.freeze({
+      identityAccess: integrationIdentityAccess,
+      scheduledTaskRuntime,
+      buildScheduleLaunch:
+        input.testSeams?.buildScheduleLaunch ?? taskExecutionProvider.trigger.buildScheduleLaunch,
+      getDefaultRuntime: async () => (await configuration.read()).defaultRuntime ?? null,
+    }),
+    webhookEndpoints: Object.freeze({
+      webhookEndpointService: integrationModules.webhookEndpointService,
+    }),
+    eventCenter,
+    webhookTriggers: Object.freeze({
+      deps: Object.freeze({ webhookTriggerService }),
+      identityAccess: integrationIdentityAccess,
+    }),
+    webhookDeliveries: Object.freeze({
+      webhookDeliveryRuntime,
+      digitalEmployeeEventCenter: eventCenter,
+      webhookDispatcher,
+      webhookTerminalControl,
+    }),
+  })
+
+  const digitalDevelopmentRoutes: ProviderAppCompositionInput<P>['digitalDevelopment'] =
+    Object.freeze({
+      executionContracts,
+      digitalEmployees: Object.freeze({
+        persistence: digitalEmployeePersistence,
+        module: digitalEmployee,
+        activityOperations: developmentActivityOperations,
+        contexts: identityAccess.directAuthority,
+      }),
+      developmentConfig: Object.freeze({
+        aclRoutes: developmentAclRoutes,
+        operations: developmentConfig,
+        contexts: identityAccess.directAuthority,
+      }),
+      developmentMissions: Object.freeze({
+        operations: developmentMissions,
+        contexts: identityAccess.directAuthority,
+      }),
+      missionInputUploads: developmentAutomation.missionInputUploads,
+    })
+
+  const taskCatalog = composeTaskCatalog({
+    sources: [...taskExecutionProvider.catalogSources, digitalEmployeeModules.taskCatalogSource],
+  })
+  const publicRoutes: ProviderAppCompositionInput<P>['public'] = Object.freeze({
+    health: Object.freeze({
+      deps: Object.freeze({
+        opencodeVersion: input.opencodeVersion,
+        dbVersion: input.dbVersion,
+      }),
+      identityAccess: identityAccess.diagnostics,
+      database: core.healthDatabase,
+    }),
+    documentation: Object.freeze({ configuration }),
+    webhookIngress: composeWebhookIngressTransport({
+      crewStationEvents: integrationModules.crewStationEvents,
+      webhookIngressPersistence: integrationModules.webhookIngressPersistence,
+      secretBox: input.secretBox,
+      digitalEmployeeEventCenter: eventCenter,
+      webhookDispatcher,
+      webhookTerminalControl,
+    }),
+  })
+
+  // One overview projection binds the session-owned domain queries.
+  const overviewQuery: ProviderAppCompositionInput<P>['platform']['overview']['query'] =
+    composeSystemOverviewQuery({
+      resourceCatalog: composeResourceCatalogOverviewQuery(input.db),
+      repositories: core.repositoryWorkspaceOperations.overviewQueries,
+      integration: scheduledTaskRuntime.overview,
+      memories: memoryCatalog,
+      tasks: taskExecutionProvider.overview,
+    })
+  const platformRoutes: ProviderAppCompositionInput<P>['platform'] = Object.freeze({
+    observability: composeRunObservation({
+      db: input.db,
+      tasks: createTaskObservationFacts(input.db),
+      runtimes: runtimeManagement.observations,
+    }),
+    config: Object.freeze({
+      configuration: applicationConfiguration.composeCommands({
+        runtimeRegistry:
+          runtimeManagement.configuration satisfies RuntimeProfileConfigurationCommands,
+        withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(
+          applicationConfiguration.notificationKey,
+        ),
+        runtimeTests: mcpRuntimeTests.reconciliation,
+        concurrencyHotApply: composeConfigConcurrencyHotApply(
+          taskExecutionProvider.processConcurrencyScope,
+        ),
+      }),
+    }),
+    maintenance: Object.freeze({
+      configuration,
+      maintenanceStatus: input.maintenanceStatus,
+      databaseTelemetry: input.databaseTelemetry,
+    }),
+    daemon: Object.freeze({
+      runtime: selectDaemonRuntimeQueries(input.daemonRuntime, { infoPath: input.daemonInfoPath }),
+    }),
+    plantuml: Object.freeze({ configuration }),
+    runtime: runtimeManagement.models,
+    runtimes: runtimeManagement.runtimes,
+    overview: Object.freeze({
+      authorization: Object.freeze({ directAuthority: identityAccess.directAuthority }),
+      query: overviewQuery,
+    }),
+  })
+
+  const resourceCatalogRoutes: ProviderAppCompositionInput<P>['resourceCatalog'] = Object.freeze({
+    agents: Object.freeze({
+      ...agentCatalog,
+      authorityFor,
+      listDigitalEmployeeTemplates: () =>
+        listDigitalEmployeeAgentTemplates(digitalEmployeeAgentTemplates),
+      taskLaunch: taskExecutionProvider.routeLaunch.agent,
+    }),
+    mcps: Object.freeze({
+      queries: mcpCatalog.queries,
+      operations: mcpCatalog.operations,
+      aclIdentity: mcpCatalog.participants.aclIdentity,
+      probeStore: mcpProbeStore,
+      authorityFor,
+      runtimeTests: { commands: mcpRuntimeTests.commands, queries: mcpRuntimeTests.queries },
+      runtimeTestCommandContextFor: mcpRuntimeTests.contexts.command,
+      runtimeTestQueryContextFor: mcpRuntimeTests.contexts.query,
+      probeRunner: mcpRuntimeTests.probeRunner,
+    }),
+    plugins: Object.freeze({
+      queries: pluginCatalog.queries,
+      operations: pluginCatalog.operations,
+      authorityFor,
+    }),
+    skills: Object.freeze({ ...skillCatalog, authorityFor }),
+    repositories: Object.freeze({
+      store: core.repositoryWorkspaceStore,
+      cached: Object.freeze({
+        configuration,
+        appHome: input.appHome,
+        secretBox: input.secretBox,
+      }),
+      groups: Object.freeze({ configuration }),
+      mirrors: composeRepositoryMirrors({
+        store: core.repositoryWorkspaceStore,
+        secretBox: input.secretBox,
+        appHome: input.appHome,
+        ...(input.selections?.repositoryRemote === undefined
+          ? {}
+          : { remote: input.selections?.repositoryRemote }),
+      }),
+    }),
+    workflows: Object.freeze({
+      runtime: input.testSeams?.workflowRuntime ?? Object.freeze({}),
+      module: Object.freeze({ ...workflowCatalog, authorityFor }),
+    }),
+    workgroups: Object.freeze({
+      queries: workgroupCatalog.queries,
+      operations: workgroupCatalog.operations,
+      resourceIntegrityQueries: agentResourceIntegrity.queries,
+      authorityFor,
+      taskLaunch: taskExecutionProvider.routeLaunch.workgroup,
+    }),
+    resourcePackages: Object.freeze({
+      catalog: resourcePackageBinding.catalog,
+      commandContextFor: resourcePackageBinding.commandContextFor,
+      queryContextFor(actor: Actor) {
+        return identityAccess.contexts.queryFromAuthority(
+          directRequestAuthority(identityAccess.directAuthority, actor),
+          'http',
+        )
+      },
+    }),
+    workgroupTasks: Object.freeze({ module: workgroupTaskRoom, authorityFor }),
+  })
+
+  const taskExecutionRoutes: ProviderAppCompositionInput<P>['taskExecution'] = Object.freeze({
+    tasks: taskRoutes,
+    catalog: taskCatalog,
+    archive: Object.freeze({
+      configuration,
+      taskArchiveMaintenance: taskExecutionProvider.archive,
+    }),
+    portArtifacts: Object.freeze({
+      taskExecutionReadModels: taskExecutionProvider.readModels,
+      portArtifacts,
+    }),
+    clarifyDirective: Object.freeze({
+      operations: taskExecutionProvider.routes.clarifyDirective,
+    }),
+    feedback: Object.freeze({
+      collaborationContext: boundCollaborationContext,
+      memoryOperations,
+    }),
+  })
+
+  const sourceControlRoutes: ProviderAppCompositionInput<P>['sourceControl'] = Object.freeze({
+    codeHosts: Object.freeze({
+      deps: input.testSeams?.codeHostRuntime ?? Object.freeze({}),
+      service: codeHostConnections,
+    }),
+    repositoryTransportCredentials: Object.freeze({
+      runtime: input.testSeams?.codeHostRuntime ?? Object.freeze({}),
+      route: Object.freeze({
+        credentials: repositoryTransport.ownCredentials,
+        currentSubjects: identityAccess.resolveAuthority,
+      }),
+    }),
+    worktreeFiles,
+  })
+
+  const codeRoutes: ProviderAppCompositionInput<P>['code'] = Object.freeze({
+    history: codeHistoryQueries,
+    capabilityTemplates: Object.freeze({
+      codeHistoryQueries,
+      capabilityTemplates: capabilityTemplateOperations,
+      capabilityTemplateAcl,
+    }),
+  })
+
+  const collaborationRoutes: ProviderAppCompositionInput<P>['collaboration'] = Object.freeze({
+    operations: collaborationRouteOperations,
+    appHome: input.appHome,
+  })
+
+  const memoryRoutes: ProviderAppCompositionInput<P>['memory'] = Object.freeze({
+    fusion: Object.freeze({
+      operations: fusionOperations,
+      directAuthority: identityAccess.directAuthority,
+    }),
+    // RFC-353 T9：技能来源追溯——版本流水来自 resource-catalog，融合记录来自 memory，
+    // 拼装归 knowledge-evolution，所以路由挂在 KE 的 inbound 上。
+    skillProvenance: Object.freeze({
+      skills: skillCatalog.queries,
+      versions: skillCatalog.versionQueries,
+      authorityFor: (actor: Actor) =>
+        directOperationAuthority(identityAccess.directAuthority, actor),
+      memoryAuthorityFor: (actor: Actor) => ({
+        actor,
+        authority: directRequestAuthority(identityAccess.directAuthority, actor),
+      }),
+      listFusedInto: (skillId: string) => memoryCatalog.queries.listFusedInto(skillId),
+      filterVisibleMemories: (
+        authority: Parameters<
+          ProviderMemoryRouteComposition['skillProvenance']['filterVisibleMemories']
+        >[0],
+        rows: Parameters<
+          ProviderMemoryRouteComposition['skillProvenance']['filterVisibleMemories']
+        >[1],
+      ) => memoryCatalog.queries.filterVisible(authority, rows),
+    }),
+    memories: Object.freeze({
+      catalog: memoryCatalog,
+      identityAccess: Object.freeze({
+        contexts: identityAccess.contexts,
+        directAuthority: identityAccess.directAuthority,
+      }),
+    }),
+    distillJobs: Object.freeze({
+      memoryDistillCommands: memoryOperations.distillCommands,
+      memoryDistillQueries: memoryOperations.distillQueries,
+    }),
+  })
+
+  const identityRoutes: ProviderAppCompositionInput<P>['identity'] = Object.freeze({
+    auth: Object.freeze({
+      deps: Object.freeze({ configuration }),
+      identityAccess,
+      bindings: Object.freeze({
+        auth: core.authRuntime,
+        listIdentitiesForUser: (userId: string) => oidcIdentities.listIdentitiesForUser(userId),
+        listTokenAuditForUser: (userId: string) => core.tokenCallAudit.listForUser(userId),
+      }),
+    }),
+    oidcAuth: Object.freeze({
+      deps: Object.freeze({ configuration }),
+      bindings: Object.freeze({
+        auth: core.authRuntime,
+        providers: oidcProviders,
+        identities: oidcIdentities,
+      }),
+    }),
+    oidc: Object.freeze({ auth: core.authRuntime, providers: oidcProviders }),
+    users: Object.freeze({
+      auth: Object.freeze({
+        auth: core.authRuntime,
+        listTokenAudit: () => core.tokenCallAudit.list(),
+      }),
+      identityAccess: Object.freeze({
+        contexts: identityAccess.contexts,
+        directAuthority: identityAccess.directAuthority,
+        operations: identityUserOperations,
+      }),
+    }),
+  })
+
+  const systemRoutes: ProviderAppCompositionInput<P>['system'] = Object.freeze({
+    maintenanceDisk: core.maintenanceDisk,
+    backup: Object.freeze({ operations: core.systemOperations, identityAccess }),
+    restore: Object.freeze({ operations: core.systemOperations, identityAccess }),
+    databaseMigration: Object.freeze({
+      operations: input.databaseMigration.operations,
+      identityAccess,
+    }),
+  })
+
+  const composition: ProviderAppCompositionInput<P> = Object.freeze({
+    token: input.token,
+    configuration,
+    authentication: core.httpAuthentication,
+    core,
+    public: publicRoutes,
+    platform: platformRoutes,
+    resourceCatalog: resourceCatalogRoutes,
+    taskExecution: taskExecutionRoutes,
+    integration: integrationRoutes,
+    sourceControl: sourceControlRoutes,
+    code: codeRoutes,
+    digitalDevelopment: digitalDevelopmentRoutes,
+    collaboration: collaborationRoutes,
+    memory: memoryRoutes,
+    intent: intentRoutes,
+    identity: identityRoutes,
+    system: systemRoutes,
+    executionAuthority: input.executionAuthority,
+  })
+  return Object.freeze({
+    composition,
+    resourcePackageApplyActivity: resourcePackageBinding.applyActivity,
+  })
+}
+
+/** Resource-package authority, catalog and atomic apply share one session binding. */
+function composeResourcePackageBinding<P extends DatabaseProvider>(
+  input: ProviderAppOwnerInput<P>,
+) {
+  const packageActorsByAuthority = new WeakMap<object, Actor>()
+  const box = input.secretBox
+  const identityAccess = input.modules.core.identityAccess
+  const resourceCatalogModules = input.modules.resourceCatalog
+  const provider = composePostgresqlResourcePackageProvider({
+    db: input.db,
+    appHome: input.appHome,
+    authorityResolver: {
+      resolve(authority) {
+        const actor = packageActorsByAuthority.get(authority)
+        if (actor === undefined) throw new Error('foreign-resource-package-authority')
+        return actor
+      },
+    },
+    mcpLifecycle: resourceCatalogModules.mcpTransactionLifecycle,
+    capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
+      db: input.db,
+    }),
+    skillArtifacts: input.selections?.resourcePackageSkillArtifacts,
+    skillPackageContent: input.selections?.resourcePackageSkillContent,
+    ...(input.selections?.resourcePackagePluginArtifacts === undefined
+      ? { pluginInstaller: createResourcePackagePluginInstaller() }
+      : { pluginArtifacts: input.selections?.resourcePackagePluginArtifacts }),
+  })
+  const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
+    db: input.db,
+    box,
+  })
+  return Object.freeze({
+    applyActivity: atomicApply,
+    catalog: composePostgresqlResourcePackageCatalog({
+      provider,
+      execution: createPostgresqlResourcePackageExecutionAdapter({
+        box,
+        provider,
+        atomicApply,
+      }),
+    }),
+    commandContextFor(actor: Actor): CommandContext {
+      const context = identityAccess.contexts.fromAuthority(
+        directRequestAuthority(identityAccess.directAuthority, actor),
+        'http',
+      )
+      packageActorsByAuthority.set(context.authority, actor)
+      return context
+    },
+  })
+}
+
+function composeConfigConcurrencyHotApply(daemonScope: object): ConfigConcurrencyHotApplyCommand {
   return Object.freeze({
     apply(input: Parameters<ConfigConcurrencyHotApplyCommand['apply']>[0]) {
       resizeAllNodePools(daemonScope, {
@@ -1413,7 +1818,7 @@ export function composeSqliteApplicationDeps(
       ? { kind: 'selected', queries: configuration }
       : { kind: 'local-sync', queries: applicationConfiguration.synchronousQueries },
   )
-  const providerCore: DaemonProviderCore =
+  const selectedCore: DaemonProviderCore =
     deps.providerCore ??
     composeDaemonProviderCore({
       db: deps.db,
@@ -1441,6 +1846,11 @@ export function composeSqliteApplicationDeps(
       identityEvents: { authorityRevisionChanged() {} },
       presenceProjection: { publish() {} },
     })
+  const providerCore = Object.freeze({
+    ...selectedCore,
+    identityAccess: deps.identityAccess ?? selectedCore.identityAccess,
+    systemOperations: deps.systemOperations ?? selectedCore.systemOperations,
+  })
   const scheduledTaskModules: DaemonScheduledTaskModules =
     deps.scheduledTaskModules ??
     composeDaemonScheduledTaskModules({
@@ -1448,11 +1858,8 @@ export function composeSqliteApplicationDeps(
       assertAgentIntegrity: (agentIds) =>
         agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
     })
-  const baseIdentityAccess = deps.identityAccess ?? providerCore.identityAccess
-  const authRuntime = deps.authRuntime ?? providerCore.authRuntime
-  const tokenCallAudit = deps.tokenCallAudit ?? providerCore.tokenCallAudit
-  const healthDatabase = deps.healthDatabase ?? providerCore.healthDatabase
-  const runtimeRegistry = deps.runtimeRegistry ?? providerCore.runtimeRegistry
+  const baseIdentityAccess = providerCore.identityAccess
+  const runtimeRegistry = providerCore.runtimeRegistry
   const standalone = standaloneModuleAdapters()
   const observationModules: DaemonObservationModules =
     deps.observationModules ??
@@ -1471,11 +1878,10 @@ export function composeSqliteApplicationDeps(
         runtimeManagement: deps.runtimeManagement ?? standalone.runtimeManagement,
         workspacePresence: () => deps.workspacePresence ?? standalone.workspacePresence(),
       },
-      mcpRuntimeTests: deps.mcpRuntimeTests,
       mcpRuntimeTestDependencies: deps.mcpRuntimeTestDependencies,
       runtimeDiagnosticTestDependencies: deps.runtimeDiagnosticTestDependencies,
     })
-  const { workspacePresence, mcpRuntimeTests: userRuntimeTests } = observationModules
+  const { mcpRuntimeTests: userRuntimeTests } = observationModules
   const resourceCatalogModules: DaemonResourceCatalogModules =
     deps.resourceCatalogModules ??
     composeDaemonResourceCatalogModules({
@@ -1489,19 +1895,7 @@ export function composeSqliteApplicationDeps(
         reconcileDurableIntents: () => userRuntimeTests.reconcileDurableIntents(),
       },
     })
-  const {
-    resourceCatalog: providerResourceCatalog,
-    agentResourceIntegrity,
-    agentCatalog,
-    mcpProbeStore,
-    mcpCatalog,
-    pluginCatalog,
-    skillCatalog,
-    workflowCatalog,
-    workgroupCatalog,
-    developmentAdapterConfigOperations,
-    developmentConfigOperations,
-  } = resourceCatalogModules
+  const { agentResourceIntegrity, mcpCatalog } = resourceCatalogModules
   const repositoryBootstrap =
     deps.repositoryCredentials ??
     composeDaemonRepositoryCredentials({
@@ -1509,15 +1903,10 @@ export function composeSqliteApplicationDeps(
       appHome,
       secretBox: deps.secretBox,
       developmentPurposeRoot,
-      repositoryWorkspaceStore:
-        deps.repositoryWorkspaceStore ?? providerCore.repositoryWorkspaceStore,
+      repositoryWorkspaceStore: providerCore.repositoryWorkspaceStore,
       repositoryWorkspaceOperations: providerCore.repositoryWorkspaceOperations,
-      repositoryTransportCredentialRepository:
-        deps.repositoryTransportCredentialRepository ??
-        providerCore.repositoryTransportCredentialRepository,
+      repositoryTransportCredentialRepository: providerCore.repositoryTransportCredentialRepository,
       repositoryTransport: deps.repositoryTransport,
-      repositoryPublicationTransport: deps.repositoryPublicationTransport,
-      developmentWorkspaceRepositoryPreparation: deps.developmentWorkspaceRepositoryPreparation,
       codeHostFetch: deps.codeHostFetch,
     })
   const memoryModules: DaemonMemoryModules =
@@ -1527,15 +1916,12 @@ export function composeSqliteApplicationDeps(
       nodeRunPrompts,
       systemAgentBinding: observationModules.memorySystemAgentBinding,
       contexts: baseIdentityAccess.contexts,
-      operations: deps.memoryOperations,
       reviewedArtifacts: {
         read: async (finalPath) =>
           await readCommittedReviewArtifactBody(collaborationContext, finalPath),
       },
     })
-  const { memoryOperations, memoryCatalog } = memoryModules
-  const configConcurrencyHotApply =
-    deps.configConcurrencyHotApply ?? composeLegacyConfigConcurrencyHotApply(deps.db)
+  const { memoryCatalog } = memoryModules
   const taskExecutionModules: DaemonTaskExecutionModules<'sqlite'> =
     deps.taskExecutionModules ??
     composeDaemonTaskExecutionModules({
@@ -1573,25 +1959,17 @@ export function composeSqliteApplicationDeps(
         scratchEffects: deps.scratchWorkspaceEffects,
         fusionWorkspaces: createFileFusionWorkspaceEffects({ appHome }),
       },
-      testSeams: {
-        schedulerDriver: deps.schedulerDriver,
-        collaboration: deps.collaborationContext,
-      },
       finalizeWorkspace: async (taskId) => {
         await finishClaimedWebhookWorkspacePrune(deps.db, taskId)
       },
     })
   const taskExecutionPersistence = taskExecutionModules.persistence
-  const taskExecutionReadModels = deps.taskExecutionReadModels ?? taskExecutionModules.readModels
-  const schedulerDriver = taskExecutionModules.runtime.schedulerDriver
   const collaborationContext = taskExecutionModules.collaboration
   const identityAccess = withIntegrationTriggerResources(
     baseIdentityAccess,
     scheduledTaskModules.scheduledTaskRuntime.integrationTriggerResources,
     taskExecutionModules.resources,
   )
-  const systemOperations = deps.systemOperations ?? providerCore.systemOperations
-  const maintenanceDisk = providerCore.maintenanceDisk
   const fusionModules: DaemonFusionModules =
     deps.fusionModules ??
     composeDaemonFusionModules({
@@ -1599,7 +1977,6 @@ export function composeSqliteApplicationDeps(
       appHome,
       memories: memoryCatalog,
       skillContent: deps.skillContent,
-      taskLaunchConfiguration,
       tasks: taskExecutionModules.fusion,
     })
   const integrationModules: DaemonIntegrationModules =
@@ -1626,15 +2003,12 @@ export function composeSqliteApplicationDeps(
       developmentDeliveryProvider: repositoryBootstrap.developmentDeliveryProvider,
       developmentPurposeRoot,
       adapters: {
-        beforeEventObservationWrite: deps.beforeEventObservationWrite,
         customObserverPrograms: deps.customObserverPrograms,
         webhookDispatcher: deps.webhookDispatcher,
         webhookTerminalControl: deps.webhookTerminalControl,
-        eventCenter: deps.digitalEmployeeEventCenter,
-        webhookIngressPersistence: deps.webhookIngressPersistence,
       },
     })
-  if (deps.integrationModules === undefined && deps.digitalEmployeeEventCenter === undefined) {
+  if (deps.integrationModules === undefined) {
     void unstarted?.trackReady(integrationModules.eventCenter.initialize())
   }
   const developmentWorkspaceEffects = selectDevelopmentWorkspaceEffectBinding({
@@ -1655,12 +2029,7 @@ export function composeSqliteApplicationDeps(
         userDirectory: identityAccess.userDirectory,
         directAuthority: identityAccess.directAuthority,
       },
-      resources: {
-        ...resourceCatalogModules,
-        digitalEmployeeAgentTemplates:
-          deps.digitalEmployeeAgentTemplates ??
-          resourceCatalogModules.digitalEmployeeAgentTemplates,
-      },
+      resources: resourceCatalogModules,
       repository: repositoryBootstrap,
       integration: integrationModules,
       taskExecution: taskExecutionModules,
@@ -1676,7 +2045,6 @@ export function composeSqliteApplicationDeps(
         employeeCaseWorkspaceEffects: deps.employeeCaseWorkspaceEffects,
         platformTools: deps.digitalEmployeePlatformTools,
         executionContracts: deps.executionContracts,
-        caseDetailProjection: deps.digitalEmployeeCaseDetailProjection,
       },
     })
   const developmentAutomationModules: DaemonDevelopmentAutomationModules =
@@ -1699,10 +2067,6 @@ export function composeSqliteApplicationDeps(
       conflictMergeWorkspaceEffects: deps.conflictMergeWorkspaceEffects,
       missionInputBlobs: deps.missionInputBlobs,
       evidenceArtifacts: deps.evidenceArtifacts,
-      adapters: {
-        automation: deps.developmentAutomation,
-        admissionLookup: deps.developmentAdmissionLookup,
-      },
     })
   const intentModules =
     deps.intentModules ??
@@ -1720,666 +2084,79 @@ export function composeSqliteApplicationDeps(
         httpTurnFixture: deps.intentTestDependencies?.runFn,
       },
     })
-  const runtimeDeps: RuntimeComposedAppDeps = {
-    ...deps,
-    intentModules,
-    digitalEmployeeModules,
-    developmentAutomationModules,
-    taskExecutionModules,
-    scheduledTaskModules,
-    integrationModules,
-    fusionModules,
-    digitalEmployeeEventCenter: integrationModules.eventCenter,
-    // Direct HTTP tests may intentionally omit dispatch/terminal ports. Session bundles
-    // are always fully wired; retain the original optional seams for the unstarted fallback.
-    webhookDispatcher: deps.integrationModules?.webhookDispatcher ?? deps.webhookDispatcher,
-    webhookTerminalControl:
-      deps.integrationModules?.webhookTerminalControl ?? deps.webhookTerminalControl,
-    ...developmentWorkspaceEffects,
-    developmentPurposeRoot,
-    observationModules,
-    resourceCatalogModules,
-    repositoryCredentials: repositoryBootstrap,
+  const unexpectedMigrationAdmission = async (): Promise<never> => {
+    throw new Error('direct HTTP composition does not implement daemon migration admission')
+  }
+  const http = composeProviderAppComposition({
+    db: deps.db,
+    token: deps.token,
     appHome,
-    authRuntime,
-    tokenCallAudit,
-    healthDatabase,
-    systemOperations,
-    maintenanceDisk,
-    webhookIngressPersistence: integrationModules.webhookIngressPersistence,
-    runtimeRegistry,
-    configConcurrencyHotApply,
-    identityAccess,
-    digitalEmployeeCaseDetailProjection: digitalEmployeeModules.caseDetailProjection,
-    schedulerDriver,
-    taskExecutionReadModels,
-    executionContracts: digitalEmployeeModules.executionContracts,
-    codeHistoryQueries: deps.codeHistoryQueries ?? composeCodeHistoryQueries(deps.db),
-    developmentAdmissionLookup: developmentAutomationModules.admissionLookup,
-    memoryDistillCommands: memoryOperations.distillCommands,
-    memoryDistillQueries: deps.memoryDistillQueries ?? memoryOperations.distillQueries,
-    memoryOperations,
-    collaborationContext,
-  }
-  const developmentMissionOperations = developmentAutomationModules.missionOperations
-  const effectiveDeps: SqliteComposedAppDeps = {
-    ...runtimeDeps,
-    workspaceUploads,
-    isolationWorkspaces,
-    repositoryGitWorkspaces,
-    workspaceReads,
-    nodeRunPrompts,
-    portArtifacts,
-    workspacePresence,
-    ...repositoryBootstrap,
-    // RFC-317 T54：装配落在 bootstrap。HTTP 与 MCP operation adapter
-    // 拿到的是**同一个**实例；MCP 不再另建 route table。
-    developmentAdapterAclIdentity: developmentAdapterConfigOperations.resourceAclIdentity,
-    developmentConfigOperations,
-    developmentMissionOperations,
-  }
-
-  // RFC-359 —— 资源包 apply **一台引擎两个 provider**：此处此前装的是 SQLite 专属的
-  // `commitResourcePackage`（同步事务里的 legacy 参与者），PostgreSQL 那台装的是
-  // journal + prestage/compensate 的原子 apply。两份做同一件事，判据却只跑前者。
-  // 现在两边都装后者；`authorityResolver` 把路由那一层的 authority 认回请求者本人。
-  const packageActorsByAuthority = new WeakMap<object, Actor>()
-  const resourcePackageBinding: ResourcePackageRouteBinding | null = (() => {
-    const box = effectiveDeps.secretBox
-    const provider = composePostgresqlResourcePackageProvider({
-      db: effectiveDeps.db,
-      appHome,
-      authorityResolver: {
-        resolve(authority) {
-          const actor = packageActorsByAuthority.get(authority)
-          if (actor === undefined) throw new Error('foreign-resource-package-authority')
-          return actor
-        },
-      },
-      mcpLifecycle: resourceCatalogModules.mcpTransactionLifecycle,
-      capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
-        db: effectiveDeps.db,
-      }),
-      skillArtifacts: effectiveDeps.resourcePackageSkillArtifacts,
-      skillPackageContent: effectiveDeps.resourcePackageSkillContent,
-      ...(effectiveDeps.resourcePackagePluginArtifacts === undefined
-        ? { pluginInstaller: createResourcePackagePluginInstaller() }
-        : { pluginArtifacts: effectiveDeps.resourcePackagePluginArtifacts }),
-    })
-    const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
-      db: effectiveDeps.db,
-      box,
-    })
-    return Object.freeze({
-      applyActivity: atomicApply,
-      catalog: composePostgresqlResourcePackageCatalog({
-        provider,
-        execution: createPostgresqlResourcePackageExecutionAdapter({
-          box,
-          provider,
-          atomicApply,
-        }),
-      }),
-      commandContextFor(actor: Actor): CommandContext {
-        const context = identityAccess.contexts.fromAuthority(
-          directRequestAuthority(identityAccess.directAuthority, actor),
-          'http',
-        )
-        packageActorsByAuthority.set(context.authority, actor)
-        return context
-      },
-    })
-  })()
-  const identityUserOperations = composeIdentityUserOperations({
-    identityAccess,
-    auth: effectiveDeps.authRuntime,
-    afterDisabled: async () => userRuntimeTests.reconcileDurableIntents(),
-  })
-  const apiComposition = composeSqliteApiRouteMounts(
-    effectiveDeps,
-    identityAccess,
-    identityUserOperations,
-    systemOperations,
-    userRuntimeTests,
-    agentCatalog,
-    mcpCatalog,
-    mcpProbeStore,
-    pluginCatalog,
-    skillCatalog,
-    workflowCatalog,
-    workgroupCatalog,
-    resourcePackageBinding,
-    providerResourceCatalog,
-    memoryCatalog,
-    agentResourceIntegrity,
-    taskExecutionPersistence,
+    secretBox: deps.secretBox,
+    dbVersion: deps.dbVersion,
+    opencodeVersion: deps.opencodeVersion,
     applicationConfiguration,
-    configuration,
-  )
-  const application = freezeComposedAppDeps({
-    token: effectiveDeps.token,
-    executionAuthority: effectiveDeps.executionAuthority,
-    configuration,
-    authentication:
-      deps.providerCore?.httpAuthentication ??
-      composeLocalHttpAuthentication({
-        auth: authRuntime,
-        daemonToken: effectiveDeps.token,
-        identityAccess,
+    executionAuthority: deps.executionAuthority ?? composeLocalExecutionAuthority(),
+    databaseTelemetry:
+      deps.databaseTelemetry ?? (() => ({ version: 1, provider: 'sqlite', poolWait: null })),
+    maintenanceStatus: deps.maintenanceStatus,
+    daemonRuntime: deps.daemonRuntime,
+    daemonInfoPath: deps.daemonInfoPath ?? Paths.daemonInfo,
+    databaseMigration:
+      deps.databaseMigration ??
+      composeDatabaseMigrationModule({
+        admission: {
+          freezeAndDrain: unexpectedMigrationAdmission,
+          reopenSqlite: unexpectedMigrationAdmission,
+          activatePostgresql: unexpectedMigrationAdmission,
+          openPostgresqlAdmission: unexpectedMigrationAdmission,
+        },
+        sqlitePath: join(appHome, 'workflow.db'),
+        operationsRoot: join(appHome, 'database-migrations'),
+        generationPointerPath: join(appHome, 'database-generation.json'),
+        configPath: deps.configPath,
+        executionMode: 'inline',
       }),
-    core:
-      effectiveDeps.providerCore === undefined
-        ? Object.freeze({
-            provider: 'sqlite',
-            authRuntime,
-            tokenCallAudit,
-            identityAccess,
-            // Compatibility `createApp` has no migration admission to consult.
-            sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
-          })
-        : Object.freeze({ ...effectiveDeps.providerCore, identityAccess }),
-    publicRoutes: Object.freeze({
-      health: (app: Hono) =>
-        mountHealthRoutes(app, effectiveDeps, identityAccess.diagnostics, healthDatabase),
-      wellKnown: (app: Hono) => mountWellKnownRoutes(app, { configuration }),
-      webhookIngress: (app: Hono) =>
-        mountWebhookIngressRoutes(app, composeWebhookIngressTransport(effectiveDeps)),
-    }),
-    apiRoutes: apiComposition.apiRoutes,
+    portArtifacts,
+    integrationIdentityAccess: identityAccess,
+    modules: {
+      core: providerCore,
+      repository: repositoryBootstrap,
+      resourceCatalog: resourceCatalogModules,
+      observation: observationModules,
+      memory: memoryModules,
+      taskExecution: taskExecutionModules,
+      scheduledTasks: scheduledTaskModules,
+      integration: integrationModules,
+      fusion: fusionModules,
+      digitalEmployee: digitalEmployeeModules,
+      developmentAutomation: developmentAutomationModules,
+      intent: intentModules,
+    },
+    selections: {
+      resourcePackageSkillArtifacts: deps.resourcePackageSkillArtifacts,
+      resourcePackagePluginArtifacts: deps.resourcePackagePluginArtifacts,
+      resourcePackageSkillContent: deps.resourcePackageSkillContent,
+      workspaceContent: deps.workspaceContent,
+      runtimeInventoryContent: deps.runtimeInventoryContent,
+    },
+    testSeams: {
+      workflowRuntime: { workflowExactOperationHook: deps.workflowExactOperationHook },
+      codeHostRuntime: { codeHostFetch: deps.codeHostFetch },
+      buildScheduleLaunch: deps.buildScheduleLaunch,
+    },
   })
+  const application = composeProviderAppDeps(http.composition)
   return Object.freeze({
     ...application,
     intentModules,
     digitalEmployeeModules,
     developmentAutomationModules,
     taskExecutionModules,
-    digitalEmployeeWorkStart: apiComposition.digitalEmployeeWorkStart,
+    digitalEmployeeWorkStart: digitalEmployeeModules.workStart,
     repositoryWorkspaceStore: repositoryBootstrap.repositoryWorkspaceStore,
-    taskExecutionReadModels: effectiveDeps.taskExecutionReadModels,
-    collaborationContext: effectiveDeps.collaborationContext,
-    resourcePackageApplyActivity:
-      resourcePackageBinding?.applyActivity ?? NO_RESOURCE_PACKAGE_APPLY_ACTIVITY,
-  })
-}
-
-interface SqliteApiRouteComposition {
-  readonly apiRoutes: AppApiRouteMounts
-  readonly digitalEmployeeWorkStart: DigitalEmployeeWorkStartPort
-}
-
-/** SQLite compatibility composition used by direct `createApp({ db })` tests. */
-/**
- * RFC-359 —— 资源包路由要的两件事：目录本身，以及**把 authority 认回请求者**的上下文工厂。
- * 它们必须同源——apply 会话在 `create()` 里用 `authorityResolver` 把 `context.authority`
- * 解回 Actor 并与传入的 Actor 对照，路由若另起一条造 context 的路，那次对照就认不出来。
- */
-interface ResourcePackageRouteBinding {
-  readonly catalog: ComposedResourcePackageCatalog
-  readonly applyActivity: ResourcePackageApplyActivityQuery
-  commandContextFor(actor: Actor): CommandContext
-}
-
-/** 没有 secretBox 就没有 apply 引擎，也就不可能有在执行的 apply。 */
-const NO_RESOURCE_PACKAGE_APPLY_ACTIVITY: ResourcePackageApplyActivityQuery = Object.freeze({
-  activeApplyIds: () => [],
-})
-
-function composeSqliteApiRouteMounts(
-  deps: SqliteComposedAppDeps,
-  identityAccess: IdentityAccessModule & IntegrationTriggerIdentityAccess,
-  identityUserOperations: IdentityUserOperations,
-  systemOperations: SystemOperationsModule,
-  mcpRuntimeTests: McpDiagnosticsRuntime,
-  agentCatalog: AgentCatalogModule,
-  mcpCatalog: McpCatalogModule,
-  mcpProbeStore: ReturnType<typeof composeMcpProbeStore>,
-  pluginCatalog: PluginCatalogModule,
-  skillCatalog: SkillCatalogModule,
-  workflowCatalog: WorkflowCatalogModule,
-  workgroupCatalog: WorkgroupCatalogModule,
-  resourcePackageBinding: ResourcePackageRouteBinding | null,
-  providerResourceCatalog: ReturnType<typeof composeResourceCatalogFor>,
-  composedMemoryCatalog: ReturnType<typeof composeMemoryCatalogOperations>,
-  agentResourceIntegrity: AgentResourceIntegrityComposition,
-  taskExecutionPersistence: ReturnType<typeof createTaskExecutionPersistence>,
-  applicationConfiguration: ApplicationConfigurationBinding,
-  configuration: ApplicationConfigurationQueries,
-): SqliteApiRouteComposition {
-  const appHome = deps.appHome ?? Paths.root
-  const repositoryTransportModule = deps.repositoryTransport
-  const repositoryWorkspaceStore = deps.repositoryWorkspaceStore
-  // RFC-370 §10 V17: SQLite is standalone only, so its mirrors are local clones.
-  const repositoryMirrors = composeRepositoryMirrors({
-    store: repositoryWorkspaceStore,
-    ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-    ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
-  })
-  const codeHostConnections = deps.codeHostConnections
-  const repositoryPublicationTransport = deps.repositoryPublicationTransport
-  const schedulerDriver = deps.schedulerDriver
-  const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace
-  const { narrativeSystemAgentBinding, runtimeManagement } = deps.observationModules
-  const taskRouteOperations = deps.taskExecutionModules.routes.tasks
-  const routeDeps = {
-    ...deps,
-    configuration,
-    identityAccess,
-    repositoryPublicationTransport,
-    schedulerDriver,
-    operations: taskRouteOperations,
-    workspaceQueries: composeTaskWorkspaceQueries({
-      load: taskRouteOperations.get,
-      contentScope: (workspaceRef) =>
-        createWorkspaceContentScope(workspaceRef, deps.workspaceContent),
-    }),
-    taskExecutionReadModels: deps.taskExecutionReadModels,
-    runtimeInventoryContent: composeTaskRuntimeInventoryContent(deps.runtimeInventoryContent),
-    taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
-    codeWorkspace,
-    // RFC-370 §10 V16: the SQLite root is standalone — native worktrees, appHome artifacts.
-    codeReview: {
-      content: composeLocalRepositoryRevisionContent(),
-      artifacts: composeLocalCodeReviewArtifacts(),
-    },
-    repositoryWorkspace: repositoryWorkspaceStore,
-    changeNarrative: {
-      async requireMember(actor: Actor, taskId: string) {
-        const access = await resolveCollaborationTaskAccess(deps.collaborationContext, {
-          actor,
-          taskId,
-        })
-        if (access.task === null) {
-          throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-        }
-        if (access.actorRole === null) {
-          throw new ForbiddenError(
-            'not-task-member',
-            'only task members or an actor with the required global task authority can do this',
-          )
-        }
-      },
-      resolveRuntime: ({
-        runtimeName,
-        defaultRuntime,
-      }: {
-        readonly runtimeName: string | null
-        readonly defaultRuntime: string | null
-      }) =>
-        deps.runtimeRegistry
-          .resolveRuntimeByName(runtimeName ?? defaultRuntime)
-          .then(narrativeSystemAgentBinding.bindRuntime),
-      systemAgents: narrativeSystemAgentBinding.family,
-    },
-    collaborationContext: deps.collaborationContext,
-  }
-  const executionContracts = deps.digitalEmployeeModules.executionContracts
-  const eventCenter = deps.integrationModules.eventCenter
-  const digitalEmployeeAgentTemplates =
-    deps.digitalEmployeeAgentTemplates ?? deps.resourceCatalogModules.digitalEmployeeAgentTemplates
-  const digitalEmployee = deps.digitalEmployeeModules.module
-  const digitalEmployeeWorkStart = deps.digitalEmployeeModules.workStart
-  const taskCatalog = composeTaskCatalog({
-    sources: [
-      // RFC-357：owner 身份是 identity-access 的能力，由装配根注入；
-      // task-execution 只声明端口，不去 compose 别的 context 的 provider。
-      ...deps.taskExecutionModules.catalogSources,
-      deps.digitalEmployeeModules.taskCatalogSource,
-    ],
-  })
-  const developmentActivityOperations = deps.digitalEmployeeModules.activityOperations
-  const developmentConfigOperations = deps.developmentConfigOperations
-  const developmentMissionOperations = deps.developmentMissionOperations
-  const databaseMigration = deps.databaseMigration
-  const oidcProviders = createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
-  const oidcIdentities = composeOidcIdentityOperations({
-    db: deps.db,
-    identityAccess,
-  })
-  const memoryCatalog = deps.memoryOperations.catalog ?? composedMemoryCatalog
-  const taskRouteLaunch = deps.taskRouteLaunch ?? deps.taskExecutionModules.routeLaunch
-  const workgroupTaskRoom = composeWorkgroupTaskRoom({
-    db: deps.db,
-    taskParticipantFactory: deps.taskExecutionModules.workgroupTaskRoom,
-    activeUsers: composeWorkgroupTaskRoomActiveUsers({
-      userDirectory: identityAccess.userDirectory,
-    }),
-    dynamicWorkflow: composeWorkgroupTaskRoomDynamicWorkflow({
-      validationContext: deps.taskExecutionModules.validationContext,
-      workflows: workflowCatalog.operations.create,
-    }),
-    systemUserId: SYSTEM_USER_ID,
-    continuation: deps.taskExecutionModules.roomContinuation,
-    broadcast(taskId, event) {
-      taskBroadcaster.broadcast(TASK_CHANNEL(taskId), { id: -1, ...event })
-    },
-  })
-  const { scheduledTaskRuntime } = deps.scheduledTaskModules
-  // RFC-359 W57 —— `/api/overview` 两个 provider 共用这一份装配（PG 侧见
-  // `cli/postgresqlDaemonApplication.ts`）。此前 SQLite 走
-  // `platform/persistence/sqlite/systemOverviewReadModel.ts::buildOverview`、PG 走这一条，
-  // 两份实现逐个聚合键语义等价（对账见 RFC-359 plan §5i），是纯重复；`buildOverview`
-  // 连同它的私有 in-flight 合流已整份删除。
-  //
-  // 它装在这一层而不是 `composeSqliteApplicationDeps`，是因为 `integration` 这一路要的是
-  // `scheduledTaskRuntime.overview`，而那个 runtime 就在上面几行才装配得起来——依赖在哪层
-  // 齐备就在哪层装，不留后填的槽（RFC-359 plan §5g：组合根占位的正解是词法作用域）。
-  const overviewQuery: OverviewRouteQuery = composeSystemOverviewQuery({
-    resourceCatalog: composeResourceCatalogOverviewQuery(deps.db),
-    repositories: deps.repositoryWorkspaceOperations.overviewQueries,
-    integration: scheduledTaskRuntime.overview,
-    memories: memoryCatalog,
-    tasks: deps.taskExecutionModules.overview,
-  })
-  const scheduledIdentityAccess = Object.freeze({
-    ...identityAccess,
-    integrationTriggerResources: scheduledTaskRuntime.integrationTriggerResources,
-  })
-  // RFC-359 AC-1（plan §5hn 批次二 ①②）：定时 / webhook 触发与路由启动**共用同一台内核**。
-  // 此前这里是 `services/scheduleLaunch.ts#buildScheduleLaunch`——`startExecution` 那个
-  // 三分支 switch 的**第三份**写法（provider runtime 的后台 tick 是第二份）。
-  const scheduledLaunch =
-    deps.buildScheduleLaunch ?? deps.taskExecutionModules.trigger.buildScheduleLaunch
-  const { webhookEndpointService, webhookTriggerService, webhookDeliveryRuntime } =
-    deps.integrationModules
-  const capabilityTemplateRouteDeps = Object.freeze({
-    codeHistoryQueries: deps.codeHistoryQueries,
-    capabilityTemplates: deps.resourceCatalogModules.capabilityTemplateOperations,
-    capabilityTemplateAcl: deps.resourceCatalogModules.capabilityTemplateAcl,
-  } satisfies CapabilityTemplateRouteDeps)
-  const intentSessionRoutes = deps.intentModules.routes
-  const digitalEmployeePersistence = deps.digitalEmployeeModules.routePersistence
-  const missionInputUploads = deps.developmentAutomationModules.missionInputUploads
-  const collaborationRouteOperations = composeCollaborationRouteOperations({
-    followupGenerator: composeClarifyFollowupGenerator({
-      db: deps.db,
-      registry: deps.runtimeRegistry,
-      binding: narrativeSystemAgentBinding,
-    }),
-    db: deps.db,
-    context: deps.collaborationContext,
-  })
-  const collaborationTaskAccess = createSqliteCollaborationTaskAccessPort(deps.db)
-  const taskClarifyDirectiveRoutes = Object.freeze({
-    operations: deps.taskExecutionModules.routes.clarifyDirective,
-  })
-  const worktreeFiles = Object.freeze({
-    store: repositoryWorkspaceStore,
-    canViewTask: async (actor, task) =>
-      (await collaborationTaskAccess.resolveTask(actor, task.id)).visible,
-    // RFC-370 §10 V15: the same content the task workspace queries read.
-    content: (workspaceRef) =>
-      deps.workspaceContent?.bind(workspaceRef) ?? createFileWorkspaceContentEffects(workspaceRef),
-  } satisfies WorktreeFilesRouteDeps)
-  const { fusionOperations, launchConfiguration: fusionLaunchConfiguration } = deps.fusionModules
-  const apiRoutes = Object.freeze({
-    config: (app) =>
-      mountConfigRoutes(app, {
-        configuration: applicationConfiguration.composeCommands({
-          runtimeRegistry:
-            runtimeManagement.configuration satisfies RuntimeProfileConfigurationCommands,
-          withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(
-            applicationConfiguration.notificationKey,
-          ),
-          runtimeTests: mcpRuntimeTests.reconciliation,
-          concurrencyHotApply: deps.configConcurrencyHotApply,
-        }),
-      }),
-    observability: (app) =>
-      composeRunObservation({
-        db: deps.db,
-        tasks: createTaskObservationFacts(deps.db),
-        runtimes: runtimeManagement.observations,
-      }).mount(app),
-    maintenance: (app) =>
-      mountMaintenanceRoutes(app, {
-        configuration,
-        maintenanceStatus: deps.maintenanceStatus,
-        databaseTelemetry: deps.databaseTelemetry,
-      }),
-    daemon: (app) =>
-      mountDaemonRoutes(app, {
-        runtime: selectDaemonRuntimeQueries(deps.daemonRuntime, { infoPath: deps.daemonInfoPath }),
-      }),
-    plantuml: (app) => mountPlantumlRoutes(app, { configuration }),
-    runtime: (app) => mountRuntimeRoutes(app, runtimeManagement.models),
-    runtimes: (app) => mountRuntimesRoutes(app, runtimeManagement.runtimes),
-    overview: (app) =>
-      mountOverviewRoutes(
-        app,
-        {
-          directAuthority: identityAccess.directAuthority,
-        },
-        overviewQuery,
-      ),
-    agents: (app) =>
-      mountAgentRoutes(app, {
-        queries: agentCatalog.queries,
-        referenceQueries: agentCatalog.referenceQueries,
-        dependencyQueries: agentCatalog.dependencyQueries,
-        resourceIntegrityQueries: agentCatalog.resourceIntegrityQueries,
-        importQueries: agentCatalog.importQueries,
-        operations: agentCatalog.operations,
-        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-        listDigitalEmployeeTemplates: () =>
-          listDigitalEmployeeAgentTemplates(digitalEmployeeAgentTemplates),
-        taskLaunch: taskRouteLaunch.agent,
-      }),
-    mcps: (app) =>
-      mountMcpRoutes(app, {
-        queries: mcpCatalog.queries,
-        operations: mcpCatalog.operations,
-        aclIdentity: mcpCatalog.participants.aclIdentity,
-        probeStore: mcpProbeStore,
-        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-        runtimeTests: { commands: mcpRuntimeTests.commands, queries: mcpRuntimeTests.queries },
-        runtimeTestCommandContextFor: mcpRuntimeTests.contexts.command,
-        runtimeTestQueryContextFor: mcpRuntimeTests.contexts.query,
-      }),
-    plugins: (app) =>
-      mountPluginRoutes(app, {
-        queries: pluginCatalog.queries,
-        operations: pluginCatalog.operations,
-        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-      }),
-    skills: (app) =>
-      mountSkillRoutes(app, {
-        fileCommands: skillCatalog.fileCommands,
-        versionCommands: skillCatalog.versionCommands,
-        queries: skillCatalog.queries,
-        fileQueries: skillCatalog.fileQueries,
-        versionQueries: skillCatalog.versionQueries,
-        operations: skillCatalog.operations,
-        zipImport: skillCatalog.zipImport,
-        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-      }),
-    repos: (app) => mountRepoRoutes(app, repositoryWorkspaceStore, repositoryMirrors),
-    cachedRepos: (app) =>
-      mountCachedRepoRoutes(
-        app,
-        { configuration, appHome: deps.appHome, secretBox: deps.secretBox },
-        repositoryWorkspaceStore,
-        repositoryMirrors,
-      ),
-    repoGroups: (app) =>
-      mountRepoGroupRoutes(app, { configuration }, repositoryWorkspaceStore, repositoryMirrors),
-    workflows: (app) =>
-      mountWorkflowRoutes(app, deps, {
-        queries: workflowCatalog.queries,
-        validationQueries: workflowCatalog.validationQueries,
-        operations: workflowCatalog.operations,
-        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-      }),
-    workgroups: (app) =>
-      mountWorkgroupRoutes(app, {
-        queries: workgroupCatalog.queries,
-        operations: workgroupCatalog.operations,
-        resourceIntegrityQueries: agentResourceIntegrity.queries,
-        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-        taskLaunch: taskRouteLaunch.workgroup,
-      }),
-    resourcePackages: (app) => {
-      if (resourcePackageBinding === null) return
-      registerResourcePackageRoutes(app, {
-        catalog: resourcePackageBinding.catalog,
-        commandContextFor: resourcePackageBinding.commandContextFor,
-        queryContextFor: (actor) =>
-          identityAccess.contexts.queryFromAuthority(
-            directRequestAuthority(identityAccess.directAuthority, actor),
-            'http',
-          ),
-      })
-    },
-    workgroupTasks: (app) =>
-      mountWorkgroupTaskRoutes(app, {
-        module: workgroupTaskRoom,
-        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-      }),
-    tasks: (app) => mountTaskRoutes(app, routeDeps),
-    taskCatalog: (app) => mountTaskCatalogRoutes(app, taskCatalog),
-    taskArchive: (app) =>
-      mountTaskArchiveRoutes(app, {
-        configuration,
-        taskArchiveMaintenance:
-          deps.taskArchiveMaintenance ??
-          createDrizzleTaskArchiveMaintenanceCommand(deps.db, deps.taskArchive),
-      }),
-    maintenanceDisk: (app) => mountMaintenanceDiskRoutes(app, deps.maintenanceDisk),
-    scheduledTasks: (app) =>
-      mountScheduledTaskRoutes(app, {
-        identityAccess: scheduledIdentityAccess,
-        scheduledTaskRuntime,
-        buildScheduleLaunch: scheduledLaunch,
-        getDefaultRuntime: async () => (await configuration.read()).defaultRuntime ?? null,
-      }),
-    webhookEndpoints: (app) => {
-      if (webhookEndpointService === null) return
-      mountWebhookEndpointRoutes(app, { webhookEndpointService })
-    },
-    codeHosts: (app) => mountCodeHostRoutes(app, deps, codeHostConnections),
-    repositoryTransportCredentials: (app) => {
-      if (repositoryTransportModule === null) return
-      mountAccountRepositoryTransportCredentialRoutes(app, deps, {
-        credentials: repositoryTransportModule.ownCredentials,
-        currentSubjects: identityAccess.resolveAuthority,
-      })
-    },
-    code: (app) => mountCodeRoutes(app, deps.codeHistoryQueries),
-    capabilityTemplates: (app) => mountCapabilityTemplateRoutes(app, capabilityTemplateRouteDeps),
-    eventCenter: (app) => mountEventCenterRoutes(app, eventCenter),
-    executionContracts: (app) => mountExecutionContractRoutes(app, executionContracts),
-    digitalEmployees: (app) =>
-      mountDigitalEmployeeRoutes(
-        app,
-        digitalEmployeePersistence,
-        digitalEmployee,
-        developmentActivityOperations,
-        identityAccess.directAuthority,
-      ),
-    developmentConfig: (app) =>
-      mountDevelopmentConfigRoutes(
-        app,
-        deps.resourceCatalogModules.developmentAclRoutes,
-        developmentConfigOperations,
-        identityAccess.directAuthority,
-      ),
-    developmentMissions: (app) =>
-      mountDevelopmentMissionRoutes(
-        app,
-        developmentMissionOperations,
-        identityAccess.directAuthority,
-      ),
-    missionInputUploads: (app) => mountMissionInputUploadRoutes(app, missionInputUploads),
-    webhookTriggers: (app) =>
-      mountWebhookTriggerRoutes(app, { webhookTriggerService }, scheduledIdentityAccess),
-    webhookDeliveries: (app) =>
-      mountWebhookDeliveryRoutes(app, {
-        webhookDeliveryRuntime,
-        ...(deps.digitalEmployeeEventCenter === undefined
-          ? {}
-          : { digitalEmployeeEventCenter: deps.digitalEmployeeEventCenter }),
-        ...(deps.webhookDispatcher === undefined
-          ? {}
-          : { webhookDispatcher: deps.webhookDispatcher }),
-        ...(deps.webhookTerminalControl === undefined
-          ? {}
-          : { webhookTerminalControl: deps.webhookTerminalControl }),
-      }),
-    backup: (app) => mountBackupRoutes(app, systemOperations, identityAccess),
-    restore: (app) => mountRestoreRoutes(app, systemOperations, identityAccess),
-    ...(databaseMigration === undefined
-      ? {}
-      : {
-          databaseMigration: (app: Hono) =>
-            mountDatabaseMigrationRoutes(app, databaseMigration.operations, identityAccess),
-        }),
-    worktreeFiles: (app) => mountWorktreeFilesRoutes(app, worktreeFiles),
-    portArtifacts: (app) => mountPortArtifactRoutes(app, deps),
-    reviews: (app) => mountReviewRoutes(app, collaborationRouteOperations, appHome),
-    clarify: (app) => mountClarifyRoutes(app, collaborationRouteOperations),
-    taskQuestions: (app) => mountTaskQuestionRoutes(app, collaborationRouteOperations),
-    taskClarifyDirective: (app) => mountTaskClarifyDirectiveRoutes(app, taskClarifyDirectiveRoutes),
-    fusion: (app) =>
-      mountFusionRoutes(app, {
-        operations: fusionOperations,
-        launchConfiguration: fusionLaunchConfiguration,
-        configPath: deps.configPath,
-        directAuthority: identityAccess.directAuthority,
-      }),
-    // RFC-353 T9：技能来源追溯——版本流水来自 resource-catalog，融合记录来自 memory，
-    // 拼装归 knowledge-evolution，所以路由挂在 KE 的 inbound 上。
-    skillProvenance: (app) =>
-      mountSkillProvenanceRoutes(app, {
-        skills: skillCatalog.queries,
-        versions: skillCatalog.versionQueries,
-        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-        memoryAuthorityFor: (actor) => ({
-          actor,
-          authority: directRequestAuthority(identityAccess.directAuthority, actor),
-        }),
-        listFusedInto: (skillId) => memoryCatalog.queries.listFusedInto(skillId),
-        filterVisibleMemories: (authority, rows) =>
-          memoryCatalog.queries.filterVisible(authority, rows),
-      }),
-    intentSessions: (app) => mountIntentSessionRoutes(app, intentSessionRoutes),
-    memories: (app) =>
-      mountMemoryRoutes(app, memoryCatalog, {
-        contexts: identityAccess.contexts,
-        directAuthority: identityAccess.directAuthority,
-      }),
-    memoryDistillJobs: (app) => mountMemoryDistillJobRoutes(app, routeDeps),
-    taskFeedback: (app) => mountTaskFeedbackRoutes(app, deps),
-    auth: (app) =>
-      mountAuthRoutes(app, { configuration }, identityAccess, {
-        auth: deps.authRuntime,
-        listIdentitiesForUser: (userId) => oidcIdentities.listIdentitiesForUser(userId),
-        listTokenAuditForUser: (userId) => deps.tokenCallAudit.listForUser(userId),
-      }),
-    oidcAuth: (app) =>
-      mountOidcAuthRoutes(
-        app,
-        { configuration },
-        {
-          auth: deps.authRuntime,
-          providers: oidcProviders,
-          identities: oidcIdentities,
-        },
-      ),
-    oidc: (app) => mountOidcRoutes(app, { auth: deps.authRuntime, providers: oidcProviders }),
-    users: (app) =>
-      mountUserRoutes(
-        app,
-        { auth: deps.authRuntime, listTokenAudit: () => deps.tokenCallAudit.list() },
-        {
-          contexts: identityAccess.contexts,
-          directAuthority: identityAccess.directAuthority,
-          operations: identityUserOperations,
-        },
-      ),
-    docs: (app) => mountDocsRoutes(app, { configuration }),
-  } satisfies AppApiRouteMounts)
-  return Object.freeze({
-    apiRoutes,
-    digitalEmployeeWorkStart,
+    taskExecutionReadModels: taskExecutionModules.readModels,
+    collaborationContext,
+    resourcePackageApplyActivity: http.resourcePackageApplyActivity,
   })
 }
 
@@ -2441,7 +2218,7 @@ export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
   routes.webhookDeliveries(app)
   routes.backup(app)
   routes.restore(app)
-  routes.databaseMigration?.(app)
+  routes.databaseMigration(app)
   for (const alias of SYSTEM_OPERATION_ALIASES) registerOperationAlias(alias)
   routes.worktreeFiles(app)
   routes.portArtifacts(app)

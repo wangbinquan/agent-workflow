@@ -701,12 +701,15 @@ test('CLI initial and replacement sessions carry one prompt selection through SQ
   )
   expect(
     compact(
-      properties(onlyCall(body, sf, 'composeSqliteAppDeps').arguments[0]!, sf).get(
-        'nodeRunPrompts',
-      )!,
+      properties(
+        properties(onlyCall(body, sf, 'composeProviderAppComposition').arguments[0]!, sf).get(
+          'modules',
+        )!,
+        sf,
+      ).get('taskExecution')!,
       sf,
     ),
-  ).toBe('nodeRunPrompts')
+  ).toBe('taskExecutionModules')
   expect(
     compact(
       properties(binding(sf, sf, 'sessionInput'), sf).get('nodeRunPromptContentEffects')!,
@@ -761,18 +764,30 @@ test('PG application carries its one prompt receiver through memory, runtime and
   expect(compact(properties(provider.get('selection')!, sf).get('nodeRunPrompts')!, sf)).toBe(
     'nodeRunPrompts',
   )
-  expect(compact(properties(binding(body, sf, 'taskRoutes'), sf).get('operations')!, sf)).toBe(
-    'taskExecutionProvider.routes.tasks',
+  const http = properties(onlyCall(body, sf, 'composeProviderAppComposition').arguments[0]!, sf)
+  expect(compact(properties(http.get('modules')!, sf).get('taskExecution')!, sf)).toBe(
+    'taskExecutionModules',
   )
-  expect(compact(properties(binding(body, sf, 'taskExecutionRoutes'), sf).get('tasks')!, sf)).toBe(
-    'taskRoutes',
+  expect(compact(onlyCall(body, sf, 'composeProviderAppDeps').arguments[0]!, sf)).toBe(
+    'http.composition',
   )
-  expect(compact(properties(binding(body, sf, 'composition'), sf).get('taskExecution')!, sf)).toBe(
-    'taskExecutionRoutes',
-  )
-  expect(compact(onlyCall(body, sf, 'composePostgresqlAppDeps').arguments[0]!, sf)).toBe(
-    'composition',
-  )
+  const neutral = source('server.ts'),
+    owner = compositionBody(neutral, 'composeProviderAppComposition')
+  expect(
+    compact(properties(binding(owner, neutral, 'taskRoutes'), neutral).get('operations')!, neutral),
+  ).toBe('taskExecutionProvider.routes.tasks')
+  expect(
+    compact(
+      properties(binding(owner, neutral, 'taskExecutionRoutes'), neutral).get('tasks')!,
+      neutral,
+    ),
+  ).toBe('taskRoutes')
+  expect(
+    compact(
+      properties(binding(owner, neutral, 'composition'), neutral).get('taskExecution')!,
+      neutral,
+    ),
+  ).toBe('taskExecutionRoutes')
   expect(calls(body, sf, 'selectNodeRunPromptOperations')).toHaveLength(0)
 })
 
@@ -809,13 +824,10 @@ test('standalone HTTP chooses raw content only for absent operations and forward
   expect(compact(memory.left, sf)).toBe('deps.memoryModules')
   expect(memory.right).toBe(onlyCall(body, sf, 'composeDaemonMemoryModules'))
   expect(
-    compact(
-      properties(onlyCall(body, sf, 'composeDaemonMemoryModules').arguments[0]!, sf).get(
-        'operations',
-      )!,
-      sf,
+    properties(onlyCall(body, sf, 'composeDaemonMemoryModules').arguments[0]!, sf).has(
+      'operations',
     ),
-  ).toBe('deps.memoryOperations')
+  ).toBe(false)
   expect(
     compact(
       properties(onlyCall(body, sf, 'composeDaemonMemoryModules').arguments[0]!, sf).get(
@@ -824,15 +836,16 @@ test('standalone HTTP chooses raw content only for absent operations and forward
       sf,
     ),
   ).toBe('nodeRunPrompts')
-  expect(
-    compact(properties(binding(body, sf, 'effectiveDeps'), sf).get('nodeRunPrompts')!, sf),
-  ).toBe('nodeRunPrompts')
-  expect(compact(onlyCall(body, sf, 'composeSqliteApiRouteMounts').arguments[0]!, sf)).toBe(
-    'effectiveDeps',
+  const httpInput = properties(
+    onlyCall(body, sf, 'composeProviderAppComposition').arguments[0]!,
+    sf,
   )
-  const mount = compositionBody(sf, 'composeSqliteApiRouteMounts')
-  expect(compact(binding(mount, sf, 'taskRouteOperations'), sf)).toBe(
-    'deps.taskExecutionModules.routes.tasks',
+  expect(compact(properties(httpInput.get('modules')!, sf).get('taskExecution')!, sf)).toBe(
+    'taskExecutionModules',
+  )
+  const mount = compositionBody(sf, 'composeProviderAppComposition')
+  expect(compact(binding(mount, sf, 'taskRoutes'), sf)).toContain(
+    'operations:taskExecutionProvider.routes.tasks',
   )
   expect(calls(mount, sf, 'createTaskRouteOperations')).toHaveLength(0)
   const selected = properties(

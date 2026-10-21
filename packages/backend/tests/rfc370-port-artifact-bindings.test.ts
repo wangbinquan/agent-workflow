@@ -534,7 +534,7 @@ test('CLI initial and replacement sessions carry raw content selection into the 
   expect(objectFields(pg[0]!.arguments[0]!, sf).get('portArtifactContentEffects')).toBe(
     'input.portArtifactContentEffects',
   )
-  const sqliteDeps = calls(sf, sf, 'composeSqliteAppDeps')
+  const sqliteDeps = calls(sf, sf, 'composeProviderAppComposition')
   expect(sqliteDeps).toHaveLength(1)
   expect(objectFields(sqliteDeps[0]!.arguments[0]!, sf).get('portArtifacts')).toBe('portArtifacts')
   expect(
@@ -556,7 +556,8 @@ test('PG and HTTP roots share one selected service between runtime, review and t
   const pgBundle = calls(pg, pg, 'composeDaemonTaskExecutionModules')
   expect(pgBundle).toHaveLength(1)
   expect(pgBundle[0]!.arguments[0]!.getText(pg)).toMatch(/selection:\s*\{[\s\S]*?\bportArtifacts,/)
-  expect(pg.text).toMatch(
+  expect(pg.text).toContain('portArtifacts,')
+  expect(server.text).toMatch(
     /portArtifacts:\s*Object\.freeze\(\{\s*taskExecutionReadModels: [^,]+,\s*portArtifacts,\s*\}\)/,
   )
   const selections = calls(server, server, 'composePortArtifactOperations')
@@ -582,7 +583,7 @@ test('PG and HTTP roots share one selected service between runtime, review and t
     calls(server, server, 'mountPortArtifactRoutes').map((call) =>
       call.arguments[1]!.getText(server),
     ),
-  ).toEqual(['input.taskExecution.portArtifacts', 'deps'])
+  ).toEqual(['input.taskExecution.portArtifacts'])
 })
 
 test('ordinary scheduler and repair dispatch use the selected factory; body read stays inside the original lock', () => {

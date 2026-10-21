@@ -218,7 +218,9 @@ describeEachProviderHttpApplication(
       expect(routesSrc).toContain('await deps.concurrencyHotApply.apply({')
 
       const serverSrc = readFileSync(resolve(import.meta.dir, '..', 'src', 'server.ts'), 'utf8')
-      expect(serverSrc).toContain('composeLegacyConfigConcurrencyHotApply(deps.db)')
+      expect(serverSrc).toMatch(
+        /composeConfigConcurrencyHotApply\(\s*taskExecutionProvider\.processConcurrencyScope,?\s*\)/,
+      )
       expect(serverSrc).toContain('resizeAllNodePools(daemonScope, {')
 
       const postgresqlSrc = readFileSync(
@@ -233,7 +235,15 @@ describeEachProviderHttpApplication(
         /DAEMON_TASK_EXECUTION_ADAPTERS\.postgresql\(\{\s*db: input\.db,\s*runtime: input\.provider\.runtime,/,
       )
       expect(adapters).toContain('processConcurrencyScope: runtime')
-      expect(postgresqlSrc).toContain('resizeAllNodePools(input.provider.runtime, {')
+      const bundle = readFileSync(
+        resolve(import.meta.dir, '../src/cli/daemonModules/taskExecution.ts'),
+        'utf8',
+      )
+      expect(
+        bundle.match(/processConcurrencyScope: input.adapters.processConcurrencyScope/g),
+      ).toHaveLength(2)
+      expect(postgresqlSrc).toContain('taskExecution: taskExecutionModules')
+      expect(postgresqlSrc).not.toContain('resizeAllNodePools(')
     })
   },
 )

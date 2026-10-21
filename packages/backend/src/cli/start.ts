@@ -136,7 +136,7 @@ import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
 import { IS_EMBEDDED } from '@/embed'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
-import { composeSqliteAppDeps, createComposedApp, type SqliteAppComposition } from '@/server'
+import { createComposedApp, composeProviderAppComposition, composeProviderAppDeps } from '@/server'
 import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/operations'
 import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
@@ -207,7 +207,6 @@ import {
 import { runDigitalEmployeeOsCycle } from '@/modules/digital-employee/composition'
 
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
-import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import {
@@ -2118,13 +2117,8 @@ async function composeSqliteProviderSession(
     adapters: standaloneModuleAdapters(),
     mcpCatalog: () => mcpCatalog,
   })
-  const {
-    observationCalls,
-    memorySystemAgentBinding,
-    workspacePresence,
-    runtimeSessionLeases,
-    mcpRuntimeTests,
-  } = observationModules
+  const { observationCalls, memorySystemAgentBinding, runtimeSessionLeases, mcpRuntimeTests } =
+    observationModules
   const resourceCatalogModules = composeDaemonResourceCatalogModules({
     db,
     skillContentRoot: Paths.root,
@@ -2157,7 +2151,6 @@ async function composeSqliteProviderSession(
     repositoryTransport: repositoryTransportModule,
     codeHostConnections: repositoryMetadataConnections,
     developmentDeliveryProvider,
-    repositoryPublicationTransport,
   } = repositoryCredentials
   const repositoryTransportRepository = providerCore.repositoryTransportCredentialRepository
   const memoryModules = composeDaemonMemoryModules({
@@ -2227,8 +2220,6 @@ async function composeSqliteProviderSession(
   const taskExecutionProvider = taskExecutionModules
   const taskExecutionResources = taskExecutionModules.resources
   const taskExecutionPersistence = taskExecutionProvider.persistence
-  const taskExecutionRuntime = taskExecutionProvider.runtime
-  const collaborationContext = taskExecutionProvider.collaboration
   const scheduledTaskModules = composeDaemonScheduledTaskModules({
     db,
     assertAgentIntegrity: (agentIds) =>
@@ -2246,7 +2237,6 @@ async function composeSqliteProviderSession(
     skillContent: input.skillContent,
     memories: memoryCatalog,
     tasks: taskExecutionProvider.fusion,
-    taskLaunchConfiguration,
   })
   const { fusionOperations } = fusionModules
   const mcpRuntimeTestBindings = createLazyPausableDaemonRuntimeServiceBindings({
@@ -2293,7 +2283,6 @@ async function composeSqliteProviderSession(
   const {
     webhookTerminalControl,
     webhookDeliveryPersistence,
-    webhookDispatcher,
     eventCenter: employeeHttpEventCenter,
   } = integrationModules
   const digitalEmployeeModules = composeDaemonDigitalEmployeeModules({
@@ -2355,11 +2344,7 @@ async function composeSqliteProviderSession(
   const employeeEventCenter = employeeHttpEventCenter
   const employeeOs = digitalEmployeeModules.module
   const employeeWriterCutover = digitalEmployeeModules.writerCutover
-  const employeeExecutionContracts = digitalEmployeeModules.executionContracts
   const digitalEmployeePlatformTools = digitalEmployeeModules.platformTools
-  const employeeCaseDetailProjection = digitalEmployeeModules.caseDetailProjection
-  const developmentAutomation = developmentAutomationModules.automation
-  const developmentAdmissionLookup = developmentAutomationModules.admissionLookup
 
   const humanGateContinuationRecovery = createSqliteHumanGateContinuationRecoveryQueries(db)
 
@@ -2506,7 +2491,7 @@ async function composeSqliteProviderSession(
   const intentMaintenanceSnapshots = intentModules.maintenance
   const intentQueuedResumption = intentModules.queuedResumption
   // RFC-359 —— 「本进程正在跑哪些 apply」的来源是 apply 引擎自己（与 PostgreSQL 同一条），
-  // 不再是 legacy `services/bundle/apply` 的模块级集合。引擎在下面的 `composeSqliteAppDeps`
+  // 不再是 legacy `services/bundle/apply` 的模块级集合。引擎在下面的 `composeProviderAppComposition`
   // 里装出来，而维护服务先起——这里晚绑定：payload 每个 tick 才求值，那时装配早已完成。
   const maintenanceConfiguration = await configuration.read()
   const maintenanceService: ReturnType<typeof createMaintenanceService> = createMaintenanceService({
@@ -2549,8 +2534,7 @@ async function composeSqliteProviderSession(
     payloadSources: Object.freeze({
       activeTaskIds: activeTaskIdsSnapshot,
       activeIntentApplyJournalIds: intentMaintenanceSnapshots.activeApplyJournalIds,
-      activeResourceBundleApplyIds: () =>
-        appComposition.resourcePackageApplyActivity.activeApplyIds(),
+      activeResourceBundleApplyIds: () => http.resourcePackageApplyActivity.activeApplyIds(),
       bootIntentTurnIds: intentMaintenanceSnapshots.bootTurnIds,
     }),
     onLifecycleDelta: (delta) => {
@@ -2569,7 +2553,6 @@ async function composeSqliteProviderSession(
     closeParticipantId: 'maintenance-final-close',
     service: maintenanceService,
   })
-  const codeHistoryQueries = composeCodeHistoryQueries(db)
   const databaseMigration = composeDatabaseMigrationModule({
     admission: migrationAdmission,
     sqlitePath: Paths.db,
@@ -2586,88 +2569,38 @@ async function composeSqliteProviderSession(
   })
 
   // 7. HTTP receives the completed session bundles.
-  const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
-    intentModules,
-    digitalEmployeeModules,
-    developmentAutomationModules,
-    repositoryCredentials,
-    resourceCatalogModules,
-    observationModules,
-    memoryModules,
-    scheduledTaskModules,
-    integrationModules,
-    fusionModules,
-    nodeRunPrompts,
-    portArtifacts,
-    taskRunSelection: input.taskRunSelection,
-    developmentPurposes: input.developmentPurposes,
-    developmentPurposeRoot,
-    workspaceExcludeProfiles: input.workspaceExcludeProfiles,
-    taskDeletionEffects: input.taskDeletionEffects,
-    automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
-    actionWorkspaceEffects: developmentWorkspaceEffects.actionWorkspaceEffects,
-    conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
-    providerCore,
-    token,
-    executionAuthority: input.executionAuthority ?? composeLocalExecutionAuthority(),
-    digitalEmployeePlatformTools,
-    configPath: Paths.config,
-    configuration,
-    applicationConfiguration,
-    daemonInfoPath: Paths.daemonInfo,
-    daemonRuntime: input.daemonRuntime,
-    // RFC-226: runtime readiness is not daemon health. Startup never executes
-    // OpenCode; explicit runtime status/Test/use paths perform the version and
-    // RFC-227 byte-frozen runtime admission instead.
-    opencodeVersion: null,
-    dbVersion,
+  const http = composeProviderAppComposition({
     db,
-    executionContracts: employeeExecutionContracts,
-    codeHistoryQueries,
-    developmentAdmissionLookup,
-    identityAccess: integrationIdentityAccess,
-    maintenanceStatus: maintenanceService.status,
+    token,
+    appHome: Paths.root,
     secretBox,
-    repositoryPublicationTransport,
-    developmentAutomation,
-    workspacePresence,
-    schedulerDriver: taskExecutionRuntime.schedulerDriver,
-    taskExecutionReadModels: taskExecutionRuntime.readModels,
-    taskExecutionModules,
-    taskRouteLaunch: taskExecutionProvider.routeLaunch,
-    taskArchiveMaintenance: taskExecutionProvider.archive,
-    skillContent: input.skillContent,
-    employeePrograms: input.employeePrograms,
-    employeeInputArtifacts: input.employeeInputArtifacts,
-    missionInputBlobs: input.missionInputBlobs,
-    pluginInstaller: input.pluginInstaller,
-    evidenceArtifacts: input.evidenceArtifacts,
-    resourcePackageSkillArtifacts: input.resourcePackageSkillArtifacts,
-    resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
-    resourcePackageSkillContent: input.resourcePackageSkillContent,
-    workspaceContent: input.workspaceContent,
-    workspaceUploads: input.workspaceUploads,
-    isolationWorkspaces: input.isolationWorkspaces,
-    repositoryGitWorkspaces: input.repositoryGitWorkspaces,
-    repositoryCandidateEffects: input.repositoryCandidateEffects,
-    workspaceReads: input.workspaceReads,
-    employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
-    repositoryBaselines: input.repositoryBaselines,
-    verificationCommands: input.verificationCommands,
-    evidenceRead: input.evidenceRead,
-    evidenceDocumentCommands: input.evidenceDocumentCommands,
-    attemptContext: input.attemptContext,
-    memoryOperations,
-    databaseMigration: databaseMigration,
-    collaborationContext,
-    mcpRuntimeTests,
-    webhookDispatcher,
-    webhookTerminalControl,
-    digitalEmployeeEventCenter: employeeHttpEventCenter,
-    digitalEmployeeCaseDetailProjection: employeeCaseDetailProjection,
-    digitalEmployeeTypePackageDriftPolicy,
+    dbVersion,
+    opencodeVersion: null,
+    applicationConfiguration,
+    executionAuthority: input.executionAuthority ?? composeLocalExecutionAuthority(),
+    databaseTelemetry: databaseProvider.telemetry,
+    maintenanceStatus: maintenanceService.status,
+    daemonRuntime: input.daemonRuntime,
+    daemonInfoPath: Paths.daemonInfo,
+    databaseMigration,
+    portArtifacts,
+    integrationIdentityAccess,
+    modules: {
+      core: providerCore,
+      repository: repositoryCredentials,
+      resourceCatalog: resourceCatalogModules,
+      observation: observationModules,
+      memory: memoryModules,
+      taskExecution: taskExecutionModules,
+      scheduledTasks: scheduledTaskModules,
+      integration: integrationModules,
+      fusion: fusionModules,
+      digitalEmployee: digitalEmployeeModules,
+      developmentAutomation: developmentAutomationModules,
+      intent: intentModules,
+    },
   })
-  const app = createComposedApp(appComposition)
+  const app = createComposedApp(composeProviderAppDeps(http.composition))
 
   const ws = buildWebSocketAdapter({
     realtime: providerCore.realtime,

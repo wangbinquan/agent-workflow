@@ -9,7 +9,6 @@ import {
   createEventAutomationDelegatedContextBinding,
 } from '@/modules/identity-access/composition'
 import { composeMemoryCatalogOperations } from '@/modules/memory/composition'
-import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { composeDevelopmentPurposeRoot } from '@/server'
@@ -31,10 +30,7 @@ export function integrationBundleFixture(
     kind: 'file',
     configPath: `${appHome}/config.json`,
   })
-  const taskLaunchConfiguration = composeTaskLaunchConfiguration({
-    kind: 'local-sync',
-    queries: configuration.synchronousQueries!,
-  })
+
   const scheduledTaskModules = composeDaemonScheduledTaskModules({
     db,
     assertAgentIntegrity: async () => {},
@@ -87,7 +83,6 @@ export function integrationBundleFixture(
       release: async () => {},
       cancel: async () => {},
     },
-    taskLaunchConfiguration,
   })
   return {
     scheduledTaskModules,
@@ -95,6 +90,5 @@ export function integrationBundleFixture(
     fusionModules,
     identityAccess,
     configuration,
-    taskLaunchConfiguration,
   }
 }

@@ -216,8 +216,6 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
         const fusionModules: DaemonFusionModules = composeDaemonFusionModules({
           db: harness.db,
           appHome,
-          configPath,
-          taskLaunchConfiguration,
           tasks,
           memories: composeMemoryCatalogOperations({
             db: harness.db,
@@ -240,7 +238,7 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
             mergeAgentRuntime: `merge-${index}`,
             subagentLiveCapture: { pollMs: 100 + index, consecutiveFailureLimit: index + 2 },
           }
-          expect((await fusionModules.launchConfiguration.read()).defaultRuntime).toBe(
+          expect((await taskLaunchConfiguration.continuationQueries.read()).defaultRuntime).toBe(
             `live-${index}`,
           )
           await fusionModules.fusionOperations.tasks.launch({
@@ -299,10 +297,13 @@ test('RFC-381 roots connect fusion adapters and routes to the same live session 
     expect(fusion[1]).toContain('coordinator: dependencies.coordinatorFactory.session')
     expect(fusion[1]).toContain('cancellation')
   }
-  expect(pg).toContain('launchConfiguration: fusionModules.launchConfiguration')
+  expect(pg).toContain('fusion: fusionModules')
   const http = source('server.ts')
   expect(http).toContain('tasks: taskExecutionModules.fusion')
-  expect(http).toContain('launchConfiguration: fusionLaunchConfiguration')
+  expect(http).toContain('operations: fusionOperations')
+  expect(source('modules/knowledge-evolution/inbound/fusionRoutes.ts')).not.toContain(
+    'launchConfiguration',
+  )
   expect(bundle).toContain('const fresh = await taskLaunchConfiguration.start()')
   expect(source('cli/daemonModules/fusion.ts')).not.toContain('runConfiguration')
 })

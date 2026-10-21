@@ -23,7 +23,7 @@ import { createTaskDagCollaborationOperations } from '../../src/modules/collabor
 import { createCollaborationRuntimeMechanics } from '../../src/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
 import type { SchedulerRuntimeTopology } from '../../src/modules/task-execution/public/participants'
-import { composeTaskExecutionRuntime } from '../../src/modules/task-execution/composition/taskExecutionRuntime'
+import { composeTaskExecutionRuntime } from '../../src/modules/task-execution/composition/runtimeAssembly'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionRuntimeParticipants } from '../../src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'

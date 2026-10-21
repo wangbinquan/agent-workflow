@@ -324,9 +324,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/ownerIdentityQueries',
-      'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/providerOperations',
-      'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/userOperations',
-      'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/public/operations',
       // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：`cli/start.ts` 是 SQLite 的**第三个
       // 组合根**（`server.ts` / `postgresqlDaemonApplication.ts` 早就在这张表上），列表行的
       // owner 身份投影在这里装配后注入任务路由——与另外两个根同形。
@@ -431,7 +428,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/server.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition/userOperations',
-      'packages/backend/src/server.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/server.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/server.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/services/oidcProviders.ts -> @/modules/identity-access/public/operations',

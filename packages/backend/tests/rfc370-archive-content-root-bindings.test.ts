@@ -67,9 +67,10 @@ test('daemon selected archive binding survives provider creation and re-composit
   const selected = calls(bundle, bundle, 'composeTaskExecutionProviderRuntime')
   expect(selected).toHaveLength(1)
   expect(compact(selected[0]!.arguments[0]!, bundle)).toContain('archive:selection.archive,')
-  const http = calls(sqlite, start, 'composeSqliteAppDeps')
+  const http = calls(sqlite, start, 'composeProviderAppComposition')
   expect(http).toHaveLength(1)
-  expect(compact(http[0]!.arguments[0]!, start)).toContain(
+  expect(compact(http[0]!.arguments[0]!, start)).toContain('taskExecution:taskExecutionModules,')
+  expect(compact(source('server.ts'), source('server.ts'))).toContain(
     'taskArchiveMaintenance:taskExecutionProvider.archive,',
   )
   expect(calls(sqlite, start, 'taskExecutionProvider.archive.recover')).toHaveLength(1)
@@ -100,26 +101,23 @@ test('PostgreSQL boot and HTTP retain the same selected command', () => {
   const selected = calls(bundle, bundle, 'composeTaskExecutionProviderRuntime')
   expect(selected).toHaveLength(1)
   expect(compact(selected[0]!.arguments[0]!, bundle)).toContain('archive:selection.archive,')
-  const mounts = descendants(
-    root,
-    (item) => ts.isVariableDeclaration(item) && item.name.getText(pg) === 'taskExecutionRoutes',
-  ).filter(ts.isVariableDeclaration)
-  expect(mounts).toHaveLength(1)
-  expect(compact(mounts[0]!, pg)).toContain('taskArchiveMaintenance:taskExecutionProvider.archive,')
+  const http = calls(root, pg, 'composeProviderAppComposition')
+  expect(http).toHaveLength(1)
+  expect(compact(http[0]!.arguments[0]!, pg)).toContain('taskExecution:taskExecutionModules,')
   expect(calls(root, pg, 'taskExecutionProvider.archive.recover')).toHaveLength(1)
 })
 
-test('SQLite HTTP prioritizes its daemon command and standalone composition selects content', () => {
+test('the shared HTTP archive uses the bundle command and test fallback selects content once', () => {
   const mounts = calls(server, server, 'mountTaskArchiveRoutes')
-  // One neutral provider mount plus one SQLite legacy mount.
-  expect(mounts).toHaveLength(2)
-  const legacy = mounts.filter((item) =>
-    item.arguments[1]?.getText(server).includes('deps.taskArchiveMaintenance'),
+  expect(mounts).toHaveLength(1)
+  expect(compact(mounts[0]!.arguments[1]!, server)).toBe('input.taskExecution.archive')
+  expect(server.text).toContain('taskArchiveMaintenance: taskExecutionProvider.archive')
+  const fallback = calls(
+    declaration(server, 'composeSqliteApplicationDeps'),
+    server,
+    'composeDaemonTaskExecutionModules',
   )
-  expect(legacy).toHaveLength(1)
-  expect(compact(legacy[0]!.arguments[1]!, server)).toContain(
-    'taskArchiveMaintenance:deps.taskArchiveMaintenance??createDrizzleTaskArchiveMaintenanceCommand(deps.db,deps.taskArchive),',
-  )
-  const factories = calls(server, server, 'createDrizzleTaskArchiveMaintenanceCommand')
-  expect(factories).toHaveLength(1)
+  expect(fallback).toHaveLength(1)
+  expect(compact(fallback[0]!.arguments[0]!, server)).toContain('archive:deps.taskArchive,')
+  expect(calls(server, server, 'createDrizzleTaskArchiveMaintenanceCommand')).toHaveLength(0)
 })

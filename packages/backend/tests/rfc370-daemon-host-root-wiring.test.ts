@@ -70,20 +70,25 @@ test('start selects the host once and passes the same object to serving, initial
   selected(
     declaration(start, 'composeSqliteProviderSession'),
     start,
-    'composeSqliteAppDeps',
+    'composeProviderAppComposition',
     'daemonRuntime:input.daemonRuntime,',
   )
 })
 
 test('both HTTP roots consume the host query rather than reading the info file in the route', () => {
   for (const [file, name, receiver] of [
-    [pg, 'composePostgresqlApplication', 'input'],
-    [server, 'composeSqliteApiRouteMounts', 'deps'],
+    [server, 'composeProviderAppComposition', 'input'],
   ] as const) {
     const selection = calls(declaration(file, name), file, 'selectDaemonRuntimeQueries')
     expect(selection).toHaveLength(1)
     expect(compact(selection[0]!.arguments[0]!, file)).toBe(`${receiver}.daemonRuntime`)
   }
+  selected(
+    declaration(pg, 'composePostgresqlApplication'),
+    pg,
+    'composeProviderAppComposition',
+    'daemonRuntime:input.daemonRuntime,',
+  )
   const route = source('routes/daemon.ts')
   const current = calls(declaration(route, 'mountDaemonRoutes'), route, 'deps.runtime.readCurrent')
   expect(current).toHaveLength(1)

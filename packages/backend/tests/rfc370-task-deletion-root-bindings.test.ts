@@ -138,12 +138,15 @@ test('frozen start choice reaches initial and replacement sessions, PG session a
       spreads.filter((spread) => text(spread.expression, source) === 'sessionInput'),
     ).toHaveLength(1)
   }
-  for (const name of ['composePostgresqlDaemonApplication', 'composeSqliteAppDeps']) {
-    const call = oneCall(source, name)
-    expect(text(property(object(call.arguments[0]!), source, 'taskDeletionEffects'), source)).toBe(
-      'input.taskDeletionEffects',
-    )
-  }
+  const pg = oneCall(source, 'composePostgresqlDaemonApplication')
+  expect(text(property(object(pg.arguments[0]!), source, 'taskDeletionEffects'), source)).toBe(
+    'input.taskDeletionEffects',
+  )
+  const bundle = oneCall(source, 'composeDaemonTaskExecutionModules')
+  const selection = property(object(bundle.arguments[0]!), source, 'selection')
+  expect(text(property(object(selection), source, 'effects'), source)).toBe(
+    'input.taskDeletionEffects',
+  )
 })
 
 test('actual route delete forwards required activity and whole effects to the original shared owner', () => {

@@ -156,7 +156,16 @@ function forwarded(
 test('CLI initial and replacement sessions forward the same selected storage objects and Worker descriptor', () => {
   const source = load('cli/start.ts')
   forwarded(oneRoot(source, 'composePostgresqlDaemonApplication'), source, 'input')
-  forwarded(oneRoot(source, 'composeSqliteAppDeps'), source, 'input', 'developmentWorkspaceEffects')
+  const sqliteHttp = oneRoot(source, 'composeProviderAppComposition')
+  expect(sqliteHttp.properties.some((node) => node.name?.getText(source) === 'selections')).toBe(
+    false,
+  )
+  const employee = oneRoot(source, 'composeDaemonDigitalEmployeeModules')
+  expect(compact(employee, source)).toContain(
+    'employeeCaseWorkspaceEffects:input.employeeCaseWorkspaceEffects',
+  )
+  expect(compact(employee, source)).toContain('repositoryBaselines:input.repositoryBaselines')
+  expect(compact(employee, source)).toContain('workspaceEffects:developmentWorkspaceEffects')
   const session = descendants(
     source,
     (node): node is ts.VariableDeclaration =>
@@ -199,8 +208,7 @@ test('CLI initial and replacement sessions forward the same selected storage obj
 
 test('both actual HTTP composers select complete workspace and package owners with lazy native defaults', () => {
   for (const [path, receiver, workspaceReceiver] of [
-    ['cli/postgresqlDaemonApplication.ts', 'input', 'input'],
-    ['server.ts', 'effectiveDeps', 'deps'],
+    ['server.ts', 'input.selections?', 'input.selections?'],
   ] as const) {
     const source = load(path)
     const workspace = oneRoot(source, 'composeTaskWorkspaceQueries')
@@ -218,9 +226,7 @@ test('both actual HTTP composers select complete workspace and package owners wi
     while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent
     if (owner === undefined || !ts.isFunctionDeclaration(owner))
       throw new Error('workspace binding must have an actual composition owner')
-    expect(owner.parameters.map((parameter) => compact(parameter.name, source))).toContain(
-      workspaceReceiver,
-    )
+    expect(owner.parameters.map((parameter) => compact(parameter.name, source))).toContain('input')
 
     const packages = oneRoot(source, 'composePostgresqlResourcePackageProvider')
     expect(compact(property(packages, source, 'skillArtifacts'), source)).toBe(
@@ -255,6 +261,28 @@ test('both actual HTTP composers select complete workspace and package owners wi
     expect(
       namedCalls(choice.whenFalse, source, 'createResourcePackagePluginInstaller'),
     ).toHaveLength(0)
+  }
+})
+
+test('HTTP callers forward selected workspace and package owners into the neutral binding', () => {
+  for (const [path, receiver] of [
+    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['server.ts', 'deps'],
+  ] as const) {
+    const source = load(path)
+    const selection = property(
+      oneRoot(source, 'composeProviderAppComposition'),
+      source,
+      'selections',
+    )
+    if (!ts.isObjectLiteralExpression(selection)) throw new Error('explicit selections required')
+    for (const key of [
+      'resourcePackageSkillArtifacts',
+      'resourcePackagePluginArtifacts',
+      'resourcePackageSkillContent',
+      'workspaceContent',
+    ])
+      expect(compact(property(selection, source, key), source)).toBe(`${receiver}.${key}`)
   }
 })
 
@@ -366,21 +394,13 @@ test('RFC-383 workspace selection reaches the three shared consumers and the HTT
         'developmentWorkspaceEffects',
       )
     }
-    if (path === 'server.ts') {
-      const variables = descendants(source, ts.isVariableDeclaration)
-      const variable = (name: string) => {
-        const found = variables.filter((n) => compact(n.name, source) === name)
-        expect(found).toHaveLength(1)
-        return found[0]!
-      }
-      expect(compact(variable('runtimeDeps').initializer!, source)).toContain(
-        '...developmentWorkspaceEffects,',
-      )
-      expect(compact(variable('effectiveDeps').initializer!, source)).toContain('...runtimeDeps,')
-      const mounts = namedCalls(source, source, 'composeSqliteApiRouteMounts')
-      expect(mounts).toHaveLength(1)
-      expect(compact(mounts[0]!.arguments[0]!, source)).toBe('effectiveDeps')
-    }
+    const http = oneRoot(source, 'composeProviderAppComposition')
+    expect(compact(property(http, source, 'modules'), source)).toContain(
+      'digitalEmployee:digitalEmployeeModules',
+    )
+    expect(compact(property(http, source, 'modules'), source)).toContain(
+      'developmentAutomation:developmentAutomationModules',
+    )
   }
   for (const [path, names] of [
     [

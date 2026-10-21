@@ -26,7 +26,7 @@ describe('RFC-349 Memory provider boundary', () => {
   test('bootstrap injects the selected catalog and keeps SQLite fallback out of transport', () => {
     const server = readFileSync(resolve(SRC, 'server.ts'), 'utf8')
 
-    expect(server).toContain('deps.memoryOperations.catalog ??')
-    expect(server).toContain('mountMemoryRoutes(app, memoryCatalog')
+    expect(server).toContain('const { memoryOperations, memoryCatalog } = memory')
+    expect(server).toContain('mountMemoryRoutes(app, input.memory.memories.catalog')
   })
 })

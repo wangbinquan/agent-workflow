@@ -733,7 +733,8 @@ describe('RFC-370 verification command composition contract', () => {
       const forwards = propertiesOf(bodyOf(source, name), source).filter((p) =>
         ts.isPropertyAccessExpression(p.initializer),
       )
-      expect(forwards).toHaveLength(name === 'composeSqliteProviderSession' ? 2 : 1)
+      // RFC-390 removes the dead SQLite HTTP forward; the live bundle receives it once.
+      expect(forwards).toHaveLength(1)
       for (const forward of forwards)
         expect(forward.initializer.getText(source)).toBe(receiver + '.verificationCommands')
     }

@@ -23,7 +23,7 @@ import { resolve, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { docVersions, nodeRuns, taskRepos, tasks, users, workflows } from '@/db/schema'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
-import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
+import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/runtimeAssembly'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskBundleInput } from './helpers/daemonTaskExecutionBundle'
 
@@ -205,7 +205,9 @@ describe('RFC-359 SQLite 守护进程读模型接线', () => {
     const start = readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8')
     expect(start).toContain('composeDaemonTaskExecutionModules({')
     expect(start).toContain('DAEMON_TASK_EXECUTION_ADAPTERS.sqlite({ db })')
-    expect(start).toContain('taskExecutionReadModels: taskExecutionRuntime.readModels,')
+    expect(start).toContain('taskExecution: taskExecutionModules,')
+    const http = readFileSync(resolve(import.meta.dir, '../src/server.ts'), 'utf8')
+    expect(http).toContain('taskExecutionReadModels: taskExecutionProvider.readModels')
     expect(start).not.toContain('composeTaskExecutionRuntime({\n          readModels: undefined')
   })
 })

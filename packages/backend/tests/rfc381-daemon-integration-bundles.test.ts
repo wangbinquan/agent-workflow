@@ -127,10 +127,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
           'resourceSnapshots',
           'scheduledTaskRuntime',
         ])
-        expect(Object.keys(session.fusionModules).sort()).toEqual([
-          'fusionOperations',
-          'launchConfiguration',
-        ])
+        expect(Object.keys(session.fusionModules).sort()).toEqual(['fusionOperations'])
         expect(Object.keys(session.integrationModules).sort()).toEqual(
           [
             'webhookTerminalControl',
@@ -154,9 +151,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
         expect(session.integrationModules.webhookIngressPersistence).toBe(
           session.integrationModules.webhookDeliveryRuntime,
         )
-        expect(session.fusionModules.launchConfiguration).toBe(
-          session.taskLaunchConfiguration.continuationQueries,
-        )
+        expect(session.fusionModules).not.toHaveProperty('launchConfiguration')
       }
       for (const member of [
         'webhookTerminalControl',

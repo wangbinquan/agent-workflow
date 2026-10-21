@@ -315,8 +315,12 @@ describe('RFC-346 System Operations contracts', () => {
     const adapters = readFileSync(join(SOURCE_ROOT, 'cli/daemonModules/adapters.ts'), 'utf8')
     expect(adapters.match(/composeSystemOperations\s*\(/g)).toHaveLength(1)
     expect(adapters.match(/composePostgresqlSystemOperations\s*\(/g)).toHaveLength(1)
-    expect(server).toContain('mountBackupRoutes(app, systemOperations, identityAccess)')
-    expect(server).toContain('mountRestoreRoutes(app, systemOperations, identityAccess)')
+    expect(server).toContain(
+      'mountBackupRoutes(app, input.system.backup.operations, input.system.backup.identityAccess)',
+    )
+    expect(server).toContain(
+      'mountRestoreRoutes(app, input.system.restore.operations, input.system.restore.identityAccess)',
+    )
     expect(server).toContain('for (const alias of SYSTEM_OPERATION_ALIASES)')
   })
 

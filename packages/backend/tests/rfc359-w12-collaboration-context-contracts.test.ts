@@ -58,7 +58,7 @@ import type {
 import type { TaskRouteOperationsDependencies } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { AppDeps } from '@/server'
+import type { DaemonTaskExecutionModules } from '@/cli/daemonModules/taskExecution'
 import { describeEachProvider } from './helpers/eachProvider'
 import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 
@@ -87,7 +87,7 @@ type ClarifyContext = Parameters<typeof submitClarifyDecision>[0]
 type ReadModelsContext = Parameters<typeof getReviewNodeReviewerConfig>[0]
 type SqliteRouteContext = Parameters<typeof composeCollaborationRouteOperations>[0]['context']
 type PostgresqlRouteContext = Parameters<typeof composeCollaborationRouteOperations>[0]['context']
-type AppRouteContext = AppDeps['collaborationContext']
+type AppRouteContext = DaemonTaskExecutionModules['collaboration']
 type ProviderRouteContext = ReturnType<
   TaskExecutionProviderRuntimeDependencies<CollaborationRouteContext>['routes']
 >['collaboration']

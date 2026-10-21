@@ -83,7 +83,7 @@ test('RFC-383 roots forward the selected candidate factory to both shared derive
   const start = load('cli/start.ts').text
   expect(start).toContain('repositoryCandidateEffects: opts.repositoryCandidateEffects,')
   expect(start.split('repositoryCandidateEffects: input.repositoryCandidateEffects,')).toHaveLength(
-    5,
+    4,
   )
 })
 

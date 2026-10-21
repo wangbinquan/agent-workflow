@@ -299,8 +299,8 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'reconcileRepositoryTransportConnectionProjections(',
     )
     expect(cli).toContain('await lifecycleProgram.initialize(input.initializeExecution)')
-    // Task execution and both employee bundles receive the same selected repository member.
-    expect(server.match(/repository: repositoryBootstrap,/g)).toHaveLength(3)
+    // Task execution, both employee bundles and the neutral HTTP owner share the selected repository.
+    expect(server.match(/repository: repositoryBootstrap,/g)).toHaveLength(4)
   })
 
   test('personal credential routes are interactive-session-only and never accept PAT access', () => {

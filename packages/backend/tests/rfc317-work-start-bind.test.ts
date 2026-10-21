@@ -42,7 +42,7 @@ describe('RFC-383 single employee and lexical work-start forwarding', () => {
     const bundleAt = root.indexOf(
       'const digitalEmployeeModules = composeDaemonDigitalEmployeeModules(',
     )
-    const appAt = root.indexOf('const appComposition: SqliteAppComposition<')
+    const appAt = root.indexOf('const http = composeProviderAppComposition({')
     const workerAt = root.indexOf('const employeeOsRuntimeFactory =')
     expect(appAt).toBeGreaterThan(bundleAt)
     expect(workerAt).toBeGreaterThan(appAt)
@@ -62,15 +62,13 @@ describe('RFC-383 single employee and lexical work-start forwarding', () => {
   test('HTTP and work-start consume the same module and its activity worker', () => {
     const server = source('server.ts'),
       bundle = source('cli/daemonModules/digitalEmployee.ts')
-    expect(server).toContain('const digitalEmployee = deps.digitalEmployeeModules.module')
+    expect(server).toContain('const digitalEmployee = digitalEmployeeModules.module')
+    expect(server).toContain('digitalEmployeeWorkStart: digitalEmployeeModules.workStart')
     expect(server).toContain(
-      'const digitalEmployeeWorkStart = deps.digitalEmployeeModules.workStart',
-    )
-    expect(server).toContain(
-      'const developmentActivityOperations = deps.digitalEmployeeModules.activityOperations',
+      'const developmentActivityOperations = digitalEmployeeModules.activityOperations',
     )
     expect(server).toMatch(
-      /mountDigitalEmployeeRoutes\(\s*app,\s*digitalEmployeePersistence,\s*digitalEmployee,/,
+      /mountDigitalEmployeeRoutes\(\s*app,\s*input.digitalDevelopment.digitalEmployees.persistence,\s*input.digitalDevelopment.digitalEmployees.module,/,
     )
     expect(bundle).toContain('await module.runtime.commands.launchWork({')
     expect(bundle).toContain('eventOrigin: request.origin')

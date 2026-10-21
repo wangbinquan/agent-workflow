@@ -8,10 +8,8 @@ import { join, resolve } from 'node:path'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type { TaskDriveSubmission } from '@/modules/task-execution/application/drive/taskDriveTypes'
-import {
-  createRepositoryPreparationRetryCommand,
-  createTaskWorkspaceMaterializer,
-} from '@/modules/task-execution/composition/taskExecutionRuntime'
+import { createRepositoryPreparationRetryCommand } from '@/modules/task-execution/infrastructure/repositoryPreparationRetryCommand'
+import { createTaskWorkspaceMaterializer } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {

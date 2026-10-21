@@ -34,6 +34,8 @@ export interface ExemptLeaf {
 
 /** 每条叶子一个元素——见文件头。只许缩。 */
 export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
+  // RFC-390: the default test dispatcher now mounts the same existing code-host callback as production.
+  { leaf: 'POST /webhooks/:id/:id', group: '(code-host callback)', category: 'deliberate' },
   // RFC-370 v2: UI execution status of a hosted instance (standalone is always active).
   { leaf: 'GET /api/execution/status', group: '/api/daemon', category: 'system-point' },
   { leaf: 'GET /.well-known/mcp', group: '(infrastructure)', category: 'deliberate' },
@@ -1176,6 +1178,8 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
 
 /** 每组一条理由。守卫要求：每个用到的 group 都在这里有非空理由。 */
 export const EXEMPT_REASONS: Readonly<Record<string, string>> = {
+  '(code-host callback)':
+    'RFC-390: this existing webhook transport receives code-host delivery envelopes; it is not an agent operation. The production-shaped test lane now includes it in the route census.',
   '/api/observability':
     'RFC-371 v2（2026-10-14）：运行观测页面的总览、任务、任务详情、Agent、模型与系统执行六个只读统计路由；Agent 查询工具不在本 RFC 范围，需要时另立 RFC 接入 MCP。登记仅限这六个精确路由。',
   '/api/observability/pricing':

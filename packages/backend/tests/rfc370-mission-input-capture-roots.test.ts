@@ -61,7 +61,10 @@ test('mission upload capture is selected lazily and forwarded through every real
   )
   const start = load('cli/start.ts')
   expect(start.text).toContain('missionInputBlobs: opts.missionInputBlobs,')
-  for (const expression of ['composePostgresqlDaemonApplication', 'composeSqliteAppDeps']) {
+  for (const expression of [
+    'composePostgresqlDaemonApplication',
+    'composeDaemonDevelopmentAutomationModules',
+  ]) {
     const roots = calls(start, expression)
     expect(roots).toHaveLength(1)
     const argument = roots[0]!.arguments[0]!

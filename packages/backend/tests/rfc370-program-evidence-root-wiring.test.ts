@@ -67,7 +67,13 @@ test('provider session and recompose retain both bootstrap selections', () => {
     selected(
       declaration(start, 'composeSqliteProviderSession'),
       start,
-      'composeSqliteAppDeps',
+      (
+        {
+          employeePrograms: 'composeDaemonDigitalEmployeeModules',
+          evidenceRead: 'composeDaemonDevelopmentAutomationModules',
+          evidenceDocumentCommands: 'composeDevelopmentPurposeRoot',
+        } as const
+      )[key as 'employeePrograms' | 'evidenceRead' | 'evidenceDocumentCommands'],
       `${key}:input.${key},`,
     )
   }

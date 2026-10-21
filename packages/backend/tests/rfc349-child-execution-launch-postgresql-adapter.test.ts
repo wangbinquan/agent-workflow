@@ -30,7 +30,7 @@ import type { TaskExecutionTopologyLogger } from '@/modules/task-execution/appli
 import {
   createChildExecutionLaunchOperations,
   type ChildExecutionLaunchDependencies,
-} from '@/modules/task-execution/composition/childExecutionLaunch'
+} from '@/modules/task-execution/infrastructure/childExecutionLaunchOperations'
 import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'

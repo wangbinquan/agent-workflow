@@ -122,7 +122,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
       if (
         ts.isCallExpression(node) &&
         ts.isIdentifier(node.expression) &&
-        node.expression.text === 'composeSqliteAppDeps'
+        node.expression.text === 'composeProviderAppComposition'
       ) {
         calls.push(node)
       }
@@ -133,13 +133,21 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     const argument = calls[0]!.arguments[0]!
     expect(ts.isObjectLiteralExpression(argument)).toBe(true)
     if (!ts.isObjectLiteralExpression(argument)) throw new Error('expected app dependency object')
-    const catalogMembers = argument.properties.filter(
+    const modules = argument.properties.find(
+      (member) => ts.isPropertyAssignment(member) && member.name.getText(parsed) === 'modules',
+    )
+    if (
+      !modules ||
+      !ts.isPropertyAssignment(modules) ||
+      !ts.isObjectLiteralExpression(modules.initializer)
+    )
+      throw new Error('HTTP bundles missing')
+    const catalogMembers = modules.initializer.properties.filter(
       (member) =>
-        !ts.isSpreadAssignment(member) &&
-        member.name.getText(parsed) === 'digitalEmployeePlatformTools',
+        ts.isPropertyAssignment(member) && member.name.getText(parsed) === 'digitalEmployee',
     )
     expect(catalogMembers).toHaveLength(1)
-    expect(ts.isShorthandPropertyAssignment(catalogMembers[0]!)).toBe(true)
+    expect(catalogMembers[0]!.getText(parsed)).toBe('digitalEmployee: digitalEmployeeModules')
     expect(bundle).toContain('composeDigitalEmployeeBuiltinToolCatalog({')
     expect(bundle).toContain('platformTools,')
     expect(source).toContain('const employeeOs = digitalEmployeeModules.module')

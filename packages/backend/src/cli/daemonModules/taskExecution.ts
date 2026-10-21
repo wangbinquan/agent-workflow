@@ -357,6 +357,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   })
   return Object.freeze({
     ...provider,
+    processConcurrencyScope: input.adapters.processConcurrencyScope,
     hostTasks,
     collaboration,
     resourceSnapshots,

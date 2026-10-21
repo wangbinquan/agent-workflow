@@ -78,7 +78,7 @@ describe('RFC-364 production bindings', () => {
       },
     )
   }
-  for (const path of ['server.ts', 'cli/postgresqlDaemonApplication.ts']) {
+  for (const path of ['server.ts']) {
     test(
       path + ' shares the same commands, queries, contexts and narrow reconciliation object',
       () => {
@@ -106,6 +106,13 @@ describe('RFC-364 production bindings', () => {
       },
     )
   }
+  test('both roots give the same observation bundle to the neutral HTTP owner', () => {
+    for (const path of ['cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+      expect(parse(path).text).toContain('observation: observationModules')
+      expect(parse(path).text).toContain('composeProviderAppComposition({')
+    }
+    expect(parse('server.ts').text).toContain('probeRunner: mcpRuntimeTests.probeRunner')
+  })
   test('shared runtime management consumes the same diagnostic reconciliation', () => {
     const source = parse('cli/daemonModules/observation.ts')
     expect(source.text).toContain('runtimeTests: mcpRuntimeTests.reconciliation')

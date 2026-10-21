@@ -29,7 +29,7 @@ const box = createSecretBoxFromKey(Buffer.alloc(32, 11))
 //      密钥解出来是乱码（pre-flight 的 ENCRYPTED-FIXTURE）；
 //   ② dispatcher 桩经作用域喂给两个组合根——PG 根同轮补了「覆盖 + 能力探测」
 //      （plan §5bi），所以两个引擎观察到的是同一件事；
-//   ③ `omitDispatcher: true` 那一条**留在单引擎**，理由见它自己的注释。
+//   ③ dispatch-only 覆盖保留单引擎兼容路径的能力缺失分支。
 let currentDispatcher: WebhookDispatcher | undefined
 const SCOPE_DISPATCHER: WebhookDispatcher = {
   dispatch: async (...args) => currentDispatcher?.dispatch(...args),
@@ -82,7 +82,7 @@ async function scopedHarness(scope: ProviderHttpApplicationScope) {
   return { db, app: opened.app, call, workflowId }
 }
 
-async function harness(opts?: { omitDispatcher?: boolean }) {
+async function harness(opts?: { unsupportedDispatcher?: boolean }) {
   const db = createInMemoryDb(MIGRATIONS)
   const admin = await createUser(db, {
     username: 'root',
@@ -122,7 +122,7 @@ async function harness(opts?: { omitDispatcher?: boolean }) {
     dbVersion: 1,
     db,
     secretBox: box,
-    ...(opts?.omitDispatcher ? {} : { webhookDispatcher: dispatcher }),
+    webhookDispatcher: opts?.unsupportedDispatcher ? { dispatch: async () => {} } : dispatcher,
   })
   const call = async (method: string, path: string, body?: unknown) =>
     app.request(path, {
@@ -431,15 +431,11 @@ describeEachProviderHttpApplication(
   },
 )
 
-// RFC-359 AC-6 例外：单引擎。被测状态是「装配里没有 dispatcher」——`server.ts` 把
-// `webhookDispatcher` 当**可选依赖**收（缺了就自我跳过、不挂公共 ingress 路由），而 PG 根
-// 自己构造一个，该状态在那边按构造不存在。生产两侧也都必定有一个（`cli/start.ts:2310`
-// 注入 / PG 根自建），所以这是**测试独有**的装配形态，不是「一个引擎能、另一个不能」。
-// 放在普通 describe 里，别让它跟着双跑（塞进 provider 作用域会带着自建的 bun:sqlite 库
-// 在 [postgresql] 那一遍里炸）。
-describe('RFC-257 · 投递面错误码（缺 dispatcher 的装配形态，单引擎）', () => {
-  test('webhook-ingress-unavailable：装配缺 dispatcher 时 replay 拒绝', async () => {
-    const h = await harness({ omitDispatcher: true })
+// RFC-390: the test lane always has a dispatcher. An injected dispatch-only
+// implementation still exercises replay's missing dispatchSubscription branch.
+describe('RFC-257 · 投递面错误码（dispatcher 缺少订阅派发能力，单引擎）', () => {
+  test('webhook-ingress-unavailable：dispatchSubscription 不受支持时 replay 拒绝', async () => {
+    const h = await harness({ unsupportedDispatcher: true })
     const id = await seedDelivery(h.db)
     expect(await codeOf(await h.call('POST', `/api/webhook-deliveries/${id}/replay`))).toBe(
       'webhook-ingress-unavailable',

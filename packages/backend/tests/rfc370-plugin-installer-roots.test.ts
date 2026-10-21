@@ -59,7 +59,10 @@ test('the complete plugin installer receiver reaches the real startup and HTTP c
   expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
   const start = load('cli/start.ts')
   expect(start.text).toContain('pluginInstaller: opts.pluginInstaller,')
-  for (const expression of ['composePostgresqlDaemonApplication', 'composeSqliteAppDeps']) {
+  for (const expression of [
+    'composePostgresqlDaemonApplication',
+    'composeDaemonResourceCatalogModules',
+  ]) {
     const roots = calls(start, expression)
     expect(roots).toHaveLength(1)
     const argument = roots[0]!.arguments[0]!

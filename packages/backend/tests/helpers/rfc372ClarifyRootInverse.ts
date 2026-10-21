@@ -16,11 +16,9 @@ export function inverseRfc372ClarifyService(source: ts.SourceFile): ts.SourceFil
 // including concurrent observation hooks, remains visible to older source oracles.
 export function inverseRfc372ClarifyRootBinding(source: ts.SourceFile): ts.SourceFile {
   const path = '/' + source.fileName.replaceAll('\\', '/')
-  const receiver = path.endsWith('/cli/postgresqlDaemonApplication.ts')
+  const receiver = path.endsWith('/server.ts')
     ? { db: 'input.db', registry: 'core.runtimeRegistry' }
-    : path.endsWith('/server.ts')
-      ? { db: 'deps.db', registry: 'deps.runtimeRegistry' }
-      : undefined
+    : undefined
   if (!receiver) return source
   const additions = [
     "import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'\n",

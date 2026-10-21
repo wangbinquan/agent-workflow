@@ -796,11 +796,9 @@ describe('RFC-344 single inbound root source locks', () => {
 
     const start = readFileSync(join(ROOT, 'src/cli/start.ts'), 'utf8')
     expect(start.match(/composeDaemonDevelopmentAutomationModules\s*\(/g)).toHaveLength(1)
-    expect(start).toContain('developmentAutomation,')
+    expect(start).toContain('developmentAutomation: developmentAutomationModules,')
 
-    expect(server).toContain(
-      'const developmentMissionOperations = developmentAutomationModules.missionOperations',
-    )
+    expect(server).toContain('const developmentMissions = developmentAutomation.missionOperations')
     const bundle = readFileSync(
       join(ROOT, 'src/cli/daemonModules/developmentAutomation.ts'),
       'utf8',

@@ -103,14 +103,8 @@ export interface ProviderHttpApplication {
   /**
    * 守护进程级并发池的 scope key（`getNodePoolSemaphore` / `resizeAllNodePools` 的第一个实参）。
    *
-   * 它**按 provider 不同**：SQLite 侧用 `db`（运行时参与者的 `processConcurrencyScope: input.db`
-   * 与 `server.ts` 的 `composeLegacyConfigConcurrencyHotApply(deps.db)`），PostgreSQL 侧用
-   * `provider.runtime`（`cli/postgresqlDaemonApplication.ts` 的 `processConcurrencyScope` 与同
-   * 文件的 `concurrencyHotApply`）。两处 file:line 用 `grep -rn processConcurrencyScope src/` 即得
-   * ——这里不写死行号，避免把一句注释算成一次「对 SQLite 适配器的引用」而让成对覆盖账本失真。
-   * 两侧各自内部一致——配置路由与任务引擎用的是同一个 key，所以池在两个 provider 上都能正确
-   * 热应用。**不一致的是用例**：直接拿 `harness.db` 当 key 只在 SQLite 上成立，在 PG 上取到的
-   * 是另一个命名空间里的空池，于是「PUT /api/config 应当当场改容量」的判据静默失效。
+   * RFC-390: 两侧都直接交出任务执行模块组的 processConcurrencyScope。
+   * 调度器与中立 HTTP 热应用助手消费同一引用；这里不再独立重选 db/runtime。
    * 要检查池就从这里取。
    */
   readonly processConcurrencyScope: object
@@ -220,6 +214,7 @@ export function composeSqliteUnstartedApplication(deps: AppDeps) {
       taskExecutionReadModels: composed.taskExecutionReadModels,
       collaborationContext: composed.collaborationContext,
       core: composed.core,
+      processConcurrencyScope: composed.taskExecutionModules.processConcurrencyScope,
     }
   })
 }
@@ -296,7 +291,7 @@ export async function createProviderHttpApplication(
       identityAccess = sqliteApplication.core.identityAccess
       tokenCallAudit = sqliteApplication.core.tokenCallAudit
       taskExecution = Object.freeze({ provider: 'sqlite' })
-      processConcurrencyScope = binding.db
+      processConcurrencyScope = sqliteApplication.processConcurrencyScope
     } else {
       const selectedConfig = { ...config, database: binding.databaseConfig }
       saveConfigRaw(input.configPath, selectedConfig)
@@ -320,7 +315,8 @@ export async function createProviderHttpApplication(
       collaborationContext = postgresqlApplication.runtime.collaborationContext
       identityAccess = postgresqlApplication.core.identityAccess
       tokenCallAudit = postgresqlApplication.core.tokenCallAudit
-      processConcurrencyScope = binding.runtime
+      processConcurrencyScope =
+        postgresqlApplication.runtime.taskExecutionModules.processConcurrencyScope
       taskExecution = Object.freeze({
         provider: 'postgresql',
         selected: postgresqlApplication.runtime.taskExecution,

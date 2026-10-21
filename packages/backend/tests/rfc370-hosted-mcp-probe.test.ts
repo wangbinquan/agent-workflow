@@ -160,10 +160,11 @@ describe('hosted probe selection wiring', () => {
     )
   })
 
-  test('the PostgreSQL daemon hands the diagnostics runner to the routes; only hosted selects one', async () => {
-    expect(await read('cli/postgresqlDaemonApplication.ts')).toContain(
-      'probeRunner: mcpRuntimeTests.probeRunner,',
-    )
+  test('the neutral HTTP binding hands both providers the selected runner; only hosted selects one', async () => {
+    for (const root of ['cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+      expect(await read(root)).toContain('observation: observationModules,')
+    }
+    expect(await read('server.ts')).toContain('probeRunner: mcpRuntimeTests.probeRunner,')
     expect(await read('modules/resource-catalog/composition/mcpDiagnostics.ts')).toContain(
       'probeRunner: undefined as McpProbeRunner | undefined,',
     )

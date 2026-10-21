@@ -74,9 +74,11 @@ test('daemon preserves the same complete skill content binding across provider s
   )
   const sqlite = declaration(start, 'composeSqliteProviderSession')
   selectedCatalog(sqlite, start, 'composeDaemonResourceCatalogModules', 'input', 'Paths.root')
-  const http = calls(sqlite, start, 'composeSqliteAppDeps')
+  const http = calls(sqlite, start, 'composeProviderAppComposition')
   expect(http).toHaveLength(1)
-  expect(compact(http[0]!.arguments[0]!, start)).toContain('skillContent:input.skillContent,')
+  expect(compact(http[0]!.arguments[0]!, start)).toContain(
+    'resourceCatalog:resourceCatalogModules,',
+  )
 })
 
 test('PostgreSQL HTTP and daemon boot choose the same store while retaining their database', () => {

@@ -380,7 +380,7 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     )
     expect(server.match(/composeDaemonTaskExecutionModules\(/g)).toHaveLength(1)
     expect(server).not.toContain('composeTaskExecutionRuntime(')
-    expect(cli).toContain('const taskExecutionRuntime = taskExecutionProvider.runtime')
+    expect(cli).toContain('const taskExecutionProvider = taskExecutionModules')
     expect(cli).not.toContain('composeTaskExecutionRuntime(')
     expect(runtime.match(/export function composeTaskExecutionRuntime\(/g)).toHaveLength(1)
     expect(runtime).toContain('wrapperRuntimeFactory: composeWrapperRuntime')
@@ -388,7 +388,7 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(
       existsSync(resolve(ROOT, 'packages/backend/src/modules/task-execution/public/topology.ts')),
     ).toBe(false)
-    expect(server).toContain('@/modules/task-execution/public/commands')
+    expect(server).toContain('@/cli/daemonModules/taskExecution')
     expect(cli).not.toContain('@/modules/task-execution/public/topology')
 
     const callers = [
@@ -412,20 +412,19 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       )
       expect(source, path).not.toContain('createLegacyTaskExecutionTopology')
     }
-    expect(server).toContain('schedulerDriver?: SchedulerDriverPort')
-    expect(server).toContain('type RuntimeComposedAppDeps = SqliteAppDeps & {')
-    expect(server).toContain('type SqliteComposedAppDeps = RuntimeComposedAppDeps &')
+    expect(server).toContain('export interface ProviderAppOwnerInput<P extends DatabaseProvider>')
+    expect(server).toContain('taskExecution: DaemonTaskExecutionModules<P>')
     expect(server).toContain('export interface ComposedAppDeps<')
-    expect(server).toContain('const effectiveDeps: SqliteComposedAppDeps = {')
+    expect(server).toContain('const http = composeProviderAppComposition({')
     expect(server).toContain('export function mountApiRoutes(')
     expect(server).toContain('deps: ComposedAppDeps')
-    expect(server).toContain('identityAccess: IdentityAccessModule')
-    expect(server).toContain('schedulerDriver: deps.schedulerDriver,')
-    expect(server).toContain('const schedulerDriver = taskExecutionModules.runtime.schedulerDriver')
-    expect(server).toContain('deps.taskExecutionReadModels ?? taskExecutionModules.readModels')
+    expect(server).toContain('const identityAccess = core.identityAccess')
+    expect(server).toContain('taskLaunch: taskExecutionProvider.routeLaunch.agent')
+    expect(server).toContain('taskLaunch: taskExecutionProvider.routeLaunch.workgroup')
+    expect(server).toContain('taskExecutionReadModels: taskExecutionProvider.readModels')
     const bundle = read('packages/backend/src/cli/daemonModules/taskExecution.ts')
     expect(bundle).toContain('schedulerDriver: input.testSeams?.schedulerDriver,')
-    expect(cli).toContain('taskExecutionReadModels: taskExecutionRuntime.readModels')
+    expect(cli).toContain('taskExecution: taskExecutionModules')
 
     const mcpServer = read('packages/backend/src/mcp/server.ts')
     expect(existsSync(resolve(ROOT, 'packages/backend/src/mcp/dispatch.ts'))).toBe(false)
