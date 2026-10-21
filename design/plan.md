@@ -420,6 +420,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-387](./RFC-387-task-continuation-semantics/proposal.md) | 任务续跑语义统一（RFC-294 S2b）：门控唤醒采用 PostgreSQL 模型、房间续跑提交后尽力驱动、仓库准备重试统一为异步、融合合为一个经会话驱动的中立适配器、驱动释放收尾尽力而为；删除 `createTaskDriveCoordinator`（RFC-294 出口判据）。 | Done（2026-10-21）：`684972dbb`，主 CI `39571384132` success；真实 PostgreSQL 上修复一条仍期望同步重试的过期断言。 |
 | [RFC-388](./RFC-388-task-execution-runtime-merge/proposal.md) | 任务执行 provider 运行时函数合一（RFC-294 S2b）：一个中立组合函数 + 进程级 / 会话级执行绑定，适配器表只剩执行绑定与并发作用域；删除 SQLite 路由启动包装与漂移；纯重构、无行为变化。 | Done（2026-10-21）：`8186c9852`，主 CI `39583800149` success。 |
 | [RFC-389](./RFC-389-maintenance-worker-root-bootstrap/proposal.md) | 维护 Worker 根迁入 bootstrap（RFC-294 S2b）：platform 只留 Worker 机制（消息路由、心跳、队列、退避、计时）并经端口接收图工厂；bootstrap 给出薄入口根与线程内一张中立模块图（provider 差异只经适配表）；监督器入口由会话传入；`platform-to-modules-file-pairs` 49 → 30。无功能变化。 | In Progress（2026-10-21 派发 Codex 实施、本会话审核） |
+| [RFC-390](./RFC-390-neutral-http-binding/proposal.md) | 中立 HTTP 绑定（RFC-294 S2b）：`server.ts` 新增 `composeProviderAppComposition`，PostgreSQL 根、SQLite 会话根与 SQLite 测试路径都经它进入 `composeProviderAppDeps`；删除 SQLite 的第二份路由表 `composeSqliteApiRouteMounts` 与 `composePostgresqlAppDeps`；消除插件安装器重复、融合死字段、`probeRunner` 漏传与两个生产可达回退。唯一用户可见变化：SQLite 的维护状态带 `database` 遥测。 | Draft（2026-10-21，RFC-389 提交后派发） |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

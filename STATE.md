@@ -2,7 +2,7 @@
 
 **RFC-388 Done**：`8186c9852`（Codex 实施、本会话审核），主 CI `39583800149` success，windows-platform `39583800091` success。两个 provider 运行时函数合为一个中立的 `composeTaskExecutionProviderRuntime`；provider 差异只经执行绑定（`packages/backend/src/modules/task-execution/composition/taskExecutionBinding.ts`：进程级 `composeProcessTaskExecutionBinding` / 会话级 `composeSessionTaskExecutionBinding`）与进程并发作用域进入；适配器表的任务执行条目只剩 `provider` / `execution` / `processConcurrencyScope`。删除 SQLite 路由启动包装、重复的 DAG 协作与工作区参与者、provider 命名的修复与记忆注入别名、legacy 活动 / 停止包装与测试专用活动钩子（`__setActiveTaskForTesting` 等）。纯重构，无行为变化。**对其他会话的影响**：不要再新增 provider 命名的运行时 / 启动工厂（`rfc388-task-execution-runtime-merge` 结构锁）；测试要模拟「任务在跑」请用 `packages/backend/tests/helpers/taskRuntimeRegistry.ts` 走真实注册表。
 
-**S2b 余下**：[RFC-389](design/RFC-389-maintenance-worker-root-bootstrap/proposal.md)（维护 Worker 根迁入 bootstrap，In Progress，Codex 实施中）→ RFC-390（中立 HTTP 绑定：SQLite 改用 `composeProviderAppDeps`，研究进行中）→ RFC-391（中立应用图）→ RFC-392（删除 `deps.x ?? composeX(...)` 测试回退）→ S2c。
+**S2b 余下**：[RFC-389](design/RFC-389-maintenance-worker-root-bootstrap/proposal.md)（维护 Worker 根迁入 bootstrap，In Progress，Codex 实施中）→ [RFC-390](design/RFC-390-neutral-http-binding/proposal.md)（中立 HTTP 绑定：SQLite 改走 `composeProviderAppDeps`，删除第二份路由表；唯一用户可见变化是 SQLite 维护状态带 `database` 遥测；Draft，RFC-389 提交后派发）→ RFC-391（中立应用图，装配迁入 `bootstrap/`）→ RFC-392（删除 `deps.x ?? composeX(...)` 测试回退）→ S2c。
 
 ## 2026-10-21 RFC-294 后继 S2b：RFC-387 Done，RFC-388 In Progress
 
