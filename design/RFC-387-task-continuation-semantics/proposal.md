@@ -1,7 +1,8 @@
 # RFC-387 任务续跑语义统一：门控唤醒、房间续跑、仓库准备重试与融合走会话驱动（RFC-294 S2b）
 
-- **状态**：In Progress（2026-10-21 落档；RFC-386 提交（`3450e6872`）后派发 Codex 实施。用户 2026-10-20「按你推荐继续推进」：由本会话
-  设计、交 Codex 实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6）
+- **状态**：Done（2026-10-21：`684972dbb`，主 CI `39571384132` success，windows-platform `39571384277` success。真实 PostgreSQL 上发现
+  并修复一条过期断言：`rfc370-selected-task-root-configuration` 仍按旧行为期望 PostgreSQL 的仓库准备重试同步返回 400。用户
+  2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与实现门；规则取舍见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b）；前置
   [RFC-382](../RFC-382-daemon-task-execution-bundle/proposal.md)、[RFC-386](../RFC-386-task-drive-coordinator-factory/proposal.md)
 - **基线**：HEAD `9382675a0` 的 task-execution 模块与 `services/task.ts`（研究基线；行号仅作定位提示，以实施时源码为准）
@@ -66,6 +67,12 @@ PostgreSQL（单机与托管）：
 5. **重试仓库准备立即返回**：克隆在后台进行，失败时任务显示失败与 git 输出（此前请求阻塞到克隆结束，失败作为 HTTP 错误返回）；
    并发重试由原子准入拒绝。启动时的自动续跑不再逐个等待克隆。
 6. **融合失败只终结该次认领的意图**；融合任务冻结的工作流定义套用内建布局（与其他启动一致）。
+
+实施审核时确认的附带语义（都与 PostgreSQL 或其他启动路径既有行为一致）：
+
+- SQLite 的门控 / 房间续跑在认领之后读取配置失败时，任务按会话上报置为失败（此前意图留待重试）。
+- 融合 POST 先持久化待执行任务，再由会话读取实时配置，配置确认之前仍不驱动；`GET /api/fusions` 不再读取执行配置。
+- SQLite 无驱动收尾（`nudgeWorkspacePrune`）失败改由持久消费者重试，不再吞掉。
 
 ## 5. 验收标准
 
