@@ -27,5 +27,7 @@
 
 ## 验收清单
 
-- [ ] proposal AC-1～AC-4
-- [ ] 推送后 exact SHA 的 CI 全绿（含 PostgreSQL 分片、windows-platform、e2e 三平台）
+- [x] proposal AC-1～AC-3（`64dd81e8d`；本地 SQLite 全量、PostgreSQL 833 个文件与双 lane 50 个文件全绿）
+- [ ] 推送后 exact SHA 的 CI 全绿（含 PostgreSQL 分片、windows-platform、e2e 三平台）：主 CI `39660260202` 49/49 全绿（含 PostgreSQL、
+  三平台 e2e）；windows-platform `39660260356`、maintenance-soak `39660260206` 红，归因 runner 变慢（`docs/audit-backlog.md`），
+  后继证据待两个 workflow 的夜间定时运行

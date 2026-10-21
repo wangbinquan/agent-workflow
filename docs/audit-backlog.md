@@ -5440,3 +5440,21 @@ shard 5/12 红（run `35814805097`，提交 `356bb594d` 只挪了一个与工作
   （`:758-762`）只返回 failed、不落 node_run 终态。工作组驱动下一次 drive 会把这类 run 当崩溃恢复采纳
   （`workgroupTurnsDriver.ts:2684-2687`），对应卡片已 failed 时 `assignmentStartOperations` 返回空、host
   会再跑一次。待办 owner：下一个触及工作组宿主失败出口的 RFC。
+
+## RFC-392 推送后的两条红落在 runner 变慢上（2026-10-21，未处置）
+
+`64dd81e8d`（RFC-392）推送后主 CI `39660260202` 49/49 全绿，另两个 workflow 红：
+
+- **windows-platform `39660260356`**：`RFC-370 SQLite direct affected rows — file > capture precedes side-writing telemetry and
+  the internal probe stays unobserved`（`packages/backend/tests/helpers/rfc370SqliteAffectedRowsCases.ts:280`，由
+  `rfc349-daemon-provider-runtime-session.test.ts` 运行）以 `this test timed out after 5000ms` 挂掉（6375 ms），没有断言失败。
+  上一次绿运行 `39635428861` 里同组文件型用例每条约 1.1 秒；本次在它之前的三条已是 1499 → 2307 → 2579 ms。该测试文件只依赖
+  `db/client`、`platform/persistence/databaseTransaction` 与 `cli/daemonProvider{Runtime,}Session`，同一步骤里按字母序先于它运行的
+  18 个文件也都不用本次改过的 helper，可排除改动影响。
+- **maintenance-soak-nightly `39660260206`**：唯一失败判据是 `SQLite statement max 1451.5ms >= 1000ms`（报告不点名语句）。同次运行
+  冷启动 251 秒（此前 6 次 125～190 秒）、事件循环最大停顿 480 ms（此前 73～105 ms）、各路由最大耗时 400～550 ms（此前 70～260 ms），
+  整体变慢。RFC-392 的生产路径逐项核对未变：迁入 `bootstrap/` 的两个函数体与原实现逐字一致，`testSeams` 生产不传，
+  `codeHostRuntime` 多出的空字段在所有消费方都按 `!== undefined` 判断。
+
+**没有动手**：未重跑，也未改用例超时或 soak 门槛。文件型 SQLite 用例在 Windows runner 上只有约 4 倍余量，慢 runner 上会复现；
+后继证据以两个 workflow 的夜间定时运行为准。

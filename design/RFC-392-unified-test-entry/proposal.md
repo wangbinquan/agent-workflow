@@ -1,6 +1,7 @@
 # RFC-392 统一测试入口：删除 `server.ts` 的 SQLite 测试路径，HTTP 组合迁入 `bootstrap/`（RFC-294 S2b）
 
-- **状态**：In Progress（2026-10-21 落档并派发 Codex 实施；RFC-391 的后继 CI `39638881400` 已确认 macOS。用户 2026-10-20「按你推荐继续推进」：
+- **状态**：Done（2026-10-21：`64dd81e8d`，主 CI `39660260202` 49/49 全绿；windows-platform 与 maintenance-soak 红归因 runner 变慢，见 `docs/audit-backlog.md`，
+  后继证据待夜间定时运行）。2026-10-21 落档并派发 Codex 实施；RFC-391 的后继 CI `39638881400` 已确认 macOS。用户 2026-10-20「按你推荐继续推进」：
   由本会话设计、交 Codex 实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b「移除 `deps.x ?? composeX(...)` 形态的测试回退」；
   design §10「测试经工厂图注入实例 port」）；前置 [RFC-390](../RFC-390-neutral-http-binding/proposal.md)、[RFC-391](../RFC-391-neutral-daemon-graph/proposal.md)
