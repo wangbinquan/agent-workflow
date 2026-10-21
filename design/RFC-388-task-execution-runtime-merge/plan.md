@@ -16,7 +16,7 @@
 
 ## 冲突面
 
-`TE/composition/providerRuntime.ts`、`cli/daemonModules/{adapters,taskExecution}.ts`、P / V 的类型引用：与 RFC-389 串行。
+`TE/composition/providerRuntime.ts`、`cli/daemonModules/{adapters,taskExecution}.ts`、P / V 的类型引用：与 RFC-389～392 串行。
 
 ## 验收清单
 

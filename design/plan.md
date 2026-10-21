@@ -419,6 +419,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-386](./RFC-386-task-drive-coordinator-factory/proposal.md) | 任务驱动协调器工厂（RFC-294 S2b）：子任务启动与续跑改经工厂画像，共用会话的生命周期、门控前置、延后准备与失败上报；子任务沿用会话实时运行配置（遵守提交 / 合并 Agent 设置并做记忆提炼）；按意图类型重建工作区排除配置（补 PostgreSQL 门控续跑）；失败上报统一按认领世代、原因名中立。 | Done（2026-10-21）：`3450e6872`，主 CI `39556503354` success；对照在真实 PostgreSQL 上确认子任务不读提交 / 合并 Agent 设置、PostgreSQL 门控续跑不修复排除配置。 |
 | [RFC-387](./RFC-387-task-continuation-semantics/proposal.md) | 任务续跑语义统一（RFC-294 S2b）：门控唤醒采用 PostgreSQL 模型、房间续跑提交后尽力驱动、仓库准备重试统一为异步、融合合为一个经会话驱动的中立适配器、驱动释放收尾尽力而为；删除 `createTaskDriveCoordinator`（RFC-294 出口判据）。 | In Progress（2026-10-21 派发 Codex 实施、本会话审核） |
 | [RFC-388](./RFC-388-task-execution-runtime-merge/proposal.md) | 任务执行 provider 运行时函数合一（RFC-294 S2b）：一个中立组合函数 + 进程级 / 会话级执行绑定，适配器表只剩执行绑定与并发作用域；删除 SQLite 路由启动包装与漂移；纯重构、无行为变化。 | Draft（2026-10-21，RFC-387 提交后派发） |
+| [RFC-389](./RFC-389-maintenance-worker-root-bootstrap/proposal.md) | 维护 Worker 根迁入 bootstrap（RFC-294 S2b）：platform 只留 Worker 机制（消息路由、心跳、队列、退避、计时）并经端口接收图工厂；bootstrap 给出薄入口根与线程内一张中立模块图（provider 差异只经适配表）；监督器入口由会话传入；`platform-to-modules-file-pairs` 49 → 30。无功能变化。 | Draft（2026-10-21，RFC-388 提交后派发） |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`
