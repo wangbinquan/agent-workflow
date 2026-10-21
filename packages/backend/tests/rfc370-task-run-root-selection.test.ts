@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: the complete root selection must preserve content identity, receivers,
 // per-drive binding and async acknowledgement before any Task effect.
 import { describe, expect, test } from 'bun:test'
@@ -258,8 +259,11 @@ describe('RFC-370 complete Task run selection', () => {
   })
 
   test('all actual roots pass the same whole selection while common runtime no longer names a local binding', () => {
-    const read = (path: string) => readFileSync(resolve(import.meta.dir, '../src', path), 'utf8')
-    for (const path of ['cli/start.ts', 'cli/postgresqlDaemonApplication.ts', 'server.ts']) {
+    const read = (path: string) =>
+      path === 'cli/start.ts'
+        ? readDaemonGraphSource()
+        : readFileSync(resolve(import.meta.dir, '../src', path), 'utf8')
+    for (const path of ['bootstrap/daemonApplication.ts', 'server.ts']) {
       const source = ts.createSourceFile(path, read(path), ts.ScriptTarget.Latest, true)
       const calls: string[] = []
       const visit = (node: ts.Node) => {

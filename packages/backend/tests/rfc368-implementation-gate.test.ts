@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-368 实现门（2026-09-23，Claude 子代理，只审功能）findings 的回归锁。
 //
 //   P1-1  启动后第一次派发的一次性收编若瞬时失败，被拒绝的 promise 曾被永久缓存——此后每个
@@ -307,7 +308,10 @@ describe('RFC-368 实现门 findings', () => {
     expect(
       taskStopProjection({ kind: 'resource-reaped', summary: 'task-idle-timeout', message: 'm' }),
     ).toEqual({ code: 'resource-reaped', summary: 'task-idle-timeout' })
-    const read = (path: string) => readFileSync(resolve(ROOT, 'packages/backend', path), 'utf8')
+    const read = (path: string) =>
+      /(?:^|\/)cli\/start\.ts$/.test(path)
+        ? readDaemonGraphSource()
+        : readFileSync(resolve(ROOT, 'packages/backend', path), 'utf8')
     expect(read('src/services/limits.ts')).toContain('await operations.cancelTask(t.id, reason)')
     expect(read('src/modules/task-execution/application/taskIdleTimeoutReaper.ts')).toContain(
       'await operations.cancelTask(taskId, reason)',
@@ -317,7 +321,7 @@ describe('RFC-368 实现门 findings', () => {
     )
     expect(read('src/cli/start.ts')).toContain("kind: 'resource-reaped'")
     expect(
-      read('src/cli/postgresqlDaemonApplication.ts').match(/kind: 'resource-reaped'/g),
+      read('src/bootstrap/daemonApplication.ts').match(/kind: 'resource-reaped'/g),
     ).toHaveLength(2)
   })
 })

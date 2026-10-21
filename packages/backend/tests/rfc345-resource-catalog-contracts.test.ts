@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-345 — executable drift locks for canonical rosters, exact public
 // 覆盖验收条款：AC-B4b（写入会话带事务钩子——统一 apply 引擎里是
 //   `prestage` / `bindTransaction` / `rollForward` / `afterCommitted` / `compensate`，
@@ -2076,7 +2077,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'bootstrap/maintenanceWorkerGraph.ts'),
       'utf8',
     )
-    const daemonStart = readFileSync(resolve(sourceRoot, 'cli/start.ts'), 'utf8')
+    const daemonStart = readDaemonGraphSource()
     const moduleRoot = resolve(sourceRoot, 'modules/resource-catalog')
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

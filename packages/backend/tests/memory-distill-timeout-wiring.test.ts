@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // 记忆蒸馏旋钮的守卫：两条部署路径都必须**每 tick 重读配置**并把超时透下去。
 //
 // 背景（2026-09-21）：`config.memoryDistillTimeoutMs` 是本次新增的用户可调旋钮
@@ -18,15 +19,13 @@
 // 「distillBootConfig 曾经存在」的注释就写在 start.ts 里，不剥的话这条守卫会绿在
 // 「解释它为什么不在了的那句话」上。
 
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import ts from 'typescript'
 
 import { DAEMON_BACKGROUND_JOBS } from '../src/cli/daemonLifecycleProgram'
 import { propertyBodies } from './helpers/daemonProgramSource'
 
-const START = readFileSync(resolve(__dirname, '..', 'src', 'cli', 'start.ts'), 'utf8')
+const START = readDaemonGraphSource()
 const parsed = ts.createSourceFile('start.ts', START, ts.ScriptTarget.Latest, true)
 const CODE = ts.createPrinter({ removeComments: true }).printFile(parsed)
 
@@ -58,7 +57,7 @@ describe('memory distill worker wiring (start.ts)', () => {
   test('both deployment paths exist and are the only ones', () => {
     expect(DAEMON_BACKGROUND_JOBS.filter((job) => job.id === 'memory-distill')).toHaveLength(1)
     const records = propertyBodies(START, 'backgroundJobs')
-    expect(records).toHaveLength(2)
+    expect(records).toHaveLength(1)
     for (const record of records) expect(propertyBodies(record, 'memory-distill')).toHaveLength(1)
   })
 
@@ -68,11 +67,8 @@ describe('memory distill worker wiring (start.ts)', () => {
 
   test('both paths re-read config and forward the timeout knob every tick', () => {
     const bodies = distillFactoryBodies()
-    expect(bodies).toHaveLength(2)
-    const selectedReads = [
-      'const current = await input.configuration.read()',
-      'const current = await configuration.read()',
-    ]
+    expect(bodies).toHaveLength(1)
+    const selectedReads = ['const current = await input.configuration.read()']
     for (const [index, body] of bodies.entries()) {
       expect(
         body.replace(/\s+/g, ' '),
@@ -91,7 +87,7 @@ describe('memory distill worker wiring (start.ts)', () => {
       'current.memoryDistillModel',
       'current.memoryDistillSourceContext',
     ]) {
-      expect(count(key), `${key} must be read per tick on both paths`).toBe(2)
+      expect(count(key), `${key} must be read per tick on both paths`).toBe(1)
     }
   })
 })

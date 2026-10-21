@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -17,7 +18,10 @@ import {
 import { WrapperRuntime } from '../src/modules/task-execution/engine/wrapper/wrapperRuntime'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
-const read = (path: string): string => readFileSync(resolve(ROOT, path), 'utf8')
+const read = (path: string): string =>
+  /(?:^|\/)cli\/start\.ts$/.test(path)
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(ROOT, path), 'utf8')
 const ok: NodeStepOutcome = { kind: 'ok', summary: '', message: '' }
 
 function tsFilesUnder(relativeDirectory: string): string[] {

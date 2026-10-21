@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 A2: complete selected evidence receiver at every real root and dual-provider HTTP.
 // Exact 694 CI repair: preserve the selected EvidenceStore default after reference-factory migration.
 import { afterEach, expect, test } from 'bun:test'
@@ -17,7 +18,9 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -50,7 +53,7 @@ function bind(source: ts.SourceFile, expression: string, key: string, receiver: 
 
 test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the same complete object', () => {
   const start = load('cli/start.ts'),
-    pg = load('cli/postgresqlDaemonApplication.ts'),
+    pg = load('bootstrap/daemonApplication.ts'),
     server = load('server.ts')
   for (const [source, receiver] of [
     [start, 'input'],
@@ -62,7 +65,7 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
     bind(source, 'composeDaemonDigitalEmployeeModules', 'evidenceArtifacts', receiver)
     expect(source.text).toContain('evidenceArtifacts?: EvidenceArtifactPort')
   }
-  bind(start, 'composePostgresqlDaemonApplication', 'evidenceArtifacts', 'input')
+  bind(start, 'composeDaemonApplication', 'evidenceArtifacts', 'input')
   bind(start, 'composeDaemonDigitalEmployeeModules', 'evidenceArtifacts', 'input')
   const development = load('cli/daemonModules/developmentAutomation.ts')
   const employee = load('cli/daemonModules/digitalEmployee.ts')

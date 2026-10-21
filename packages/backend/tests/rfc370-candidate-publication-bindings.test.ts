@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: every real DA and DE root selects the same complete candidate receiver.
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -39,13 +40,14 @@ test('RFC-383 roots forward the selected candidate factory to both shared derive
   const load = (path: string) =>
     ts.createSourceFile(
       path,
-      readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+      /(?:^|\/)cli\/start\.ts$/.test(path)
+        ? readDaemonGraphSource()
+        : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
       ts.ScriptTarget.Latest,
       true,
     )
   for (const [path, receiver] of [
-    ['cli/start.ts', 'input'],
-    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['bootstrap/daemonApplication.ts', 'input'],
     ['server.ts', 'deps'],
   ] as const) {
     const source = load(path)

@@ -298,7 +298,7 @@ MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionM
 - **bun 报表里的每条耗时**含* beforeEach/afterEach*，**而默认 5s 超时只管 test body**——所以别拿报表数字给「哪些测试贴着上限」排序。直接探针实测：3s `beforeEach` + 3s body，报表打印 **6.02s，测试照样 pass**。真实后果两个方向都有：把重活放 `beforeEach` 的文件报表数字很大而风险低（`git-repo-cache` / `clarify-inline-isolated-parity` 在 CPU 打满的 Windows 上报表 5.5–6.0s，两轮都没红）；反过来在 body 里做真 I/O 的文件报表值≈body 值，4947ms 那条就是真的会红（`rfc130-node-isolation`，同负载 3 条超时）。**判据是「body 里做了多少真 I/O」，报表数字只配当粗筛。**
 - **上一条的严重版：超时的测试如果「持有一块工作区」，它会把还在跑的东西一起带走，而报错点名的是错的子系统**。bun 判超时后会**回收该测试的子进程**，于是 RFC-254 T32 里出现这条链：在飞的 `git rev-list` 收 SIGTERM（`exited 143`）→ `seedWorktree` 认为基线解析失败并抛错 → `createFusion` 的 `finally` 删掉它仍持有的 fusion work dir → 而**该测试此前已经启动的任务还在被调度**，于是 iso 从一个已被删除的目录上建，报出 `git worktree add (iso): fatal: cannot change to '…'` / `workspace-missing: canonical worktree does not exist` / `TypeError: … 'task.worktreePath'`。**这四行点名的全是 git，真正的主语却是「这个测试文件没声明预算」**——它一度被立成一条「Windows 上 git worktree 坏了」的 P1。**判据**：看到 git 报「路径不存在 / 对象解析不了」，先查同一批日志里有没有 `exited 143` 或 `this test timed out`；有就先修预算再谈缺陷。**预防**：凡是「真的起任务 / 真的建仓 / 真的拉子进程」的用例，文件顶上写 `setDefaultTimeout(60_000)`（先例：`task-start-pre-worktree` / `clarify-review-combination-scenarios` / `fusion-engine`），别让它贴着默认 5s 跑——安静机器上 1.5–3.4s 看着安全，那已经是预算的 30–70%。**又一例（2026-08-25）**：`rfc321-cached-repo-refresh-credential`（Codex 提交时没写预算）body 里 init / commit / bare clone / 经 smart-HTTP 冷 clone / 再 fetch，**绿的时候** Ubuntu 3.4s、macOS 4.0–4.6s，macOS 分片 3 以 5019ms 翻红，随后 `killed 1 dangling process` + afterEach 删夹具 + 被判超时的 body 跑到 `expect` 抛成「Unhandled error between tests」——三行都点名 git。接手 Codex 提交的「真跑 git」测试文件时先看顶上有没有预算。
 - **`architecture/guard-manifest.json` 里有一批「手工维护格」，重跑 census 不会带上它们**（2026-09-18 实撞，推红一次）：`corpusScanner` / `minCorpusFiles` / `assertsAbsence` 这几格是**种子**，`scripts/architecture-census.ts` 读它、原样写回，**不重算**。于是「改完代码跑一次 census」这条定式在它们上面**不成立**：本地跑的那几个账本守卫全绿（它们读的是别的账本），推上去 CI 才在`rfc317-guard-corpus-floor` / `rfc317-guard-negative-fixture` 上翻红。触发条件很平常——守卫的扫描形状变了（本次：从「扫一个目录」变成「读一个文件」⇒ `corpusScanner` 该翻 false），或者给守卫补了一条空集断言（⇒ `assertsAbsence` 该翻 true）。**定式**：动了任何 `GUARD_FILE_NAME_PATTERN` 命中的测试文件（名字里带 architecture / boundary / ratchet / lock / guard / invariants / preflight / callsite / extinction / interlock）之后，**把 `tests/architecture/` 整目录跑一遍**（69 个文件、分片 8 个一批约两分钟），别只跑你以为相关的那几个；真值可以用 census 导出的 `isCorpusScanner` / `assertsAbsence` / `corpusFloor` 三个纯函数直接算出来对账。
-- **退役一份实现时，守卫的「语料」会静默缩小——抽取器只认一种写法的那些尤其危险**（2026-09-18 RFC-359 第 8 刀实撞）：`rfc317-transition-table-oracle` 靠 AST 抽 `setTaskStatus({ to, allowedFrom })` 这种**调用参数对象**来数「CAS 站点」。合并两份修复实现、退役其中一份之后，语料从 **35 掉到 15**——而掉走的那 20 个正是这条预言头注释里逐条点名的**反例来源**。留下的那份把同样的 `(from, to)` 放在 `kind: 'task-transition' 的动作描述符里，一样静态可知，抽取器却看不见。**症状是「守卫还绿着，射程却少了一半」**，比红更难发现：只有「语料非空」那条下限断言偶然挡了一下（`>= 35` 变成量到 15）。**定式**：①这类守卫必须有「语料下限」断言，且下限要够高、能在射程塌一半时报出来（只写 `> 0` 等于没有）；②被测实现换写法（哪怕只是把参数对象挪进一个描述符）时，要回头问一句「原来那个抽取器还认得它吗」；③给抽取器补第二种形态时，把两种形态各写一条自证 fixture，别让「只认一种」再次静默发生。本次补上第二种形态后语料回到 28，三条越界边按新锚点重新入账。
+- **退役一份实现时，守卫的「语料」会静默缩小——抽取器只认一种写法的那些尤其危险**（2026-09-18 RFC-359 第 8 刀实撞）：`rfc317-transition-table-oracle` 靠 AST 抽 `setTaskStatus({ to, allowedFrom })` 这种**调用参数对象**来数「CAS 站点」。合并两份修复实现、退役其中一份之后，语料从 **35 掉到 15**——而掉走的那 20 个正是这条预言头注释里逐条点名的**反例来源**。留下的那份把同样的 `(from, to)` 放在 `kind: 'task-transition' 的动作描述符里，一样静态可知，抽取器却看不见。**症状是「守卫还绿着，射程却少了一半」**，比红更难发现：只有「语料非空」那条下限断言偶然挡了一下（`>= 35`变成量到 15）。**定式**：①这类守卫必须有「语料下限」断言，且下限要够高、能在射程塌一半时报出来（只写`> 0` 等于没有）；②被测实现换写法（哪怕只是把参数对象挪进一个描述符）时，要回头问一句「原来那个抽取器还认得它吗」；③给抽取器补第二种形态时，把两种形态各写一条自证 fixture，别让「只认一种」再次静默发生。本次补上第二种形态后语料回到 28，三条越界边按新锚点重新入账。
 - **源码锁的锚点文件被删掉时，要跟着实现走、不是删条目**（同一刀，8 处）：`lifecycle-repair-grep-guard`（不许裸写 node_run 状态 / 不许 delete）、`rfc165 A7c`（会复活执行的修复选项必须盖章）、`rfc193 case 8d`（S1 的 scopeRoot 要按 wrapper 血缘推导）、`s13 G5`（fork 排序不得回来）这些锁**锁的是行为约束，不是那个文件**。实现搬家 / 合并时把锚点换到留下的那一份，约束就继续生效；顺手删掉条目则等于把约束一起退役——而这次重挂锚点**当场照出一处真缺陷**：留下的那份 S1 直接传 `task.worktreePath`，正是 case 8d 明令禁止的写法（wrapper 内的评审修复会落在任务根而不是 iso 工作树上）。
 - **结构守卫必做变异实证**：加 grep/AST 守卫后，改坏源码断言必须看它变红；否则守卫是空的。表级锁（一次锁一类）优于文件级——注释里的字面量也会踩表级锁（RFC-072 事故）。
 - **变异实证的还原步骤要用绝对路径，并且**逐字 diff 核对**——`cd ..` 很容易落错目录**（RFC-287 三轮门实撞，三条变异的还原全部静默失败）。写成 `cd packages/backend && bun test … ; cd .. && cp /tmp/x.bak packages/backend/src/…` 时，`cd ..` 从 `packages/backend` 回到的是 **`packages/`** 而不是仓根，于是 `cp` 报 `No such file or directory` ——而这行 `cp` 的失败混在一大段输出里毫不显眼，**变异就留在了生产代码里**。更糟的是下一条变异接着施加，等于叠加。**定式**：备份与还原一律写绝对路径（`R=$(git rev-parse --show-toplevel)` 开头取一次）；还原后不要只 `grep -c` 关键字（改动可能不止一处），直接 `diff <(cat /tmp/x.bak) <file>` 求逐字一致再继续。判据：还原那步的输出里必须有一句明确的「一致」，没有就当没还原。
@@ -375,7 +375,7 @@ MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionM
 
 - **`bun test` 全绿 ≠ 类型对**（2026-08-16 实撞）。给共享测试 harness 的构造函数加了个字段却忘了加进它的 `interface`，33 条用例全绿、`tsc` 红。bun 跑测试时不做类型检查，所以**测试绿只证明运行时行为，证明不了类型面**——这正是门禁把 typecheck 单列一条车道而不是让它跟着测试走的原因。改完 harness / fixture 的**形状**（不只是值）时，跑一次 `bunx tsc --noEmit` 再说。
   **2026-09-13 又撞一次，代价是把 main 推红**（RFC-359）：一批 27 个测试从单引擎迁到双引擎 harness，本地「改过的文件跑 eslint + prettier + 那几个测试」全绿、两个引擎都过，CI 红在 `Lint + Typecheck + Format`——11 个文件把更宽的 db 类型传给了形参写死窄类型的函数，**运行时正好都只用到两个类型共有的 API**，所以只有编译期看得见。⇒ **凡是动到类型面的改动**（换参数类型、换 import、放宽/收窄签名、加泛型），提交前必跑 `bun run typecheck`；eslint 不做类型推断，替代不了它。
-  **反过来也要跑**（2026-09-13 同日第三次推红）：放宽一个形参会让原来的窄类型 import 变成死的，`tsc` 不管这个、`eslint --max-warnings 0` 会当场红。所以「改完类型跑 typecheck」和「改完任何文件跑 eslint」是**两件事**，缺哪件都能把 main 推红——**提交前对着 `git status` 的****完整改动列表**各跑一遍，别只跑「我觉得动过的那几个」。
+  **反过来也要跑**（2026-09-13 同日第三次推红）：放宽一个形参会让原来的窄类型 import 变成死的，`tsc` 不管这个、`eslint --max-warnings 0` 会当场红。所以「改完类型跑 typecheck」和「改完任何文件跑 eslint」是**两件事**，缺哪件都能把 main 推红——**提交前对着 `git status` 的\*\***完整改动列表\*\*各跑一遍，别只跑「我觉得动过的那几个」。
 
 - **给共享 harness 加东西，别让不需要它的用例陪着付钱**（同日，自伤后自修）。我给一张 8 类资源的 ACL 矩阵加了第五个用户，只有其中 1 类用得上，但它建在 `beforeEach` 里——`createUser` 会**故意慢速**哈希密码，于是另外 7 类 × 33 条用例全在为一条用例付这笔钱。高负载下随即出现一次与本改动无关的用例超时红。**没拿「重跑九次都绿」当通过依据**（含三次 `--isolate --randomize`）：能消掉的时序面就消掉。**定式**：往共享 fixture 里加**慢**操作（密码哈希、子进程、文件系统、网络桩）时按需构造，别无条件建。
 
@@ -393,11 +393,11 @@ MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionM
 把一份钉死在 bun:sqlite 上的测试改成 `describeEachProvider` 时，真正的工作量不是换 harness，
 是把 bun:sqlite 的**同步执行面**全部换成 `await`。三个 API 的危险程度差得很远：
 
-| API | 中立客户端上的行为 | `tsc` 拦得住吗 |
-| --- | --- | --- |
-| `.all()` | 返回 `Result<…>` 而不是数组 | **拦得住**，`.length` 一取就编译错 |
-| `.get()` | 返回 `Promise` | **多半拦得住**，下游取字段会报 possibly undefined |
-| `.run()` | 返回**没人 await 的 Promise** | **完全拦不住** |
+| API      | 中立客户端上的行为            | `tsc` 拦得住吗                                    |
+| -------- | ----------------------------- | ------------------------------------------------- |
+| `.all()` | 返回 `Result<…>` 而不是数组   | **拦得住**，`.length` 一取就编译错                |
+| `.get()` | 返回 `Promise`                | **多半拦得住**，下游取字段会报 possibly undefined |
+| `.run()` | 返回**没人 await 的 Promise** | **完全拦不住**                                    |
 
 `.run()` 是唯一一种「类型完全合法、`tsc` 一声不吭、运行时那句写根本没发生」的写法。
 它在 SQLite 上是同步执行所以一切正常，换到 PostgreSQL 上立刻变成「写了个寂寞」——
@@ -424,6 +424,7 @@ MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionM
 的判据在 PG 上零预言力（同文件头注释记着它此前已经以别的形态发生过一次）。
 
 **定式两条**：
+
 1. 包 `db` 的 Proxy **必须同时拦 `transaction`** 并把交回的 tx 句柄重新包一层。
 2. 更重要的是给 seam 加一个 `fired()` 计数器，**在每条用它的用例里断言它真的触发过**。
    没有这个计数器，"seam 坏了"和"功能正常"在绿色里长得一模一样——而 seam 坏掉的方向
@@ -619,8 +620,9 @@ RFC 三件套，全都不在这个范围内**——它们从来没被 prettier �
 缓存/配置覆盖里），所以"写完还报错"很容易被读成"再写一次就好"，于是越写越偏。
 
 **定式**：
+
 - 改根目录或 `design/` 下的 markdown，**只手写，不跑 prettier**。要对齐风格就照着邻近段落抄。
-- 只对**自己新增的、位于 `packages/**` 下的**文件跑 `bunx prettier --check <files>`。
+- 只对**自己新增的、位于 `packages/**`下的**文件跑`bunx prettier --check <files>`。
 - 任何时候插完段落先看一眼 `git diff --stat`：**纯新增的段落必须是 0 deletions**。出现删除行就
   说明你动了别人的东西，停下来还原，别 commit。这一步和 §「推之前 `git diff --cached --stat`
   看一眼暂存区」是同一类兜底，只是更靠前。
@@ -763,7 +765,7 @@ Playwright e2e 六个分片同时红。此前没暴露，只是因为走那台�
 1. 任何自己拼 `deps` 的调用点，都要 `...resolveLaunchRuntimeConfig(configPath)`
    ——和 `buildStartTaskDeps` 取自同一处；
 2. 写一条**扫全部调用点**的判据，不要逐个回忆。本仓那条是
-   `rfc359-w5hn-drive-coordinator-runtime-config`：扫三个组合根里每一处
+   `rfc359-w5hn-drive-coordinator-runtime-config`：扫 `bootstrap/daemonApplication.ts` 与 `server.ts` 测试回退里的每一处
    `createTaskDriveCoordinator({ deps: … })`，字面量 deps 必须 spread 配置漏斗，
    整体交一个已构造好的 `StartTaskDeps`（裸标识符）天然合格。
    **它当场找出了第三台手改时漏掉的协调器**——写判据比逐个回忆可靠。
@@ -801,7 +803,7 @@ Playwright e2e 六个分片同时红。此前没暴露，只是因为走那台�
 账本清点的恰恰就是测试文件里的那些数组。
 
 **更狠的一条：声明了 `allowGrowth` 之后，下一笔提交必须把它删掉——哪怕那笔是纯文档。**
-（2026-09-17 实撞，同一族第三次，这次是**一笔只改 `design/**/plan.md` 的提交把 main 推红**。）
+（2026-09-17 实撞，同一族第三次，这次是**一笔只改 `design/**/plan.md` 的提交把 main 推红\*\*。）
 
 判据是「**这个 commit 没涨就必须删掉它**」，而**没涨**包含「什么都没动」。
 于是节奏是强制的两步：
@@ -981,7 +983,7 @@ const codeOnly = (src: string): string =>
 `tests/architecture/`**，再加上你改过的那几个源码锁所在的用例文件。
 「只改了个注释」「只补了文档」都不是豁免——它们恰恰是这两类判据最常见的红因。
 
-### 顺序是硬的：**手改 `architecture/**` 一律在 census 之前**（2026-09-18 实撞）
+### 顺序是硬的：**手改 `architecture/**` 一律在 census 之前\*\*（2026-09-18 实撞）
 
 > 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
@@ -1027,6 +1029,7 @@ bun run scripts/architecture-census.ts --write --snapshot-sha HEAD
 > 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 `ledger-baselines.json` 的条目分两类，看 `file` 字段：
+
 - `file` 指向 `architecture/*.json`（census 自己的产物）⇒ **census 重算** `baseline`；
 - `file` 指向 `packages/backend/tests/**`（例如 `TEST_ENGINE_HARDCODING_DEBT`、
   `ACCEPTED_DUAL_ENGINE_DIVERGENCES`）⇒ **census 原样写回，要手改**。
@@ -1034,7 +1037,6 @@ bun run scripts/architecture-census.ts --write --snapshot-sha HEAD
 所以「删了账本数组里的四行 → 跑 census → 应该就对了」是错的：census 不动它，
 `RFC-317 T16 > 条目数与源码逐字相等` 会红在「源码 322 vs 基线 326」。
 处置是手把 `baseline` 改小并在 `why` 末尾追一句为什么销的账。
-
 
 两次主干红，同一个根因：自查命令**看上去绿，实际什么都没查**。
 
@@ -1115,11 +1117,11 @@ JIT / GC / 首次 `getrusage` 的固定成本全会落进那 60ms 的测量窗�
 `modules/integration/infrastructure/webhookDeliveryPersistence.ts` 的 `gcSlice`）。push 档的
 时间窗正好落在边界附近：
 
-| 跑 | slice 数 | 删了几行 | 事务 max | 结论 |
-| --- | ---: | ---: | ---: | --- |
-| `04a6535a4` / `85dabac62` / `fcbbd0962` | 91~93 | 0 | 17~19ms | 绿（全在 body 相） |
-| `934c31af9` | 125 | 25000 | 149.7ms | **红**（跨界，9/126 越 50ms） |
-| `f2e062092`（夜跑档） | 202 | 100000 | 96.2ms | 绿（必然跨界，样本摊薄） |
+| 跑                                      | slice 数 | 删了几行 | 事务 max | 结论                          |
+| --------------------------------------- | -------: | -------: | -------: | ----------------------------- |
+| `04a6535a4` / `85dabac62` / `fcbbd0962` |    91~93 |        0 |  17~19ms | 绿（全在 body 相）            |
+| `934c31af9`                             |      125 |    25000 |  149.7ms | **红**（跨界，9/126 越 50ms） |
+| `f2e062092`（夜跑档）                   |      202 |   100000 |   96.2ms | 绿（必然跨界，样本摊薄）      |
 
 也就是说这条门**runner 越快越红**——它量的是「这次快到没快到跨过第 ~101 个 slice」。
 另一次红 `a889b978c` 则是纯 runner 冻结：同样 91 个 body 相 slice、删 0 行，max 却 565.8ms。
@@ -1321,6 +1323,7 @@ sleep 45
 判据：守候进程还在（`ps` 看得到 `sleep 45`），但 `gh run list` 直查已是 `completed`。
 
 定式（任选其一，别再用 `set -- $unquoted`）：
+
 - **根本上别拆串**：只查你要的那一个字段，直接比较——
   `S=$(gh run list … -q '.[] | select(.headSha=="'"$SHA"'") | .status' | head -1); [ "$S" = completed ] && …`
 - 真要拆：zsh 的显式分词 `set -- ${=R}`，或 `read -r id status conclusion <<< "$R"`。
@@ -2358,6 +2361,7 @@ cp <scratch>/headtree/architecture/*.json  <repo>/architecture/       # 只把�
   ☠️ **只给普查脚本与 `tests/architecture/`，绝不要给整轮 `bun test`。** 那两者是纯文件读；
   而行为用例里有会 `git init` + `git commit` 的夹具，`GIT_DIR` 的优先级**高于 `-C`**，
   于是它们的提交会打进**你的真仓库**。2026-09-10 实撞的代价见下一条。
+
 - **守卫也要在副本上跑**：它们同样读文件系统，在共享树上跑会看见别人的在制品，结论不可归因。
   跑完 446 个架构用例全绿，才是「CI 会绿」的有效证据。
 
@@ -2402,8 +2406,8 @@ digest 变了就抛 `postgresql-schema-drift`（`postgresqlMigrator.ts:97`），
 自用身份要 `admitDaemonIdentity`，替属主跑存量工作要 `admitDurableWorkOwner`，两个都在
 `auth/session.ts`。
 
-**这类缺陷藏得住，是因为两个 provider 各有一份手写组合根**。`cli/start.ts`（SQLite）与
-`cli/postgresqlDaemonApplication.ts`（PostgreSQL）是同一产品的两棵装配树，一条只存在于其中一棵的
+**当时这类缺陷藏得住，是因为两个 provider 各有一份手写组合根**。RFC-391 已将两棵装配树收为
+`bootstrap/daemonApplication.ts` 与 `bootstrap/daemonSession.ts`，差异只在 `bootstrap/daemonSessionAdapters.ts`。历史上一条只存在于其中一棵的
 接线**没有任何测试会碰**——没有测试组装得起任何一棵（要真库 / 要全量子系统）。于是 typecheck 绿、
 全量 CI 绿、code review 也看不出，而选了 PostgreSQL 的部署上四条路径必炸：动态工作流校验上下文、
 工作组启动的 `loadExistingAgentIds`、数字员工执行的 `agents.get` / `workflows.get` 与
@@ -2903,11 +2907,11 @@ GIT_DIR=<repo>/.git AW_TEST_PROVIDERS=sqlite bun test --isolate \
 
 三把刀分别撞到不同的一档，合起来才是全貌。写变异 / 读汇报时要先问「这是哪一档」：
 
-| 档 | 写法 | SQLite | PostgreSQL | 谁会红 |
-| --- | --- | --- | --- | --- |
-| ① 裸惰性 builder | 既不 `.run()` 也不 `await` | 语句**不发生** | 语句**不发生** | **两个引擎都红** |
-| ② 读漏 await | `.all()` / `.get()` 不 await | 同步驱动当场执行并交回数据 | 拿到 Promise | **只有 PG 红** |
-| ③ 写漏 await | `.run()` 不 await | `changes` 是真值 | `changes` 恒 `undefined` | **只有 PG 红，而且静默** |
+| 档               | 写法                         | SQLite                     | PostgreSQL               | 谁会红                   |
+| ---------------- | ---------------------------- | -------------------------- | ------------------------ | ------------------------ |
+| ① 裸惰性 builder | 既不 `.run()` 也不 `await`   | 语句**不发生**             | 语句**不发生**           | **两个引擎都红**         |
+| ② 读漏 await     | `.all()` / `.get()` 不 await | 同步驱动当场执行并交回数据 | 拿到 Promise             | **只有 PG 红**           |
+| ③ 写漏 await     | `.run()` 不 await            | `changes` 是真值           | `changes` 恒 `undefined` | **只有 PG 红，而且静默** |
 
 - ① 之所以两边都红：drizzle 的查询构建器是**惰性 `QueryPromise`**——`.run()` 与 `await` 都会触发执行，
   两者都没有就一条语句都不发出去。把这一档记成「PG 独有」会让人以为双引擎对拍在这里没有增量，错。
@@ -2943,6 +2947,7 @@ SQLite 会话是进程内单写者租约 + `BEGIN IMMEDIATE`，它串的是**事
 正是为这个窗口存在的。
 
 推论有两条，方向相反、都要注意：
+
 - 判定某处「SQLite 表达不出、只能 PG 测」之前，先看**读是不是在事务外**；是的话这个判断错了，
   两个引擎都要测。
 - `holdAggregateRoot` 这类「占住聚合根撑开窗口」的手法在这条路径上**用不了**：SQLite 的
@@ -2964,6 +2969,7 @@ SQLite 会话是进程内单写者租约 + `BEGIN IMMEDIATE`，它串的是**事
 弱侧只要用了自己的命名，grep 就落空，于是「做了但名字不同」被记成「没做」。
 
 **规矩**：
+
 - `absent` 锚点要按**行为**取，不要按**强侧的字面量**取——能落到「哪个函数在哪个位置做了这件事」
   最好；退而求其次，把两侧的候选字面量都列上。
 - 读到「一侧缺 X」的账本条目，**动手前先在弱侧按行为搜一遍**（搜错误类型、搜调用点、搜测试名），
@@ -3017,6 +3023,7 @@ SQLite 会话是进程内单写者租约 + `BEGIN IMMEDIATE`，它串的是**事
 ⚠️ **别写成 `grep -c allowGrowth`**（2026-09-10 实撞）：这份文件的 `note` 字段本身就在正文里
 解释 `allowGrowth`，裸词恒能命中一次，于是判据**永远返回 1**、永远像「上一笔留了债」。
 必须带引号匹配 **JSON 键**（`"allowGrowth"`）才数得到真条目。
+
 ## 本地跑多个测试文件**必须带 `--isolate`**——CI 就是这么跑的，不带会看见一片假红（2026-09-10 实撞）
 
 `.github/workflows/ci.yml` 的 backend 分片跑的是：
@@ -3109,7 +3116,7 @@ git 操作都会写错仓库**——不报错、不告警，只是悄悄打到�
 > 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 上一条讲的是「账本涨了要重采」，这一条讲的是更常被漏掉的那半：**任何触及
-`packages/*/src/**` 的提交都要在同一提里重采普查**，与改动大小无关。
+`packages/\*/src/**` 的提交都要在同一提里重采普查\*\*，与改动大小无关。
 
 实撞：我为了修 CI 推了一笔纯修复——`review.ts` 换成 drizzle 的 `count()`、
 `taskAuthorization.ts` 删掉一行变成未使用的 `or` import。行为测试、lint、format、
@@ -3222,6 +3229,7 @@ TDZ 根本不触发。必须是一次**真实读取**（传参、取属性、放
 FILES=$(grep -rl ... )                       # 444 个路径
 bun test --isolate tests/architecture/ $FILES   # ← zsh 里 $FILES 是**一个**参数
 ```
+
 bash 会分词，**zsh 默认不会**。于是那 444 个路径被当成一个不存在的过滤器，
 bun **不报错**，只跑了 `tests/architecture/`——输出看起来完全正常（`Ran 623 tests across 62 files`），
 而你以为自己跑了 500 多个文件。
@@ -3231,6 +3239,7 @@ bun **不报错**，只跑了 `tests/architecture/`——输出看起来完全�
 守卫）上转红。**验证的静默降级比红本身危险得多**。
 
 **正确姿势**（任选，别再用无引号变量）：
+
 ```zsh
 grep -rl ... > /tmp/files.txt
 xargs bun test --isolate < /tmp/files.txt          # 最稳、且跨平台
@@ -3248,12 +3257,14 @@ FILES=( ${(f)"$(grep -rl ...)"} ); bun test --isolate $FILES
 这一条比看 pass/fail 更早暴露问题。
 
 **同族**（都是 zsh 与 bash 的差异，都会静默降级）：
+
 - `grep --include=*.ts` 无引号 ⇒ zsh 当 glob 展开，`no matches found` 直接中止命令；
 - `cmd | head -N` 之后拿 `$?` 或计数下全称结论（见本文件另一条）。
 
 ## 源码里混进裸 NUL 字节 ⇒ **grep 把整个文件当二进制，所有文本守卫对它集体失明**（2026-09-08，本日第二次）
 
 写复合键分隔符时直接落了字面 `\0`（不是 `\u0000` 转义）。后果链条：
+
 - `tsc` 通过、两个引擎都接受、**所有测试全绿**；
 - 但 `grep` 判定该文件为 binary，**在里面什么都找不到**；
 - 于是**每一条扫这个文件的源码文本守卫都变成零预言力**——不是红，是**静默失明**。
@@ -3263,9 +3274,10 @@ FILES=( ${(f)"$(grep -rl ...)"} ); bun test --isolate $FILES
 
 **规矩**：分隔符 / 控制字符一律写**转义**（`\u0000`），不要落字面字节。
 批量改完后扫一遍：
+
 ```bash
 grep -rlIP '\x00' packages/backend/src packages/backend/tests || echo "clean"
-# 或：file packages/backend/src/**/*.ts | grep -v 'text' 
+# 或：file packages/backend/src/**/*.ts | grep -v 'text'
 ```
 
 ## 先红后绿的第二个用处：**发现自己对"现状"的假设是错的**（同上）
@@ -3340,6 +3352,7 @@ grep -rlIP '\x00' packages/backend/src packages/backend/tests || echo "clean"
 （只在需要它的引擎上断言）。改完变异当场红。
 
 **规矩**：
+
 - **断言里不要出现被变异的那个符号做条件**。`if (用了X) expect(X 对)` 是空断言；
   要写成 `expect(渲染结果).toContain(X 的效果)`。
 - **变异不红先怀疑用例，别急着下「此处不可达」的结论**——本仓另有先例是真不可达，
@@ -3427,6 +3440,7 @@ W55 首次给两条调度器回归锁加上双引擎，两条当场在 PostgreSQ
   于是在 PG 上恒不重叠。两侧隔离都生效、锁序未变——**变的只是一次派生要多久**。
 
 **规矩**：把一条**依赖时序**的既有用例接上双引擎前，先量两件事：
+
 1. 该断言的余量是什么（「A 必须在 B 结束前开始」⇒ 余量 = B 的时长 − A 的启动延迟）；
 2. 两个泳道的**同一段开销**各是多少。PG 泳道往往贵一个量级——不是因为 PG 慢，
    是因为它的测试拓扑更重（完整应用装配 + 网络往返 vs 进程内直连）。
@@ -3442,6 +3456,7 @@ CI 上一条用例撞满超时时，最容易的解释是「CI 机器慢」，�
 「整台 runner 慢了 2–4×」。**第三次撞上时一查，那个诊断是错的。**
 
 **决定性判据是同分片其它用例的耗时**：
+
 - 真·runner 慢：**所有**用例按比例变慢，包括同文件的邻居。
 - 单点挂起：邻居**正常速度**，只有它一条爆表。
 
@@ -3450,12 +3465,14 @@ CI 上一条用例撞满超时时，最容易的解释是「CI 机器慢」，�
 ——runner 没有慢。
 
 **取证姿势**（日志已下载到本地时）：
+
 ```bash
 # 同文件所有用例的结果与耗时
 grep -aoE "\((pass|fail)\) <describe 名> > [^[]*\[[0-9.]+ms\]" job.log
 # 分片里最慢的十几条，用来定「正常水位」
 grep -aoE "\(pass\) .*\[[0-9]{4,}\.[0-9]+ms\]" job.log | sed -E 's/.*\[([0-9]+)\.[0-9]+ms\]/\1 &/' | sort -rn | head -12
 ```
+
 再用**时间戳空窗**定位挂点：把日志按行首时间戳解析出来，找 ≥20s 的间隔，看空窗**前后各是哪一行**。
 上面那次的空窗夹在「冷克隆成功」与 bun 的 `killed 1 dangling process` 之间，一句话锁死了挂在哪一步、
 而且 `killed 1 dangling process` 说明**有个子进程还悬着**。
@@ -3467,6 +3484,7 @@ grep -aoE "\(pass\) .*\[[0-9]{4,}\.[0-9]+ms\]" job.log | sed -E 's/.*\[([0-9]+)\
 ## `| head -N` 之后不能下**全称结论**（2026-09-08 又撞，本日第二次）
 
 实撞两次，都是同一个形状：
+
 - `cmd | head -3; echo $?` —— 报的是 **head 的**退出码，不是 cmd 的。据此说「`tsc` 退出 0」是错的，
   真实退出码是 1（输出里没有 `error TS` 行才是那次的真相）。
 - `grep -rn "batchInsertMax" src tests | head -8` —— 只看到 `capabilities.ts` 自己，
@@ -3536,6 +3554,7 @@ T17 `allowGrowth` 过期 → N1b 投影不一致 → RFC-345 门面守卫 → T1
 是 4/4」又会以为是新问题——**分片号不携带任何信息，别拿它做归因**。
 
 **规矩**：
+
 - **推完必须盯到绿再推下一笔**，尤其是带普查重采的提交。连着推等于把「上一笔红没红」
   这个信息永久丢掉——后面每一笔的 CI 结果都混着前面的账。
 - 归因只看**失败用例名**：`gh run view --job "$JID" --log | grep -oE "\(fail\) .*" | sort -u`。
@@ -3558,9 +3577,11 @@ T17 `allowGrowth` 过期 → N1b 投影不一致 → RFC-345 门面守卫 → T1
 所以必须先手工删掉再跑，指望普查自己清是清不掉的。
 
 **开工自查**（30 秒，能挡住第六次）：
+
 ```bash
 git show HEAD:architecture/ledger-baselines.json | grep -c '"allowGrowth"'   # 期望 0（必须带引号：裸词会命中 note 正文）
 ```
+
 不是 0 就说明上一笔留了债，**先把它清干净再干自己的活**。
 
 ## 覆盖度守卫按「提到模块名」计数：**在注释里写一句文件名就算一次覆盖**（2026-09-08 实撞）
@@ -3572,6 +3593,7 @@ git show HEAD:architecture/ledger-baselines.json | grep -c '"allowGrowth"'   # �
 守卫头注释里本来就警告过「覆盖数会虚高」，但没想到**虚高会来自文档**。
 
 **规矩**：
+
 - 在测试文件里写背景注释时，**不要写另一侧的模块文件名 / 导出符号**——写「PostgreSQL 侧的任务路由适配器」
   这类描述性说法，或者干脆写清「本文件不覆盖那一对」。
 - 反过来，**读覆盖数时要知道它可能虚高**：一个对子的 ref 数上去了，不代表真的多了判据，
@@ -6360,7 +6382,7 @@ instead of importing another SQLite/PostgreSQL factory.」
 **跨 context 的 provider 装配没有任何模块内的合法落点**，只剩：
 
 > 模块之间只交换 **provider 中性的端口类型**；具体挑哪个 provider 一律在 **bootstrap
-> （`cli/start.ts` / `server.ts` / `cli/postgresqlDaemonApplication.ts`）或 system-operation 根**上完成。
+> （`bootstrap/daemonApplication.ts` / `bootstrap/daemonSessionAdapters.ts`；SQLite 测试回退暂在 `server.ts`）或 system-operation 根**上完成。
 
 **做法**：owner context 在自己的 `composition/` 下开一个装配出口（`composition.ts` 或
 `composition/xxx.ts`，那一层不在判据的负样本里），消费方的 compose 函数把 participant 作为**入参**收，
@@ -7088,7 +7110,13 @@ architecture|boundary|ratchet|lock|guard|invariants|preflight|callsite|extinctio
 四个元数据字段**别手填**——用 `census.ts` 自己导出的判据现算，与生成器同源：
 
 ```ts
-import { sourceUnit, isCorpusScanner, corpusFloor, assertsAbsence, negativeFixtureAssertions } from './tests/architecture/census'
+import {
+  sourceUnit,
+  isCorpusScanner,
+  corpusFloor,
+  assertsAbsence,
+  negativeFixtureAssertions,
+} from './tests/architecture/census'
 const u = sourceUnit(relPath, readFileSync(abs, 'utf8'))
 // corpusScanner / minCorpusFiles / assertsAbsence / negativeFixture 全从这四个函数取
 ```
@@ -7159,6 +7187,7 @@ for f in chunk-*; do bun test --isolate $(cat $f | tr '\n' ' '); done
 ```
 
 两条注意：
+
 - **`--isolate` 必须带**（见本文件另一条）；
 - **分批**：`bun test` 把多个路径当过滤器，一次给上百个会出现「filters did not match any test files」
   然后一个都不跑——它会 exit 0，看起来像跑过了。
@@ -7200,11 +7229,11 @@ bun run scripts/source-guard-sweep.ts --run    # 分批 + --isolate 跑
 
 `platform/persistence/capabilities.ts` 两个引擎的 `uniqueViolationTarget` 都这样回答：
 
-| 返回值 | 含义 |
-| --- | --- |
-| `undefined` | 这条错误**不是**唯一冲突 |
-| `''` | **是**唯一冲突，但驱动没说是哪条约束（PG 的 23505 不带 `constraint`；SQLite 的 message 匹配不出列清单） |
-| 非空串 | 约束名（PG）/ 列清单（SQLite） |
+| 返回值      | 含义                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| `undefined` | 这条错误**不是**唯一冲突                                                                                |
+| `''`        | **是**唯一冲突，但驱动没说是哪条约束（PG 的 23505 不带 `constraint`；SQLite 的 message 匹配不出列清单） |
+| 非空串      | 约束名（PG）/ 列清单（SQLite）                                                                          |
 
 把「是不是我关心的那条冲突」写成**约束名正则**，`''` 这一档就被判成 false，驱动错误原样漏到
 HTTP 边界——用户拿到 **500 而不是 409**。这种漏法本地极难复现（并发 200 轮全绿），只在 CI 上偶发。
@@ -7236,8 +7265,11 @@ HTTP 边界——用户拿到 **500 而不是 409**。这种漏法本地极难�
 
 ```md
 <!-- 会被逐条请求，第三方一抖就红 -->
+
 [CSS Color Adjustment](https://drafts.csswg.org/css-color-adjust-1/)
+
 <!-- 纯文本，同样可追溯，且不依赖任何外部站点保持在线 -->
+
 CSS Color Adjustment（`drafts.csswg.org/css-color-adjust-1/`）
 ```
 
@@ -7256,6 +7288,7 @@ CLAUDE.md 那条规则原本是针对 opencode 源码的 GitHub 外链写的，*
 `registerPostgresql` / `initializeDatabases` **源码抽出来求值**，逐条钉住 `calls` 序列。
 
 它躲过了本文件另外两条挑法：
+
 - 文件名里没有 guard/lock/architecture 等关键词（叫 "lifecycle diagnostics"）；
 - 它不扫 `src/` 语料，所以「谁扫源码树」那条挑法也罩不住它。
 
@@ -7543,7 +7576,12 @@ unhandled rejection。处置是让那一拍自己 `.catch` + `log.warn`（尽力
 import { Database } from 'bun:sqlite'
 const original = Database.prototype.prepare
 Database.prototype.prepare = function (...args) {
-  try { return original.apply(this, args) } catch (e) { console.error('SQL: ' + String(args[0])); throw e }
+  try {
+    return original.apply(this, args)
+  } catch (e) {
+    console.error('SQL: ' + String(args[0]))
+    throw e
+  }
 }
 ```
 
@@ -7573,7 +7611,6 @@ DrizzleQueryError                 // 没有 code / constraint
 
 **看错误形态的手法**：写一个临时 `describeEachProvider` 用例故意撞一次约束，把
 `error.cause` 链逐层打出 `{ctor, code, errno, constraint, table, message}`——比猜字段快得多。
-
 
 ## 把一个文件**拆成**「双引擎那几组 + 单引擎这一组」时，单引擎的钩子必须在它自己的 describe 里
 
@@ -7643,7 +7680,6 @@ DrizzleQueryError                 // 没有 code / constraint
 > 或防抖），所以没有一把梭；但改到它们时**顺手换掉**，别等它在别人的提交上红——
 > 这个形状已经推红两次，两次的直接触发者都与被测代码无关。
 
-
 `rfc247-token-audit` 的 AC-20 三条用例原来这样等审计快照：
 
 ```ts
@@ -7664,16 +7700,17 @@ PostgreSQL 是一次真实往返：**本机够、忙分片不够**，CI 的 ubun
   「除它之外没有别的行」。时间不是屏障，因果才是。
 
 判据已写成守卫（`test-suite-policy`：`provider HTTP tests do not sleep to wait for a write`）
-+ 同判据的 pre-flight（`SLEEP-TO-WAIT[L…]`），已变异验证。
+
+- 同判据的 pre-flight（`SLEEP-TO-WAIT[L…]`），已变异验证。
 
 **⚠️ 判据只能报「直线式睡眠」，而且报出来要逐条分类。** 这条判据改了四版才对
 （报出的数字 20 → 11 → 12 → 7），每一版的错都只能靠**跑真实数据**发现：
 
-| 版本 | 漏判的正当形态 |
-| --- | --- |
+| 版本                      | 漏判的正当形态                                                              |
+| ------------------------- | --------------------------------------------------------------------------- |
 | 只看「有没有 setTimeout」 | 有界轮询（`for(;;){ …break; if(Date.now()>deadline) break; await sleep }`） |
-| 循环 + `Date.now() +` | **计数式**上界（`for (attempt < 500 && isActive(id))`） |
-| 循环里有 `break` | 用 **`return` / `throw`** 退出的轮询（`waitFor` 辅助函数的标准写法） |
+| 循环 + `Date.now() +`     | **计数式**上界（`for (attempt < 500 && isActive(id))`）                     |
+| 循环里有 `break`          | 用 **`return` / `throw`** 退出的轮询（`waitFor` 辅助函数的标准写法）        |
 
 **真正的区别不在「有没有上界」，而在谁在做同步**：坏形态里睡眠时长**就是**同步手段；
 好形态里 `loop { 查一下; 满足就退出; sleep(退避) }`——**那个检查**才是同步。
@@ -7884,7 +7921,7 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
 
 - **故障注入触发器走 `tests/helpers/faultTrigger.ts`**（`installAbortTrigger` /
   `dropAbortTrigger`），别再手写 `db.run(sql\`CREATE TRIGGER …\`)`：①业务客户端在 PostgreSQL 上
-  **拒绝 DDL**（`postgresql-ddl-through-business-client`），要走 `harness.executeFixtureDdl`；
+**拒绝 DDL**（`postgresql-ddl-through-business-client`），要走 `harness.executeFixtureDdl`；
   ②两个引擎的 DDL 与 DROP 语法都不同；③**必须配 try/finally 删掉**——PG 的库是整份测试共用的真库，
   用例之间只清表不回滚 DDL。
 
@@ -7943,7 +7980,7 @@ fire-and-forget 的可观测时机在两个引擎上不同。那条讲的是「�
 **根因**是一行看着人畜无害的 drizzle：
 
 ```ts
-sql`(SELECT 1 FROM ${tasks} WHERE ${tasks.workgroupId} >= ${''} LIMIT 1)`   // 空串被编成 $1
+sql`(SELECT 1 FROM ${tasks} WHERE ${tasks.workgroupId} >= ${''} LIMIT 1)` // 空串被编成 $1
 ```
 
 那个 `''` 是**源码常量**，但 drizzle 把它编成绑定参数。generic plan 看不见它，于是把
@@ -7963,10 +8000,10 @@ sql`(SELECT 1 FROM ${tasks} WHERE ${tasks.workgroupId} >= ${''} LIMIT 1)`   // �
 **判据不能只看形状**——会过度报警。PostgreSQL 只在 **generic 估算代价不高于 custom** 时才真的
 换过去（`plan_cache_mode=auto`）。实测对照：
 
-| 语句 | custom 估算 | generic 估算 | PG 会换吗 | 真实后果 |
-| --- | --- | --- | --- | --- |
-| workgroup 探针 | 12.63 | **8.47** | 会 | 全表扫，10 倍回归 |
-| `/api/overview` 计数 | 8.62 | 458.58 | 不会 | 无（形状退化但吃不到） |
+| 语句                 | custom 估算 | generic 估算 | PG 会换吗 | 真实后果               |
+| -------------------- | ----------- | ------------ | --------- | ---------------------- |
+| workgroup 探针       | 12.63       | **8.47**     | 会        | 全表扫，10 倍回归      |
+| `/api/overview` 计数 | 8.62        | 458.58       | 不会      | 无（形状退化但吃不到） |
 
 所以判据是**两条的合取**：generic plan 把索引扫换成顺序扫，**且**它自己估得不更贵。
 这正是「估错了所以才被采纳」——只有这种才会真的伤到生产。守卫落在
@@ -8236,7 +8273,6 @@ gh run rerun <id> --failed
 `[steps=0]` 一眼就能和真失败分开——第二次就是靠这个立刻认出来的，没再花时间翻日志。
 顺带一个旁证：同 run 里正常执行的兄弟分片 `steps` 是 15，没跑起来那个是 0。
 
-
 ## 单引擎测试迁双引擎：先问「判据依赖哪个引擎的**执行模型**」，再谈换 harness（RFC-359 AC-6 实撞，2026-09-15）
 
 把 `describe` 换成 `describeEachProvider`、库取 `harness.db`——大多数迁移到此为止。
@@ -8279,6 +8315,7 @@ gh run rerun <id> --failed
 `--isolate` 每个文件一个干净进程、分片又把它们分散到不同 runner 上，所以 CI 上不会这样。
 
 **处置**：
+
 - 半径大到几百个文件时**别用单进程一条命令**。要么 `--isolate`（慢但对），
   要么按 CI 的形状分片，要么**把半径收窄到真正会被改动影响的那几十个文件**
   （纯 rename / 纯抽取不改行为的部分不用进半径，只有**行为真的变了**的那一处才要）。
@@ -8340,6 +8377,7 @@ gh run rerun <id> --failed
 3. 推上去 —— 提交里的账本指着一个**已经不在历史上**的 SHA。
 
 CI 两格红，同一个根因：
+
 - `rfc294-canonical-manifests`：`merge-base --is-ancestor <currentSnapshotSha> HEAD` 失败；
 - 另一条的报错更直白：「账本记了当前历史走不到的 SHA（典型成因：记了 rebase 前的本地提交）」。
 
@@ -8347,6 +8385,7 @@ CI 两格红，同一个根因：
 **红的是提交里的那份**。本地绿与提交内容不一致，正是这类事故最难自查的地方。
 
 **处置（二选一）**：
+
 - amend 之后**必须重跑一次 census 并把结果一起 amend 进去**（`--amend` 两次）；
 - 或者干脆**不要 amend 带 census 产物的提交**，补一笔新 commit。
 
@@ -8372,10 +8411,7 @@ SHA 有多个 workflow 时会返回多行，取 run id 要加 `select(.workflowN
     split -n l/4 radius.txt part-       # 或 awk 'NR%4==<i>'
     for p in part-*; do bun test --isolate $(cat $p | tr '\n' ' ') || break; done
 
-另外，改过 `server.ts` / `cli/start.ts` / `cli/postgresqlDaemonApplication.ts` 三个组合根
-**任意一个**，就把 `rfc359-w29-unstarted-application-composition.test.ts` 无条件加进半径
-——它一个文件里钉着**四段**装配体的摘要（PG daemon 段、SQLite applicationDeps 段、
-SQLite apiRouteMounts 段等），是这三个文件的改动最集中的落点。
+RFC-391 后，守护进程应用与会话分别在 `bootstrap/daemonApplication.ts`、`bootstrap/daemonSession.ts`，provider 差异在 `bootstrap/daemonSessionAdapters.ts`；`server.ts` 保留中立 HTTP 绑定与 SQLite 测试回退。旧 W29 摘要守卫已退役。改动接线时应覆盖 RFC-379/380/390/391 结构锁、RFC-370 根绑定测试与双引擎行为用例，不能只按符号 import 缩小范围。先完成全部开发与用例，再集中验证。
 
 ### 批量改符号名要**带词边界**：`composePostgresqlDigitalEmployee` 是 `…DigitalEmployeeExecution` 的前缀
 
@@ -8713,7 +8749,7 @@ SQLite 专有的东西。判据是整份源码 `not.toContain('sqlite')`，**注
 
 ## HTTP 组合根变更要同步结构锁与真实入口用例
 
-RFC-390 已将 HTTP owner 绑定收为 `server.ts` 的 `composeProviderAppComposition`，两个 provider 根和 SQLite 测试回退都经它进入同一张 `composeProviderAppDeps` 路由表。旧 W29 的三段源码摘要守卫已退役，不再按旧函数名更新摘要。修改接线时同步 RFC-380 模块组单次构造守卫、RFC-390 中立绑定守卫和实际双引擎 HTTP 用例；先完成全部实现与用例，再集中验证。
+RFC-390 已将 HTTP owner 绑定收为 `server.ts` 的 `composeProviderAppComposition`，RFC-391 的中立应用图和 SQLite 测试回退都经它进入同一张 `composeProviderAppDeps` 路由表。旧 W29 的三段源码摘要守卫已退役，不再按旧函数名更新摘要。修改接线时同步 RFC-380 模块组单次构造守卫、RFC-390 中立绑定守卫和实际双引擎 HTTP 用例；先完成全部实现与用例，再集中验证。
 
 ## 复现 CI 的 PG 失败要用仓库钉死的 Bun 版本（2026-09-23）
 
@@ -8721,7 +8757,6 @@ RFC-390 已将 HTTP owner 绑定收为 `server.ts` 的 `composeProviderAppCompos
 连接关闭语义不同，同一条 `rfc349-postgresql-target-faults` 在本机报 `close()` 的 `Connection closed`、在 CI 报
 注入落空——两处看到的根本不是同一个失败。不想动全局安装时，装一份到临时目录直接用：
 `npm i --prefix <tmp> bun@1.4.0 && <tmp>/node_modules/.bin/bun test <file>`。
-
 
 ## 2026-10-01：Bun 源码 census 的 named fs import 与并行候选
 
@@ -8763,3 +8798,9 @@ provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行�
 `bootstrap/maintenanceWorkerGraph.ts`；`platform/background` 只承载运行时机制与中立系统维护工厂，
 不得导入模块或写入 bootstrap 入口路径。主线程只能导入无副作用的 `maintenanceWorkerEntries.ts`，
 并显式把入口传给监督器；编译态相对入口、构建清单与架构入口清单必须一致。
+
+### RFC-391 中立守护图的维护约定
+
+`main.ts` 将 `composeDaemonSession` 注入 `startCommand`；`cli/start.ts` / `cli/dev.ts` 不得导入 `bootstrap/`。应用图只构造被动模块，`unstarted` 相位仅做有限初始化；会话图拥有唯一 `composeDaemonLifecycle` 调用。冷恢复经适配表的 `afterCore` 在核心组之后、资源目录之前执行。受限启动步骤只读 `DAEMON_BOOT_STEPS`，不得在图里另写 provider 分支。恢复证明保留 SQLite 的进程世代与 PostgreSQL 的数据库世代，执行 owner 仍统一使用 `DAEMON_GENERATION`。
+
+维护 Worker 的任务保护集取会话驱动注册表与 `materializingSpaces.keys()` 的并集。新增源代码锁应读取真实图文件；跨层接线锁可用 `tests/helpers/daemonGraphSource.ts`，它每个文件只读取一次。不要恢复两个 provider 副本的计数或按旧 `backgroundJobs[1]` 找 SQLite。`composeProviderAppComposition` 暂留 `server.ts`，避免 SQLite 测试回退形成值依赖环；测试入口与机制目录迁移分别留给 RFC-392 与 S2c。

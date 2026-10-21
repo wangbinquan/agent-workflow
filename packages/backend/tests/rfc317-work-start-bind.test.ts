@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-317 / RFC-383: reverses RFC-359 W12's deliberate separate SQLite OS instance.
 // HTTP, work-start and the OS worker use one initialized employee bundle per session.
 import { DAEMON_BACKGROUND_JOBS } from '../src/cli/daemonLifecycleProgram'
@@ -5,14 +6,17 @@ import { propertyBodies } from './helpers/daemonProgramSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-const source = (path: string) => readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
+const source = (path: string) =>
+  path === 'cli/start.ts'
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
 describe('RFC-383 single employee and lexical work-start forwarding', () => {
   test('the integration composer has no mutable bind holder', () => {
     const integration = source('modules/integration/composition.ts')
     expect(integration).not.toContain('DeferredDigitalEmployeeWorkStart')
     expect(integration).not.toContain('DigitalEmployeeWorkStartPort | null')
   })
-  for (const path of ['cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+  for (const path of ['cli/start.ts', 'bootstrap/daemonApplication.ts']) {
     test(`${path}: the integration forwarder resolves the one completed employee bundle`, () => {
       const root = source(path)
       const portAt = root.indexOf('const digitalEmployeeWorkStart = Object.freeze<')
@@ -37,27 +41,24 @@ describe('RFC-383 single employee and lexical work-start forwarding', () => {
       expect(root).not.toContain('digitalEmployeeWorkStart.participant')
     })
   }
-  test('SQLite passes both bundles to HTTP before registering the same OS worker', () => {
-    const root = source('cli/start.ts')
+  test('application passes both bundles to HTTP and the session registers their OS worker', () => {
+    const root = source('bootstrap/daemonApplication.ts')
+    const session = source('bootstrap/daemonSession.ts')
     const bundleAt = root.indexOf(
       'const digitalEmployeeModules = composeDaemonDigitalEmployeeModules(',
     )
     const appAt = root.indexOf('const http = composeProviderAppComposition({')
-    const workerAt = root.indexOf('const employeeOsRuntimeFactory =')
     expect(appAt).toBeGreaterThan(bundleAt)
-    expect(workerAt).toBeGreaterThan(appAt)
-    expect(root.slice(appAt, root.indexOf('const app =', appAt))).toContain(
-      'digitalEmployeeModules,',
-    )
-    expect(root.slice(appAt, root.indexOf('const app =', appAt))).toContain(
-      'developmentAutomationModules,',
-    )
-    expect(root).toContain('const employeeOs = digitalEmployeeModules.module')
-    expect(root).toContain('runDigitalEmployeeOsCycle({ runtime: employeeOs.runtime.worker })')
+    expect(root.slice(appAt)).toContain('digitalEmployee: digitalEmployeeModules,')
+    expect(root.slice(appAt)).toContain('developmentAutomation: developmentAutomationModules,')
+    expect(
+      session.indexOf('const employeeRuntime = runtime.digitalEmployee.runtime'),
+    ).toBeGreaterThan(session.indexOf('const application = await composeDaemonApplication('))
+    expect(session).toContain('runDigitalEmployeeOsCycle({ runtime: employeeRuntime.worker })')
     expect(DAEMON_BACKGROUND_JOBS.filter((j) => j.id === 'digital-employee-os')).toHaveLength(1)
-    expect(propertyBodies(root, 'backgroundJobs')[1]).toContain(
-      "'digital-employee-os': employeeOsRuntimeFactory",
-    )
+    const records = propertyBodies(session, 'backgroundJobs')
+    expect(records).toHaveLength(1)
+    expect(records[0]).toContain("'digital-employee-os': digitalEmployeeRuntimeFactory")
   })
   test('HTTP and work-start consume the same module and its activity worker', () => {
     const server = source('server.ts'),

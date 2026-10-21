@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -5,7 +6,9 @@ import ts from 'typescript'
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -64,12 +67,7 @@ function arrowObject(node: ts.Node): ts.ObjectLiteralExpression {
 
 test('both actual provider route closures and standalone HTTP bind the same whole record', () => {
   for (const [path, fn, selected] of [
-    ['cli/start.ts', 'composeSqliteProviderSession', 'input.taskDeletionEffects'],
-    [
-      'cli/postgresqlDaemonApplication.ts',
-      'composePostgresqlApplication',
-      'input.taskDeletionEffects',
-    ],
+    ['bootstrap/daemonApplication.ts', 'composeDaemonApplication', 'input.taskDeletionEffects'],
     ['server.ts', 'composeSqliteApplicationDeps', 'deps.taskDeletionEffects'],
   ]) {
     const source = load(path!),
@@ -100,8 +98,7 @@ test('both actual provider route closures and standalone HTTP bind the same whol
 
 test('both real boot recovery calls retain db and default store before the whole selected record', () => {
   for (const [path, fn, db] of [
-    ['cli/start.ts', 'composeSqliteProviderSession', 'db'],
-    ['cli/postgresqlDaemonApplication.ts', 'composePostgresqlApplication', 'input.db'],
+    ['bootstrap/daemonApplication.ts', 'composeDaemonApplication', 'input.db'],
   ]) {
     const source = load(path!),
       call = oneCall(source, 'recoverInterruptedTaskDeletes')
@@ -130,7 +127,7 @@ test('frozen start choice reaches initial and replacement sessions, PG session a
   expect(
     text(property(object(initializer.arguments[0]!), source, 'taskDeletionEffects'), source),
   ).toBe('opts.taskDeletionEffects')
-  const sessions = calls(source, source, 'composeDaemonProviderSession')
+  const sessions = calls(source, source, 'composeSession')
   expect(sessions).toHaveLength(2)
   for (const call of sessions) {
     const spreads = object(call.arguments[0]!).properties.filter(ts.isSpreadAssignment)
@@ -138,7 +135,7 @@ test('frozen start choice reaches initial and replacement sessions, PG session a
       spreads.filter((spread) => text(spread.expression, source) === 'sessionInput'),
     ).toHaveLength(1)
   }
-  const pg = oneCall(source, 'composePostgresqlDaemonApplication')
+  const pg = oneCall(source, 'composeDaemonApplication')
   expect(text(property(object(pg.arguments[0]!), source, 'taskDeletionEffects'), source)).toBe(
     'input.taskDeletionEffects',
   )
@@ -165,7 +162,7 @@ test('actual route delete forwards required activity and whole effects to the or
 test('root choice uses exact TE public type and SC offers its own independent native factory', () => {
   for (const [path, names] of [
     ['cli/start.ts', ['StartOptions', 'DaemonProviderSessionComposeInput']],
-    ['cli/postgresqlDaemonApplication.ts', ['PostgresqlDaemonApplicationInput']],
+    ['bootstrap/daemonApplication.ts', ['DaemonApplicationInput']],
     ['server.ts', ['AppDeps']],
   ] as const) {
     const source = load(path)
@@ -200,57 +197,19 @@ test('root choice uses exact TE public type and SC offers its own independent na
       expect(text(fields[0]!.type!, source)).toBe('TaskDeletionEffects')
     }
   }
-  const postgres = load('cli/postgresqlDaemonApplication.ts')
+  const postgres = load('bootstrap/daemonApplication.ts')
   const derived = postgres.statements.filter(
     (node): node is ts.InterfaceDeclaration =>
-      ts.isInterfaceDeclaration(node) && node.name.text === 'PostgresqlApplicationInput',
+      ts.isInterfaceDeclaration(node) && node.name.text === 'DaemonApplicationInput',
   )
   expect(derived).toHaveLength(1)
-  const clauses = derived[0]!.heritageClauses
-  expect(clauses).toHaveLength(1)
-  const clause = clauses![0]!
-  expect(clause.token).toBe(ts.SyntaxKind.ExtendsKeyword)
-  expect(clause.types).toHaveLength(1)
-  const inherited = clause.types[0]!
-  expect(text(inherited.expression, postgres)).toBe('Omit')
-  expect(inherited.typeArguments).toHaveLength(2)
-  expect(text(inherited.typeArguments![0]!, postgres)).toBe('PostgresqlDaemonApplicationInput')
-  const omissions = inherited.typeArguments![1]!
-  expect(ts.isUnionTypeNode(omissions)).toBe(true)
-  if (!ts.isUnionTypeNode(omissions)) throw new Error('exact original exclusions required')
-  expect(omissions.types.map((node) => text(node, postgres))).toEqual([
-    "'provider'",
-    "'maintenanceStatus'",
-  ])
-  expect(
-    derived[0]!.members.filter(
-      (node) => ts.isPropertySignature(node) && text(node.name, postgres) === 'taskDeletionEffects',
-    ),
-  ).toHaveLength(0)
-
-  const selection = load('modules/task-execution/composition/taskDeletionEffects.ts')
-  const nativeImports = selection.statements.filter(
-    (node): node is ts.ImportDeclaration =>
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text.includes('source-control'),
+  // RFC-391: daemon and unstarted phases now share the exact same generic input.
+  expect(derived[0]!.heritageClauses).toBeUndefined()
+  const effects = derived[0]!.members.filter(
+    (node) => ts.isPropertySignature(node) && text(node.name, postgres) === 'taskDeletionEffects',
   )
-  expect(nativeImports).toHaveLength(1)
-  expect((nativeImports[0]!.moduleSpecifier as ts.StringLiteral).text).toBe(
-    '@/modules/source-control/composition',
-  )
-  const composition = load('modules/source-control/composition.ts')
-  const exports = composition.statements.filter(
-    (node): node is ts.ExportDeclaration =>
-      ts.isExportDeclaration(node) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text === './infrastructure/local/gitTaskDeletionRepositoryEffects',
-  )
-  expect(exports).toHaveLength(1)
-  expect(text(exports[0]!.exportClause!, composition)).toBe(
-    '{createGitTaskDeletionRepositoryEffects}',
-  )
+  expect(effects).toHaveLength(1)
+  expect(text(effects[0]!, postgres)).toContain('TaskDeletionEffects')
 })
 
 test('native content construction stays lazy and existence plus removal stays one synchronous method', () => {

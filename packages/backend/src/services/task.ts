@@ -326,17 +326,6 @@ export function isTaskActive(taskId: string): boolean {
   return isTaskDriverActive(taskId)
 }
 
-/** RFC-338: point-in-time advisory input for the off-thread maintenance
- * worker. Durable task status/maintenance claims remain the deletion fence. */
-export function activeTaskIdsSnapshot(): string[] {
-  return [
-    ...new Set([
-      ...taskDriverRegistry.activeTokens().map((token) => token.taskId),
-      ...materializingSpaces.keys(),
-    ]),
-  ]
-}
-
 /**
  * P-4-06: abort every in-flight task. Used by daemon shutdown. The runner
  * SIGTERMs each opencode child via the controller's signal; the scheduler

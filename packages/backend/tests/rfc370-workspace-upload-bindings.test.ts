@@ -386,7 +386,8 @@ test('real roots, provider reassembly, SQLite arms and PG preselection preserve 
   const root = resolve(import.meta.dir, '../src')
   const source = (path: string) => readFileSync(join(root, path), 'utf8')
   const cli = source('cli/start.ts'),
-    pg = source('cli/postgresqlDaemonApplication.ts'),
+    session = source('bootstrap/daemonSession.ts'),
+    pg = source('bootstrap/daemonApplication.ts'),
     http = source('server.ts')
   function values(text: string, property: string) {
     const sf = ts.createSourceFile('root.ts', text, ts.ScriptTarget.Latest, true),
@@ -402,10 +403,9 @@ test('real roots, provider reassembly, SQLite arms and PG preselection preserve 
     return result
   }
   expect(values(cli, 'workspaceUploads')).toEqual([
-    'input.workspaceUploads',
     'selectWorkspaceUploadContentFactory(opts.workspaceUploads)',
-    'input.workspaceUploads',
   ])
+  expect(values(session, 'workspaceUploads')).toEqual(['input.workspaceUploads'])
   expect(values(pg, 'workspaceUploads')).toEqual(['workspaceUploads'])
   // RFC-382 shares the selected receiver with the bundle and the HTTP dependency record.
   expect(values(http, 'workspaceUploads')).toEqual(['workspaceUploads'])

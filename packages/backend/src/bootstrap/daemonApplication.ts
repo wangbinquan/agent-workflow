@@ -1,17 +1,34 @@
-import { composeDaemonIntentModules, type DaemonIntentModules } from './daemonModules/intent'
+// RFC-391 — one passive application graph for daemon and unstarted phases.
+import {
+  DAEMON_SESSION_ADAPTERS,
+  type DaemonSessionAdapter,
+  type DaemonApplicationProvider,
+  type DaemonApplicationDatabase,
+} from './daemonSessionAdapters'
+import type { ProviderAppOwnerInput } from '@/server'
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
+import { ensureCredentialsSealed } from '@/services/repoCredentials'
+import { DEFAULT_DISTILL_POLICY, resolveDistillPolicy } from '@agent-workflow/shared'
+import { setMemoryDistillPolicyProvider } from '@/modules/memory/composition'
+import { getRuntimeDriver, RUNTIME_KINDS } from '@/services/runtime'
+import { assertRuntimeDeclarations } from '@/services/runtime/selfCheck'
+import {
+  initializeRuntimeRegistryBoot,
+  type RuntimeLegacyConfigurationPort,
+} from '@/modules/runtime-management/composition/runtimeRegistry'
+import { composeDaemonIntentModules, type DaemonIntentModules } from '@/cli/daemonModules/intent'
 import {
   composeDaemonDigitalEmployeeModules,
   type DaemonDigitalEmployeeModules,
-} from './daemonModules/digitalEmployee'
+} from '@/cli/daemonModules/digitalEmployee'
 import {
   composeDaemonDevelopmentAutomationModules,
   type DaemonDevelopmentAutomationModules,
-} from './daemonModules/developmentAutomation'
+} from '@/cli/daemonModules/developmentAutomation'
 import {
   composeDaemonTaskExecutionModules,
   type DaemonTaskExecutionModules,
-} from './daemonModules/taskExecution'
-import { DAEMON_TASK_EXECUTION_ADAPTERS } from './daemonModules/adapters'
+} from '@/cli/daemonModules/taskExecution'
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import {
   composeDaemonScheduledTaskModules,
@@ -22,10 +39,7 @@ import {
   type DaemonIntegrationModules,
 } from '@/cli/daemonModules/integration'
 import { composeDaemonFusionModules, type DaemonFusionModules } from '@/cli/daemonModules/fusion'
-import {
-  DAEMON_PROVIDER_CORE_ADAPTERS,
-  standaloneModuleAdapters,
-} from '@/cli/daemonModules/adapters'
+import { standaloneModuleAdapters } from '@/cli/daemonModules/adapters'
 import { composeDaemonMemoryModules } from '@/cli/daemonModules/memory'
 import { composeDaemonObservationModules } from '@/cli/daemonModules/observation'
 import {
@@ -34,7 +48,13 @@ import {
 } from '@/cli/daemonModules/providerCore'
 import { composeDaemonRepositoryCredentials } from '@/cli/daemonModules/repositoryCredentials'
 import { composeDaemonResourceCatalogModules } from '@/cli/daemonModules/resourceCatalog'
-import { NotApplicable, type DaemonBootSteps } from './daemonLifecycleProgram'
+import {
+  DAEMON_BOOT_STEPS,
+  NotApplicable,
+  type DaemonBootStepId,
+  type DaemonBootSteps,
+  type DaemonBootStepDeclaration,
+} from '@/cli/daemonLifecycleProgram'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { TaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
 import type { TaskRecoveryDeploymentSelection } from '@/modules/task-execution/composition/taskRecoverySelection'
@@ -114,42 +134,30 @@ import {
 } from '@/modules/source-control/composition'
 import { type ScriptFixtureProcess } from '@/modules/task-execution/composition/programTools'
 import type { ActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionRunners'
-// RFC-349 — PostgreSQL daemon application composition.
-//
-// This file is intentionally a bootstrap composition root. Provider clients
-// are captured while owner modules are built and never cross into HTTP, WS or
-// public route contracts.
-
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { DigitalEmployeeModuleWithRuntime } from '@/modules/digital-employee/composition'
-import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
+import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import {
-  createDaemonLockProof,
   createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
   type BootExecutionRecoveryFactory,
 } from '@/modules/task-execution/composition/bootRecovery'
 import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
-import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import type { Config } from '@agent-workflow/shared'
 import { join } from 'node:path'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
-
 import type { SecretBox } from '@/auth/secretBox'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { type RuntimeDiagnosticDependencies } from '@/modules/runtime-management/composition/runtimeManagement'
 import type { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
 import { type WebhookDispatcher } from '@/services/webhook/dispatcherTypes'
-
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
 import { reconcileRepositoryTransportConnectionProjections } from '@/modules/source-control/composition'
 import type { CodeReviewArtifactStore } from '@/modules/code-capability/public/participants'
 import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
 import type { composePostgresqlMemoryOperations } from '@/modules/memory/composition'
-
 import { type PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
-
 import {
   type ResourcePackageSkillArtifactOwner,
   type ResourcePackagePluginArtifactOwner,
@@ -167,10 +175,10 @@ import {
 } from '@/modules/source-control/public/queries'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition'
-import { composePostgresqlResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
+import { composeResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import {
   composeTaskIdleTimeoutOperations,
-  createPostgresqlTaskIdleTimeoutPersistence,
+  createTaskIdleTimeoutPersistence,
   type TaskIdleTimeoutOperations,
 } from '@/modules/task-execution/composition/taskIdleTimeout'
 import type {
@@ -181,11 +189,8 @@ import type {
 } from '@/modules/development-automation/composition'
 import { type MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
-
 import type { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
-
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
-
 import { type CustomObserverProgramFactory } from '@/modules/event-center/composition'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
@@ -197,16 +202,12 @@ import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-ca
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { materializingSpaces } from '@/services/gc'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
-
 import { createLogger } from '@/util/log'
 import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { ResolvedDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
 import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
-
 import { batchOwnerUserId } from '@/services/repoBatchImport'
 import { redactEventPayload } from '@/services/tokenRedaction'
 import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
@@ -215,14 +216,13 @@ import {
   composeProviderAppDeps,
   createComposedApp,
   type UnstartedApplicationScope,
-  type PostgresqlAppCompositionInput,
+  type ProviderAppCompositionInput,
 } from '@/server'
 import { buildWebSocketAdapter } from '@/ws/server'
 import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
-import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
-
+import { composeDaemonRealtimePolicy } from '@/cli/daemonRealtimePolicy'
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { type SkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 import type {
@@ -231,20 +231,14 @@ import type {
 } from '@/modules/digital-employee/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 
-const log = createLogger('postgresql-daemon-application')
-
-type PostgresqlProviderRuntime = Extract<
-  ResolvedDatabaseProviderRuntime,
-  { readonly provider: 'postgresql' }
->
-
-export interface PostgresqlDaemonApplicationInput {
+export interface DaemonApplicationInput<P extends DatabaseProvider = DatabaseProvider> {
   readonly digitalEmployeeTypePackageDriftPolicy?: 'reject' | 'draft-overlay'
-  readonly provider: PostgresqlProviderRuntime
-  readonly db: PostgresqlDatabaseClient
-  readonly config: Config & {
-    readonly database: Extract<Config['database'], { readonly provider: 'postgresql' }>
-  }
+  readonly provider: DaemonApplicationProvider<P>
+  readonly db: DaemonApplicationDatabase<P>
+  readonly config: Config
+  readonly log?: ReturnType<typeof createLogger>
+  readonly runtimeLegacyConfiguration?: RuntimeLegacyConfigurationPort
+  readonly dbPath?: string
   readonly token: string
   readonly appHome: string
   readonly configPath: string
@@ -383,34 +377,31 @@ export interface PostgresqlDaemonApplicationInput {
   readonly intentTestDependencies?: {
     readonly runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
   }
-  readonly maintenanceStatus: NonNullable<
-    PostgresqlAppCompositionInput['platform']['maintenance']['maintenanceStatus']
+  readonly maintenanceStatus?: NonNullable<
+    ProviderAppCompositionInput<P>['platform']['maintenance']['maintenanceStatus']
   >
-}
-
-export interface PostgresqlApplicationInput extends Omit<
-  PostgresqlDaemonApplicationInput,
-  'provider' | 'maintenanceStatus'
-> {
-  readonly provider: Pick<PostgresqlProviderRuntime, 'runtime' | 'telemetry'>
-  readonly maintenanceStatus?: PostgresqlDaemonApplicationInput['maintenanceStatus']
-  readonly workflowRuntime?: PostgresqlAppCompositionInput['resourceCatalog']['workflows']['runtime']
+  readonly workflowRuntime?: ProviderAppCompositionInput<P>['resourceCatalog']['workflows']['runtime']
   readonly opencodeVersion?: string | null
 }
 
-export type PostgresqlApplicationPhase =
+export type DaemonApplicationPhase =
   | { readonly kind: 'daemon' }
   | { readonly kind: 'unstarted'; readonly scope: UnstartedApplicationScope }
 
-export interface PostgresqlDaemonApplication {
-  readonly lifecycleSteps: Omit<
-    DaemonBootSteps,
-    'runtime-declarations' | 'runtime-registry' | 'maintenance-boot-snapshot'
-  >
-  readonly core: SelectedDaemonProviderCore<'postgresql'>
+export interface DaemonApplication<P extends DatabaseProvider = DatabaseProvider> {
+  readonly modules: ProviderAppOwnerInput<P>['modules']
+  readonly operations: {
+    readonly workspaceMaintenance: ReturnType<typeof composeWorkspaceMaintenanceCommand>
+    readonly resourceLimits: ReturnType<typeof composeResourceLimitOperations>
+    readonly taskIdleTimeout: TaskIdleTimeoutOperations
+    readonly integrationIdentityAccess: ProviderAppOwnerInput<P>['integrationIdentityAccess']
+    readonly resourcePackageApplyActivity: DaemonApplicationRuntime<P>['resourcePackageActivity']
+  }
+  readonly lifecycleSteps: Omit<DaemonBootSteps, 'maintenance-boot-snapshot'>
+  readonly core: SelectedDaemonProviderCore<P>
   readonly app: ReturnType<typeof createComposedApp>
   readonly webSocket: ReturnType<typeof buildWebSocketAdapter>
-  readonly runtime: PostgresqlDaemonApplicationRuntime
+  readonly runtime: DaemonApplicationRuntime<P>
 }
 
 /**
@@ -418,8 +409,8 @@ export interface PostgresqlDaemonApplication {
  * The start command owns timers and workers; it receives no route dependency
  * builders and cannot accidentally re-compose a second provider graph.
  */
-export interface PostgresqlDaemonApplicationRuntime {
-  readonly taskExecutionModules: DaemonTaskExecutionModules<'postgresql'>
+export interface DaemonApplicationRuntime<P extends DatabaseProvider = DatabaseProvider> {
+  readonly taskExecutionModules: DaemonTaskExecutionModules<P>
   readonly taskExecution: SelectedTaskExecutionProviderRuntime
   /**
    * RFC-359 —— 装配好的协作命令上下文。暴露它不是为了给 daemon 用（daemon 不碰它），
@@ -439,7 +430,7 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly crewStationEvents?: CrewStationEventIngress
   readonly eventCenter: DaemonIntegrationModules['eventCenter']
   readonly fusion: DaemonFusionModules['fusionOperations']
-  readonly resourceLimits: ReturnType<typeof composePostgresqlResourceLimitOperations>
+  readonly resourceLimits: ReturnType<typeof composeResourceLimitOperations>
   /** RFC-350：不活跃超时收割（僵尸任务）的 provider-bound operations。 */
   readonly taskIdleTimeout: TaskIdleTimeoutOperations
   readonly mcpRuntimeTests: ReturnType<typeof composeLocalMcpDiagnostics>
@@ -456,21 +447,13 @@ export interface PostgresqlDaemonApplicationRuntime {
   }) => Promise<void>
 }
 
-/**
- * Build one complete PostgreSQL HTTP/WS graph from the already verified live
- * generation. The implementation is filled by the owner-domain compositions
- * below; callers never reopen or reselect a provider.
- */
-export async function composePostgresqlDaemonApplication(
-  input: PostgresqlDaemonApplicationInput,
-): Promise<PostgresqlDaemonApplication> {
-  return composePostgresqlApplication(input, { kind: 'daemon' })
-}
-
-export async function composePostgresqlApplication(
-  input: PostgresqlApplicationInput,
-  phase: PostgresqlApplicationPhase,
-): Promise<PostgresqlDaemonApplication> {
+export async function composeDaemonApplication<P extends DatabaseProvider>(
+  input: DaemonApplicationInput<P>,
+  phase: DaemonApplicationPhase,
+): Promise<DaemonApplication<P>> {
+  const adapter = DAEMON_SESSION_ADAPTERS[input.provider.provider] as DaemonSessionAdapter<P>
+  adapter.admitSelections(input)
+  const log = input.log ?? createLogger('daemon')
   const developmentPurposeRoot = composeDevelopmentPurposeRoot({
     appHome: input.appHome,
     selection: input.developmentPurposes,
@@ -540,14 +523,7 @@ export async function composePostgresqlApplication(
     ...(input.sourceWriteWindow === undefined
       ? {}
       : { sourceWriteWindow: input.sourceWriteWindow }),
-    adapters: DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
-      db: input.db,
-      runtime: input.provider.runtime,
-      databaseConfig: input.config.database,
-      backup: input.databaseBackup,
-      appHome: input.appHome,
-      lockPath: input.lockPath,
-    }),
+    adapters: adapter.core(input),
     appHome: input.appHome,
     secretBox: input.secretBox,
     realtimePolicy,
@@ -573,7 +549,7 @@ export async function composePostgresqlApplication(
   // the selected schema. A live non-empty target is rejected by the restore
   // coordinator; bootstrap never drops or aliases the active schema.
   if (phase.kind === 'daemon') {
-    await core.systemOperations.applyPendingRestore()
+    await adapter.afterCore(core)
   }
 
   const identityAccess = core.identityAccess
@@ -645,67 +621,62 @@ export async function composePostgresqlApplication(
     },
   })
   const { memoryOperations, memoryCatalog } = memoryModules
-  const taskExecutionModules: DaemonTaskExecutionModules<'postgresql'> =
-    composeDaemonTaskExecutionModules({
-      db: input.db,
-      appHome: input.appHome,
-      configPath: input.configPath,
-      secretBox: input.secretBox,
-      taskLaunchConfiguration,
-      adapters: DAEMON_TASK_EXECUTION_ADAPTERS.postgresql({
-        db: input.db,
-        runtime: input.provider.runtime,
-      }),
-      core,
-      observation: observationModules,
-      resources: {
-        ...resourceCatalogModules,
-        agentResourceIntegrity: agentResourceIntegrity,
-        owners: composeOwnerIdentityQueries(input.db),
+  const taskExecutionModules: DaemonTaskExecutionModules<P> = composeDaemonTaskExecutionModules({
+    db: input.db,
+    appHome: input.appHome,
+    configPath: input.configPath,
+    secretBox: input.secretBox,
+    taskLaunchConfiguration,
+    adapters: adapter.taskExecution(input),
+    core,
+    observation: observationModules,
+    resources: {
+      ...resourceCatalogModules,
+      owners: composeOwnerIdentityQueries(input.db),
+    },
+    repository: repositoryCredentials,
+    memory: memoryModules,
+    selection: {
+      taskRunBinding: taskRunRoot.drive,
+      workspaceExcludeProfilesFor,
+      nodeRunPrompts,
+      portArtifacts,
+      isolationWorkspaces,
+      repositoryGitWorkspaces,
+      archive: input.taskArchive,
+      workspaceReads,
+      effects: input.taskDeletionEffects,
+      archivedEvents: input.archivedNodeEvents,
+      reviewArtifacts: input.reviewArtifacts,
+      reviewRollbackSnapshots: input.reviewRollbackSnapshots,
+      workspaceUploads,
+      inputFiles: input.taskInputFiles,
+      preparationEffects: input.repositoryPreparationEffects,
+      scratchEffects: input.scratchWorkspaceEffects,
+      recoverySelection: input.taskRecovery?.(identityAccess),
+      fusionWorkspaces:
+        input.fusionWorkspaceEffects ??
+        createFileFusionWorkspaceEffects({ appHome: input.appHome }),
+    },
+    alerts: {
+      onAlert(row, transition) {
+        tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+          type: 'lifecycle.alert',
+          taskId: row.taskId,
+          rule: row.rule,
+          severity: row.severity,
+          transition,
+        })
       },
-      repository: repositoryCredentials,
-      memory: memoryModules,
-      selection: {
-        taskRunBinding: taskRunRoot.drive,
-        workspaceExcludeProfilesFor,
-        nodeRunPrompts,
-        portArtifacts,
-        isolationWorkspaces,
-        repositoryGitWorkspaces,
-        archive: input.taskArchive,
-        workspaceReads,
-        effects: input.taskDeletionEffects,
-        archivedEvents: input.archivedNodeEvents,
-        reviewArtifacts: input.reviewArtifacts,
-        reviewRollbackSnapshots: input.reviewRollbackSnapshots,
-        workspaceUploads,
-        inputFiles: input.taskInputFiles,
-        preparationEffects: input.repositoryPreparationEffects,
-        scratchEffects: input.scratchWorkspaceEffects,
-        recoverySelection: input.taskRecovery?.(identityAccess),
-        fusionWorkspaces:
-          input.fusionWorkspaceEffects ??
-          createFileFusionWorkspaceEffects({ appHome: input.appHome }),
+      onResolved(taskId) {
+        tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+          type: 'lifecycle.alert.resolved',
+          taskId,
+        })
       },
-      alerts: {
-        onAlert(row, transition) {
-          tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-            type: 'lifecycle.alert',
-            taskId: row.taskId,
-            rule: row.rule,
-            severity: row.severity,
-            transition,
-          })
-        },
-        onResolved(taskId) {
-          tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-            type: 'lifecycle.alert.resolved',
-            taskId,
-          })
-        },
-      },
-      finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
-    })
+    },
+    finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
+  })
   const taskExecutionProvider = taskExecutionModules
   const taskExecutionResources = taskExecutionModules.resources
   const taskExecutionPersistence = taskExecutionModules.persistence
@@ -728,7 +699,7 @@ export async function composePostgresqlApplication(
   })
   const { fusionOperations } = fusionModules
   // RFC-223 PR-4 / RFC-359 W3-T15：融合 provenance 修复必须在任何融合恢复 / 播种 / HTTP 观察到历史
-  // name-only 行之前完成。fail-closed：不包 try，修复失败即 daemon 不起（与 cli/start.ts 同）。
+  // name-only 行之前完成。fail-closed：不包 try，修复失败即 daemon 不起（两种 provider 共用）。
   const scheduledTaskModules = composeDaemonScheduledTaskModules({
     db: input.db,
     assertAgentIntegrity: (agentIds) =>
@@ -818,7 +789,7 @@ export async function composePostgresqlApplication(
   const developmentAutomation = developmentAutomationModules.automation
   // RFC-368 实现门 P2-1：资源上限与空闲收割都带真实原因取消（`resource-reaped`），状态与原因
   // 同一次写入落下——此前按 `user` 取消、事后改写原因，中间几秒像是用户取消的。
-  const resourceLimitOperations = composePostgresqlResourceLimitOperations({
+  const resourceLimitOperations = composeResourceLimitOperations({
     db: input.db,
     cancelTask: (taskId, reason) =>
       taskExecutionProvider.cancellation.cancel({
@@ -827,7 +798,7 @@ export async function composePostgresqlApplication(
       }),
   })
   const taskIdleTimeoutOperations = composeTaskIdleTimeoutOperations({
-    persistence: createPostgresqlTaskIdleTimeoutPersistence(input.db),
+    persistence: createTaskIdleTimeoutPersistence(input.db),
     cancelTask: (taskId, reason) =>
       taskExecutionProvider.cancellation.cancel({
         taskId,
@@ -896,7 +867,25 @@ export async function composePostgresqlApplication(
   // RFC-359 W3-T4（P0-3 / P0-4）：boot 恢复四步与 SQLite 同一段序列（composition/bootRecovery.ts）——
   // 撤销旧 daemon 的 owner → 收割孤儿 run → 修 runtime session lease → 清算 effect 并释放 / 闭合 owner。
   // 必须在 HTTP 与任何自动续跑之前；此前 PG daemon 从未跑过，重启一次就把上一代任务永久卡在 running。
-  const lifecycleSteps: PostgresqlDaemonApplication['lifecycleSteps'] = {
+  const lifecycleSteps: DaemonApplication<P>['lifecycleSteps'] = {
+    'runtime-declarations': async () => {
+      const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))
+      if (notModeled.length > 0) {
+        log.info('runtime declaration self-check: not-modeled dispositions', { notModeled })
+      }
+    },
+    'runtime-registry': async () => {
+      await initializeRuntimeRegistryBoot({
+        operations: core.runtimeRegistry,
+        config: input.config,
+        legacyConfiguration: requireRuntimeLegacyConfiguration(input.runtimeLegacyConfiguration),
+        onRecoverableFailure(error) {
+          log.warn('builtin runtime seed/migration on boot failed', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+        },
+      })
+    },
     'process-registrations': async () => {
       registerTerminalWorkspacePrunePolicy(
         composeWebhookTerminalWorkspacePrunePolicy({
@@ -904,8 +893,21 @@ export async function composePostgresqlApplication(
           enabled: async () => (await configuration.read()).webhookTaskWorkspaceAutoCleanup,
         }),
       )
+      setMemoryDistillPolicyProvider(async () => {
+        try {
+          return resolveDistillPolicy(await configuration.read())
+        } catch {
+          return DEFAULT_DISTILL_POLICY
+        }
+      })
     },
-    'repository-url-sealing': NotApplicable,
+    'repository-url-sealing': providerBootStep(
+      input.provider.provider,
+      'repository-url-sealing',
+      async () => {
+        await ensureCredentialsSealed(core.repositoryWorkspaceStore, input.secretBox)
+      },
+    ),
     'transport-projections': async () => {
       await reconcileRepositoryTransportConnectionProjections(
         repositoryTransportRepository,
@@ -918,9 +920,9 @@ export async function composePostgresqlApplication(
         log.info('orphaned git credential leases removed', { count: removedCredentialLeases })
       }
     },
-    'daemon-identity': async () => {
+    'daemon-identity': providerBootStep(input.provider.provider, 'daemon-identity', async () => {
       await core.daemonActor('postgresql-daemon-system-identity-not-admitted')
-    },
+    }),
     'skill-identity-barrier': async () => {
       const report = await skillCatalogBoot.runIdentityMigrationBarrier()
       if (report.recoveredOperations > 0 || report.removedHusks > 0 || report.migratedSkills > 0) {
@@ -1039,19 +1041,12 @@ export async function composePostgresqlApplication(
         recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
         persistence: taskExecutionPersistence,
         runtimeSessionLeases,
-        lockProof:
-          input.daemonStartupLease === undefined
-            ? createDaemonLockProof({
-                lockPath: input.lockPath,
-                lockPid: process.pid,
-                daemonGeneration: DAEMON_GENERATION,
-              })
-            : createDaemonRecoveryAuthorityProof(
-                await readDaemonStartupRecoveryAuthority(
-                  input.daemonStartupLease,
-                  input.provider.runtime.generationId,
-                ),
-              ),
+        lockProof: createDaemonRecoveryAuthorityProof(
+          await readDaemonStartupRecoveryAuthority(
+            requireStartupLease(input.daemonStartupLease),
+            adapter.recoveryProofGeneration(input.provider),
+          ),
+        ),
         codeHostProbe: (descriptor) =>
           probeCodeHostMutation({
             descriptor,
@@ -1093,13 +1088,20 @@ export async function composePostgresqlApplication(
       }
     },
     'resource-reverify': async () => {
-      const bf = await skillCatalogBoot.backfillLegacyVersions()
-      const r = await skillCatalogBoot.reverifySnapshots()
-      log.info('boot snapshot reverify', {
-        ...r,
-        legacyBackfilled: bf.backfilled,
-        husksRemoved: bf.husksRemoved,
-      })
+      try {
+        const bf = await skillCatalogBoot.backfillLegacyVersions()
+        const r = await skillCatalogBoot.reverifySnapshots()
+        log.info('boot snapshot reverify', {
+          ...r,
+          legacyBackfilled: bf.backfilled,
+          husksRemoved: bf.husksRemoved,
+        })
+      } catch (error) {
+        log.warn('boot snapshot reverify failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+        throw error
+      }
     },
     'bootstrap-admin-hint': async () => {
       if (await core.authRuntime.isBootstrapRequired())
@@ -1109,7 +1111,8 @@ export async function composePostgresqlApplication(
     },
   }
   if (phase.kind === 'unstarted') {
-    await (lifecycleSteps['daemon-identity'] as () => Promise<void>)()
+    const identity = lifecycleSteps['daemon-identity']
+    if (identity !== NotApplicable) await identity()
     await eventCenter.initialize()
     await digitalEmployeePlatformTools.load()
     await phase.scope.trackReady(digitalEmployee.maintenance.ready())
@@ -1119,7 +1122,7 @@ export async function composePostgresqlApplication(
     realtime: core.realtime,
     identityAccess: core.identityAccess,
   })
-  const runtime: PostgresqlDaemonApplicationRuntime = Object.freeze({
+  const runtime: DaemonApplicationRuntime<P> = Object.freeze({
     taskExecution: taskExecutionProvider,
     taskExecutionModules,
     collaborationContext: boundCollaborationContext,
@@ -1147,5 +1150,55 @@ export async function composePostgresqlApplication(
     // RFC-387: both providers skip an active driver; the worker retries the durable intent.
     driveHumanGateContinuation: taskExecutionModules.gateContinuation,
   })
-  return Object.freeze({ core, app, webSocket, runtime, lifecycleSteps })
+  return Object.freeze({
+    core,
+    app,
+    webSocket,
+    runtime,
+    lifecycleSteps,
+    modules: Object.freeze({
+      core,
+      repository: repositoryCredentials,
+      resourceCatalog: resourceCatalogModules,
+      observation: observationModules,
+      memory: memoryModules,
+      taskExecution: taskExecutionModules,
+      scheduledTasks: scheduledTaskModules,
+      integration: integrationModules,
+      fusion: fusionModules,
+      digitalEmployee: digitalEmployeeModules,
+      developmentAutomation: developmentAutomationModules,
+      intent: intentModules,
+    }),
+    operations: Object.freeze({
+      workspaceMaintenance,
+      resourceLimits: resourceLimitOperations,
+      taskIdleTimeout: taskIdleTimeoutOperations,
+      integrationIdentityAccess,
+      resourcePackageApplyActivity: http.resourcePackageApplyActivity,
+    }),
+  })
+}
+
+function providerBootStep(
+  provider: DatabaseProvider,
+  id: DaemonBootStepId,
+  run: () => Promise<void>,
+): DaemonBootSteps[DaemonBootStepId] {
+  const declaration: DaemonBootStepDeclaration = DAEMON_BOOT_STEPS.find((step) => step.id === id)!
+  return declaration.providers !== undefined && !declaration.providers.includes(provider)
+    ? NotApplicable
+    : run
+}
+
+function requireStartupLease(lease: DaemonStartupLease | undefined): DaemonStartupLease {
+  if (lease === undefined) throw new Error('daemon-startup-lease-required')
+  return lease
+}
+
+function requireRuntimeLegacyConfiguration(
+  configuration: RuntimeLegacyConfigurationPort | undefined,
+): RuntimeLegacyConfigurationPort {
+  if (configuration === undefined) throw new Error('daemon-runtime-legacy-configuration-required')
+  return configuration
 }

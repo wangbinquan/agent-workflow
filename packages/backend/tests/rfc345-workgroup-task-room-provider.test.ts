@@ -1,9 +1,13 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const sourceRoot = resolve(import.meta.dir, '../src')
-const read = (path: string): string => readFileSync(resolve(sourceRoot, path), 'utf8')
+const read = (path: string): string =>
+  /(?:^|\/)cli\/start\.ts$/.test(path)
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(sourceRoot, path), 'utf8')
 
 describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
   test('the route consumes one required closed module binding', () => {
@@ -44,7 +48,7 @@ describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
     expect(composition).not.toContain('composeSqliteWorkgroupTaskRoom')
     expect(composition).not.toContain('composePostgresqlWorkgroupTaskRoom')
     expect(read('server.ts').match(/composeWorkgroupTaskRoom\(\{/g)).toHaveLength(1)
-    for (const bootstrap of ['cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+    for (const bootstrap of ['bootstrap/daemonApplication.ts', 'bootstrap/daemonApplication.ts']) {
       expect(read(bootstrap)).toContain('composeProviderAppComposition({')
       expect(read(bootstrap)).not.toContain('composeWorkgroupTaskRoom({')
     }

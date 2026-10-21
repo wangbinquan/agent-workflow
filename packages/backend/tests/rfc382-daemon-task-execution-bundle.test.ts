@@ -1,6 +1,7 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-382: exercise the real session graph on both databases, including pre-fix controls.
 import { afterEach, expect, spyOn, test } from 'bun:test'
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -287,8 +288,10 @@ describeEachProvider('RFC-382 session task execution bundle', (harness) => {
       await ready
       expect(bundle.activeTaskIds()).toContain(seeded.taskId)
       expect(bundle.isTaskActive(seeded.taskId)).toBe(true)
-      const source = readFileSync(join(import.meta.dir, '../src/cli/start.ts'), 'utf8')
-      expect(source).toContain('activeTaskIds: runtime.taskExecutionModules.activeTaskIds')
+      const source = readDaemonGraphSource()
+      expect(source).toContain(
+        'activeTaskIds: () => snapshotMaintenanceTaskIds(runtime.taskExecutionModules.activeTaskIds)',
+      )
       expect(source).toContain('runtime.taskExecutionModules.isTaskActive(taskId)')
     } finally {
       release()

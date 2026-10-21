@@ -1,3 +1,33 @@
+function isStandaloneWorkerEntry(unit: SourceUnit | undefined): boolean {
+  if (unit?.path !== PREFIX + 'bootstrap/maintenanceWorkerEntries.ts') return false
+  const statements = unit.source.statements
+  if (statements.length !== 2) return false
+  const declarations = statements.map((statement) => {
+    if (
+      !ts.isVariableStatement(statement) ||
+      (statement.declarationList.flags & ts.NodeFlags.Const) === 0 ||
+      statement.declarationList.declarations.length !== 1
+    )
+      return undefined
+    return { statement, declaration: statement.declarationList.declarations[0]! }
+  })
+  const flag = declarations[0],
+    entry = declarations[1]
+  return (
+    flag !== undefined &&
+    entry !== undefined &&
+    flag.statement.modifiers?.length === 1 &&
+    flag.statement.modifiers[0]?.kind === ts.SyntaxKind.DeclareKeyword &&
+    flag.declaration.name.getText() === 'AW_COMPILED_BUILD' &&
+    flag.declaration.initializer === undefined &&
+    entry.statement.modifiers?.length === 1 &&
+    entry.statement.modifiers[0]?.kind === ts.SyntaxKind.ExportKeyword &&
+    entry.declaration.name.getText() === 'MAINTENANCE_WORKER_ENTRY' &&
+    entry.declaration.initializer?.getText().replace(/\s+/g, '') ===
+      "typeofAW_COMPILED_BUILD==='boolean'&&AW_COMPILED_BUILD?'./bootstrap/maintenanceWorker.ts':newURL('./maintenanceWorker.ts',import.meta.url).href"
+  )
+}
+
 // RFC-389 — lock the Worker/runtime split, single neutral graph and all entry inventories.
 // Negative fixtures prove that a main-thread root import, duplicated graph or path drift fails.
 import { describe, expect, test } from 'bun:test'
@@ -5,7 +35,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { backendUnits, BOOTSTRAP_FILES, importEdges, sourceUnit, type SourceUnit } from './census'
-import { BINARY_ENTRIES, resolveImport, isMaintenanceWorkerEntryPathModule } from './rfc294Gates'
+import { BINARY_ENTRIES, resolveImport } from './rfc294Gates'
 import { binaryEntries } from './architectureReport'
 
 const PREFIX = 'packages/backend/src/'
@@ -142,7 +172,7 @@ export function workerRootViolations(
   )
     errors.push('entry is not thin')
   const entries = find(ENTRIES)
-  if (!isMaintenanceWorkerEntryPathModule(entries)) errors.push('standalone entry forms differ')
+  if (!isStandaloneWorkerEntry(entries)) errors.push('standalone entry forms differ')
   if (
     !binaryEntries(build).includes(PREFIX + ROOT_ENTRY) ||
     !binaries.includes(PREFIX + ROOT_ENTRY) ||
@@ -150,10 +180,10 @@ export function workerRootViolations(
     binaries.includes(PREFIX + 'platform/background/maintenanceWorker.ts')
   )
     errors.push('binary entry drift')
-  const start = find('cli/start.ts')
+  const start = find('bootstrap/daemonSession.ts')
   const supervisors = start ? calls(start.source, 'startMaintenanceWorkerSupervisor') : []
   if (
-    supervisors.length !== 2 ||
+    supervisors.length !== 1 ||
     supervisors.some((call) => {
       const options = call.arguments[0]
       return (
@@ -285,7 +315,7 @@ ${name}(input)`,
     ).toContain('binary entry drift')
     expect(
       workerRootViolations(
-        changed('cli/start.ts', (text) =>
+        changed('bootstrap/daemonSession.ts', (text) =>
           text.replace('workerEntry: MAINTENANCE_WORKER_ENTRY', "workerEntry: './wrongWorker.ts'"),
         ),
         BUILD,

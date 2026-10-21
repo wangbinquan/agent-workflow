@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 A1: the readiness writer and all actual HTTP compositions share one host query.
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -7,7 +8,9 @@ import ts from 'typescript'
 function source(path: string): ts.SourceFile {
   return ts.createSourceFile(
     path,
-    readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
+    path === 'cli/start.ts'
+      ? readDaemonGraphSource()
+      : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -42,7 +45,7 @@ function selected(node: ts.Node, file: ts.SourceFile, expression: string, proper
   expect(compact(matches[0]!.arguments[0]!, file)).toContain(property)
 }
 const start = source('cli/start.ts')
-const pg = source('cli/postgresqlDaemonApplication.ts')
+const pg = source('bootstrap/daemonApplication.ts')
 const server = source('server.ts')
 
 test('start selects the host once and passes the same object to serving, initial composition and recompose', () => {
@@ -56,19 +59,19 @@ test('start selects the host once and passes the same object to serving, initial
   ).filter(ts.isVariableDeclaration)
   expect(sessionInputs).toHaveLength(1)
   expect(compact(sessionInputs[0]!, start)).toContain('daemonRuntime:daemonHost,')
-  const compositions = calls(root, start, 'composeDaemonProviderSession')
+  const compositions = calls(root, start, 'composeSession')
   expect(compositions).toHaveLength(2)
   for (const composition of compositions)
     expect(compact(composition.arguments[0]!, start)).toContain('...sessionInput,')
   selected(root, start, 'serveDaemon', 'daemonHost,')
   selected(
-    declaration(start, 'composePostgresqlProviderSession'),
+    declaration(start, 'composeDaemonSession'),
     start,
-    'composePostgresqlDaemonApplication',
+    'composeDaemonApplication',
     'daemonRuntime:input.daemonRuntime,',
   )
   selected(
-    declaration(start, 'composeSqliteProviderSession'),
+    declaration(start, 'composeDaemonApplication'),
     start,
     'composeProviderAppComposition',
     'daemonRuntime:input.daemonRuntime,',
@@ -84,7 +87,7 @@ test('both HTTP roots consume the host query rather than reading the info file i
     expect(compact(selection[0]!.arguments[0]!, file)).toBe(`${receiver}.daemonRuntime`)
   }
   selected(
-    declaration(pg, 'composePostgresqlApplication'),
+    declaration(pg, 'composeDaemonApplication'),
     pg,
     'composeProviderAppComposition',
     'daemonRuntime:input.daemonRuntime,',

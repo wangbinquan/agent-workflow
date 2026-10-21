@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: the real daemon roots must bind the shared selected query and drain
 // the same admitted backup/refresh instances. Leaf ACK behavior is covered by
 // the purpose tests; this locks the wiring without starting a daemon or worker.
@@ -9,12 +10,14 @@ import ts from 'typescript'
 const source = (path: string) =>
   ts.createSourceFile(
     path,
-    readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
+    path === 'cli/start.ts'
+      ? readDaemonGraphSource()
+      : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
 const start = source('cli/start.ts')
-const pg = source('cli/postgresqlDaemonApplication.ts')
+const pg = source('bootstrap/daemonApplication.ts')
 const compact = (node: ts.Node, file: ts.SourceFile) => node.getText(file).replace(/\s/g, '')
 
 function descendants(node: ts.Node, match: (item: ts.Node) => boolean): ts.Node[] {
@@ -58,12 +61,7 @@ function method(node: ts.Node, name: string): ts.MethodDeclaration {
 }
 
 for (const [name, query, notificationKey] of [
-  [
-    'composePostgresqlProviderSession',
-    'input.configuration',
-    'input.applicationConfiguration.notificationKey',
-  ],
-  ['composeSqliteProviderSession', 'configuration', 'applicationConfiguration.notificationKey'],
+  ['composeDaemonSession', 'input.configuration', 'input.applicationConfiguration.notificationKey'],
 ] as const) {
   describe(`RFC-370 ${name} background configuration binding`, () => {
     const root = declaration(start, name)
@@ -78,9 +76,7 @@ for (const [name, query, notificationKey] of [
       const bindings = calls(root, start, '_bindTaskExecutionProviderBackground')
       expect(bindings).toHaveLength(1)
       const dependencies = compact(bindings[0]!.arguments[1]!, start)
-      expect(dependencies).toContain(
-        query === 'configuration' ? 'configuration,' : 'configuration:input.configuration,',
-      )
+      expect(dependencies).toContain('configuration:input.configuration,')
       expect(dependencies).not.toContain('loadConfig:')
       expect(dependencies).not.toContain('configPath:')
     })

@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-364: root bindings are explicit and retain W29's ordered lifecycle graph.
 import { describe, expect, test } from 'bun:test'
 import { readFileSync, existsSync } from 'node:fs'
@@ -7,7 +8,9 @@ const root = resolve(import.meta.dir, '../src')
 function parse(path: string) {
   return ts.createSourceFile(
     path,
-    readFileSync(resolve(root, path), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(resolve(root, path), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -72,7 +75,7 @@ describe('RFC-364 production bindings', () => {
         expect(parse('server.ts').text).toContain(
           'unstarted?.createMcpRuntimeTests ?? standalone.mcpDiagnostics',
         )
-        expect(parse('cli/postgresqlDaemonApplication.ts').text).toContain(
+        expect(parse('bootstrap/daemonApplication.ts').text).toContain(
           'phase.scope.createMcpRuntimeTests',
         )
       },
@@ -107,7 +110,7 @@ describe('RFC-364 production bindings', () => {
     )
   }
   test('both roots give the same observation bundle to the neutral HTTP owner', () => {
-    for (const path of ['cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+    for (const path of ['cli/start.ts', 'bootstrap/daemonApplication.ts']) {
       expect(parse(path).text).toContain('observation: observationModules')
       expect(parse(path).text).toContain('composeProviderAppComposition({')
     }

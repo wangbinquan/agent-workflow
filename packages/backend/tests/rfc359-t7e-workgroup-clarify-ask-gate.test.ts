@@ -418,7 +418,7 @@ test('源锁：中立回合驱动用真协议块与唯一判定点，PG 适配�
     'utf8',
   )
   expect(adapter).toContain('dependencies.clarifyAskGate.allowed(input)')
-  const daemon = readFileSync(resolve(root, 'cli/postgresqlDaemonApplication.ts'), 'utf8')
+  const daemon = readFileSync(resolve(root, 'bootstrap/daemonApplication.ts'), 'utf8')
   expect(daemon).toContain('composeDaemonTaskExecutionModules({')
   const bundle = readFileSync(resolve(root, 'cli/daemonModules/taskExecution.ts'), 'utf8')
   expect(bundle).toContain('createWorkgroupClarifyAskGate(db)')

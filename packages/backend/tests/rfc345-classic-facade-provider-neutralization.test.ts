@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -5,7 +6,9 @@ import { resolve } from 'node:path'
 const backendRoot = resolve(import.meta.dir, '..')
 
 function source(path: string): string {
-  return readFileSync(resolve(backendRoot, path), 'utf8')
+  return /(?:^|\/)cli\/start\.ts$/.test(path)
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(backendRoot, path), 'utf8')
 }
 
 function typescriptFiles(path: string): string[] {
@@ -103,7 +106,7 @@ describe('RFC-345 classic facade provider neutralization', () => {
       'src/server.ts',
       'src/cli/daemonModules/resourceCatalog.ts',
       'src/cli/start.ts',
-      'src/cli/postgresqlDaemonApplication.ts',
+      'src/bootstrap/daemonApplication.ts',
     ]) {
       expect(source(bootstrap), bootstrap).not.toMatch(
         /from '@\/services\/(?:agent|workflow|workflow\.validator|workgroups|resourceAcl)'/,

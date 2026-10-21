@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-349 T10 回归防护 —— 源库被迁移冻结时，请求路径一个字节都不许写。
 //
 // 为什么这条测试存在：迁移先冻结 SQLite 源、再证明拷贝期间它没变过
@@ -129,7 +130,7 @@ describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
   })
 
   test('the daemon binds the live window, not the always-writable default', () => {
-    const start = readFileSync(resolve(backendRoot, 'src/cli/start.ts'), 'utf8')
+    const start = readDaemonGraphSource()
     const bootstrap = readFileSync(
       resolve(backendRoot, 'src/cli/daemonProviderBootstrap.ts'),
       'utf8',
@@ -159,13 +160,12 @@ describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
     const nextSession = start.indexOf('async create(lifecycleInput, bindings)')
     expect(nextSession).toBeGreaterThan(-1)
     expect(start.slice(nextSession, nextSession + 1600)).toContain('...bindings,')
-    // SQLite daemon: the provider core must receive that window (destructured from the input).
+    // The common application graph passes the selected session window to its core.
     const core = start.indexOf('composeDaemonProviderCore({')
     expect(core).toBeGreaterThan(-1)
-    expect(
-      start.slice(core, core + 300),
-      'SQLite daemon 没把真窗口交给 provider core ⇒ 这层在生产里永远是空转',
-    ).toMatch(/sourceWriteWindow,|sourceWriteWindow: sourceWriteWindow/u)
+    expect(start.slice(core, core + 300), '中立应用图必须把会话窗口交给 provider core').toContain(
+      'sourceWriteWindow: input.sourceWriteWindow',
+    )
     // PostgreSQL daemon: same window, threaded through the session composer.
     expect(start, 'PG 装配没接上同一个窗口').toContain('sourceWriteWindow: input.sourceWriteWindow')
     // The window reads the actual admission even while the first session is composing.

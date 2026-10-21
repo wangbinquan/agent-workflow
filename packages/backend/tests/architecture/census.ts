@@ -102,7 +102,9 @@ export const BOOTSTRAP_FILES = [
   // Development reload assembles the same daemon host and retains its lifetime.
   'packages/backend/src/cli/dev.ts',
   'packages/backend/src/cli/daemonProviderMigrationAdmission.ts',
-  'packages/backend/src/cli/postgresqlDaemonApplication.ts',
+  'packages/backend/src/bootstrap/daemonApplication.ts',
+  'packages/backend/src/bootstrap/daemonSession.ts',
+  'packages/backend/src/bootstrap/daemonSessionAdapters.ts',
   'packages/backend/src/cli/start.ts',
   'packages/backend/src/server.ts',
 ] as const

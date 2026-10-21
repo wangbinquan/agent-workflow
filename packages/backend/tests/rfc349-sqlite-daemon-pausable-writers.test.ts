@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-349 回归防护 —— SQLite daemon 的周期写手必须归 provider session 管，能被冻结。
 //
 // 为什么这条测试存在：一次数据库迁移先**冻结** SQLite 源，再证明它在拷贝期间没动过
@@ -22,7 +23,7 @@ import { DAEMON_BACKGROUND_JOBS } from '../src/cli/daemonLifecycleProgram'
 import { propertyBodies } from './helpers/daemonProgramSource'
 
 const backendRoot = resolve(import.meta.dir, '..')
-const START = readFileSync(resolve(backendRoot, 'src/cli/start.ts'), 'utf8')
+const START = readDaemonGraphSource()
 
 /** handle id ⇄ the factory const each daemon registers under it. */
 const PAUSABLE_WRITERS = [
@@ -42,10 +43,10 @@ const PAUSABLE_WRITERS = [
 
 describe('RFC-349 SQLite daemon periodic writers are provider-session handles', () => {
   test('the SQLite session owns all four periodic writers', () => {
-    expect(propertyBodies(START, 'backgroundJobs')).toHaveLength(2)
+    expect(propertyBodies(START, 'backgroundJobs')).toHaveLength(1)
     for (const writer of PAUSABLE_WRITERS)
       expect(DAEMON_BACKGROUND_JOBS.filter((job) => job.id === writer.id)).toHaveLength(1)
-    const sqliteList = propertyBodies(START, 'backgroundJobs')[1]!
+    const sqliteList = propertyBodies(START, 'backgroundJobs')[0]!
     for (const writer of PAUSABLE_WRITERS) {
       expect(
         sqliteList,
@@ -91,7 +92,7 @@ describe('RFC-349 SQLite daemon periodic writers are provider-session handles', 
     // 允许的注册只有两处：两个 daemon 各自 handle 的 `start()`。任何裸注册都会
     // 让泵活过冻结窗口。`registerAfterCommitEventPump(null)` 是撤销，不受此限。
     const registrations = START.split('registerAfterCommitEventPump(committedEventPump)').length - 1
-    expect(registrations, '注册 post-commit 泵的地方不是两处 ⇒ 有一侧改了组装形状').toBe(2)
+    expect(registrations, '注册 post-commit 泵的地方不是两处 ⇒ 有一侧改了组装形状').toBe(1)
     for (const [index] of [
       ...START.matchAll(/registerAfterCommitEventPump\(committedEventPump\)/g),
     ].map((match) => [match.index ?? 0] as const)) {

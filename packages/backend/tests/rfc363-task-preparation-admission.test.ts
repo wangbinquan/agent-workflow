@@ -4,7 +4,7 @@ import { createTaskExecutionResourceBinding } from '@/services/execution/taskExe
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { composeWorkspacePreparationMaintenance } from '@/modules/task-execution/composition/workspacePreparationMaintenance'
 import { materializingSpaces } from '@/services/gc'
-import { activeTaskIdsSnapshot } from '@/services/task'
+import { snapshotMaintenanceTaskIds } from '@/bootstrap/daemonSession'
 import { compensatePreMaterializedRepository } from '@/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace'
 import type { ProviderNeutralDatabase } from '@/db/query'
 // RFC-363: exercise the production Task kernel, real provider transactions and Git adapter.
@@ -399,7 +399,7 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
       lane: 'pre-materialized',
       admittedTaskId: null,
     })
-    expect(activeTaskIdsSnapshot()).toContain(taskId)
+    expect(snapshotMaintenanceTaskIds(() => [])).toContain(taskId)
     writeFileSync(join(first.worktreePath, 'uploaded.txt'), 'before admission')
     const rebound = createTaskRouteWorkspaceParticipant({
       sourceContexts: f.identityAccess.taskPreparationContext,

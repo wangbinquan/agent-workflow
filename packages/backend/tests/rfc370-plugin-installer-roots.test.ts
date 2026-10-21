@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,7 +11,9 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -27,8 +30,7 @@ function calls(source: ts.SourceFile, expression: string) {
 
 test('the complete plugin installer receiver reaches the real startup and HTTP catalogs', () => {
   for (const [path, receiver] of [
-    ['cli/start.ts', 'input'],
-    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['bootstrap/daemonApplication.ts', 'input'],
     ['server.ts', 'deps'],
   ] as const) {
     const source = load(path)
@@ -59,10 +61,7 @@ test('the complete plugin installer receiver reaches the real startup and HTTP c
   expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
   const start = load('cli/start.ts')
   expect(start.text).toContain('pluginInstaller: opts.pluginInstaller,')
-  for (const expression of [
-    'composePostgresqlDaemonApplication',
-    'composeDaemonResourceCatalogModules',
-  ]) {
+  for (const expression of ['composeDaemonApplication', 'composeDaemonResourceCatalogModules']) {
     const roots = calls(start, expression)
     expect(roots).toHaveLength(1)
     const argument = roots[0]!.arguments[0]!

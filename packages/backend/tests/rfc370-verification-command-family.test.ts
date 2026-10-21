@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: the same verification policy drives selected command/evidence owners.
 // Opaque fixtures exercise real DA persistence; they are not CS acceptance.
 import { describe, expect, test } from 'bun:test'
@@ -666,7 +667,9 @@ const sourceRoot = resolve(import.meta.dir, '../src')
 function readSource(path: string) {
   return ts.createSourceFile(
     path,
-    readFileSync(resolve(sourceRoot, path), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(resolve(sourceRoot, path), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -727,8 +730,8 @@ describe('RFC-370 verification command composition contract', () => {
     const source = readSource('cli/start.ts')
     for (const [name, receiver] of [
       ['startCommand', 'opts'],
-      ['composePostgresqlProviderSession', 'input'],
-      ['composeSqliteProviderSession', 'input'],
+      ['composeDaemonSession', 'input'],
+      ['composeDaemonApplication', 'input'],
     ] as const) {
       const forwards = propertiesOf(bodyOf(source, name), source).filter((p) =>
         ts.isPropertyAccessExpression(p.initializer),
@@ -742,8 +745,8 @@ describe('RFC-370 verification command composition contract', () => {
   test('RFC-383 each root forwards verification selection into the shared bundle', () => {
     for (const [path, root, receiver] of [
       ['server.ts', 'composeSqliteApplicationDeps', 'deps'],
-      ['cli/postgresqlDaemonApplication.ts', 'composePostgresqlApplication', 'input'],
-      ['cli/start.ts', 'composeSqliteProviderSession', 'input'],
+      ['bootstrap/daemonApplication.ts', 'composeDaemonApplication', 'input'],
+      ['cli/start.ts', 'composeDaemonApplication', 'input'],
     ] as const) {
       const source = readSource(path)
       const calls = descendants(bodyOf(source, root), ts.isCallExpression).filter(

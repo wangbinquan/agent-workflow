@@ -224,15 +224,17 @@ describeEachProviderHttpApplication(
       expect(serverSrc).toContain('resizeAllNodePools(daemonScope, {')
 
       const postgresqlSrc = readFileSync(
-        resolve(import.meta.dir, '..', 'src', 'cli', 'postgresqlDaemonApplication.ts'),
+        resolve(import.meta.dir, '..', 'src', 'bootstrap', 'daemonApplication.ts'),
         'utf8',
       )
       const adapters = readFileSync(
         resolve(import.meta.dir, '..', 'src', 'cli', 'daemonModules', 'adapters.ts'),
         'utf8',
       )
-      expect(postgresqlSrc).toMatch(
-        /DAEMON_TASK_EXECUTION_ADAPTERS\.postgresql\(\{\s*db: input\.db,\s*runtime: input\.provider\.runtime,/,
+      expect(
+        readFileSync(resolve(import.meta.dir, '../src/bootstrap/daemonSessionAdapters.ts'), 'utf8'),
+      ).toMatch(
+        /DAEMON_TASK_EXECUTION_ADAPTERS\.postgresql\(\{\s*db: input\.db,\s*runtime: input\.provider\.runtime,?\s*\}/,
       )
       expect(adapters).toContain('processConcurrencyScope: runtime')
       const bundle = readFileSync(
@@ -243,6 +245,7 @@ describeEachProviderHttpApplication(
         bundle.match(/processConcurrencyScope: input.adapters.processConcurrencyScope/g),
       ).toHaveLength(2)
       expect(postgresqlSrc).toContain('taskExecution: taskExecutionModules')
+      expect(postgresqlSrc).toContain('adapters: adapter.taskExecution(input)')
       expect(postgresqlSrc).not.toContain('resizeAllNodePools(')
     })
   },

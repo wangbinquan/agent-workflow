@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 W4-D15 —— resource-catalog 的 Workflow 聚合：异步仓库 / 语义层 / 校验与 D15 准入成为唯一实现，SQLite 装配
 // 也切到这一份。同一段断言在两个引擎上各跑一遍：创建 / 读 / 列表 / 复制命名、update 的 already-current 与 committed
 // 与 stale、删除受工作流引用保护、校验端口装载库存、准入端口对不可见引用报 acl-missing-refs、managed skill 可用性判据；
@@ -370,9 +371,11 @@ test('源码锁：Workflow 聚合没有 provider 命名的仓库 / 语义 / 校�
   for (const file of [
     'src/cli/daemonModules/resourceCatalog.ts',
     'src/server.ts',
-    'src/cli/start.ts',
+    'src/bootstrap/daemonApplication.ts',
   ]) {
-    const source = readFileSync(join(import.meta.dir, '..', file), 'utf8')
+    const source = /(?:^|\/)cli\/start\.ts$/.test(file)
+      ? readDaemonGraphSource()
+      : readFileSync(join(import.meta.dir, '..', file), 'utf8')
     expect(
       readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
       file,

@@ -139,7 +139,7 @@ export async function preparePreMaterializedRepository(input: {
   rollback(): Promise<WorkspaceCleanupReport>
 }> {
   // Reuse the existing preparation lease. The maintenance worker receives its
-  // task ID through activeTaskIdsSnapshot; there is no new timer or scheduler.
+  // task ID through the session maintenance payload; there is no new timer or scheduler.
   materializingSpaces.set(input.taskId, { dir: input.appHome, startedAt: Date.now() })
   let operationRef: string | undefined
   try {

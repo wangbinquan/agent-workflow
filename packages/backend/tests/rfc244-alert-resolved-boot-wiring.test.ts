@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-244 — daemon assembly lock for lifecycle-alert resolution dirty truth.
 //
 // Service-level tests prove that reconciliation emits one onResolved callback
@@ -9,7 +10,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const START_SOURCE = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+const START_SOURCE = readDaemonGraphSource()
 const WORKER_SOURCE = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'platform', 'background', 'maintenanceJobRunner.ts'),
   'utf8',
@@ -53,10 +54,7 @@ function assemblySlice(startMarker: string, endMarker: string): string {
 
 describe('RFC-244 lifecycle alert resolution boot wiring', () => {
   test('defines one tasks-list resolved broadcaster with the strict additive frame', () => {
-    const helper = assemblySlice(
-      'const broadcastResolved =',
-      'const humanGateContinuationRecovery =',
-    )
+    const helper = assemblySlice('onResolved(taskId) {', 'finalizeWorkspace:')
     expect(helper).toContain('tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL')
     expect(helper).toContain("type: 'lifecycle.alert.resolved'")
     expect(helper).toContain('taskId,')
@@ -72,14 +70,15 @@ describe('RFC-244 lifecycle alert resolution boot wiring', () => {
     expect(MAINTENANCE_SOURCE).toContain(
       "if (delta.kind === 'lifecycle-alerts') options.onLifecycleDelta?.(delta)",
     )
-    const workerConsumer = assemblySlice('onLifecycleDelta: (delta) => {', 'onIntentQueued:')
+    const workerConsumer = assemblySlice('onLifecycleDelta(delta) {', 'onIntentQueued(')
     expect(workerConsumer).toContain('for (const taskId of delta.resolvedTaskIds)')
-    expect(workerConsumer).toContain('broadcastResolved(taskId)')
+    expect(workerConsumer).toContain("type: 'lifecycle.alert.resolved'")
+    expect(workerConsumer).toContain('tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL')
     // RFC-349 moved the timer into the selected-provider TaskExecution
     // background participant. Bootstrap still injects the one broadcaster;
     // the neutral runtime factory passes it through the selected repair engine to the
     // shared automatic command, and the background loop invokes that command.
-    expect(START_SOURCE).toContain('onResolved: broadcastResolved')
+    expect(START_SOURCE).toContain('onResolved(taskId) {')
     expect(
       TASK_PROVIDER_RUNTIME_SOURCE.match(
         /const lifecycleRepair = createTaskLifecycleAutoRepairCommand/g,

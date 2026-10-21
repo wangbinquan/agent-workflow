@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-359 W3-T4（P0-3 / P0-4）—— daemon 启动期的任务执行恢复四步，两个引擎各跑一遍。
 //
@@ -288,17 +289,16 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
 })
 
 test('both provider recovery bindings follow skill gates and precede task deletion before listening', () => {
-  const cli = resolve(import.meta.dir, '..', 'src', 'cli')
+  const cli = resolve(import.meta.dir, '..', 'src', 'bootstrap')
   expectBootOrder(['skill-availability-gate', 'task-execution-recovery', 'task-delete-recovery'])
   expect(bootDeclaration('task-execution-recovery')).toMatchObject({
     phase: 'execution-recovery',
     failure: 'fail-closed',
   })
-  for (const [file, database] of [
-    ['start.ts', 'db'],
-    ['postgresqlDaemonApplication.ts', 'input.db'],
-  ] as const) {
-    const source = readFileSync(resolve(cli, file), 'utf8')
+  for (const [file, database] of [['daemonApplication.ts', 'input.db']] as const) {
+    const source = /(?:^|\/)cli\/start\.ts$/.test(file)
+      ? readDaemonGraphSource()
+      : readFileSync(resolve(cli, file), 'utf8')
     expect(bootImplementation(source, 'task-execution-recovery')).toContain(
       'await runTaskExecutionBootRecovery({',
     )

@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -5,7 +6,9 @@ import { resolve } from 'node:path'
 const backendRoot = resolve(import.meta.dir, '..')
 
 function source(path: string): string {
-  return readFileSync(resolve(backendRoot, path), 'utf8')
+  return /(?:^|\/)cli\/start\.ts$/.test(path)
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(backendRoot, path), 'utf8')
 }
 
 describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
@@ -53,7 +56,7 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     expect(bundle).toContain('readonly db: ProviderNeutralDatabase')
     for (const root of [
       'src/cli/start.ts',
-      'src/cli/postgresqlDaemonApplication.ts',
+      'src/bootstrap/daemonApplication.ts',
       'src/server.ts',
     ]) {
       expect(source(root), root).toContain('composeDaemonResourceCatalogModules({')

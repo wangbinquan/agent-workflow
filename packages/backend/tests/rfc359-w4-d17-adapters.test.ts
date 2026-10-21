@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 W4-D17 —— resource-catalog 的 Plugin 聚合：异步仓库成为唯一实现（`sqlitePluginRepository` /
 // `postgresqlPluginRepository` 退役），目录装配与代际清扫装配各一份。同一段断言在两个引擎上各跑一遍：创建 / 读 / 列表、
 // owner 级 name 唯一（唯一冲突经能力矩阵映射）、`assertNameAvailable`、publish 的 configHash OCC、改名撞名、被 agent
@@ -225,9 +226,11 @@ test('源码锁：Plugin 聚合没有 provider 命名的仓库 / 装配孪生，
     'src/cli/daemonModules/resourceCatalog.ts',
     'src/server.ts',
     'src/cli/start.ts',
-    'src/cli/postgresqlDaemonApplication.ts',
+    'src/bootstrap/daemonApplication.ts',
   ]) {
-    const source = readFileSync(join(import.meta.dir, '..', file), 'utf8')
+    const source = /(?:^|\/)cli\/start\.ts$/.test(file)
+      ? readDaemonGraphSource()
+      : readFileSync(join(import.meta.dir, '..', file), 'utf8')
     expect(
       readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
       file,

@@ -22,7 +22,6 @@ test('execution module, provider runtime, fusion, run configuration and standalo
   for (const [path, sites] of [
     ['cli/daemonModules/adapters.ts', 1],
     ['cli/daemonModules/taskExecution.ts', 1],
-    ['cli/postgresqlDaemonApplication.ts', 1],
   ] as const) {
     const source = read(path)
     expect(source).toContain("from '@/services/daemonGeneration'")
@@ -40,12 +39,13 @@ test('execution module, provider runtime, fusion, run configuration and standalo
   expect(bundle).not.toContain('input.adapters.daemonGeneration')
   expect(bundle).not.toContain('readonly daemonGeneration:')
   const recovery = bootImplementation(
-    read('cli/postgresqlDaemonApplication.ts'),
+    read('bootstrap/daemonApplication.ts'),
     'task-execution-recovery',
   )
   expect(compact(recovery)).toContain(
-    'createDaemonLockProof({lockPath:input.lockPath,lockPid:process.pid,daemonGeneration:DAEMON_GENERATION,})',
+    'createDaemonRecoveryAuthorityProof(awaitreadDaemonStartupRecoveryAuthority(requireStartupLease(input.daemonStartupLease),adapter.recoveryProofGeneration(input.provider),),)',
   )
+  expect(recovery).not.toContain('createDaemonLockProof')
 })
 
 test('negative fixtures reject the former database/adapter wiring and missing sites', () => {
@@ -76,16 +76,16 @@ test('SQLite, child runtime inheritance and CrewStation keep their existing gene
   expect(read('modules/task-execution/composition.ts')).toContain(
     'new TaskExecutionModule(DAEMON_GENERATION)',
   )
-  expect(read('cli/start.ts')).toContain(
-    'readDaemonStartupRecoveryAuthority(lock, DAEMON_GENERATION)',
+  expect(read('bootstrap/daemonSessionAdapters.ts')).toContain(
+    'recoveryProofGeneration: () => DAEMON_GENERATION',
   )
   expect(read('modules/task-execution/composition/taskExecutionBinding.ts')).toContain(
     'const module = createProviderTaskExecutionModule(input)',
   )
   expect(read('cli/daemonModules/adapters.ts')).toContain('daemonGeneration: DAEMON_GENERATION')
   // The selected startup lease contract is deliberately outside the standalone proof change.
-  expect(compact(read('cli/postgresqlDaemonApplication.ts'))).toContain(
-    'readDaemonStartupRecoveryAuthority(input.daemonStartupLease,input.provider.runtime.generationId,)',
+  expect(read('bootstrap/daemonSessionAdapters.ts')).toContain(
+    'recoveryProofGeneration: (provider) => provider.runtime.generationId',
   )
   expect(read('modules/task-execution/composition/crewstationExecution.ts')).toContain(
     'daemonGeneration: lease.instanceId',

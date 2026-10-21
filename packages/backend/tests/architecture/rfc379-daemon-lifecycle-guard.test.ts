@@ -12,9 +12,15 @@ import {
 const PREFIX = 'packages/backend/src/'
 const PROGRAM = `${PREFIX}cli/daemonLifecycleProgram.ts`
 const ROOTS = new Set(
-  ['cli/start.ts', 'cli/postgresqlDaemonApplication.ts', 'server.ts', 'main.ts', 'cli/dev.ts'].map(
-    (path) => PREFIX + path,
-  ),
+  [
+    'cli/start.ts',
+    'bootstrap/daemonApplication.ts',
+    'bootstrap/daemonSession.ts',
+    'bootstrap/daemonSessionAdapters.ts',
+    'server.ts',
+    'main.ts',
+    'cli/dev.ts',
+  ].map((path) => PREFIX + path),
 )
 const LISTS = new Set([
   'DAEMON_BOOT_STEPS',
@@ -106,27 +112,29 @@ export function duplicateLifecycleDeclarations(units: readonly SourceUnit[]): st
   return violations
 }
 export function providerProgramComposition(units: readonly SourceUnit[]): string[] {
-  const unit = units.find(({ path }) => path === PREFIX + 'cli/start.ts')
-  const violations: string[] = []
-  for (const name of ['composeSqliteProviderSession', 'composePostgresqlProviderSession']) {
-    const root = unit?.source.statements.find(
-      (node) => ts.isFunctionDeclaration(node) && node.name?.text === name,
-    )
-    let count = 0
-    if (root !== undefined)
-      walk(root, (node) => {
-        if (ts.isCallExpression(node) && literal(node.expression) === 'composeDaemonLifecycle')
-          count++
-      })
-    if (count !== 1) violations.push(`${name}: expected one program, found ${count}`)
-  }
-  return violations
+  const sites: string[] = []
+  for (const unit of units)
+    walk(unit.source, (node) => {
+      if (!ts.isCallExpression(node) || literal(node.expression) !== 'composeDaemonLifecycle')
+        return
+      let owner: ts.Node | undefined = node.parent
+      while (owner && !ts.isFunctionDeclaration(owner)) owner = owner.parent
+      sites.push(
+        `${unit.path}::${owner && ts.isFunctionDeclaration(owner) ? owner.name?.text : 'top-level'}`,
+      )
+    })
+  return sites.length === 1 &&
+    sites[0] === PREFIX + 'bootstrap/daemonSession.ts::composeDaemonSession'
+    ? []
+    : [`expected one program in composeDaemonSession, found ${sites.join(', ') || 'none'}`]
 }
+
 const ROOT = resolve(import.meta.dir, '../../../..')
 const UNITS = backendUnits(ROOT)
-const virtual = (text: string, path = PREFIX + 'cli/start.ts') => [sourceUnit(path, text)]
-const compliant = `function composeSqliteProviderSession() { return composeDaemonLifecycle({ runtimeJobs: {}, backgroundJobs: {}, closeParticipants: {} }) }
-function composePostgresqlProviderSession() { return composeDaemonLifecycle({ runtimeJobs: {}, backgroundJobs: {}, closeParticipants: {} }) }`
+const virtual = (text: string, path = PREFIX + 'bootstrap/daemonSession.ts') => [
+  sourceUnit(path, text),
+]
+const compliant = `function composeDaemonSession() { return composeDaemonLifecycle({ runtimeJobs: {}, backgroundJobs: {}, closeParticipants: {} }) }`
 
 describe('RFC-379 daemon lifecycle hard gate', () => {
   test('production corpus is non-vacuous and satisfies all three detections', () => {
@@ -161,7 +169,7 @@ describe('RFC-379 daemon lifecycle hard gate', () => {
           duplicateLifecycleDeclarations(virtual(`const ${name} = ${values} as const`, PROGRAM)),
         ).toHaveLength(1)
     })
-  for (const name of ['composeSqliteProviderSession', 'composePostgresqlProviderSession'])
+  for (const name of ['composeDaemonSession'])
     test(`L3 rejects zero/multiple programs in ${name}`, () => {
       expect(
         providerProgramComposition(

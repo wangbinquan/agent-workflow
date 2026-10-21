@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-202 — source-text locks for wiring that is impractical to drive in a
 // unit harness (scheduler abort checkpoints, runner persist branch, frontend
@@ -11,7 +12,10 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
-const read = (rel: string): string => readFileSync(resolve(ROOT, rel), 'utf8')
+const read = (rel: string): string =>
+  /(?:^|\/)cli\/start\.ts$/.test(rel)
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(ROOT, rel), 'utf8')
 
 describe('RFC-202 source locks', () => {
   test('task engine abort checkpoints thread signal.reason into the provider-neutral lifecycle', () => {
@@ -99,8 +103,8 @@ describe('RFC-202 source locks', () => {
     )
     expect(start).toContain('createTaskLifecycleDurableConsumerDefinitions')
     // RFC-359 W4-B3：清扫命令只有一份实现，两个 bootstrap 仍经各自的具名绑定装配。
-    expect(start).toContain('createSqliteHumanGateTerminalSweepCommand')
-    expect(start).toContain('createPostgresqlHumanGateTerminalSweepCommand')
+    expect(start).toContain('createHumanGateTerminalSweepCommand')
+    expect(start).toContain('createHumanGateTerminalSweepCommand')
     expect(start).toContain('closeTerminalGates(taskId, status)')
     expect(consumers).toContain("id: 'task-terminal-gate-close'")
     expect(start).not.toContain('registerTerminalTaskHook')

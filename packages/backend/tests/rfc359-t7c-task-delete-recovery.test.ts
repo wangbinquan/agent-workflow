@@ -206,7 +206,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
 
 test('源码锁：PG daemon 在可用性闸之后、HTTP 之前续做 delete 认领；services/taskDelete 只再导出', () => {
   const src = resolve(import.meta.dir, '..', 'src')
-  const daemon = readFileSync(resolve(src, 'cli', 'postgresqlDaemonApplication.ts'), 'utf8')
+  const daemon = readFileSync(resolve(src, 'bootstrap', 'daemonApplication.ts'), 'utf8')
   expectBootOrder(['skill-availability-gate', 'task-execution-recovery', 'task-delete-recovery'])
   expect(bootDeclaration('task-delete-recovery')).toMatchObject({
     phase: 'execution-recovery',

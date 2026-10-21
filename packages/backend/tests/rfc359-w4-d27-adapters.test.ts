@@ -234,7 +234,7 @@ test('源码锁：资源快照只剩一份读面 + 一份绑定，四个 provide
     read('cli/daemonModules/taskExecution.ts').match(/createTaskExecutionResourceBinding\(/g),
   ).toHaveLength(1)
   // RFC-382: three roots consume the single session binding.
-  for (const bootstrap of ['server.ts', 'cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+  for (const bootstrap of ['server.ts', 'bootstrap/daemonApplication.ts']) {
     expect(read(bootstrap)).toContain('composeDaemonTaskExecutionModules(')
     expect(read(bootstrap)).not.toContain('createTaskExecutionResourceBinding(')
   }

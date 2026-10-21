@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -5,7 +6,9 @@ import ts from 'typescript'
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -59,9 +62,9 @@ test('the actual DA composition selects one context receiver and invokes its nat
 
 test('all real startup and HTTP roots forward the same selected context through provider recomposition', () => {
   const start = load('cli/start.ts')
-  const pg = load('cli/postgresqlDaemonApplication.ts')
+  const pg = load('bootstrap/daemonApplication.ts')
   const server = load('server.ts')
-  const pgRoot = calls(start, 'composePostgresqlDaemonApplication')
+  const pgRoot = calls(start, 'composeDaemonApplication')
   expect(pgRoot).toHaveLength(1)
   binding(start, pgRoot[0]!, 'input')
   for (const [source, receiver] of [

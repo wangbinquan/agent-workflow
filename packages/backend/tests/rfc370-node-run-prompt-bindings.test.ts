@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { createPollingDaemonRuntimeHandleFactory } from '../src/cli/daemonProviderRuntimeHandles'
 import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
 import { expect, test } from 'bun:test'
@@ -515,7 +516,9 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
 function source(path: string) {
   return ts.createSourceFile(
     path,
-    readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -671,13 +674,13 @@ function optionalPromptContract(sf: ts.SourceFile, name: string, withOperations 
 
 test('CLI initial and replacement sessions carry one prompt selection through SQLite and PG', () => {
   const sf = source('cli/start.ts'),
-    body = compositionBody(sf, 'composeSqliteProviderSession'),
+    body = compositionBody(sf, 'composeDaemonApplication'),
     selected = onlyCall(body, sf, 'composeNodeRunPromptOperations')
   optionalPromptContract(sf, 'StartOptions')
   optionalPromptContract(sf, 'DaemonProviderSessionComposeInput')
   expect(selected.arguments.map((value) => compact(value, sf))).toEqual([
     'input.nodeRunPromptContentEffects',
-    'Paths.runsDir',
+    "join(input.appHome,'runs')",
   ])
   expect(binding(body, sf, 'nodeRunPrompts')).toBe(selected)
   expect(calls(sf, sf, 'composeNodeRunPromptOperations')).toHaveLength(1)
@@ -716,7 +719,7 @@ test('CLI initial and replacement sessions carry one prompt selection through SQ
       sf,
     ),
   ).toBe('opts.nodeRunPromptContentEffects')
-  const sessions = calls(sf, sf, 'composeDaemonProviderSession')
+  const sessions = calls(sf, sf, 'composeSession')
   expect(sessions).toHaveLength(2)
   for (const call of sessions) {
     const value = call.arguments[0]!
@@ -727,7 +730,7 @@ test('CLI initial and replacement sessions carry one prompt selection through SQ
   }
   expect(
     compact(
-      properties(onlyCall(sf, sf, 'composePostgresqlDaemonApplication').arguments[0]!, sf).get(
+      properties(onlyCall(sf, sf, 'composeDaemonApplication').arguments[0]!, sf).get(
         'nodeRunPromptContentEffects',
       )!,
       sf,
@@ -736,10 +739,10 @@ test('CLI initial and replacement sessions carry one prompt selection through SQ
 })
 
 test('PG application carries its one prompt receiver through memory, runtime and the actual HTTP graph', () => {
-  const sf = source('cli/postgresqlDaemonApplication.ts'),
-    body = compositionBody(sf, 'composePostgresqlApplication'),
+  const sf = source('bootstrap/daemonApplication.ts'),
+    body = compositionBody(sf, 'composeDaemonApplication'),
     selected = onlyCall(body, sf, 'composeNodeRunPromptOperations')
-  optionalPromptContract(sf, 'PostgresqlDaemonApplicationInput')
+  optionalPromptContract(sf, 'DaemonApplicationInput')
   expect(selected.arguments.map((value) => compact(value, sf))).toEqual([
     'input.nodeRunPromptContentEffects',
     "join(input.appHome,'runs')",

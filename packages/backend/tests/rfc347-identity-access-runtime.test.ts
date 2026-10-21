@@ -269,8 +269,8 @@ describe('RFC-347 exact production source locks', () => {
       // RFC-370 M0 / §9.2 V9: hosted assembly lives only in bootstrap, which
       // composes the CrewStation credential adapters.
       'src/bootstrap/crewstation.ts',
+      'src/bootstrap/daemonApplication.ts',
       'src/cli/daemonModules/providerCore.ts',
-      'src/cli/postgresqlDaemonApplication.ts',
       // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：`cli/start.ts` 是 SQLite 的第三个
       // 组合根，列表行的 owner 身份投影在这里装配后注入任务路由——与另外两个根同形
       //（`server.ts` / `postgresqlDaemonApplication.ts` 早就在这张表上）。

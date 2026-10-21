@@ -6,8 +6,7 @@ import { backendUnits, sourceUnit, type SourceUnit } from './census'
 
 const PREFIX = 'packages/backend/src/'
 const ROOTS = [
-  ['cli/start.ts', 'composeSqliteProviderSession'],
-  ['cli/postgresqlDaemonApplication.ts', 'composePostgresqlApplication'],
+  ['bootstrap/daemonApplication.ts', 'composeDaemonApplication'],
   ['server.ts', 'composeSqliteApplicationDeps'],
 ] as const
 const RETIRED = [
@@ -112,7 +111,12 @@ export function neutralHttpViolations(units: readonly SourceUnit[]): string[] {
     )
       errors.push(`${ownerName ?? 'top-level'}: second route table (${callee})`)
   })
-  for (const path of ['cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+  for (const path of [
+    'cli/start.ts',
+    'bootstrap/daemonApplication.ts',
+    'bootstrap/daemonSession.ts',
+    'bootstrap/daemonSessionAdapters.ts',
+  ]) {
     const unit = units.find((unit) => unit.path === PREFIX + path)
     if (!unit) continue
     for (const factory of HTTP_OWNERS)
@@ -201,23 +205,28 @@ describe('RFC-390 neutral HTTP binding', () => {
       'directAuthority',
     ])
   })
-  test('SQLite maintenance still precedes HTTP and reads its apply activity late', () => {
-    const start = units.find((unit) => unit.path === PREFIX + 'cli/start.ts')!
-    const root = start.source.statements.find(
-      (node) =>
-        ts.isFunctionDeclaration(node) && node.name?.text === 'composeSqliteProviderSession',
+  test('application precedes maintenance and supplies its apply activity to both providers', () => {
+    const session = units.find((unit) => unit.path === PREFIX + 'bootstrap/daemonSession.ts')!
+    const application = units.find(
+      (unit) => unit.path === PREFIX + 'bootstrap/daemonApplication.ts',
     )!
-    const maintenance = calls(root, 'createMaintenanceService')
-    const http = calls(root, 'composeProviderAppComposition')
+    const maintenance = calls(session.source, 'createMaintenanceService')
+    const graph = calls(session.source, 'composeDaemonApplication')
+    const http = calls(application.source, 'composeProviderAppComposition')
     expect(maintenance).toHaveLength(1)
+    expect(graph).toHaveLength(1)
     expect(http).toHaveLength(1)
-    expect(maintenance[0]!.getStart()).toBeLessThan(http[0]!.getStart())
-    expect(maintenance[0]!.getText(start.source)).toContain(
-      'http.resourcePackageApplyActivity.activeApplyIds()',
+    expect(graph[0]!.getStart()).toBeLessThan(maintenance[0]!.getStart())
+    expect(maintenance[0]!.getText(session.source)).toContain(
+      'runtime.resourcePackageActivity.activeApplyIds',
     )
-    expect(http[0]!.getText(start.source)).toContain('appHome: Paths.root')
-    expect(http[0]!.getText(start.source)).toContain(
-      'databaseTelemetry: databaseProvider.telemetry',
+    expect(graph[0]!.getText(session.source)).toContain(
+      'maintenanceStatus: () => maintenanceService.status()',
     )
+    expect(http[0]!.getText(application.source)).toContain('appHome: input.appHome')
+    expect(http[0]!.getText(application.source)).toContain(
+      'databaseTelemetry: input.provider.telemetry',
+    )
+    expect(application.text).toContain('resourcePackageActivity: http.resourcePackageApplyActivity')
   })
 })

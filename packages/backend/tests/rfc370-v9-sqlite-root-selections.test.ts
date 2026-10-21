@@ -1,11 +1,11 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 §9.2 V9 — hosted assembly lives only in bootstrap and reaches only
 // the PostgreSQL daemon root. A hosted deployment always runs on PostgreSQL, so
 // the SQLite root composes the standalone owners directly and refuses any
 // hosted-only selection instead of silently threading it through.
 import { expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { HOSTED_ONLY_SELECTIONS, standaloneSelectionsOf } from '@/cli/start'
+
+import { HOSTED_ONLY_SELECTIONS, standaloneSelectionsOf } from '@/bootstrap/daemonSessionAdapters'
 
 type ComposeInput = Parameters<typeof standaloneSelectionsOf>[0]
 
@@ -20,12 +20,15 @@ test('the SQLite root refuses every hosted-only selection by name', () => {
   }
 })
 
-test('the SQLite composer body never reads a hosted-only selection', () => {
-  const source = readFileSync(join(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
-  const start = source.indexOf('async function composeSqliteProviderSession(')
+test('the shared graph admits selections before composing owners', () => {
+  const source = readDaemonGraphSource()
+  const start = source.indexOf('async function composeDaemonApplication<')
   expect(start).toBeGreaterThan(0)
   const body = source.slice(start)
-  for (const key of HOSTED_ONLY_SELECTIONS) expect(body).not.toContain(`input.${key}`)
+  expect(body.indexOf('adapter.admitSelections(input)')).toBeLessThan(
+    body.indexOf('composeDevelopmentPurposeRoot({'),
+  )
+  expect(body).toContain('DAEMON_SESSION_ADAPTERS[input.provider.provider]')
 })
 
 test('RFC-380 treats credentials, run families and workspace presence as hosted-only', () => {

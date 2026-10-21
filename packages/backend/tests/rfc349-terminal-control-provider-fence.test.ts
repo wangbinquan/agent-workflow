@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-349 — the MR terminal-control worker must live inside the provider
 // pause/resume fence, and its fire-and-forget drain must never kill the daemon.
 //
@@ -23,8 +24,6 @@
 // non-throwing.
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 
 import type { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
@@ -146,17 +145,16 @@ describe('RFC-349 terminal-control worker inside the provider fence', () => {
     await worker.stop()
   })
 
-  test('both daemon bootstraps register the worker as a paused provider writer', () => {
-    const start = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+  test('the shared daemon graph registers the worker for both adapters as a paused provider writer', () => {
+    const start = readDaemonGraphSource()
 
     expect(DAEMON_BACKGROUND_JOBS[0].id).toBe('webhook-terminal-control')
     const records = propertyBodies(start, 'backgroundJobs')
-    expect(records).toHaveLength(2)
+    expect(records).toHaveLength(1)
     expect(propertyBodies(records[0]!, 'webhook-terminal-control')).toEqual([
       'webhookTerminalRuntimeFactory',
     ])
-    expect(propertyBodies(records[1]!, 'webhook-terminal-control')).toEqual([
-      'webhookTerminalControlRuntimeFactory',
-    ])
+    expect(start).toContain('DAEMON_SESSION_ADAPTERS[input.provider.provider]')
+    expect(start.match(/^ {2}(?:sqlite|postgresql): \{/gm)).toHaveLength(2)
   })
 })

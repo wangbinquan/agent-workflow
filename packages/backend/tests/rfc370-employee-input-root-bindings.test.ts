@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -11,7 +12,9 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -30,8 +33,7 @@ function calls(source: ts.SourceFile, expression: string) {
 test('real boot and HTTP roots choose one complete input receiver for both intake and materialization', () => {
   // RFC-383: roots forward their selection; the one bundle chooses and shares the receiver.
   for (const [path, receiver] of [
-    ['cli/start.ts', 'input'],
-    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['bootstrap/daemonApplication.ts', 'input'],
     ['server.ts', 'deps'],
   ] as const) {
     const root = load(path)

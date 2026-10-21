@@ -1,10 +1,11 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // The daemon selects one raw legacy source independently of parsed settings.
 // Both provider compositions must retain that source through boot and cutover.
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import ts from 'typescript'
 import { runtimes } from '@/db/schema'
 import {
@@ -15,12 +16,7 @@ import {
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 
-const start = ts.createSourceFile(
-  'start.ts',
-  readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8'),
-  ts.ScriptTarget.Latest,
-  true,
-)
+const start = ts.createSourceFile('start.ts', readDaemonGraphSource(), ts.ScriptTarget.Latest, true)
 
 function descendants(node: ts.Node, predicate: (node: ts.Node) => boolean): ts.Node[] {
   const found: ts.Node[] = []
@@ -66,14 +62,19 @@ test('both daemon providers and target recomposition retain the selected raw sou
   ).filter(ts.isVariableDeclaration)
   expect(sessionInputs).toHaveLength(1)
   expect(compact(sessionInputs[0]!.initializer!)).toContain(',runtimeLegacyConfiguration,')
-  const providerSessions = calls(root, 'composeDaemonProviderSession')
+  const providerSessions = calls(root, 'composeSession')
   expect(providerSessions).toHaveLength(2)
   for (const session of providerSessions) {
     expect(compact(session.arguments[0]!)).toContain('...sessionInput,')
   }
+  expect(compact(body('composeDaemonSession'))).toContain(
+    'runtimeLegacyConfiguration:input.runtimeLegacyConfiguration',
+  )
   for (const [owner, expected] of [
-    ['composePostgresqlProviderSession', 'legacyConfiguration:input.runtimeLegacyConfiguration'],
-    ['composeSqliteProviderSession', 'legacyConfiguration:runtimeLegacyConfiguration'],
+    [
+      'composeDaemonApplication',
+      'legacyConfiguration:requireRuntimeLegacyConfiguration(input.runtimeLegacyConfiguration)',
+    ],
   ]) {
     const provider = body(owner!)
     expect(calls(provider, 'composeFileRuntimeLegacyConfiguration')).toHaveLength(0)

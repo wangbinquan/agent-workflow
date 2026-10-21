@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { bootImplementation, bootDeclaration } from './helpers/daemonProgramSource'
 // RFC-321 T19 — repository publication boundary ratchet.
 //
@@ -34,7 +35,9 @@ interface PublicationLedger {
 }
 
 function read(relativePath: string): string {
-  return readFileSync(resolve(REPO_ROOT, relativePath), 'utf8')
+  return /(?:^|\/)cli\/start\.ts$/.test(relativePath)
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(REPO_ROOT, relativePath), 'utf8')
 }
 
 const GIT_NETWORK_COMMANDS = ['push', 'fetch', 'ls-remote'] as const
@@ -258,7 +261,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     )
     const composition = read('packages/backend/src/modules/source-control/composition.ts')
     const server = read('packages/backend/src/server.ts')
-    const cli = read('packages/backend/src/cli/start.ts')
+    const cli = read('packages/backend/src/bootstrap/daemonApplication.ts')
 
     expect(commitPush).toContain('subject: publicationSubject')
     expect(commitPush).toContain('session.runNetwork')
@@ -298,7 +301,9 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(bootImplementation(cli, 'transport-projections')).toContain(
       'reconcileRepositoryTransportConnectionProjections(',
     )
-    expect(cli).toContain('await lifecycleProgram.initialize(input.initializeExecution)')
+    expect(read('packages/backend/src/bootstrap/daemonSession.ts')).toContain(
+      'await lifecycleProgram.initialize(input.initializeExecution)',
+    )
     // Task execution, both employee bundles and the neutral HTTP owner share the selected repository.
     expect(server.match(/repository: repositoryBootstrap,/g)).toHaveLength(4)
   })
@@ -319,7 +324,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     // participant, so SSH publication skipped provider API discovery and went
     // straight to mapping/SaaS URL rules even though RFC-321 requires API first.
     const startTaskDeps = read('packages/backend/tests/helpers/startTaskDeps.ts')
-    const cli = read('packages/backend/src/cli/start.ts')
+    const cli = read('packages/backend/src/bootstrap/daemonApplication.ts')
     const taskRoutes = read('packages/backend/src/routes/tasks.ts')
     const providerRuntime = read(
       'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',

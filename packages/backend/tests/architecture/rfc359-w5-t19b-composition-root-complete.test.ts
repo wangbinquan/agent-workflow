@@ -182,7 +182,12 @@ const PROSE =
  * 而 `cli/start.ts` 里同款的 holder 一个没少。
  * 命名不是判据，装配职责才是：谁在装配依赖并把它交给下游，谁就进扫描面。
  */
-const NAMED_ROOTS: ReadonlySet<string> = new Set(['server.ts'])
+const NAMED_ROOTS: ReadonlySet<string> = new Set([
+  'server.ts',
+  'bootstrap/daemonApplication.ts',
+  'bootstrap/daemonSession.ts',
+  'bootstrap/daemonSessionAdapters.ts',
+])
 
 function isCompositionRoot(rel: string): boolean {
   if (NAMED_ROOTS.has(rel)) return true
@@ -386,7 +391,8 @@ describe('RFC-359 W5-T19b —— 组合根全量装配（占位与晚绑定 hold
     expect(files.length).toBeGreaterThanOrEqual(150)
     // 三部分都要在：塌了任意一块，那一块此刻不设防而账本还是绿的。
     expect(
-      files.some((rel) => rel.startsWith('cli/')),
+      files.some((rel) => rel.startsWith('cli/')) &&
+        files.some((rel) => rel.startsWith('bootstrap/')),
       '扫描面丢了 cli/ 这一块',
     ).toBe(true)
     expect(

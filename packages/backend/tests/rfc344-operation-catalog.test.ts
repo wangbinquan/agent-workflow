@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-344 — closed operation catalog and single inbound-root locks.
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -794,7 +795,7 @@ describe('RFC-344 single inbound root source locks', () => {
     expect(server).toContain('const appHome = deps.appHome ?? Paths.root')
     expect(server).not.toContain('dirname(runtimeDeps.configPath)')
 
-    const start = readFileSync(join(ROOT, 'src/cli/start.ts'), 'utf8')
+    const start = readDaemonGraphSource()
     expect(start.match(/composeDaemonDevelopmentAutomationModules\s*\(/g)).toHaveLength(1)
     expect(start).toContain('developmentAutomation: developmentAutomationModules,')
 

@@ -161,7 +161,7 @@ describe('hosted probe selection wiring', () => {
   })
 
   test('the neutral HTTP binding hands both providers the selected runner; only hosted selects one', async () => {
-    for (const root of ['cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+    for (const root of ['bootstrap/daemonApplication.ts']) {
       expect(await read(root)).toContain('observation: observationModules,')
     }
     expect(await read('server.ts')).toContain('probeRunner: mcpRuntimeTests.probeRunner,')

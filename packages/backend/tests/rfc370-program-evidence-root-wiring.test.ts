@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 A2: actual session, daemon and standalone roots share selected
 // program artifacts and all evidence read faces; no daemon starts here.
 import { expect, test } from 'bun:test'
@@ -8,7 +9,9 @@ import ts from 'typescript'
 function source(path: string): ts.SourceFile {
   return ts.createSourceFile(
     path,
-    readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
+    path === 'cli/start.ts'
+      ? readDaemonGraphSource()
+      : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -40,7 +43,7 @@ const compact = (node: ts.Node, file: ts.SourceFile): string =>
   node.getText(file).replace(/\s/g, '')
 
 const start = source('cli/start.ts')
-const pg = source('cli/postgresqlDaemonApplication.ts')
+const pg = source('bootstrap/daemonApplication.ts')
 const server = source('server.ts')
 
 function selected(node: ts.Node, file: ts.SourceFile, name: string, property: string): void {
@@ -59,13 +62,13 @@ test('provider session and recompose retain both bootstrap selections', () => {
   for (const key of ['employeePrograms', 'evidenceRead', 'evidenceDocumentCommands']) {
     expect(compact(inputs[0]!, start)).toContain(`${key}:opts.${key},`)
     selected(
-      declaration(start, 'composePostgresqlProviderSession'),
+      declaration(start, 'composeDaemonSession'),
       start,
-      'composePostgresqlDaemonApplication',
+      'composeDaemonApplication',
       `${key}:input.${key},`,
     )
     selected(
-      declaration(start, 'composeSqliteProviderSession'),
+      declaration(start, 'composeDaemonApplication'),
       start,
       (
         {
@@ -81,8 +84,8 @@ test('provider session and recompose retain both bootstrap selections', () => {
 
 test('both daemon owners consume the same program and evidence read selection', () => {
   for (const [file, rootName, receiver] of [
-    [start, 'composeSqliteProviderSession', 'input'],
-    [pg, 'composePostgresqlApplication', 'input'],
+    [start, 'composeDaemonApplication', 'input'],
+    [pg, 'composeDaemonApplication', 'input'],
   ] as const) {
     const root = declaration(file, rootName)
     selected(

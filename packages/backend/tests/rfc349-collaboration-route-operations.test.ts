@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -5,7 +6,9 @@ import { resolve } from 'node:path'
 const ROOT = resolve(import.meta.dir, '..')
 
 function source(path: string): string {
-  return readFileSync(resolve(ROOT, path), 'utf8')
+  return /(?:^|\/)cli\/start\.ts$/.test(path)
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(ROOT, path), 'utf8')
 }
 
 describe('RFC-349 collaboration route operations', () => {
@@ -95,7 +98,7 @@ describe('RFC-349 collaboration route operations', () => {
   })
 
   test('SQLite daemon composition wires every collaboration decision port without a root cycle', () => {
-    const daemon = source('src/cli/start.ts')
+    const daemon = source('src/bootstrap/daemonApplication.ts')
     expect(daemon).toContain('composeDaemonTaskExecutionModules({')
     const start = source('src/cli/daemonModules/taskExecution.ts')
     const root = source('src/modules/collaboration/composition.ts')

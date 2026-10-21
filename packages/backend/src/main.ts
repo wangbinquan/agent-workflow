@@ -32,6 +32,7 @@ import {
 } from './cli/deployment'
 import { migrationReportCommand } from './cli/migrationReport'
 import { startCommand, type StartOptions } from './cli/start'
+import { composeDaemonSession } from './bootstrap/daemonSession'
 import {
   createDevelopmentDaemonState,
   reloadDevelopmentDaemon,
@@ -398,7 +399,7 @@ async function main(): Promise<void> {
       // RFC-370 v2 §3.1: the deployment selects its adapters once; flags still win.
       const deployment = await composeDeploymentStartOptions(process.env)
       const start = (development?: StartOptions) =>
-        startCommand({ ...deployment, ...opts, ...development })
+        startCommand({ ...deployment, ...opts, ...development }, composeDaemonSession)
       if (process.env.AGENT_WORKFLOW_DEV_HOT_RELOAD === '1') {
         const retained = globalThis as typeof globalThis & {
           agentWorkflowDevelopment?: DevelopmentDaemonState

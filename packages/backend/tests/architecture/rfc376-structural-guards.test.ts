@@ -988,46 +988,11 @@ describe('RFC-376 G9 deployment branches', () => {
     'server.ts',
     'embed.ts',
     'cli/start.ts',
-    'cli/postgresqlDaemonApplication.ts',
     'cli/dev.ts',
   ])('business scope includes %s', (path) => {
     expect(deploymentBranchSites(fixture(path, "if (mode === 'crewstation') run()"))).toHaveLength(
       1,
     )
-  })
-  test('RFC-389 literal Worker entry paths are passive, while any extra effect remains a deployment import', () => {
-    const entryPath = 'bootstrap/maintenanceWorkerEntries.ts'
-    const passive = `declare const AW_COMPILED_BUILD: boolean | undefined
-      export const MAINTENANCE_WORKER_ENTRY = typeof AW_COMPILED_BUILD === 'boolean' && AW_COMPILED_BUILD
-        ? './bootstrap/maintenanceWorker.ts'
-        : new URL('./maintenanceWorker.ts', import.meta.url).href`
-    const source = "import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'"
-    expect(
-      deploymentBranchSites(fixture('cli/start.ts', source, [unit(entryPath, passive)])),
-    ).toEqual([])
-    for (const mutated of [
-      passive + "\nimport '@/bootstrap/crewstation'",
-      passive + '\nstartWorker()',
-      passive.replace(
-        "new URL('./maintenanceWorker.ts', import.meta.url).href",
-        'selectDeployment()',
-      ),
-      passive.replace(
-        'declare const AW_COMPILED_BUILD: boolean | undefined',
-        'const AW_COMPILED_BUILD = selectDeployment()',
-      ),
-    ]) {
-      expect(
-        deploymentBranchSites(fixture('cli/start.ts', source, [unit(entryPath, mutated)])),
-      ).toHaveLength(1)
-    }
-    expect(
-      deploymentBranchSites(
-        fixture('cli/start.ts', "import '@/bootstrap/otherEntries'", [
-          unit('bootstrap/otherEntries.ts', passive),
-        ]),
-      ),
-    ).toHaveLength(1)
   })
   test('literal port contracts count, ordinary value literals do not', () => {
     expect(

@@ -1,10 +1,10 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { DAEMON_RUNTIME_JOBS } from '../src/cli/daemonLifecycleProgram'
 // Queued admission must await the selected reader and settle before provider
 // close. These controls do not start an Intent turn, daemon, or local process.
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+
 import ts from 'typescript'
 import { createIntentPersistence } from '@/modules/intent/composition/persistence'
 import { composeIntentQueuedResumption } from '@/modules/intent/composition/queuedResumption'
@@ -406,15 +406,12 @@ test('both provider roots read the complete intent bundle before maintenance and
   expect(DAEMON_RUNTIME_JOBS[0].id).toBe('intent-queued-resumption')
   const file = ts.createSourceFile(
     'start.ts',
-    readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8'),
+    readDaemonGraphSource(),
     ts.ScriptTarget.Latest,
     true,
   )
   const compact = (node: ts.Node): string => node.getText(file).replace(/\s/g, '')
-  for (const [name, firstRuntime] of [
-    ['composePostgresqlProviderSession', 'runtimeJobs'],
-    ['composeSqliteProviderSession', 'runtimeJobs'],
-  ] as const) {
+  for (const [name, firstRuntime] of [['composeDaemonSession', 'runtimeJobs']] as const) {
     const root = file.statements.find(
       (node): node is ts.FunctionDeclaration =>
         ts.isFunctionDeclaration(node) && node.name?.text === name,
@@ -442,12 +439,7 @@ test('both provider roots read the complete intent bundle before maintenance and
       'constintentQueuedResumption=intentModules.queuedResumption',
     )
     expect(compact(root.body)).not.toContain('composeIntentQueuedNotifications')
-    if (name === 'composeSqliteProviderSession') {
-      expect(compact(selected[0]!)).toContain('composeDaemonIntentModules({')
-      expect(compact(selected[0]!)).toContain('configuration,')
-    } else {
-      expect(compact(selected[0]!)).toBe('intentModules=runtime.intentModules')
-    }
+    expect(compact(selected[0]!)).toBe('intentModules=runtime.intentModules')
     const factories = nodes.filter(
       (node) =>
         (ts.isPropertyAssignment(node) || ts.isVariableDeclaration(node)) &&

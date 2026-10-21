@@ -282,8 +282,8 @@ describe('RFC-372 mindmap uses the original TaskEngine continuation', () => {
       }
 })
 
-test('both daemon roots route the selected observation and task bundle through the neutral follow-up owner', async () => {
-  for (const path of ['../src/cli/start.ts', '../src/cli/postgresqlDaemonApplication.ts']) {
+test('the common daemon graph routes the selected observation and task bundle through the neutral follow-up owner', async () => {
+  for (const path of ['../src/bootstrap/daemonApplication.ts']) {
     const source = await Bun.file(new URL(path, import.meta.url)).text()
     expect(source).toContain('composeProviderAppComposition({')
     expect(source).toContain('observation: observationModules')

@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-331 — topology cut behavior and architecture ratchets.
 // Functionality only: these tests lock request shape, status/call-graph parity,
 // explicit fixture topology and the three dependency cuts.
@@ -23,11 +24,13 @@ type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 
 function source(path: string): string {
-  return readFileSync(resolve(REPO_ROOT, path), 'utf8')
+  return /(?:^|\/)cli\/start\.ts$/.test(path)
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(REPO_ROOT, path), 'utf8')
 }
 
 const RFC331_LEGACY_CONSUMERS = new Set([
-  'packages/backend/src/cli/start.ts',
+  'packages/backend/src/bootstrap/daemonApplication.ts',
   'packages/backend/src/routes/clarify.ts',
   'packages/backend/src/routes/reviews.ts',
   'packages/backend/src/routes/taskQuestions.ts',

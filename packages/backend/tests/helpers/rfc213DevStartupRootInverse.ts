@@ -44,15 +44,15 @@ const declarationCheck: readonly Change[] = [
     uniqueMarker: "import { assertRuntimeDeclarations } from '@/services/runtime/selfCheck'\n",
   },
   {
-    occurrences: 2,
+    occurrences: 1,
     current:
-      "      'runtime-declarations': async () => {\n" +
-      '        const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))\n',
+      "    'runtime-declarations': async () => {\n" +
+      '      const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))\n',
     previous:
-      "      'runtime-declarations': async () => {\n" +
-      "        const { assertRuntimeDeclarations } = await import('@/services/runtime/selfCheck')\n" +
-      "        const { getRuntimeDriver, RUNTIME_KINDS } = await import('@/services/runtime')\n" +
-      '        const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))\n',
+      "    'runtime-declarations': async () => {\n" +
+      "      const { assertRuntimeDeclarations } = await import('@/services/runtime/selfCheck')\n" +
+      "      const { getRuntimeDriver, RUNTIME_KINDS } = await import('@/services/runtime')\n" +
+      '      const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))\n',
   },
 ]
 
@@ -79,11 +79,17 @@ function inverseRevision(text: string, changes: readonly Change[]): string {
 }
 
 // Test-only inverse of the approved development preparation and static self-check
-// imports in both RFC-379 provider bindings. Preserve every other byte, including
+// imports in the RFC-391 neutral application graph. Preserve every other byte, including
 // concurrent host/observation edits; a partial or changed binding must fail closed.
 export function inverseRfc213DevStartupRoot(source: ts.SourceFile): ts.SourceFile {
-  if (!('/' + source.fileName.replaceAll('\\', '/')).endsWith('/cli/start.ts')) return source
-  const text = inverseRevision(inverseRevision(source.text, declarationCheck), preparation)
+  const path = '/' + source.fileName.replaceAll('\\', '/')
+  const changes = path.endsWith('/cli/start.ts')
+    ? preparation
+    : path.endsWith('/bootstrap/daemonApplication.ts')
+      ? declarationCheck
+      : undefined
+  if (changes === undefined) return source
+  const text = inverseRevision(source.text, changes)
   if (text === source.text) return source
   return ts.createSourceFile(source.fileName, text, ts.ScriptTarget.Latest, true)
 }

@@ -317,20 +317,18 @@ describe('RFC-305 identity-access architecture', () => {
       // RFC-370 M0 / §9.2 V9：托管装配只在 bootstrap，装配 CrewStation 的 HTTP / WebSocket
       // 凭据适配器、来源令牌校验与恢复请求人解析。
       'packages/backend/src/bootstrap/crewstation.ts -> @/modules/identity-access/composition/authentication',
+      'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition',
+      'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition/authentication',
+      'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition/ownerIdentityQueries',
       'packages/backend/src/cli/daemonModules/providerCore.ts -> @/modules/identity-access/composition',
       'packages/backend/src/cli/daemonModules/providerCore.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/cli/daemonModules/providerCore.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition',
-      'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/authentication',
-      'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/ownerIdentityQueries',
       // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：`cli/start.ts` 是 SQLite 的**第三个
       // 组合根**（`server.ts` / `postgresqlDaemonApplication.ts` 早就在这张表上），列表行的
       // owner 身份投影在这里装配后注入任务路由——与另外两个根同形。
-      'packages/backend/src/cli/start.ts -> @/modules/identity-access/composition',
       // RFC-370 M0：启动参数携带部署选定的凭据适配器（类型），两个 provider 根按它装配。
       'packages/backend/src/cli/start.ts -> @/modules/identity-access/composition/authentication',
-      'packages/backend/src/cli/start.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/main.ts -> ./modules/identity-access/composition',

@@ -2,7 +2,7 @@ import { bootImplementation, bootDeclaration } from './helpers/daemonProgramSour
 // RFC-349 回归防护 —— PostgreSQL daemon 自用的「系统身份」必须由 identity-access 注册表
 // **铸**出来，不能手捏。
 //
-// 为什么这条测试存在：`cli/postgresqlDaemonApplication.ts` 曾在模块作用域用
+// 为什么这条测试存在：`bootstrap/daemonApplication.ts` 曾在模块作用域用
 // `buildActor({ user: { id: SYSTEM_USER_ID, … }, source: 'daemon' })` 拼出一个 `systemActor`，
 // 再把它交给 `authorityFor` / `resourceAuthorityFor`。但 RFC-345 之后授权句柄是按**对象引用**
 // 从注册表的 WeakMap 里取的（`modules/identity-access/application/operationContext.ts` 的
@@ -35,7 +35,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { directOperationAuthority, directRequestAuthority } from '../src/routes/operationAuthority'
 
-const DAEMON_SOURCE = resolve(import.meta.dir, '..', 'src', 'cli', 'postgresqlDaemonApplication.ts')
+const DAEMON_SOURCE = resolve(import.meta.dir, '..', 'src', 'bootstrap', 'daemonApplication.ts')
 
 /** daemon 组合根当年手捏的那个投影，逐字段照抄。 */
 function handBuiltSystemActor(): Actor {
@@ -104,7 +104,7 @@ describeEachProvider('RFC-349 — PostgreSQL daemon 的系统身份', (harness) 
     // 只钉出事的那棵树，等于把同一个坑留给另外两棵。三个组合根都拿得到注册表，
     // 也都有「daemon 自己要一个身份」的需求，判据必须一视同仁。
     const roots = [
-      'src/cli/postgresqlDaemonApplication.ts',
+      'src/bootstrap/daemonApplication.ts',
       'src/cli/start.ts',
       'src/server.ts',
       'src/cli/daemonModules/observation.ts',

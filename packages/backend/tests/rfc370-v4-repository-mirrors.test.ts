@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 §10 V17 — registered repositories are read, registered and refreshed
 // where their content lives.
 //
@@ -19,9 +20,9 @@
 //   registration instead of cloning, and the rows say so;
 // - a hosted daemon registers no working mirror refresh job.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { RepoRefsResponse } from '@agent-workflow/shared'
 import { Hono, type Context } from 'hono'
 import { buildActor } from '../src/auth/actor'
@@ -322,7 +323,7 @@ describe('RFC-370 V17 hosted mirror refresh job', () => {
     // Source-level lock: both daemons freeze the same writers (RFC-349), so
     // the handle stays in the PostgreSQL session's list; with the hosted
     // remote selected its start() returns an inert handle.
-    const start = readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8')
+    const start = readDaemonGraphSource()
     const factory = start.slice(start.indexOf("id: 'submodule-refresh'"))
     expect(factory.slice(0, 700)).toContain('if (input.repositoryRemote !== undefined)')
   })

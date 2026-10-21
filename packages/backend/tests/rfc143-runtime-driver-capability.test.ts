@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-143 — runtime 能力对象收口的 PR-1 验收锁。
 //
@@ -39,7 +40,10 @@ import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import { assembleOpencodePersonaSpawn } from '../src/services/runtime/opencode/driver'
 import type { AgentSpawnContext } from '../src/services/runtime/types'
 
-const SRC = (rel: string) => readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
+const SRC = (rel: string) =>
+  rel === 'cli/start.ts'
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
 
 describe('RFC-143 (A) 派生单源', () => {
   it('RUNTIME_KINDS = DRIVERS 的 keys（当前两内建）', () => {
@@ -436,7 +440,7 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
       expect(src).not.toContain('configPath: deps.configPath')
     }
     expect(SRC('cli/start.ts')).toContain('configPath: Paths.config')
-    expect(SRC('cli/start.ts')).toContain('drive: taskExecutionModules.gateContinuation')
+    expect(SRC('cli/start.ts')).toContain('drive: runtime.driveHumanGateContinuation')
     expect(SRC('services/runtime/opencode/util.ts')).not.toContain(
       'export function resolveOpencodeCmd',
     )

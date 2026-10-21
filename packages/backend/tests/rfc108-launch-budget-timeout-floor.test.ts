@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-108 PR-B (AR-01) — per-node hard-timeout floor launch-path wiring lock.
 //
 // 为什么这条测试存在：`defaultPerNodeTimeoutMs`（config 默认 30min）在 RFC-108 之前
@@ -55,7 +56,10 @@ describe('RFC-108 T4 resolveLaunchRuntimeConfig — 接线 per-node timeout floo
 })
 
 describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps 站点）', () => {
-  const src = (rel: string): string => readFileSync(join(import.meta.dir, '../src', rel), 'utf8')
+  const src = (rel: string): string =>
+    rel === 'cli/start.ts'
+      ? readDaemonGraphSource()
+      : readFileSync(join(import.meta.dir, '../src', rel), 'utf8')
 
   test('共享 resolver 读 defaultPerNodeTimeoutMs', () => {
     expect(src('modules/task-execution/application/launchConfiguration.ts')).toContain(
@@ -69,7 +73,7 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
   test('gate continuation and fusion share the session configuration floor', () => {
     const start = src('cli/start.ts')
     const bundle = src('cli/daemonModules/taskExecution.ts')
-    expect(start).toContain('drive: taskExecutionModules.gateContinuation')
+    expect(start).toContain('drive: runtime.driveHumanGateContinuation')
     expect(bundle).toContain('const fresh = await taskLaunchConfiguration.start()')
     expect(bundle).toContain('...runtimeConfigOpts({')
     expect(bundle).toContain('const gateContinuation = createGateContinuationDriver({')

@@ -1,9 +1,13 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const sourceRoot = resolve(import.meta.dir, '../src/modules/resource-catalog')
-const source = (path: string): string => readFileSync(resolve(sourceRoot, path), 'utf8')
+const source = (path: string): string =>
+  /(?:^|\/)cli\/start\.ts$/.test(path)
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(sourceRoot, path), 'utf8')
 
 describe('RFC-345 Intent context resource authorization seam', () => {
   test('public contract is closed and carries no provider or actor shape', () => {

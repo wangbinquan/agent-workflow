@@ -35,10 +35,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 test('PostgreSQL daemon：屏障紧跟 restore、fail-closed、闸在 HTTP 之前，后台 reverify 在 HTTP 之后', () => {
   const source = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'cli', 'postgresqlDaemonApplication.ts'),
+    resolve(import.meta.dir, '..', 'src', 'bootstrap', 'daemonApplication.ts'),
     'utf8',
   )
-  const restore = source.indexOf('await core.systemOperations.applyPendingRestore()')
+  const restore = source.indexOf('await adapter.afterCore(core)')
   const compose = source.indexOf('composeDaemonResourceCatalogModules({', restore)
   expect(restore).toBeGreaterThan(-1)
   expect(compose).toBeGreaterThan(restore)

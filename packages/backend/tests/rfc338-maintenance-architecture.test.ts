@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-338 — closed production inventory and main-event-loop isolation guard.
 // Adding a periodic DB/FS-heavy body without catalog + Worker composition must
 // fail here instead of silently reintroducing an hourly whole-UI freeze.
@@ -15,7 +16,10 @@ import { MAINTENANCE_PHASE } from '@/services/daemonCadence'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const ROOT = resolve(BACKEND, '..', '..')
-const readBackend = (path: string): string => readFileSync(resolve(BACKEND, path), 'utf8')
+const readBackend = (path: string): string =>
+  /(?:^|\/)cli\/start\.ts$/.test(path)
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(BACKEND, path), 'utf8')
 
 describe('RFC-338 maintenance architecture', () => {
   test('catalog is closed and every historical phase is classified exactly once', () => {
@@ -40,17 +44,15 @@ describe('RFC-338 maintenance architecture', () => {
   })
 
   test('each selected provider owns one maintenance service and keeps only memory GC on main', () => {
-    const start = readBackend('src/cli/start.ts')
-    expect(start.match(/createMaintenanceService\(\{/g)).toHaveLength(2)
+    const start = readDaemonGraphSource()
+    expect(start.match(/createMaintenanceService\(\{/g)).toHaveLength(1)
+    expect(start).toMatch(/postgresql: \{[\s\S]*?createMaintenanceRunStore\(db\)/u)
     expect(start).toMatch(
-      /createMaintenanceService\(\{[\s\S]*?provider: 'postgresql',[\s\S]*?createMaintenanceRunStore\(db\)/u,
+      /adapter\.maintenance\(\{[\s\S]*?dbPath: Paths\.db,[\s\S]*?migrationsFolder/u,
     )
-    expect(start).toMatch(
-      /createMaintenanceService\(\{[\s\S]*?dbPath: Paths\.db,[\s\S]*?migrationsFolder/u,
-    )
-    expect(start).toContain('maintenanceStatus: maintenanceService.status')
+    expect(start).toContain('maintenanceStatus: () => maintenanceService.status()')
     expect(start).toContain("maintenanceService.runSoon('backupPrune')")
-    expect(start).toContain('maintenanceRuntimeBindings.runtimeFactory')
+    expect(start).toContain('maintenanceBindings.runtimeFactory')
     // RFC-359 W3-T14：监听器与关机序列只有一份（serveDaemon），bootstrap.stop() 只在它里面调一次。
     expect(start).toContain('await input.bootstrap.stop()')
     expect(start.split('.bootstrap.stop()').length - 1).toBe(1)
@@ -114,7 +116,9 @@ describe('RFC-338 maintenance architecture', () => {
     expect(readBackend('src/platform/persistence/sqlite/maintenanceAdmissionStore.ts')).toContain(
       "journalMode: 'preserve'",
     )
-    expect(readBackend('src/cli/start.ts')).toContain('openSqliteMaintenanceAdmissionStore({')
+    expect(readBackend('src/bootstrap/daemonSessionAdapters.ts')).toContain(
+      'openSqliteMaintenanceAdmissionStore({',
+    )
     expect(service).toContain('recoverTurnIds: bootIntentTurnIds')
     expect(service).not.toContain('recoverTurns: true')
     expect(graph).toContain("'database' in request")

@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 W4-D18 —— resource-catalog 的 Workgroup 聚合：异步仓库成为唯一实现（`sqliteWorkgroupRepository` /
 // `postgresqlWorkgroupRepository` 退役），agent 引用可用性判定只剩一份（`referenceUsability.ts`），目录装配一份。
 // 同一段断言在两个引擎上各跑一遍：创建（成员名解析）/ owner 级同名冲突 / 不可见 agent 报 acl-missing-refs / 不存在的
@@ -311,9 +312,11 @@ test('源码锁：Workgroup 聚合没有 provider 命名的仓库 / 引用可用
     'src/cli/daemonModules/resourceCatalog.ts',
     'src/server.ts',
     'src/cli/start.ts',
-    'src/cli/postgresqlDaemonApplication.ts',
+    'src/bootstrap/daemonApplication.ts',
   ]) {
-    const source = readFileSync(join(import.meta.dir, '..', file), 'utf8')
+    const source = /(?:^|\/)cli\/start\.ts$/.test(file)
+      ? readDaemonGraphSource()
+      : readFileSync(join(import.meta.dir, '..', file), 'utf8')
     expect(
       readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
       file,

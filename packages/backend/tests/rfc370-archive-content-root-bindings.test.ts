@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 A2: leaf archive selection must reach both real provider roots, boot
 // recovery and HTTP. No daemon, worker or listener is started by this oracle.
 import { expect, test } from 'bun:test'
@@ -8,7 +9,9 @@ import ts from 'typescript'
 function source(path: string): ts.SourceFile {
   return ts.createSourceFile(
     path,
-    readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
+    path === 'cli/start.ts'
+      ? readDaemonGraphSource()
+      : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -40,7 +43,7 @@ const compact = (node: ts.Node, file: ts.SourceFile): string =>
   node.getText(file).replace(/\s/g, '')
 
 const start = source('cli/start.ts')
-const pg = source('cli/postgresqlDaemonApplication.ts')
+const pg = source('bootstrap/daemonApplication.ts')
 const server = source('server.ts')
 const provider = source('modules/task-execution/composition/providerRuntime.ts')
 const bundle = source('cli/daemonModules/taskExecution.ts')
@@ -53,13 +56,13 @@ test('daemon selected archive binding survives provider creation and re-composit
   ).filter(ts.isVariableDeclaration)
   expect(sessionInputs).toHaveLength(1)
   expect(compact(sessionInputs[0]!, start)).toContain('taskArchive:opts.taskArchive,')
-  const pgRoot = declaration(start, 'composePostgresqlProviderSession')
-  const pgApplication = calls(pgRoot, start, 'composePostgresqlDaemonApplication')
+  const pgRoot = declaration(start, 'composeDaemonSession')
+  const pgApplication = calls(pgRoot, start, 'composeDaemonApplication')
   expect(pgApplication).toHaveLength(1)
   expect(compact(pgApplication[0]!.arguments[0]!, start)).toContain(
     'taskArchive:input.taskArchive,',
   )
-  const sqlite = declaration(start, 'composeSqliteProviderSession')
+  const sqlite = declaration(start, 'composeDaemonApplication')
   const runtime = calls(sqlite, start, 'composeDaemonTaskExecutionModules')
   expect(runtime).toHaveLength(1)
   expect(compact(runtime[0]!.arguments[0]!, start)).toContain('archive:input.taskArchive,')
@@ -93,7 +96,7 @@ test('both provider aggregates use the selected binding with their original data
 })
 
 test('PostgreSQL boot and HTTP retain the same selected command', () => {
-  const root = declaration(pg, 'composePostgresqlApplication')
+  const root = declaration(pg, 'composeDaemonApplication')
   const runtime = calls(root, pg, 'composeDaemonTaskExecutionModules')
   expect(runtime).toHaveLength(1)
   expect(compact(runtime[0]!.arguments[0]!, pg)).toContain('archive:input.taskArchive,')

@@ -497,7 +497,7 @@ test('源码锁：回合只有一份实现与一份装配，legacy 薄壳与 pro
   }
 
   // RFC-382: all roots share the one neutral bundle assembly; no root rebuilds it.
-  for (const bootstrap of ['server.ts', 'cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+  for (const bootstrap of ['server.ts', 'bootstrap/daemonApplication.ts']) {
     expect(read(bootstrap)).toContain('composeDaemonTaskExecutionModules({')
     expect(read(bootstrap)).not.toContain('composeWorkgroupTurnsOperations(')
   }

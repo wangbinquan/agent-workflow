@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-208 PR-5 —— daemon 侧剩余的无界等待。
 //
 // 与 PR-1 同一主题（「只能重启」类），但这几处的形状不同：不是 permit 泄漏，而是
@@ -15,7 +16,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { renderPlantuml } from '../src/services/plantuml'
 
-const startSource = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+const startSource = readDaemonGraphSource()
 const gitVersionSource = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'gitVersion.ts'),
   'utf8',
@@ -24,14 +25,16 @@ const gitVersionSource = readFileSync(
 describe('RFC-208 / RFC-226 · boot probes', () => {
   test('OpenCode is absent from the daemon boot gate', () => {
     const begin = startSource.indexOf('export async function startCommand')
-    const end = startSource.indexOf('async function composeSqliteProviderSession(', begin)
+    const end = startSource.indexOf('async function composeDaemonApplication<', begin)
     expect(begin).toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(begin)
     const boot = startSource.slice(begin, end)
     expect(boot).not.toContain("getRuntimeDriver('opencode')")
     expect(boot).not.toContain('ocDriver.probe')
     expect(boot).not.toContain('opencode probe ok')
-    expect(startSource).toContain('opencodeVersion: null')
+    expect(startSource).toContain(
+      "opencodeVersion: phase.kind === 'daemon' ? null : (input.opencodeVersion ?? null)",
+    )
   })
 
   test('the git boot probe remains bounded', () => {

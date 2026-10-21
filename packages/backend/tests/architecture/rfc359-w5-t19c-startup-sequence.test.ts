@@ -87,8 +87,7 @@ const CORPUS_SKIP_DIRS: ReadonlySet<string> = new Set([
  * 而真正的门（会话装配）已经被 `composeDaemonProviderSession` 的 exact 2 钉住了。
  */
 const STARTUP_SEQUENCE_ENTRYPOINTS: readonly string[] = [
-  'composeDaemonProviderSession',
-  'composePostgresqlDaemonApplication',
+  'composeDaemonApplication',
   'serveDaemon',
   'startCommand',
 ]
@@ -101,8 +100,9 @@ const STARTUP_SEQUENCE_ENTRYPOINTS: readonly string[] = [
  * 数字变小 / 少一行 ⇒ 收敛或改名，把这里一起改，让变化留下一次有署名的提交记录。
  */
 const STARTUP_SEQUENCE_CALL_SITES: readonly string[] = [
-  'composeDaemonProviderSession @ packages/backend/src/cli/start.ts: 2',
-  'composePostgresqlDaemonApplication @ packages/backend/src/cli/start.ts: 1',
+  'composeDaemonApplication @ packages/backend/src/bootstrap/daemonSession.ts: 1',
+  'composeDaemonApplication @ packages/backend/tests/helpers/providerHttpApplication.ts: 1',
+  'composeDaemonApplication @ packages/backend/tests/rfc391-neutral-daemon-graph.test.ts: 1',
   'serveDaemon @ packages/backend/src/cli/start.ts: 1',
   // One real listener fixture exercises the same exported serve path; no second boot sequence.
   'serveDaemon @ packages/backend/tests/rfc370-daemon-host-lifecycle.test.ts: 1',
@@ -117,21 +117,19 @@ const STARTUP_SEQUENCE_CALL_SITES: readonly string[] = [
  * `composers[provider](input)` 取。任何一处**具名调用**都意味着有人在表之外又开了一条
  * 「这个 provider 走这边」的路——那就是 provider 执行分支，只是换了个写法。
  */
-const PROVIDER_SESSION_COMPOSERS: readonly string[] = [
-  'composePostgresqlProviderSession',
-  'composeSqliteProviderSession',
-]
+const PROVIDER_SESSION_COMPOSERS: readonly string[] = ['composeDaemonSession']
 
 /** `<函数> @ <路径>: <定义处之外的引用数>`。逐字相等。 */
 const PROVIDER_SESSION_COMPOSER_REFERENCES: readonly string[] = [
-  'composePostgresqlProviderSession @ packages/backend/src/cli/start.ts: 1',
-  'composeSqliteProviderSession @ packages/backend/src/cli/start.ts: 1',
+  'composeDaemonSession @ packages/backend/src/main.ts: 1',
 ]
 
 /** (b) 的被扫面：两个 daemon 入口文件。 */
 const DAEMON_ENTRY_FILES: readonly string[] = [
   'packages/backend/src/cli/start.ts',
-  'packages/backend/src/cli/postgresqlDaemonApplication.ts',
+  'packages/backend/src/bootstrap/daemonApplication.ts',
+  'packages/backend/src/bootstrap/daemonSession.ts',
+  'packages/backend/src/bootstrap/daemonSessionAdapters.ts',
 ]
 
 /**
@@ -553,7 +551,7 @@ describe('RFC-359 W5-T19c —— 语料下限（扫空 = 假绿）', () => {
   test('两个 daemon 入口文件读得到、解析得动、体量对得上', () => {
     for (const rel of DAEMON_ENTRY_FILES) {
       const text = readFileSync(resolve(REPO_ROOT, rel), 'utf8')
-      expect(text.split('\n').length, `${rel} 体量异常，可能读错了文件`).toBeGreaterThan(300)
+      expect(text.split('\n').length, `${rel} 体量异常，可能读错了文件`).toBeGreaterThan(100) // RFC-391: the adapter table is smaller than either graph.
       expect(parse(rel, text).statements.length, `${rel} 解析不出顶层语句`).toBeGreaterThan(0)
     }
   })
@@ -615,6 +613,15 @@ describe('RFC-359 W5-T19c (a) —— 启动序列恰有一个调用方', () => {
     CORPUS_SCAN_TIMEOUT_MS,
   )
 
+  test('initial and migration target sessions use the injected composer exactly twice', () => {
+    const start = readFileSync(resolve(BACKEND_SRC, 'cli/start.ts'), 'utf8')
+    expect(namedCallCount(start, 'composeSession')).toBe(2)
+    const main = readFileSync(resolve(BACKEND_SRC, 'main.ts'), 'utf8')
+    expect(main).toContain(
+      'startCommand({ ...deployment, ...opts, ...development }, composeDaemonSession)',
+    )
+  })
+
   test('账本自身：无重复行、按字典序（清点稳定的前提）', () => {
     for (const ledger of [STARTUP_SEQUENCE_CALL_SITES, PROVIDER_SESSION_COMPOSER_REFERENCES]) {
       expect(new Set(ledger).size, '账本里有重复行').toBe(ledger.length)
@@ -646,7 +653,7 @@ describe('RFC-359 W5-T19c (b) —— 入口里没有 provider 执行分支', () 
   })
 
   test('PostgreSQL 入口钉 0：它整份就是一个 provider 的装配，内部不许再按 provider 拐', () => {
-    const rel = 'packages/backend/src/cli/postgresqlDaemonApplication.ts'
+    const rel = 'packages/backend/src/bootstrap/daemonApplication.ts'
     expect(
       providerConditions(readFileSync(resolve(REPO_ROOT, rel), 'utf8'), rel),
       'PG 装配入口里出现了 provider 判别式。这份文件被调用时 provider 已经选定，' +

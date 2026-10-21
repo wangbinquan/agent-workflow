@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { composePostgresqlResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
+import { composeResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import type { ResourceLimitOperations } from '@/modules/system-operations/public/operations'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -153,7 +153,7 @@ describe('RFC-349 resource-limit provider seam', () => {
   test('PostgreSQL adapter performs live provider reads/writes and uses injected cancellation', async () => {
     const fixture = postgresqlFixture()
     const cancellations: string[] = []
-    const operations = composePostgresqlResourceLimitOperations({
+    const operations = composeResourceLimitOperations({
       db: fixture.db,
       cancelTask: async (taskId) => {
         cancellations.push(taskId)

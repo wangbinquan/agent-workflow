@@ -23,7 +23,13 @@ import { errorHandler } from '@/util/errors'
 
 const CODE_ROUTE_SOURCE = resolve(import.meta.dir, '..', 'src', 'routes', 'code.ts')
 const SERVER_SOURCE = resolve(import.meta.dir, '..', 'src', 'server.ts')
-const START_SOURCE = resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts')
+const APPLICATION_SOURCE = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'bootstrap',
+  'daemonApplication.ts',
+)
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
   return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
@@ -104,14 +110,14 @@ describe('RFC-349 code-history composition', () => {
   test('route mounting cannot reopen SQLite after bootstrap selected a provider', () => {
     const routeSource = readFileSync(CODE_ROUTE_SOURCE, 'utf8')
     const serverSource = readFileSync(SERVER_SOURCE, 'utf8')
-    const startSource = readFileSync(START_SOURCE, 'utf8')
+    const applicationSource = readFileSync(APPLICATION_SOURCE, 'utf8')
 
     expect(routeSource).not.toContain('sqliteCodeHistoryFallback')
     expect(routeSource).not.toContain('deps.db')
     expect(serverSource).toContain('const codeHistoryQueries = composeCodeHistoryQueries(input.db)')
     expect(serverSource).toContain('mountCodeRoutes(app, input.code.history)')
-    expect(startSource).not.toContain('composeCodeHistoryQueries(')
-    expect(startSource).toContain('composeProviderAppComposition({')
+    expect(applicationSource).not.toContain('composeCodeHistoryQueries(')
+    expect(applicationSource).toContain('composeProviderAppComposition({')
   })
 
   test('one PostgreSQL aggregate drives all four HTTP history projections', async () => {

@@ -1533,7 +1533,7 @@
       "lines": 138,
       "mechanism": "source-text",
       "minCorpusFiles": null,
-      "negativeFixture": false,
+      "negativeFixture": true,
       "runner": "bun"
     },
     {
@@ -2261,6 +2261,42 @@
       "assertsAbsence": true,
       "classified": true,
       "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc389-maintenance-worker-root.test.ts",
+      "id": "rfc389-maintenance-worker-root",
+      "lines": 329,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc390-neutral-http-binding.test.ts",
+      "id": "rfc390-neutral-http-binding",
+      "lines": 223,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc391-neutral-daemon-graph.test.ts",
+      "id": "rfc391-neutral-daemon-graph",
+      "lines": 173,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "id": "runtime-parameter-ratchet",
       "lines": 83,
@@ -2652,30 +2688,6 @@
       "minCorpusFiles": null,
       "negativeFixture": false,
       "runner": "vitest"
-    },
-    {
-      "assertsAbsence": true,
-      "classified": true,
-      "corpusScanner": true,
-      "file": "packages/backend/tests/architecture/rfc389-maintenance-worker-root.test.ts",
-      "id": "rfc389-maintenance-worker-root",
-      "lines": 329,
-      "mechanism": "ast",
-      "minCorpusFiles": 2000,
-      "negativeFixture": true,
-      "runner": "bun"
-    },
-    {
-      "assertsAbsence": true,
-      "classified": true,
-      "corpusScanner": true,
-      "file": "packages/backend/tests/architecture/rfc390-neutral-http-binding.test.ts",
-      "id": "rfc390-neutral-http-binding",
-      "lines": 223,
-      "mechanism": "ast",
-      "minCorpusFiles": 2000,
-      "negativeFixture": true,
-      "runner": "bun"
     }
   ],
   "note": "RFC-317 守卫清单。三向钉死：①两向枚举（删守卫 / 改守卫名 / 加守卫不登记 ⇒ 红）；②扫语料型守卫（corpusScanner）的语料下限 minCorpusFiles——扫描根失效时「零违规」与「合规」同形，语料下限是唯一能把二者分开的断言；③断言「不存在」的守卫（assertsAbsence）必须有负 fixture（negativeFixture）——语料还在但 matcher 不咬了，违规集合同样回到空。只断言存在的守卫自带证明，不在 ③ 的管辖内。全部判据走 census.ts 单一实现，与生成本账本的实现逐字相同。",

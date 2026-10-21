@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 W4-D14 —— resource-catalog 的 Agent 聚合：异步仓库 / 语义层 / portable-import 快照成为唯一实现，SQLite 装配
 // 也切到这一份。同一段断言在两个引擎上各跑一遍：创建 / 读 / 列表、owner 级 name 唯一（唯一冲突经能力矩阵映射）、
 // fence 过期、改名冲突、引用校验（依赖 / runtime）、删除受引用保护、引用标签、import 引用快照；附源码锁。
@@ -251,9 +252,11 @@ test('源码锁：Agent 聚合没有 provider 命名的仓库 / 语义 / 快照�
   for (const file of [
     'src/cli/daemonModules/resourceCatalog.ts',
     'src/server.ts',
-    'src/cli/start.ts',
+    'src/bootstrap/daemonApplication.ts',
   ]) {
-    const source = readFileSync(join(import.meta.dir, '..', file), 'utf8')
+    const source = /(?:^|\/)cli\/start\.ts$/.test(file)
+      ? readDaemonGraphSource()
+      : readFileSync(join(import.meta.dir, '..', file), 'utf8')
     expect(
       readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
       file,

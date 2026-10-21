@@ -1,9 +1,12 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 function source(path: string): string {
-  return readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
+  return path === 'cli/start.ts'
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
 }
 
 describe('RFC-341 collaboration owner source locks', () => {
@@ -166,7 +169,7 @@ describe('RFC-341 collaboration owner source locks', () => {
     const catalog = source('platform/background/maintenanceCatalog.ts')
     const service = source('platform/background/maintenanceService.ts')
     expect(start).toContain('createHumanGateContinuationWorkerDefinition')
-    expect(start).toContain('drive: taskExecutionModules.gateContinuation')
+    expect(start).toContain('drive: runtime.driveHumanGateContinuation')
     expect(start).not.toContain('wakeHumanGateContinuation')
     expect(start).not.toContain('onHumanGateContinuations')
     expect(catalog).not.toContain("key: 'humanGateRecovery'")

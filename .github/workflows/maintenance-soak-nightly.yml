@@ -33,6 +33,9 @@ on:
     branches: [main]
     paths:
       - 'packages/backend/src/cli/start.ts'
+      - 'packages/backend/src/bootstrap/daemonApplication.ts'
+      - 'packages/backend/src/bootstrap/daemonSession.ts'
+      - 'packages/backend/src/bootstrap/daemonSessionAdapters.ts'
       - 'packages/backend/src/db/client.ts'
       - 'packages/backend/src/db/txSync.ts'
       - 'packages/backend/src/platform/background/**'
@@ -52,6 +55,9 @@ on:
   pull_request:
     paths:
       - 'packages/backend/src/cli/start.ts'
+      - 'packages/backend/src/bootstrap/daemonApplication.ts'
+      - 'packages/backend/src/bootstrap/daemonSession.ts'
+      - 'packages/backend/src/bootstrap/daemonSessionAdapters.ts'
       - 'packages/backend/src/db/client.ts'
       - 'packages/backend/src/db/txSync.ts'
       - 'packages/backend/src/platform/background/**'

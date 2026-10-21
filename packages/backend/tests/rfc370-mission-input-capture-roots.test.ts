@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -11,7 +12,9 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -36,8 +39,7 @@ test('mission upload capture is selected lazily and forwarded through every real
   expect(selection.left.getText(composition)).toBe('input.blobs ?? input.artifacts')
   expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
   for (const [path, receiver] of [
-    ['cli/start.ts', 'input'],
-    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['bootstrap/daemonApplication.ts', 'input'],
     ['server.ts', 'deps'],
   ] as const) {
     const source = load(path)
@@ -62,7 +64,7 @@ test('mission upload capture is selected lazily and forwarded through every real
   const start = load('cli/start.ts')
   expect(start.text).toContain('missionInputBlobs: opts.missionInputBlobs,')
   for (const expression of [
-    'composePostgresqlDaemonApplication',
+    'composeDaemonApplication',
     'composeDaemonDevelopmentAutomationModules',
   ]) {
     const roots = calls(start, expression)

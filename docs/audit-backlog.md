@@ -69,7 +69,7 @@ users:                created_by               -> users(id)
 `PostgreSQL crash matrix + 100-client full seed` 这一格失败，失败用例是：
 
 > `RFC-349 real PostgreSQL target fault/resume matrix > disconnect, timeout, deadlock, constraint
-> and storage faults roll back row plus receipt before exact resume`（6229.81ms）
+and storage faults roll back row plus receipt before exact resume`（6229.81ms）
 
 同 run 里 `RFC-349 hosted external PostgreSQL evidence contract` 与 `RFC-349 database migration runner`
 的各条都是 pass，所以红的是**真 PG 目标上的故障注入/恢复那条**，不是判据契约本身。
@@ -85,20 +85,21 @@ checkout 默认分支 HEAD——不是那个提交引入的。要按失败用例
 **后续数据点**（同一条用例、同一个断言 `expected the real PostgreSQL target operation to fail`，即五种故障注入里
 有一种**没有让目标操作失败**；栈只给到 `captureFailure`，看不出是哪一种）：
 
-| 日期 | 触发 | headSha | 结论 |
-| --- | --- | --- | --- |
-| 2026-09-14 | dispatch ×5 | `56713f376`…`070af2205` | 全红 |
-| 2026-09-18 | dispatch | `e7831c498` | 该 job **skipped**（非绿，见上方更正） |
-| 2026-09-20 | schedule | `5663a01a6` | 红 |
-| 2026-09-23 | dispatch | `6936c133e` | 红（run 35832424184；同 run 其余四个 job 全绿） |
-
+| 日期       | 触发        | headSha                 | 结论                                            |
+| ---------- | ----------- | ----------------------- | ----------------------------------------------- |
+| 2026-09-14 | dispatch ×5 | `56713f376`…`070af2205` | 全红                                            |
+| 2026-09-18 | dispatch    | `e7831c498`             | 该 job **skipped**（非绿，见上方更正）          |
+| 2026-09-20 | schedule    | `5663a01a6`             | 红                                              |
+| 2026-09-23 | dispatch    | `6936c133e`             | 红（run 35832424184；同 run 其余四个 job 全绿） |
 
 ## RFC-359：`inspectHumanReview` 是**同步**公共端口，PostgreSQL 上按签名实现不了
 
 `modules/task-execution/public/participants.ts:373`
+
 ```ts
 inspectHumanReview?(executionRef: string): DigitalEmployeeHumanReviewState | null
 ```
+
 实现（`modules/task-execution/composition/digitalEmployeeExecution.ts:235`）靠 bun:sqlite 的同步游标
 `.get()` 当场取行；消费方 `modules/digital-employee/application/runtimeService.ts:1289` 也按同步用。
 
@@ -4389,7 +4390,7 @@ CI 把 backend 分成四片、跑在干净 checkout 上，所以这个顺序在 
 **下次再红时要抓的**：①`stableCenter` 判定稳定的那一帧，把手与它所在节点的
 `getBoundingClientRect()` 与计算样式各打一份；②同一时刻 `react-flow` 的 viewport transform
 （相机还在动的话坐标会整体漂）。在拿到证据之前不动稳定器的阈值——调大它只会把偶发变成更慢的偶发。
-判据：`rfc253-script-node.spec.ts:256` + 「实际命中：div.react-flow__pane」。
+判据：`rfc253-script-node.spec.ts:256` + 「实际命中：div.react-flow\_\_pane」。
 
 ## ✅ 已收（2026-09-17）O(k²) 守卫用**墙钟毫秒**当判据，在共享 runner 上会假红（2026-09-06 实撞）
 
@@ -4560,13 +4561,14 @@ AbortSignal，让它超时后以可诊断的错误收场。**未实施，未立�
 
 **现象**：`Frontend tests (windows-latest shard N/3)` 间歇转红，每次红在**不同用例、不同分片**：
 
-| commit | 分片 | 失败用例 |
-| --- | --- | --- |
-| `3fad84efa` | 1/3 | `plugins-split-page.test.tsx > Upgrade applies only the exact checked hash…` |
-| `a64c5991e` | 3/3 | `relative-time.test.ts > renders <time> … 30s shared ticker advances the label` |
-| `6194d343a` | 3/3 | `relative-time.test.ts` + `memory-panels-async-state.test.tsx`，两条同时 30000ms |
+| commit      | 分片 | 失败用例                                                                         |
+| ----------- | ---- | -------------------------------------------------------------------------------- |
+| `3fad84efa` | 1/3  | `plugins-split-page.test.tsx > Upgrade applies only the exact checked hash…`     |
+| `a64c5991e` | 3/3  | `relative-time.test.ts > renders <time> … 30s shared ticker advances the label`  |
+| `6194d343a` | 3/3  | `relative-time.test.ts` + `memory-panels-async-state.test.tsx`，两条同时 30000ms |
 
 **为什么判成环境而不是某条用例挂住**（三条证据）：
+
 1. 每次红的用例不同、分片也不同——不是某一条的固有缺陷；
 2. `relative-time` 那条是**同步**用例且用**假定时器**（`vi.useFakeTimers()` +
    `advanceTimersByTime`），本不该等任何真实时间，却报 43426ms；同步用例要"超时"只能是
@@ -4594,7 +4596,6 @@ jsdom 大文件、杀毒软件扫描临时文件。**未立项、未验证。**
 **已知在制**：上一 session 给 `plugins-split-page.test.tsx` 加了 `act()` 包裹与渲染态诊断
 （失败时打印 router/query 状态），显然在追同一件事；那份诊断已随 `c8ed5871a` 落库。
 
-
 ## 双引擎 harness 与「多个测试文件共用一个 PostgreSQL 库」（2026-09-10 CI 实撞，未处置）
 
 **症状**：`53d670270` 的 ubuntu 分片 7/8 红一条——
@@ -4619,6 +4620,7 @@ TRUNCATE 已经是**单条语句**列出全部表，两条同样的 TRUNCATE 之
 文件正在用的行整表清掉。今天没有大面积翻车，只是因为重叠窗口很短。
 
 **为什么不随手补**：候选修法各有代价，需要先量再选——
+
 - `DELETE` 换 `TRUNCATE`：拿掉 AccessExclusiveLock、消掉这一类死锁，但**解决不了数据互踩**；
 - 每个文件一个 schema：`db/providerSchema.ts` 的 `pgSchema('agent_workflow')` 是模块级常量，
   按文件换要动 provider 投影本身，影响面大；
@@ -4631,7 +4633,7 @@ TRUNCATE 已经是**单条语句**列出全部表，两条同样的 TRUNCATE 之
 上面「先量再选」的两个未知数都测掉了：
 
 1. **迁移开销不是增量。** harness 今天**已经**在每个文件 `drop schema if exists agent_workflow
-   cascade` + 跑一次完整迁移（`createPostgresqlHarnessDatabase` 里的
+cascade` + 跑一次完整迁移（`createPostgresqlHarnessDatabase` 里的
    `schema.drop-application` / `schema.migrate` 两步）。实测一个只有一条断言的 PG-only 测试文件
    端到端 **1.57–1.69s**，同一个文件 SQLite-only 是 **0.54–0.55s**——差出来的 ~1.05s 就是这份
    已经在付的迁移开销。改成每文件一库**不会多跑一次迁移**，只是把它跑在自己的库上。
@@ -4771,11 +4773,11 @@ supersede。判据：**同时看 `cancelled`**，并算一下 `completedAt - sta
 
 **实测的余量**（三轮 exact SHA 的四个 macOS backend 分片，单位分钟）：
 
-| run | 1/4 | 2/4 | 3/4 | 4/4 |
-| --- | --- | --- | --- | --- |
-| `593fe3681` | 12.4 | 12.8 | 6.0 | 11.6 |
-| `0b313c0d1` | 11.7 | 7.0 | 11.5 | 13.3 |
-| `7e11a2dd0` | **15.3 ⇒ 被杀** | 6.5 | 7.1 | 11.2 |
+| run         | 1/4             | 2/4  | 3/4  | 4/4  |
+| ----------- | --------------- | ---- | ---- | ---- |
+| `593fe3681` | 12.4            | 12.8 | 6.0  | 11.6 |
+| `0b313c0d1` | 11.7            | 7.0  | 11.5 | 13.3 |
+| `7e11a2dd0` | **15.3 ⇒ 被杀** | 6.5  | 7.1  | 11.2 |
 
 最长的一片长期在预算的 **75%~90%**，方差一大就有一个翻。分片之间也很不均（同一轮 6.0 vs 12.8）
 ——bun 按路径确定性分片，慢文件聚在哪一片是随机的。
@@ -4810,6 +4812,7 @@ TestingLibraryElementError: Unable to find an element by: [data-testid="mission-
 不是逻辑形状。
 
 **已排除的**：
+
 - 触发这次 CI 的提交是**纯后端**的（backend 用例 + architecture JSON + plan.md，零前端文件）；
 - 同一个 job 在紧邻的前三个提交上都是 success；
 - 那次 push 是从上一个绿提交的**快进**，中间没有别人的提交挤进来；
@@ -4966,6 +4969,7 @@ drizzle 把 PG 错误包成 `Failed query: <整条 SQL> params: …`，**真正�
 它沿 cause 链取）。于是 CI 日志里只剩一条几百字符的 SQL，看不出是唯一键冲突、死锁还是序列化失败。
 
 **待办（按顺序）**：
+
 1. **先让它可诊断**：给那条 catch 的日志补上沿 cause 链取到的 `code` / `errno` / `detail`。
    注意 `postgresqlSqlState` 目前是**私有**的，直接导出会给 resource-catalog → platform/persistence
    添一条跨上下文边（会顶高 `rfc294-cross-context-observed-imports` 账本）——
@@ -5011,15 +5015,15 @@ Error: e2e/harness: daemon closed with code 1 signal null before printing ready 
 
 把 2026-09-12 这一天的 CI 结果逐条归因（下面每条都单独查过日志、比对过提交内容）：
 
-| commit | 红在哪 | 归因 |
-| --- | --- | --- |
-| `98545e3f8` | Backend macos 3/6 + ubuntu 1/8 | **真缺陷**（W29 摘要没同步）+ 一次抖动 |
-| `e48b1d71a` | Backend ubuntu 1/8 | **真抖动**（W8-T28 L6 固定等待，已修成信号量谓词） |
-| `4a53d0b46` | Playwright e2e ubuntu 3/3 | 抖动（`workflow-matrix:1157`，**该提零 `src/` 改动**） |
-| `c8c944bed` | Backend ubuntu 6/8 | **真缺陷**（`dispatchIntentTurn` fire-and-forget 无网，已修） |
-| `6c033e5ef` | Backend ubuntu 4/8 | 抖动（`rfc189-wg-round` PG，**该提只改了两个 markdown**） |
-| `2d330ace7` | Playwright e2e windows 2/4 | 抖动（`rfc294-human-gate-restart`，**该提零 `src/` 改动**） |
-| `07882bb32` | Backend macos 1/6 | **已修**：`test-suite-policy` 的全语料 AST 扫撞 bun 固定 5s 默认（**该提只改了一个 markdown**） |
+| commit      | 红在哪                         | 归因                                                                                            |
+| ----------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `98545e3f8` | Backend macos 3/6 + ubuntu 1/8 | **真缺陷**（W29 摘要没同步）+ 一次抖动                                                          |
+| `e48b1d71a` | Backend ubuntu 1/8             | **真抖动**（W8-T28 L6 固定等待，已修成信号量谓词）                                              |
+| `4a53d0b46` | Playwright e2e ubuntu 3/3      | 抖动（`workflow-matrix:1157`，**该提零 `src/` 改动**）                                          |
+| `c8c944bed` | Backend ubuntu 6/8             | **真缺陷**（`dispatchIntentTurn` fire-and-forget 无网，已修）                                   |
+| `6c033e5ef` | Backend ubuntu 4/8             | 抖动（`rfc189-wg-round` PG，**该提只改了两个 markdown**）                                       |
+| `2d330ace7` | Playwright e2e windows 2/4     | 抖动（`rfc294-human-gate-restart`，**该提零 `src/` 改动**）                                     |
+| `07882bb32` | Backend macos 1/6              | **已修**：`test-suite-policy` 的全语料 AST 扫撞 bun 固定 5s 默认（**该提只改了一个 markdown**） |
 
 **（2026-09-12 续）第 7 红 `07882bb32` 已经查清并修掉**——不是抖动、是**判据自己的预算写错了**：
 全语料 AST 扫（784 个文件）吃 bun 的固定 5000ms 默认，本机 0.81s、macOS 分片 5061ms 撞线。
@@ -5150,6 +5154,7 @@ PG 上也要成立），属于产品行为决策，不夹在测试迁移里做�
 `Failed query: rollback`。
 
 **判据（不是「重跑就过了」）**：
+
 - **没有任何断言失败**，挂的是 bun 默认的单条用例 5s 超时；`rollback` 报错是用例被超时拆掉时
   事务善后失败的**后果**，不是原因。
 - 单文件跑：33 条用例 14.1s（均值 ~430ms），连跑两次均 33 pass / 0 fail。
@@ -5178,6 +5183,7 @@ void deps.core.tokenCallAudit.record({ actor, channel: 'rest', method, path, sta
 审计失败不能拖垮业务调用，也不该给每个请求加一次写延迟。
 
 **两个引擎的保证因此不同**：
+
 - **SQLite**：`insertAudit` 同步执行，中间件返回时行已经落库。客户端下一条请求必然读得到。
 - **PostgreSQL**：它是一次**真异步**插入，且没有任何人 await 它。客户端紧接着读
   `/api/auth/pats/audit` 会读到**空列表**——审计行随后才到。
@@ -5210,7 +5216,7 @@ ubuntu 分片 2/12，`services/mcpRuntimeTest.ts` 的 `scheduleIdleTimer`，已�
 **未核的 45 处**分布（`packages/backend/src`，AST 扫描：`void` 语句 + 链上无 rejection handler）：
 `platform/background/maintenanceWorkerRuntime.ts`(3)、`platform/background/maintenanceService.ts`(1)、
 `platform/events/committed/workerDefinitions.ts`(1)、`mcp/server.ts`(1)、`cli/start.ts`(6)、
-`cli/postgresqlDaemonApplication.ts`(3)、`modules/digital-employee/application/osWorker.ts`(1)、
+`bootstrap/daemonApplication.ts`（原 PostgreSQL 应用的 3 处，RFC-391 已合一）、`modules/digital-employee/application/osWorker.ts`(1)、
 `modules/intent/inbound/intentSessionRoutes.ts`(10)、`modules/intent/application/dispatcher.ts`(3)、
 `modules/event-center/application/eventCenterWorker.ts`(1)、`server.ts`(4)、`routes/webhooks.ts`(1)、
 `services/scheduledTaskScheduler.ts`(1)、`services/controlListener.ts`(1)、
@@ -5299,7 +5305,7 @@ bun 把失败的 `beforeAll` 记成 `(unnamed)`（`tests/helpers/eachProvider.ts
 **定式：动手隔离之前先确认环境健康，隔离之后再把基线复测一遍**——两头都对得上，中间的差异才是真的。
 
 **仍然成立的那半个事实**（与上面的错误结论无关，是读源码得到的）：
-`cli/postgresqlDaemonApplication.ts:1929` 把路由的 `databaseTelemetry` 硬接成
+`bootstrap/daemonApplication.ts` 的 `composeProviderAppComposition` 调用（RFC-391 从原 PostgreSQL 应用迁入）把路由的 `databaseTelemetry` 接成
 `input.provider.telemetry`，所以从 `AppDeps` 喂进去的 `databaseTelemetry` 在 PG 侧会被忽略。
 测试作用域要让那条「注入伪造投影、断言路由原样回显」的用例在两个引擎上都跑，就得在
 `tests/helpers/providerHttpApplication.ts` 的 PG 分支上传
@@ -5381,12 +5387,12 @@ SERIALIZABLE，PG 根本不会抛 40001（`could not serialize access due to rea
 **对手方已查明：回合引擎的并发是它自己。** 不必再找外部写者——
 
 · `workgroupTurnsDriver.ts` 同时驱动多个回合：`Promise.allSettled(inflight.values())`
-  （`:2657` / `:2661` / `:2668`）与 `Promise.race(inflight.values())`（`:2776`）。
+（`:2657` / `:2661` / `:2668`）与 `Promise.race(inflight.values())`（`:2776`）。
 · 每个回合各自是一笔 SERIALIZABLE 事务（`runResourceCatalogTransaction` → `serializable`）。
 · 它们读写的是**同一个 task** 的 `node_runs` / `tasks` / 工作组行——天然互为读写依赖。
 · 失败那条用例把这件事**推到最大**：它脚本化地让成员连失败 `DEFAULT_PROTOCOL_RETRY_BUDGET + 1`
-  次（`rfc359-w4-d19c-adapters.test.ts:387`），**每一次重试都要新铸一个 `node_run`**——
-  正是日志里失败的那条 insert。于是这条用例是全文件铸 run 最密集的一条，也就最先输。
+次（`rfc359-w4-d19c-adapters.test.ts:387`），**每一次重试都要新铸一个 `node_run`**——
+正是日志里失败的那条 insert。于是这条用例是全文件铸 run 最密集的一条，也就最先输。
 
 **这就是典型的「一个好一个不好」**：同一套并发设计在 SQLite 上没事（没有 SSI，写被单写者
 租约串起来），在 PostgreSQL 上会被 SSI 判成依赖环并抛 40001。
@@ -5434,5 +5440,3 @@ shard 5/12 红（run `35814805097`，提交 `356bb594d` 只挪了一个与工作
   （`:758-762`）只返回 failed、不落 node_run 终态。工作组驱动下一次 drive 会把这类 run 当崩溃恢复采纳
   （`workgroupTurnsDriver.ts:2684-2687`），对应卡片已 failed 时 `assignmentStartOperations` 返回空、host
   会再跑一次。待办 owner：下一个触及工作组宿主失败出口的 RFC。
-
-

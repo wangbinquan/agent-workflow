@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-041 — verify that completing a clarify session and submitting a
 // review decision both enqueue a `memory_distill_jobs` row (best-effort,
 // must not break the original decision path).
@@ -206,15 +207,12 @@ describe('source-code grep guard — review distill is a durable committed-event
       ),
       'utf8',
     )
-    const bootstrap = fs.readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'),
-      'utf8',
-    )
+    const bootstrap = readDaemonGraphSource()
     expect(review).not.toContain('enqueueDistillJob(')
     expect(consumer.match(/await input\.enqueueReviewDistill\(/g) ?? []).toHaveLength(1)
     expect(
       bootstrap.match(/\.\.\.createCollaborationDurableConsumerDefinitions\(\{/g) ?? [],
-    ).toHaveLength(2)
-    expect(bootstrap).toContain('async enqueueReviewDistill(input) {')
+    ).toHaveLength(1)
+    expect(bootstrap).toContain('async enqueueReviewDistill(request) {')
   })
 })

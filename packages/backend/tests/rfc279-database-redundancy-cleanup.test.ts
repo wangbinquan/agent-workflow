@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-279 — locks the seven-column physical cleanup, fail-closed polarity,
 // direct-upgrade URL escrow, and current single-id operation contract.
 
@@ -304,9 +305,13 @@ describe('RFC-279 source ratchet', () => {
       'modules/resource-catalog/infrastructure/legacy/skillOperations.ts',
       'modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts',
       'services/webhook/webhookDispatch.ts',
-      'cli/start.ts',
+      'bootstrap/daemonApplication.ts',
     ]
-      .map((path) => readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'))
+      .map((path) =>
+        path === 'bootstrap/daemonApplication.ts'
+          ? readDaemonGraphSource()
+          : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
+      )
       .join('\n')
     expect(production).not.toContain('skills.sourceKind')
     expect(production).not.toContain('cachedRepos.url)')

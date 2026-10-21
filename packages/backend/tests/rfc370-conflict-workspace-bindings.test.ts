@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: actual DE Case persistence/recomposition and complete bootstrap owner selection.
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -55,8 +56,7 @@ function property(source: ts.SourceFile, call: ts.CallExpression, name: string) 
 
 test('RFC-383 shared conflict bindings and paired root selections retain the explicit receiver', () => {
   for (const [path, receiver] of [
-    ['cli/start.ts', 'input'],
-    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['bootstrap/daemonApplication.ts', 'input'],
     ['server.ts', 'deps'],
   ] as const) {
     const source = ts.createSourceFile(
@@ -112,7 +112,7 @@ test('RFC-383 shared conflict bindings and paired root selections retain the exp
       }
     }
   }
-  const start = readFileSync(new URL('../src/cli/start.ts', import.meta.url), 'utf8')
+  const start = readDaemonGraphSource()
   for (const name of ['actionWorkspaceEffects', 'conflictMergeWorkspaceEffects']) {
     expect(start).toContain(`${name}: opts.${name},`)
     expect(start.split(`${name}: input.${name},`)).toHaveLength(

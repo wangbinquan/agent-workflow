@@ -5,9 +5,9 @@ import { join } from 'node:path'
 
 import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
 import {
-  composePostgresqlApplication,
-  type PostgresqlApplicationInput,
-} from '@/cli/postgresqlDaemonApplication'
+  composeDaemonApplication,
+  type DaemonApplicationInput,
+} from '@/bootstrap/daemonApplication'
 import { invalidateReadConfigCache, loadConfig, saveConfigRaw } from '@/config'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/composition'
@@ -115,7 +115,7 @@ export interface ProviderHttpApplication {
    * RFC-359 —— 合一前一批用例为了拿到它，在外面再 `createTaskExecutionReadModels(db)` 建一份
    * 一模一样的，再从 `AppDeps.taskExecutionReadModels` 塞回去（`rfc340-review-access` /
    * `rfc314-session-view-window` / `rfc311-session-view-bounded` 等）。那个形状把用例钉死在
-   * SQLite 上——`PostgresqlApplicationInput` 没有、也不该有这个只服务测试的字段。
+   * SQLite 上——`DaemonApplicationInput<'postgresql'>` 没有、也不该有这个只服务测试的字段。
    * 两个 provider 本来都已经装配了它（SQLite 的 `SqliteAppComposition.taskExecutionReadModels`、
    * PostgreSQL 的 `taskExecutionProvider.readModels`），这里只是把结果交出来。
    */
@@ -195,9 +195,9 @@ export async function composeUnstartedApplication<T extends object>(
 }
 
 /** Test-only lifetime around the same complete composer called by the daemon. */
-export function composePostgresqlUnstartedApplication(input: PostgresqlApplicationInput) {
+export function composePostgresqlUnstartedApplication(input: DaemonApplicationInput<'postgresql'>) {
   return composeUnstartedApplication((scope) =>
-    composePostgresqlApplication(input, { kind: 'unstarted', scope }),
+    composeDaemonApplication(input, { kind: 'unstarted', scope }),
   )
 }
 
@@ -299,6 +299,7 @@ export async function createProviderHttpApplication(
         ...input,
         db: binding.db,
         provider: {
+          provider: 'postgresql',
           runtime: binding.runtime,
           telemetry: input.databaseTelemetry ?? binding.runtime.telemetry,
         },

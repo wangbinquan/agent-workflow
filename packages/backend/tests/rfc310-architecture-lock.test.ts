@@ -44,12 +44,12 @@ const PUBLIC_ALLOWED = new Set([
 
 /** 消费者账本：import 这两个入口的仓内生产文件（相对 backend/src）。 */
 const COMPOSITION_CONSUMERS: string[] = [
+  'bootstrap/daemonApplication.ts',
   'bootstrap/maintenanceWorkerGraph.ts',
   'cli/daemonModules/developmentAutomation.ts',
   'cli/daemonModules/digitalEmployee.ts',
   'cli/daemonModules/integration.ts',
   'cli/daemonModules/repositoryCredentials.ts',
-  'cli/postgresqlDaemonApplication.ts',
   'cli/start.ts',
   'server.ts',
 ]

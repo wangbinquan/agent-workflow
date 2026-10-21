@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 AC-1 / AC-6 —— 任务执行读模型**只有一份实现**，两个引擎跑同一组判据。
 //
 // 这个文件原名 `rfc349-task-execution-read-models-postgresql-adapter.test.ts`，
@@ -202,9 +203,9 @@ describeEachProvider('RFC-359 任务执行读模型的装配身份', (h) => {
 
 describe('RFC-359 SQLite 守护进程读模型接线', () => {
   test('守护进程 bootstrap 显式选 SQLite，而不是靠 runtime 兜底', () => {
-    const start = readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8')
+    const start = readDaemonGraphSource()
     expect(start).toContain('composeDaemonTaskExecutionModules({')
-    expect(start).toContain('DAEMON_TASK_EXECUTION_ADAPTERS.sqlite({ db })')
+    expect(start).toContain('DAEMON_TASK_EXECUTION_ADAPTERS.sqlite({ db: input.db })')
     expect(start).toContain('taskExecution: taskExecutionModules,')
     const http = readFileSync(resolve(import.meta.dir, '../src/server.ts'), 'utf8')
     expect(http).toContain('taskExecutionReadModels: taskExecutionProvider.readModels')

@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: check each real call argument rather than matching unrelated source text.
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -6,7 +7,9 @@ import ts from 'typescript'
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -31,7 +34,10 @@ function namedCalls(root: ts.Node, source: ts.SourceFile, name: string) {
   )
 }
 function objectArgument(call: ts.CallExpression): ts.ObjectLiteralExpression {
-  expect(call.arguments).toHaveLength(1)
+  if (call.expression.getText() === 'composeDaemonApplication') {
+    expect(call.arguments).toHaveLength(2)
+    expect(call.arguments[1]!.getText()).toBe("{ kind: 'daemon' }")
+  } else expect(call.arguments).toHaveLength(1)
   const value = call.arguments[0]!
   if (!ts.isObjectLiteralExpression(value)) throw new Error('explicit root object required')
   const names = value.properties
@@ -75,8 +81,7 @@ const fields = {
 
 test('RFC-383 roots forward baselines and the three bundle consumers retain their lexical selection', () => {
   for (const [path, receiver] of [
-    ['cli/start.ts', 'input'],
-    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['bootstrap/daemonApplication.ts', 'input'],
     ['server.ts', 'deps'],
   ] as const) {
     const source = load(path)
@@ -155,10 +160,10 @@ function forwarded(
 
 test('CLI initial and replacement sessions forward the same selected storage objects and Worker descriptor', () => {
   const source = load('cli/start.ts')
-  forwarded(oneRoot(source, 'composePostgresqlDaemonApplication'), source, 'input')
+  forwarded(oneRoot(source, 'composeDaemonApplication'), source, 'input')
   const sqliteHttp = oneRoot(source, 'composeProviderAppComposition')
   expect(sqliteHttp.properties.some((node) => node.name?.getText(source) === 'selections')).toBe(
-    false,
+    true,
   )
   const employee = oneRoot(source, 'composeDaemonDigitalEmployeeModules')
   expect(compact(employee, source)).toContain(
@@ -180,7 +185,7 @@ test('CLI initial and replacement sessions forward the same selected storage obj
   expect(compact(property(value, source, 'maintenanceEffectsBootstrap'), source)).toBe(
     'opts.maintenanceEffectsBootstrap',
   )
-  const sessions = namedCalls(source, source, 'composeDaemonProviderSession')
+  const sessions = namedCalls(source, source, 'composeSession')
   expect(sessions).toHaveLength(2)
   for (const call of sessions) {
     const argument = objectArgument(call)
@@ -195,7 +200,7 @@ test('CLI initial and replacement sessions forward the same selected storage obj
     ).toBe(false)
   }
   const workers = namedCalls(source, source, 'startMaintenanceWorkerSupervisor')
-  expect(workers).toHaveLength(2)
+  expect(workers).toHaveLength(1)
   for (const call of workers) {
     const argument = objectArgument(call)
     expect(compact(property(argument, source, 'effectsBootstrap'), source)).toBe(
@@ -266,7 +271,7 @@ test('both actual HTTP composers select complete workspace and package owners wi
 
 test('HTTP callers forward selected workspace and package owners into the neutral binding', () => {
   for (const [path, receiver] of [
-    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['bootstrap/daemonApplication.ts', 'input'],
     ['server.ts', 'deps'],
   ] as const) {
     const source = load(path)
@@ -288,8 +293,7 @@ test('HTTP callers forward selected workspace and package owners into the neutra
 
 test('RFC-383 one employee case participant supplies workspace and platform work items', () => {
   for (const [path, receiver] of [
-    ['cli/start.ts', 'input'],
-    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['bootstrap/daemonApplication.ts', 'input'],
     ['server.ts', 'deps'],
   ] as const) {
     const source = load(path)
@@ -343,7 +347,7 @@ test('all three original checkpoint consumers await the selected receipt before 
 test('public root types expose existing complete contracts without adding partial callback ports', () => {
   for (const [path, names] of [
     ['cli/start.ts', ['StartOptions', 'DaemonProviderSessionComposeInput']],
-    ['cli/postgresqlDaemonApplication.ts', ['PostgresqlDaemonApplicationInput']],
+    ['bootstrap/daemonApplication.ts', ['DaemonApplicationInput']],
     ['server.ts', ['AppDeps']],
   ] as const) {
     const source = load(path)
@@ -371,8 +375,7 @@ test('public root types expose existing complete contracts without adding partia
 
 test('RFC-383 workspace selection reaches the three shared consumers and the HTTP fallback', () => {
   for (const [path, receiver] of [
-    ['cli/start.ts', 'input'],
-    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['bootstrap/daemonApplication.ts', 'input'],
     ['server.ts', 'deps'],
   ] as const) {
     const source = load(path),

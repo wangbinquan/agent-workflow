@@ -12,9 +12,10 @@ import { resolve } from 'node:path'
 import { DAEMON_BOOT_STEPS } from '../src/cli/daemonLifecycleProgram'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 
-const cli = resolve(import.meta.dir, '..', 'src', 'cli')
-const SQLITE_ENTRY = readFileSync(resolve(cli, 'start.ts'), 'utf8')
-const POSTGRESQL_ENTRY = readFileSync(resolve(cli, 'postgresqlDaemonApplication.ts'), 'utf8')
+const APPLICATION = readFileSync(
+  resolve(import.meta.dir, '../src/bootstrap/daemonApplication.ts'),
+  'utf8',
+)
 
 test('both providers bind the common boot program to the original operations', () => {
   const bindings = {
@@ -32,13 +33,8 @@ test('both providers bind the common boot program to the original operations', (
     'employee-agent-templates': 'ensureDigitalEmployeeAgentTemplates(',
     'demo-seed': 'seedDemoContent({',
   } as const
-  const sqlite = SQLITE_ENTRY.slice(
-    SQLITE_ENTRY.indexOf('async function composeSqliteProviderSession('),
-  )
-  for (const source of [sqlite, POSTGRESQL_ENTRY]) {
-    for (const [id, operation] of Object.entries(bindings))
-      expect(bootImplementation(source, id as keyof typeof bindings)).toContain(operation)
-  }
+  for (const [id, operation] of Object.entries(bindings))
+    expect(bootImplementation(APPLICATION, id as keyof typeof bindings)).toContain(operation)
   expectBootOrder([
     'process-registrations',
     'git-credential-lease-cleanup',
@@ -62,7 +58,7 @@ test('delivery recovery directly follows MR terminal reconciliation inside execu
     id: 'webhook-delivery-recovery',
     phase: 'execution-recovery',
   })
-  for (const source of [SQLITE_ENTRY, POSTGRESQL_ENTRY]) {
+  for (const source of [APPLICATION]) {
     expect(bootImplementation(source, 'mr-terminal-reconcile')).toContain(
       'await webhookTerminalControl.reconcileOnBoot()',
     )
@@ -74,22 +70,21 @@ test('delivery recovery directly follows MR terminal reconciliation inside execu
 
 test('fusion provenance stays fail-closed and precedes recovery and seeding', () => {
   expect(bootDeclaration('fusion-provenance').failure).toBe('fail-closed')
-  const body = bootImplementation(POSTGRESQL_ENTRY, 'fusion-provenance')
+  const body = bootImplementation(APPLICATION, 'fusion-provenance')
   expect(body).not.toContain('try {')
   expect(body).not.toContain('catch')
   expectBootOrder(['fusion-provenance', 'fusion-resource-seed', 'fusion-decision-recovery'])
 })
 
-test('runtime 注册表 boot 每条 provider 路径恰好一次：SQLite 在 start.ts 主路径，PG 在 provider 会话建立时', () => {
-  const marker = 'await initializeRuntimeRegistryBoot({'
-  const sqliteEntryCalls = SQLITE_ENTRY.split(marker).length - 1
-  // start.ts 里两处：composePostgresqlProviderSession（PG 路径）与 SQLite 主路径各一次。
-  expect(sqliteEntryCalls).toBe(2)
-  const providerSession = SQLITE_ENTRY.indexOf('async function composePostgresqlProviderSession(')
-  const serve = SQLITE_ENTRY.indexOf('async function serveDaemon(')
-  const first = SQLITE_ENTRY.indexOf(marker)
-  expect(first).toBeGreaterThan(providerSession)
-  expect(first).toBeLessThan(serve)
-  // PG daemon 装配里不得再跑一次（否则内置 runtime 行会被重复播种 / 回填）。
-  expect(POSTGRESQL_ENTRY).not.toContain(marker)
+test('one application graph initializes the runtime registry once for both adapters', () => {
+  expect(APPLICATION.split('await initializeRuntimeRegistryBoot({').length - 1).toBe(1)
+  expect(bootImplementation(APPLICATION, 'runtime-registry')).toContain(
+    'operations: core.runtimeRegistry',
+  )
+  const session = readFileSync(
+    resolve(import.meta.dir, '../src/bootstrap/daemonSession.ts'),
+    'utf8',
+  )
+  expect(session).not.toContain('initializeRuntimeRegistryBoot(')
+  expect(session).toContain('...application.lifecycleSteps')
 })

@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 A2: locks real-root propagation of the complete skill store into
 // editing, availability and restart recovery without starting a daemon.
 import { expect, test } from 'bun:test'
@@ -8,7 +9,9 @@ import ts from 'typescript'
 function source(path: string): ts.SourceFile {
   return ts.createSourceFile(
     path,
-    readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
+    path === 'cli/start.ts'
+      ? readDaemonGraphSource()
+      : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -40,7 +43,7 @@ const compact = (node: ts.Node, file: ts.SourceFile): string =>
   node.getText(file).replace(/\s/g, '')
 
 const start = source('cli/start.ts')
-const pg = source('cli/postgresqlDaemonApplication.ts')
+const pg = source('bootstrap/daemonApplication.ts')
 const server = source('server.ts')
 const bundle = source('cli/daemonModules/resourceCatalog.ts')
 
@@ -66,14 +69,14 @@ test('daemon preserves the same complete skill content binding across provider s
   ).filter(ts.isVariableDeclaration)
   expect(inputs).toHaveLength(1)
   expect(compact(inputs[0]!, start)).toContain('skillContent:opts.skillContent,')
-  const postgres = declaration(start, 'composePostgresqlProviderSession')
-  const application = calls(postgres, start, 'composePostgresqlDaemonApplication')
+  const postgres = declaration(start, 'composeDaemonSession')
+  const application = calls(postgres, start, 'composeDaemonApplication')
   expect(application).toHaveLength(1)
   expect(compact(application[0]!.arguments[0]!, start)).toContain(
     'skillContent:input.skillContent,',
   )
-  const sqlite = declaration(start, 'composeSqliteProviderSession')
-  selectedCatalog(sqlite, start, 'composeDaemonResourceCatalogModules', 'input', 'Paths.root')
+  const sqlite = declaration(start, 'composeDaemonApplication')
+  selectedCatalog(sqlite, start, 'composeDaemonResourceCatalogModules', 'input', 'input.appHome')
   const http = calls(sqlite, start, 'composeProviderAppComposition')
   expect(http).toHaveLength(1)
   expect(compact(http[0]!.arguments[0]!, start)).toContain(
@@ -82,7 +85,7 @@ test('daemon preserves the same complete skill content binding across provider s
 })
 
 test('PostgreSQL HTTP and daemon boot choose the same store while retaining their database', () => {
-  const root = declaration(pg, 'composePostgresqlApplication')
+  const root = declaration(pg, 'composeDaemonApplication')
   selectedCatalog(root, pg, 'composeDaemonResourceCatalogModules', 'input', 'input.appHome')
   expect(
     compact(calls(root, pg, 'composeDaemonResourceCatalogModules')[0]!.arguments[0]!, pg),

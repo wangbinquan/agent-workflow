@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: the actual runner, collaboration factory and provider HTTP roots await selected artifact ACKs.
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -451,7 +452,9 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
 function source(path: string) {
   return ts.createSourceFile(
     path,
-    readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -527,9 +530,9 @@ test('CLI initial and replacement sessions carry raw content selection into the 
   expect(sqlite).toHaveLength(1)
   expect(sqlite[0]!.arguments.map((arg) => arg.getText(sf))).toEqual([
     'input.portArtifactContentEffects',
-    'Paths.root',
+    'input.appHome',
   ])
-  const pg = calls(sf, sf, 'composePostgresqlDaemonApplication')
+  const pg = calls(sf, sf, 'composeDaemonApplication')
   expect(pg).toHaveLength(1)
   expect(objectFields(pg[0]!.arguments[0]!, sf).get('portArtifactContentEffects')).toBe(
     'input.portArtifactContentEffects',
@@ -543,7 +546,7 @@ test('CLI initial and replacement sessions carry raw content selection into the 
 })
 
 test('PG and HTTP roots share one selected service between runtime, review and the real artifact route', () => {
-  const pg = source('cli/postgresqlDaemonApplication.ts'),
+  const pg = source('bootstrap/daemonApplication.ts'),
     server = source('server.ts')
   const pgSelection = calls(pg, pg, 'composePortArtifactOperations')
   expect(pgSelection).toHaveLength(1)

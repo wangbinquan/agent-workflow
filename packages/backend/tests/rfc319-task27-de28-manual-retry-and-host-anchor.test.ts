@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-319 TASK-27 / DE-28 —— 两条被 RFC-359 AC-1 合一顺手丢掉的装配步骤。
 //
 // 两条都只有 `@nightly` 的 e2e 覆盖，推送档看不见，所以红了几天没人认领；这里把它们锁进推送档。
@@ -65,7 +66,9 @@ describe('RFC-319 TASK-27 —— 演员发起的仓库准备重试必须带着�
 
   test('两个组合根共用的适配器把 authorization.actorUserId 原样传下去（写死 SYSTEM 就红）', () => {
     for (const path of ['cli/start.ts', 'server.ts']) {
-      const root = readFileSync(resolve(ROOT, 'packages/backend/src', path), 'utf8')
+      const root = /(?:^|\/)cli\/start\.ts$/.test(path)
+        ? readDaemonGraphSource()
+        : readFileSync(resolve(ROOT, 'packages/backend/src', path), 'utf8')
       expect(root).toContain('composeDaemonTaskExecutionModules({')
       expect(root).toContain('DAEMON_TASK_EXECUTION_ADAPTERS.sqlite({')
       expect(root).not.toContain('async retry(taskId: string')
@@ -134,7 +137,7 @@ describeEachProvider('RFC-319 DE-28 —— 数字员工宿主工作流的锚行'
   })
 })
 
-describe('RFC-319 DE-28 —— 启动前必须播种，三个组合根一个都不许漏', () => {
+describe('RFC-319 DE-28 —— 启动前必须播种，中立应用图与 SQLite 测试根一个都不许漏', () => {
   test('执行合一的那份实现在 launch 之前调 hostWorkflow.ensure()', () => {
     const composer = readFileSync(
       resolve(
@@ -151,12 +154,11 @@ describe('RFC-319 DE-28 —— 启动前必须播种，三个组合根一个都�
     expect(ensureAt).toBeLessThan(launchAt)
   })
 
-  test('三个组合根都绑上了这个端口（漏一个 = 那条路的评审页打不开）', () => {
+  test('中立应用图与 SQLite 测试根都绑上了这个端口（漏一个 = 那条路的评审页打不开）', () => {
     // RFC-383: all three roots select the employee bundle; the execution core supplies its hostWorkflow default once.
     for (const relative of [
       'packages/backend/src/server.ts',
-      'packages/backend/src/cli/start.ts',
-      'packages/backend/src/cli/postgresqlDaemonApplication.ts',
+      'packages/backend/src/bootstrap/daemonApplication.ts',
     ]) {
       const source = readFileSync(resolve(ROOT, relative), 'utf-8')
       expect(source).toContain('composeDaemonDigitalEmployeeModules({')

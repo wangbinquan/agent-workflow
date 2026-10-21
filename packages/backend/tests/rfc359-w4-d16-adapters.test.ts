@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 W4-D16 —— resource-catalog 的 Mcp 聚合：异步仓库与事务内运行时测试生命周期成为唯一实现，SQLite 装配也切到
 // 这一份。同一段断言在两个引擎上各跑一遍：创建 / 同 owner 同名冲突 / OCC（configHash）/ 改名冲突 / 被 agent 引用时
 // 删除只回引用、运行时测试会话在同一笔事务里写下失效意图（配置变更阻塞、停用结束、ACL 变更按可见性结束或阻塞）、
@@ -355,9 +356,11 @@ test('源码锁：Mcp 聚合没有 provider 命名的仓库 / 生命周期孪生
     'src/cli/daemonModules/resourceCatalog.ts',
     'src/server.ts',
     'src/cli/start.ts',
-    'src/cli/postgresqlDaemonApplication.ts',
+    'src/bootstrap/daemonApplication.ts',
   ]) {
-    const source = readFileSync(join(import.meta.dir, '..', file), 'utf8')
+    const source = /(?:^|\/)cli\/start\.ts$/.test(file)
+      ? readDaemonGraphSource()
+      : readFileSync(join(import.meta.dir, '..', file), 'utf8')
     expect(
       readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
       file,

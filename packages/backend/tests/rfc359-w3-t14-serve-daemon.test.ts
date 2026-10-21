@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 W3-T14 —— 监听器与关机序列只有一份（`serveDaemon`），两个 provider 共用；
 // provider 专属的收尾全部在各自会话的关闭参与者里，且两侧同一组 id、同一顺序。
 //
@@ -13,7 +14,7 @@ import { resolve } from 'node:path'
 import { DAEMON_CLOSE_PARTICIPANTS } from '../src/cli/daemonLifecycleProgram'
 import { propertyBodies } from './helpers/daemonProgramSource'
 
-const START = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+const START = readDaemonGraphSource()
 
 function closeParticipantIds(section: string): string[] {
   const ids: string[] = []
@@ -48,37 +49,29 @@ test('serveDaemon 的 shutdown 只做监听器层的事：provider 专属收尾�
   expect(body).toContain('input.lock.release()')
 })
 
-test('startCommand 没有 provider 执行分支：不比较 provider 字面量，会话装配只经 composeDaemonProviderSession 查表', () => {
+test('startCommand 没有 provider 执行分支：不比较 provider 字面量，会话装配只经 composeSession 查表', () => {
   const body = START.slice(
     START.indexOf('export async function startCommand('),
-    START.indexOf('async function composeSqliteProviderSession('),
+    START.indexOf('async function composeDaemonApplication<'),
   )
   expect(body).not.toMatch(/provider\s*[!=]==\s*'(?:sqlite|postgresql)'/u)
   expect(body).not.toContain("'postgresql' as const")
-  expect(body.split('composeDaemonProviderSession({').length - 1).toBe(2)
-  // 查表按 DatabaseProvider 穷举：少一个 provider 就编译不过，多一个分支这里就红。
-  const table = START.slice(
-    START.indexOf('function composeDaemonProviderSession('),
-    START.indexOf('async function serveDaemon('),
-  )
-  expect(table).toContain('satisfies Record<DatabaseProvider, DaemonProviderSessionComposer>')
-  expect(table).toContain('sqlite: composeSqliteProviderSession')
-  expect(table).toContain('postgresql: composePostgresqlProviderSession')
+  expect(body.split('composeSession({').length - 1).toBe(2)
+  expect(START).toContain('DAEMON_SESSION_ADAPTERS[input.provider.provider]')
+  expect(START).toContain('readonly [P in DatabaseProvider]: DaemonSessionAdapter<P>')
 })
 
 test('两个 provider 会话声明同一组关闭参与者、同一顺序', () => {
-  const pg = START.slice(
-    START.indexOf('async function composePostgresqlProviderSession('),
-    START.indexOf('async function serveDaemon('),
+  const session = readFileSync(
+    resolve(import.meta.dir, '../src/bootstrap/daemonSession.ts'),
+    'utf8',
   )
-  const sqlite = START.slice(START.indexOf('async function composeSqliteProviderSession('))
   const expected = [
     'memory-distill-recover-running',
     'task-execution-graceful-shutdown',
     'webhook-terminal-control',
   ]
-  expect(closeParticipantIds(pg)).toEqual(expected)
-  expect(closeParticipantIds(sqlite)).toEqual(expected)
+  expect(closeParticipantIds(session)).toEqual(expected)
   expect(DAEMON_CLOSE_PARTICIPANTS.map((item) => item.id)).toEqual([
     'memory-distill-recover-running',
     'task-execution-final-close',
@@ -87,7 +80,7 @@ test('两个 provider 会话声明同一组关闭参与者、同一顺序', () =
     'task-execution-graceful-shutdown',
     'webhook-terminal-control',
   ])
-  for (const section of [sqlite, pg]) {
+  for (const section of [session]) {
     const record = propertyBodies(section, 'closeParticipants')
     expect(record).toHaveLength(1)
     for (const { id } of DAEMON_CLOSE_PARTICIPANTS)

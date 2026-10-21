@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-349 — runtime registry persistence is selected once at bootstrap. The
 // application and HTTP surfaces consume one Promise-only closed port; SQLite
 // and PostgreSQL keep provider mechanics inside infrastructure adapters.
@@ -18,7 +19,9 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 
 function source(relativePath: string): string {
-  return readFileSync(resolve(import.meta.dir, '..', relativePath), 'utf8')
+  return /(?:^|\/)cli\/start\.ts$/.test(relativePath)
+    ? readDaemonGraphSource()
+    : readFileSync(resolve(import.meta.dir, '..', relativePath), 'utf8')
 }
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
@@ -143,7 +146,7 @@ describe('RFC-349 runtime registry provider operations', () => {
     const provider = source('src/modules/task-execution/composition/providerRuntime.ts')
     expect(provider).not.toContain('composeRuntimeRegistryOperations')
     expect(provider).toContain('...dependencies.runtime')
-    const root = source('src/cli/postgresqlDaemonApplication.ts')
+    const root = source('src/bootstrap/daemonApplication.ts')
     expect(root).toContain('runtimeRegistry: core.runtimeRegistry')
     expect(root).toContain('observation: observationModules,')
     expect(source('src/server.ts')).toMatch(
@@ -164,7 +167,7 @@ describe('RFC-349 runtime registry provider operations', () => {
     for (const path of [
       'src/server.ts',
       'src/cli/start.ts',
-      'src/cli/postgresqlDaemonApplication.ts',
+      'src/bootstrap/daemonApplication.ts',
     ]) {
       const root = source(path)
       expect(root).toContain('composeDaemonTaskExecutionModules({')

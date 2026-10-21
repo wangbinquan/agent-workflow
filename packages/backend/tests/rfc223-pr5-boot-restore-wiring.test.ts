@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-223 PR-5 — boot/restore placement and real backup forward-restore proof.
 //
@@ -34,7 +35,7 @@ const tmps: string[] = []
 
 describe('RFC-223 PR-5 boot/restore source ordering', () => {
   test('boot barrier is fail-closed immediately after db-ready and before every consumer', () => {
-    const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf-8')
+    const source = readDaemonGraphSource()
     expect(source).toContain("log.info('db ready'")
     expectBootOrder([
       'skill-identity-barrier',

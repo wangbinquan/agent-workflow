@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { bootImplementation, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-349 回归防护 —— HTTP 授权面必须和 OS 运行时读同一份平台工具目录。
 //
@@ -105,7 +106,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
   })
 
   test('the SQLite daemon hands its one catalog to the app composition, not only to the OS runtime', () => {
-    const source = readFileSync(resolve(backendRoot, 'src/cli/start.ts'), 'utf8')
+    const source = readDaemonGraphSource()
     // RFC-383: the session bundle builds and owns the catalog before HTTP assembly.
     const bundle = readFileSync(
       resolve(backendRoot, 'src/cli/daemonModules/digitalEmployee.ts'),
@@ -150,7 +151,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     expect(catalogMembers[0]!.getText(parsed)).toBe('digitalEmployee: digitalEmployeeModules')
     expect(bundle).toContain('composeDigitalEmployeeBuiltinToolCatalog({')
     expect(bundle).toContain('platformTools,')
-    expect(source).toContain('const employeeOs = digitalEmployeeModules.module')
+    expect(source).toContain('const digitalEmployee = digitalEmployeeModules.module')
     expect(bootImplementation(source, 'employee-tool-catalog')).toContain(
       'await digitalEmployeePlatformTools.load()',
     )

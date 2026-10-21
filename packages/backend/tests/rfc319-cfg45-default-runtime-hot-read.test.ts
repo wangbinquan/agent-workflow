@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { taskBundleInput } from './helpers/daemonTaskExecutionBundle'
 import { composeDaemonTaskExecutionModules } from '@/cli/daemonModules/taskExecution'
 import { execFileSync } from 'node:child_process'
@@ -117,7 +118,7 @@ describe('RFC-319 CFG-45 —— 默认运行时的热读', () => {
 
   // RFC-382: all former root sites now share this one live getter.
   test('三个组合根里的每一台长驻协调器都接上了热读（枚举，不是点名）', () => {
-    for (const relative of ['server.ts', 'cli/start.ts', 'cli/postgresqlDaemonApplication.ts']) {
+    for (const relative of ['server.ts', 'bootstrap/daemonApplication.ts']) {
       const source = readFileSync(resolve(ROOT, 'packages/backend/src', relative), 'utf8')
       expect(source).not.toMatch(/(?:createTaskDriveCoordinator|new DefaultTaskDriveCoordinator)\(/)
       expect(source.match(/composeDaemonTaskExecutionModules\(/g)).toHaveLength(1)
@@ -278,15 +279,15 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
 
 test('RFC-381 roots connect fusion adapters and routes to the same live session configuration', () => {
   const source = (file: string) =>
-    readFileSync(resolve(ROOT, 'packages/backend/src', file), 'utf8').replace(
-      /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
-      '',
-    )
+    (/(?:^|\/)cli\/start\.ts$/.test(file)
+      ? readDaemonGraphSource()
+      : readFileSync(resolve(ROOT, 'packages/backend/src', file), 'utf8')
+    ).replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
   const bundle = source('cli/daemonModules/taskExecution.ts')
   expect(bundle).toContain('const coordinatorFactory = createTaskDriveCoordinatorFactory({')
   expect(bundle).toContain('    runConfiguration,')
   expect(bundle).not.toContain('resolveLaunchRuntimeConfig')
-  const pg = source('cli/postgresqlDaemonApplication.ts')
+  const pg = source('bootstrap/daemonApplication.ts')
   expect(pg).not.toContain('fusionRunConfiguration')
   expect(bundle).not.toContain('fusionRunConfiguration')
   const providers = source('modules/task-execution/composition/providerRuntime.ts')

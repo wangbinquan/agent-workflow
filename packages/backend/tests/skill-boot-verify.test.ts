@@ -389,8 +389,8 @@ test('post-ready boot pass backfills legacy skills BEFORE reverify on both provi
     phase: 'post-ready',
     failure: 'tracked-detached',
   })
-  for (const file of ['start.ts', 'postgresqlDaemonApplication.ts']) {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', file), 'utf8')
+  for (const file of ['daemonApplication.ts']) {
+    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'bootstrap', file), 'utf8')
     const backfillIdx = src.indexOf('skillCatalogBoot.backfillLegacyVersions()')
     const reverifyIdx = src.indexOf('skillCatalogBoot.reverifySnapshots()')
     expect(backfillIdx).toBeGreaterThan(0)

@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // 为什么有这条测试（2026-08-26 起草 RFC-319 B97 时撞到）：
 //
 // 「重试仓库准备」与 boot 自动恢复两处**手搓** StartTaskDeps，都漏了 `secretBox`，
@@ -21,7 +22,10 @@ import { describe, expect, test } from 'bun:test'
 import { unsealRepoUrl } from '../src/services/repoCredentials'
 
 const SRC = join(import.meta.dir, '..', 'src')
-const read = (rel: string): string => readFileSync(join(SRC, rel), 'utf8')
+const read = (rel: string): string =>
+  /(?:^|\/)cli\/start\.ts$/.test(rel)
+    ? readDaemonGraphSource()
+    : readFileSync(join(SRC, rel), 'utf8')
 
 describe('仓库准备重试 / boot 恢复必须带上 secretBox', () => {
   test('失败模式本身：封存过的 URL 在没有 secretBox 时读不出来（这就是 409 的来源）', () => {

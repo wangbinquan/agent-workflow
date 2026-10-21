@@ -358,8 +358,13 @@ describe('RFC-349 provider cutover', () => {
     expect(source).not.toMatch(/from\s+['"]@\/db\/client['"]/) // provider factory owns SQLite
     expect(source).toContain('resolveDatabaseProviderRuntime')
     expect(source).toContain('createDatabaseMigrationDaemonAdmission')
-    expect(source).toMatch(/composeProviderAppComposition\(\{[\s\S]*?\bdatabaseMigration,/)
-    expect(source).toContain('taskExecution: taskExecutionModules')
+    const application = unit('packages/backend/src/bootstrap/daemonApplication.ts').text
+    const session = unit('packages/backend/src/bootstrap/daemonSession.ts').text
+    expect(session).toContain('composeDatabaseMigrationModule({')
+    expect(application).toMatch(
+      /composeProviderAppComposition\(\{[\s\S]*?databaseMigration: input.databaseMigration,/,
+    )
+    expect(application).toContain('taskExecution: taskExecutionModules')
     expect(source).toContain('.runBusinessRequest(')
   })
 

@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
@@ -613,18 +614,18 @@ test('第 12 刀 · 引擎差异只剩三个端口：认领策略 / 活跃度 / 
     'releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request)',
   )
   // RFC-387: production uses the common finalizer; RFC-389 owns the HTTP fixture fallback.
-  const sqlite = readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8')
-  expect(sqlite).toContain('await workspaceMaintenance.finalizeClaimedWorkspace(taskId)')
-  expect(sqlite).not.toContain('finishClaimedWebhookWorkspacePrune')
-  const http = readFileSync(resolve(import.meta.dir, '../src/server.ts'), 'utf8')
-  expect(http).toContain('await finishClaimedWebhookWorkspacePrune(deps.db, taskId)')
-  const pg = readFileSync(
-    resolve(import.meta.dir, '../src/cli/postgresqlDaemonApplication.ts'),
-    'utf8',
-  )
-  expect(pg).toContain(
+  const graph = readDaemonGraphSource()
+  expect(graph).toContain(
     'finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId)',
   )
+  expect(graph).not.toContain('finishClaimedWebhookWorkspacePrune')
+  const http = readFileSync(resolve(import.meta.dir, '../src/server.ts'), 'utf8')
+  expect(http).toContain('await finishClaimedWebhookWorkspacePrune(deps.db, taskId)')
+  expect(
+    graph.match(
+      /finalizeWorkspace: \(taskId\) => workspaceMaintenance\.finalizeClaimedWorkspace\(taskId\)/g,
+    ),
+  ).toHaveLength(1)
   const binding = readFileSync(
     resolve(import.meta.dir, '../src/modules/task-execution/composition/taskExecutionBinding.ts'),
     'utf8',

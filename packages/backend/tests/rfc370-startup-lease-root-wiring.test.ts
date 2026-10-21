@@ -1,3 +1,4 @@
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -5,7 +6,9 @@ import ts from 'typescript'
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+    /(?:^|\/)cli\/start\.ts$/.test(path)
+      ? readDaemonGraphSource()
+      : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
@@ -54,24 +57,20 @@ test('the real startup root selects one lazy lease and encloses boot in its fail
 
 test('provider recompose keeps the acquired lease and both boot roots wait for its proof', () => {
   const start = load('cli/start.ts')
-  const pg = load('cli/postgresqlDaemonApplication.ts')
-  const pgBinding = calls(start, 'composePostgresqlDaemonApplication')[0]!.arguments[0]!
+  const pg = load('bootstrap/daemonApplication.ts')
+  const pgBinding = calls(start, 'composeDaemonApplication')[0]!.arguments[0]!
   expect(pgBinding.getText(start)).toContain('daemonStartupLease: input.lock')
   expect(start.text).toContain('...sessionInput,')
-  const sqlite = calls(start, 'readDaemonStartupRecoveryAuthority')
-  expect(sqlite).toHaveLength(1)
-  expect(sqlite[0]!.arguments.map((node) => node.getText(start))).toEqual([
-    'lock',
-    'DAEMON_GENERATION',
-  ])
-  expect(ts.isAwaitExpression(sqlite[0]!.parent)).toBe(true)
   const selected = calls(pg, 'readDaemonStartupRecoveryAuthority')
   expect(selected).toHaveLength(1)
   expect(selected[0]!.arguments.map((node) => node.getText(pg))).toEqual([
-    'input.daemonStartupLease',
-    'input.provider.runtime.generationId',
+    'requireStartupLease(input.daemonStartupLease)',
+    'adapter.recoveryProofGeneration(input.provider)',
   ])
   expect(ts.isAwaitExpression(selected[0]!.parent)).toBe(true)
+  const adapters = load('bootstrap/daemonSessionAdapters.ts').text
+  expect(adapters).toContain('recoveryProofGeneration: () => DAEMON_GENERATION')
+  expect(adapters).toContain('recoveryProofGeneration: (provider) => provider.runtime.generationId')
   expect(calls(start, 'createDaemonLockProof')).toHaveLength(0)
   expect(calls(start, 'createDaemonRecoveryAuthorityProof')).toHaveLength(1)
   expect(calls(pg, 'createDaemonRecoveryAuthorityProof')).toHaveLength(1)
