@@ -5,7 +5,7 @@ import {
   type DaemonProviderSessionError,
   type DaemonProviderSessionLifecycleInput,
   type ManagedDaemonProviderSession,
-} from '../src/cli/daemonProviderSession'
+} from '../src/bootstrap/daemonProviderSession'
 
 interface TestSession extends ManagedDaemonProviderSession {
   readonly events: string[]

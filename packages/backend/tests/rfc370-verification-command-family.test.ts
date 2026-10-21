@@ -667,7 +667,7 @@ const sourceRoot = resolve(import.meta.dir, '../src')
 function readSource(path: string) {
   return ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(resolve(sourceRoot, path), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -702,7 +702,7 @@ function propertiesOf(node: ts.Node, source: ts.SourceFile) {
 describe('RFC-370 verification command composition contract', () => {
   for (const [path, name, receiver] of [
     [
-      'cli/daemonModules/developmentAutomation.ts',
+      'bootstrap/daemonModules/developmentAutomation.ts',
       'composeDaemonDevelopmentAutomationModules',
       'input',
     ],
@@ -727,7 +727,7 @@ describe('RFC-370 verification command composition contract', () => {
     })
   }
   test('CLI initial construction, PostgreSQL dispatch and SQLite HTTP reassembly forward the same factory', () => {
-    const source = readSource('cli/start.ts')
+    const source = readSource('bootstrap/daemonStart.ts')
     for (const [name, receiver] of [
       ['startCommand', 'opts'],
       ['composeDaemonSession', 'input'],
@@ -745,7 +745,7 @@ describe('RFC-370 verification command composition contract', () => {
   test('RFC-383 each root forwards verification selection into the shared bundle', () => {
     for (const [path, root, receiver] of [
       ['bootstrap/daemonApplication.ts', 'composeDaemonApplication', 'input'],
-      ['cli/start.ts', 'composeDaemonApplication', 'input'],
+      ['bootstrap/daemonStart.ts', 'composeDaemonApplication', 'input'],
     ] as const) {
       const source = readSource(path)
       const calls = descendants(bodyOf(source, root), ts.isCallExpression).filter(

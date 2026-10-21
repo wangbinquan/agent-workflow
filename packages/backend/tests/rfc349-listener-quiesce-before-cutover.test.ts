@@ -14,12 +14,12 @@ import { describe, expect, test } from 'bun:test'
 import {
   createDaemonProviderListenerTraffic,
   createDaemonProviderRuntimeRouter,
-} from '../src/cli/daemonProviderRuntimeRouter'
+} from '../src/bootstrap/daemonProviderRuntimeRouter'
 import {
   createDaemonProviderSessionController,
   type DaemonProviderSessionLifecycleInput,
   type ManagedDaemonProviderSession,
-} from '../src/cli/daemonProviderSession'
+} from '../src/bootstrap/daemonProviderSession'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve: (value: T) => void = () => {}

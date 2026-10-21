@@ -29,15 +29,15 @@ import {
   composeDeploymentStartOptions,
   migrateForDeployment,
   verifyDatabaseRestoreForDeployment,
-} from './cli/deployment'
+} from './bootstrap/deployment'
 import { migrationReportCommand } from './cli/migrationReport'
-import { startCommand, type StartOptions } from './cli/start'
+import { startCommand, type StartOptions } from './bootstrap/daemonStart'
 import { composeDaemonSession } from './bootstrap/daemonSession'
 import {
   createDevelopmentDaemonState,
   reloadDevelopmentDaemon,
   type DevelopmentDaemonState,
-} from './cli/dev'
+} from './bootstrap/developmentReload'
 import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
 import {

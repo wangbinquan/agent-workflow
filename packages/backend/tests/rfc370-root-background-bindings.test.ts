@@ -10,13 +10,13 @@ import ts from 'typescript'
 const source = (path: string) =>
   ts.createSourceFile(
     path,
-    path === 'cli/start.ts'
+    path === 'bootstrap/daemonStart.ts'
       ? readDaemonGraphSource()
       : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )
-const start = source('cli/start.ts')
+const start = source('bootstrap/daemonStart.ts')
 const pg = source('bootstrap/daemonApplication.ts')
 const compact = (node: ts.Node, file: ts.SourceFile) => node.getText(file).replace(/\s/g, '')
 
@@ -129,7 +129,7 @@ for (const [name, query, notificationKey] of [
 test('the shared Intent queued resume consumes the admission-time selected snapshot', () => {
   const intent = ts.createSourceFile(
     'intent.ts',
-    readFileSync(resolve(import.meta.dir, '../src/cli/daemonModules/intent.ts'), 'utf8'),
+    readFileSync(resolve(import.meta.dir, '../src/bootstrap/daemonModules/intent.ts'), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   )

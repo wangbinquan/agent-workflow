@@ -1,4 +1,4 @@
-import { createPollingDaemonRuntimeHandleFactory } from '../src/cli/daemonProviderRuntimeHandles'
+import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
 import { distillTick, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'

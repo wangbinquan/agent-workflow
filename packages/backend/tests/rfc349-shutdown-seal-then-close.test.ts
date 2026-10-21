@@ -21,11 +21,11 @@ import {
   type DaemonProviderCloseParticipant,
   type DaemonProviderRuntimeAdmission,
   type DaemonProviderRuntimeHandleFactory,
-} from '../src/cli/daemonProviderRuntimeSession'
+} from '../src/bootstrap/daemonProviderRuntimeSession'
 import {
   describeDaemonProviderSessionFailure,
   type DaemonProviderSessionLifecycleInput,
-} from '../src/cli/daemonProviderSession'
+} from '../src/bootstrap/daemonProviderSession'
 import { TaskClaimGate } from '../src/modules/task-execution/application/taskClaimGate'
 
 const lifecycle: DaemonProviderSessionLifecycleInput = {

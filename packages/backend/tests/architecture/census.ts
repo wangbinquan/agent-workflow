@@ -72,23 +72,23 @@ export const MODULE_TOP_LEVEL_ENTRIES = [
 
 /** 只有 bootstrap 可以指向模块的 `composition` 入口（RFC-294 §G1）。 */
 export const BOOTSTRAP_FILES = [
-  'packages/backend/src/cli/daemonModules/adapters.ts',
-  'packages/backend/src/cli/daemonModules/providerCore.ts',
-  'packages/backend/src/cli/daemonModules/repositoryCredentials.ts',
-  'packages/backend/src/cli/daemonModules/resourceCatalog.ts',
-  'packages/backend/src/cli/daemonModules/observation.ts',
-  'packages/backend/src/cli/daemonModules/memory.ts',
-  'packages/backend/src/cli/daemonModules/scheduledTasks.ts',
-  'packages/backend/src/cli/daemonModules/integration.ts',
-  'packages/backend/src/cli/daemonModules/fusion.ts',
-  'packages/backend/src/cli/daemonModules/taskExecution.ts',
-  'packages/backend/src/cli/daemonModules/digitalEmployee.ts',
-  'packages/backend/src/cli/daemonModules/developmentAutomation.ts',
-  'packages/backend/src/cli/daemonModules/intent.ts',
+  'packages/backend/src/bootstrap/daemonModules/adapters.ts',
+  'packages/backend/src/bootstrap/daemonModules/providerCore.ts',
+  'packages/backend/src/bootstrap/daemonModules/repositoryCredentials.ts',
+  'packages/backend/src/bootstrap/daemonModules/resourceCatalog.ts',
+  'packages/backend/src/bootstrap/daemonModules/observation.ts',
+  'packages/backend/src/bootstrap/daemonModules/memory.ts',
+  'packages/backend/src/bootstrap/daemonModules/scheduledTasks.ts',
+  'packages/backend/src/bootstrap/daemonModules/integration.ts',
+  'packages/backend/src/bootstrap/daemonModules/fusion.ts',
+  'packages/backend/src/bootstrap/daemonModules/taskExecution.ts',
+  'packages/backend/src/bootstrap/daemonModules/digitalEmployee.ts',
+  'packages/backend/src/bootstrap/daemonModules/developmentAutomation.ts',
+  'packages/backend/src/bootstrap/daemonModules/intent.ts',
 
   'packages/backend/src/main.ts',
   // RFC-370 v2 §3.1: the single deployment selection point composes the hosted adapters.
-  'packages/backend/src/cli/deployment.ts',
+  'packages/backend/src/bootstrap/deployment.ts',
   'packages/backend/src/bootstrap/crewstation.ts',
   // RFC-370 §9.2 V9: the hosted maintenance Worker's effect registration and
   // its process entry are bootstrap too (the platform layer imports neither).
@@ -100,14 +100,16 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/bootstrap/executionInitialization.ts',
   'packages/backend/src/bootstrap/workspaceTaskImage.ts',
   // Development reload assembles the same daemon host and retains its lifetime.
-  'packages/backend/src/cli/dev.ts',
-  'packages/backend/src/cli/daemonProviderMigrationAdmission.ts',
+  'packages/backend/src/bootstrap/developmentReload.ts',
+  'packages/backend/src/bootstrap/daemonProviderMigrationAdmission.ts',
   'packages/backend/src/bootstrap/daemonApplication.ts',
   'packages/backend/src/bootstrap/daemonHttpComposition.ts',
   'packages/backend/src/bootstrap/developmentPurposeRoot.ts',
   'packages/backend/src/bootstrap/daemonSession.ts',
   'packages/backend/src/bootstrap/daemonSessionAdapters.ts',
-  'packages/backend/src/cli/start.ts',
+  'packages/backend/src/bootstrap/daemonSessionInput.ts',
+  'packages/backend/src/bootstrap/migrate.ts',
+  'packages/backend/src/bootstrap/daemonStart.ts',
   'packages/backend/src/server.ts',
 ] as const
 
@@ -331,7 +333,7 @@ const BARE_MODULE_ROOT = /^@\/modules\/([a-z0-9-]+)$/
  * R1：`packages/backend/src` 下**非 module** 文件指向 module 内部的边。
  *
  * 允许：exact `public/{commands,queries,participants,events,operations,types}`；
- * bootstrap（`server.ts` / `cli/start.ts`）可额外指向 `composition`。
+ * bootstrap（`server.ts` / `bootstrap/daemonStart.ts`）可额外指向 `composition`。
  *
  * 裸模块根导入（`@/modules/foo`）单独判：`moduleLocation` 对它返回 null，若不显式
  * 兜住，它会成为**规则本身的结构性盲区**——将来谁给某个 context 加一个 `index.ts`

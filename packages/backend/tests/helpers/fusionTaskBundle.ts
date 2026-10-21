@@ -2,7 +2,7 @@
 import type { DbClient } from '@/db/client'
 import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
-import { composeDaemonTaskExecutionModules } from '@/cli/daemonModules/taskExecution'
+import { composeDaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { taskBundleInput } from './daemonTaskExecutionBundle'
 
 export function composeTestFusionTasks(input: {

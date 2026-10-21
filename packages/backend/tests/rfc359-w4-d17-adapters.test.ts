@@ -223,17 +223,20 @@ test('源码锁：Plugin 聚合没有 provider 命名的仓库 / 装配孪生，
     )
   }
   for (const file of [
-    'src/cli/daemonModules/resourceCatalog.ts',
+    'src/bootstrap/daemonModules/resourceCatalog.ts',
     'src/server.ts',
     'src/bootstrap/daemonHttpComposition.ts',
-    'src/cli/start.ts',
+    'src/bootstrap/daemonStart.ts',
     'src/bootstrap/daemonApplication.ts',
   ]) {
-    const source = /(?:^|\/)cli\/start\.ts$/.test(file)
+    const source = /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(file)
       ? readDaemonGraphSource()
       : readFileSync(join(import.meta.dir, '..', file), 'utf8')
     expect(
-      readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
+      readFileSync(
+        join(import.meta.dir, '../src/bootstrap/daemonModules/resourceCatalog.ts'),
+        'utf8',
+      ),
       file,
     ).toContain('composePluginCatalog({')
     expect(source, file).not.toMatch(/composePostgresqlPluginCatalog|composeSqlitePluginCatalog/)

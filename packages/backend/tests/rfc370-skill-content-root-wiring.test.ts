@@ -9,7 +9,7 @@ import ts from 'typescript'
 function source(path: string): ts.SourceFile {
   return ts.createSourceFile(
     path,
-    path === 'cli/start.ts'
+    path === 'bootstrap/daemonStart.ts'
       ? readDaemonGraphSource()
       : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -42,9 +42,9 @@ function calls(node: ts.Node, file: ts.SourceFile, name: string): ts.CallExpress
 const compact = (node: ts.Node, file: ts.SourceFile): string =>
   node.getText(file).replace(/\s/g, '')
 
-const start = source('cli/start.ts')
+const start = source('bootstrap/daemonStart.ts')
 const pg = source('bootstrap/daemonApplication.ts')
-const bundle = source('cli/daemonModules/resourceCatalog.ts')
+const bundle = source('bootstrap/daemonModules/resourceCatalog.ts')
 
 function selectedCatalog(
   node: ts.Node,

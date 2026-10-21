@@ -296,7 +296,7 @@ test('both provider recovery bindings follow skill gates and precede task deleti
     failure: 'fail-closed',
   })
   for (const [file, database] of [['daemonApplication.ts', 'input.db']] as const) {
-    const source = /(?:^|\/)cli\/start\.ts$/.test(file)
+    const source = /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(file)
       ? readDaemonGraphSource()
       : readFileSync(resolve(cli, file), 'utf8')
     expect(bootImplementation(source, 'task-execution-recovery')).toContain(

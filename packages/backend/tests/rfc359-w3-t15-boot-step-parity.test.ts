@@ -9,7 +9,7 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { DAEMON_BOOT_STEPS } from '../src/cli/daemonLifecycleProgram'
+import { DAEMON_BOOT_STEPS } from '../src/bootstrap/daemonLifecycleProgram'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 
 const APPLICATION = readFileSync(

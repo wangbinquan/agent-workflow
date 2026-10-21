@@ -8,7 +8,7 @@ import ts from 'typescript'
 function source(path: string): ts.SourceFile {
   return ts.createSourceFile(
     path,
-    path === 'cli/start.ts'
+    path === 'bootstrap/daemonStart.ts'
       ? readDaemonGraphSource()
       : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -44,7 +44,7 @@ function selected(node: ts.Node, file: ts.SourceFile, expression: string, proper
   expect(matches).toHaveLength(1)
   expect(compact(matches[0]!.arguments[0]!, file)).toContain(property)
 }
-const start = source('cli/start.ts')
+const start = source('bootstrap/daemonStart.ts')
 const pg = source('bootstrap/daemonApplication.ts')
 const server = source('bootstrap/daemonHttpComposition.ts')
 

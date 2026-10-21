@@ -12,7 +12,7 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -52,13 +52,13 @@ test('mission upload capture is selected lazily and forwarded through every real
     expect(selected).toHaveLength(1)
     expect(selected[0]!.initializer.getText(source)).toBe(`${receiver}.missionInputBlobs`)
   }
-  const bundle = load('cli/daemonModules/developmentAutomation.ts')
+  const bundle = load('bootstrap/daemonModules/developmentAutomation.ts')
   const uploads = calls(bundle, 'composeMissionInputUploadOperations')
   expect(uploads).toHaveLength(1)
   expect(uploads[0]!.arguments[0]!.getText(bundle).replace(/\s/g, '')).toContain(
     'blobs:input.missionInputBlobs',
   )
-  const start = load('cli/start.ts')
+  const start = load('bootstrap/daemonStart.ts')
   expect(start.text).toContain('missionInputBlobs: opts.missionInputBlobs,')
   for (const expression of [
     'composeDaemonApplication',

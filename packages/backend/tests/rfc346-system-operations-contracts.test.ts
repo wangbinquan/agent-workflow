@@ -312,7 +312,7 @@ describe('RFC-346 System Operations contracts', () => {
     expect(restore).toContain('systemOperations.operations.getRecoveryStatus')
     expect(restore).toContain('systemOperations.operations.cancelStagedRestore')
     expect(restore).toContain('systemOperations.operations.stageRestore')
-    const adapters = readFileSync(join(SOURCE_ROOT, 'cli/daemonModules/adapters.ts'), 'utf8')
+    const adapters = readFileSync(join(SOURCE_ROOT, 'bootstrap/daemonModules/adapters.ts'), 'utf8')
     expect(adapters.match(/composeSystemOperations\s*\(/g)).toHaveLength(1)
     expect(adapters.match(/composePostgresqlSystemOperations\s*\(/g)).toHaveLength(1)
     expect(server).toContain(

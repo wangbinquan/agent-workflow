@@ -1,10 +1,14 @@
 // Provider-neutral route mounts and HTTP request pipeline.
-import {
-  type DaemonProviderCore,
-  type SelectedDaemonProviderCore,
-} from '@/cli/daemonModules/providerCore'
 import { type RunObservation } from '@/modules/run-observability/composition/runObservation'
-import type { HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'
+import type {
+  DirectAuthorityAdmission,
+  DirectAuthorityBinding,
+  HttpAuthenticationParticipant,
+} from '@/modules/identity-access/public/participants'
+import type { AuthRuntime } from '@/auth/application/authRuntime'
+import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
+import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { composeHttpAuthenticationMiddleware } from '@/modules/identity-access/composition/authentication'
 import type { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
@@ -185,10 +189,15 @@ export interface AppApiRouteMounts {
   readonly docs: AppRouteMount
 }
 
-export type AppHttpProviderCore = Pick<
-  DaemonProviderCore,
-  'provider' | 'authRuntime' | 'tokenCallAudit' | 'identityAccess' | 'sourceWriteWindow'
->
+export interface AppHttpProviderCore {
+  readonly provider: DatabaseProvider
+  readonly authRuntime: AuthRuntime
+  readonly tokenCallAudit: TokenCallAuditParticipant
+  readonly identityAccess: {
+    readonly directAuthority: DirectAuthorityAdmission & DirectAuthorityBinding
+  }
+  readonly sourceWriteWindow: DatabaseSourceWriteWindow
+}
 
 /**
  * Provider-neutral application assembly consumed by production daemon
@@ -208,9 +217,8 @@ export interface ComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProv
   readonly executionAuthority: ExecutionAuthorityPort
 }
 
-export type ProviderComposedAppDeps<
-  TProvider extends DaemonProviderCore['provider'] = DaemonProviderCore['provider'],
-> = ComposedAppDeps<SelectedDaemonProviderCore<TProvider>>
+export type ProviderComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProviderCore> =
+  ComposedAppDeps<TCore>
 
 export interface ProviderPublicRouteComposition {
   readonly health: Readonly<{
@@ -375,12 +383,12 @@ export interface ProviderSystemRouteComposition {
  * route topology.
  */
 export interface ProviderAppCompositionInput<
-  TProvider extends DaemonProviderCore['provider'] = DaemonProviderCore['provider'],
+  TCore extends AppHttpProviderCore = AppHttpProviderCore,
 > {
   readonly token: string
   readonly configuration: ApplicationConfigurationQueries
   readonly authentication: HttpAuthenticationParticipant
-  readonly core: SelectedDaemonProviderCore<TProvider>
+  readonly core: TCore
   readonly public: ProviderPublicRouteComposition
   readonly platform: ProviderPlatformRouteComposition
   readonly resourceCatalog: ProviderResourceCatalogRouteComposition
@@ -398,9 +406,13 @@ export interface ProviderAppCompositionInput<
   readonly executionAuthority: ExecutionAuthorityPort
 }
 
-export type SqliteAppCompositionInput = ProviderAppCompositionInput<'sqlite'>
+export type SqliteAppCompositionInput = ProviderAppCompositionInput<
+  AppHttpProviderCore & { readonly provider: 'sqlite' }
+>
 
-export type PostgresqlAppCompositionInput = ProviderAppCompositionInput<'postgresql'>
+export type PostgresqlAppCompositionInput = ProviderAppCompositionInput<
+  AppHttpProviderCore & { readonly provider: 'postgresql' }
+>
 
 /** Freeze one server-owned route assembly after its provider aggregates bind. */
 function freezeComposedAppDeps<TCore extends AppHttpProviderCore>(
@@ -422,9 +434,9 @@ function freezeComposedAppDeps<TCore extends AppHttpProviderCore>(
  * route topology. Provider clients stay captured inside the injected
  * aggregates, so this boundary cannot silently select another provider.
  */
-export function composeProviderAppDeps<TProvider extends DaemonProviderCore['provider']>(
-  input: ProviderAppCompositionInput<TProvider>,
-): ProviderComposedAppDeps<TProvider> {
+export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
+  input: ProviderAppCompositionInput<TCore>,
+): ProviderComposedAppDeps<TCore> {
   const publicRoutes = Object.freeze({
     health: (app: Hono) =>
       mountHealthRoutes(

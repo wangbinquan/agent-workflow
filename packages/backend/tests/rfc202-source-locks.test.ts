@@ -13,7 +13,7 @@ import { resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 const read = (rel: string): string =>
-  /(?:^|\/)cli\/start\.ts$/.test(rel)
+  /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(rel)
     ? readDaemonGraphSource()
     : readFileSync(resolve(ROOT, rel), 'utf8')
 
@@ -97,7 +97,7 @@ describe('RFC-202 source locks', () => {
   })
 
   test('terminal sweep is owned by the committed-event consumer with no ambient hook slot', () => {
-    const start = read('packages/backend/src/cli/start.ts')
+    const start = read('packages/backend/src/bootstrap/daemonStart.ts')
     const consumers = read(
       'packages/backend/src/modules/task-execution/application/taskLifecycleConsumers.ts',
     )

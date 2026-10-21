@@ -11,13 +11,13 @@ import {
 import {
   DAEMON_PROVIDER_CORE_ADAPTERS,
   DAEMON_TASK_EXECUTION_ADAPTERS,
-} from '@/cli/daemonModules/adapters'
+} from '@/bootstrap/daemonModules/adapters'
 import type {
   DaemonProviderCoreAdapters,
   SelectedDaemonProviderCore,
-} from '@/cli/daemonModules/providerCore'
-import type { DaemonTaskExecutionAdapters } from '@/cli/daemonModules/taskExecution'
-import type { DaemonProviderSessionComposeInput } from '@/cli/start'
+} from '@/bootstrap/daemonModules/providerCore'
+import type { DaemonTaskExecutionAdapters } from '@/bootstrap/daemonModules/taskExecution'
+import type { DaemonProviderSessionComposeInput } from './daemonSessionInput'
 import type { DaemonApplicationInput } from './daemonApplication'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'

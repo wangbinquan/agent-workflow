@@ -9,7 +9,7 @@ import ts from 'typescript'
 function source(path: string): ts.SourceFile {
   return ts.createSourceFile(
     path,
-    path === 'cli/start.ts'
+    path === 'bootstrap/daemonStart.ts'
       ? readDaemonGraphSource()
       : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -42,12 +42,12 @@ function calls(node: ts.Node, file: ts.SourceFile, name: string): ts.CallExpress
 const compact = (node: ts.Node, file: ts.SourceFile): string =>
   node.getText(file).replace(/\s/g, '')
 
-const start = source('cli/start.ts')
+const start = source('bootstrap/daemonStart.ts')
 const pg = source('bootstrap/daemonApplication.ts')
 const server = source('server.ts')
 const owner = source('bootstrap/daemonHttpComposition.ts')
 const provider = source('modules/task-execution/composition/providerRuntime.ts')
-const bundle = source('cli/daemonModules/taskExecution.ts')
+const bundle = source('bootstrap/daemonModules/taskExecution.ts')
 
 test('daemon selected archive binding survives provider creation and re-composition', () => {
   const root = declaration(start, 'startCommand')

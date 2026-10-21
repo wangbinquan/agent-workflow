@@ -369,26 +369,35 @@ test('源码锁：Workflow 聚合没有 provider 命名的仓库 / 语义 / 校�
     'return Object.freeze({ agent, skill, workflow, agentResourceIntegrity, skillContent })',
   )
   for (const file of [
-    'src/cli/daemonModules/resourceCatalog.ts',
+    'src/bootstrap/daemonModules/resourceCatalog.ts',
     'src/server.ts',
     'src/bootstrap/daemonHttpComposition.ts',
     'src/bootstrap/daemonApplication.ts',
   ]) {
-    const source = /(?:^|\/)cli\/start\.ts$/.test(file)
+    const source = /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(file)
       ? readDaemonGraphSource()
       : readFileSync(join(import.meta.dir, '..', file), 'utf8')
     expect(
-      readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
+      readFileSync(
+        join(import.meta.dir, '../src/bootstrap/daemonModules/resourceCatalog.ts'),
+        'utf8',
+      ),
       file,
     ).toContain(
       "import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'",
     )
     expect(
-      readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
+      readFileSync(
+        join(import.meta.dir, '../src/bootstrap/daemonModules/resourceCatalog.ts'),
+        'utf8',
+      ),
       file,
     ).toContain('const classicCatalogs = composeClassicCatalogs({')
     expect(
-      readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
+      readFileSync(
+        join(import.meta.dir, '../src/bootstrap/daemonModules/resourceCatalog.ts'),
+        'utf8',
+      ),
       file,
     ).toContain('classicCatalogs.workflow')
     expect(source, file).not.toContain('composeDatabaseWorkflowCatalog({')

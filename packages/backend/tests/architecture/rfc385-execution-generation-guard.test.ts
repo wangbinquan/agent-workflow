@@ -20,14 +20,14 @@ function executionGenerationViolations(source: string, expectedSites: number): s
 
 test('execution module, provider runtime, fusion, run configuration and standalone proof use the process generation', () => {
   for (const [path, sites] of [
-    ['cli/daemonModules/adapters.ts', 1],
-    ['cli/daemonModules/taskExecution.ts', 1],
+    ['bootstrap/daemonModules/adapters.ts', 1],
+    ['bootstrap/daemonModules/taskExecution.ts', 1],
   ] as const) {
     const source = read(path)
     expect(source).toContain("from '@/services/daemonGeneration'")
     expect(executionGenerationViolations(source, sites)).toEqual([])
   }
-  const adapters = compact(read('cli/daemonModules/adapters.ts'))
+  const adapters = compact(read('bootstrap/daemonModules/adapters.ts'))
   expect(adapters).not.toContain('generationId')
   expect(adapters).toContain(
     "sqlite:({db})=>({provider:'sqlite',execution:()=>composeProcessTaskExecutionBinding(db)",
@@ -35,7 +35,7 @@ test('execution module, provider runtime, fusion, run configuration and standalo
   expect(adapters).toContain(
     "postgresql:({runtime})=>({provider:'postgresql',execution:(persistence)=>composeSessionTaskExecutionBinding(",
   )
-  const bundle = read('cli/daemonModules/taskExecution.ts')
+  const bundle = read('bootstrap/daemonModules/taskExecution.ts')
   expect(bundle).not.toContain('input.adapters.daemonGeneration')
   expect(bundle).not.toContain('readonly daemonGeneration:')
   const recovery = bootImplementation(
@@ -82,7 +82,9 @@ test('SQLite, child runtime inheritance and CrewStation keep their existing gene
   expect(read('modules/task-execution/composition/taskExecutionBinding.ts')).toContain(
     'const module = createProviderTaskExecutionModule(input)',
   )
-  expect(read('cli/daemonModules/adapters.ts')).toContain('daemonGeneration: DAEMON_GENERATION')
+  expect(read('bootstrap/daemonModules/adapters.ts')).toContain(
+    'daemonGeneration: DAEMON_GENERATION',
+  )
   // The selected startup lease contract is deliberately outside the standalone proof change.
   expect(read('bootstrap/daemonSessionAdapters.ts')).toContain(
     'recoveryProofGeneration: (provider) => provider.runtime.generationId',

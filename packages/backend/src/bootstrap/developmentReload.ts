@@ -1,6 +1,6 @@
 // Development-only reloader. Bun --hot retains its state in globalThis;
 // ordinary CLI starts never receive its process-local integrity preparation.
-import type { StartOptions } from './start'
+import type { StartOptions } from './daemonStart'
 import {
   selectDaemonHostLifecycle,
   type DaemonHostLifecyclePort,

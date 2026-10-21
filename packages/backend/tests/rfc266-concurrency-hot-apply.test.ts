@@ -231,7 +231,7 @@ describeEachProviderHttpApplication(
         'utf8',
       )
       const adapters = readFileSync(
-        resolve(import.meta.dir, '..', 'src', 'cli', 'daemonModules', 'adapters.ts'),
+        resolve(import.meta.dir, '..', 'src', 'bootstrap', 'daemonModules', 'adapters.ts'),
         'utf8',
       )
       expect(
@@ -241,7 +241,7 @@ describeEachProviderHttpApplication(
       )
       expect(adapters).toContain('processConcurrencyScope: runtime')
       const bundle = readFileSync(
-        resolve(import.meta.dir, '../src/cli/daemonModules/taskExecution.ts'),
+        resolve(import.meta.dir, '../src/bootstrap/daemonModules/taskExecution.ts'),
         'utf8',
       )
       expect(

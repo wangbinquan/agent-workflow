@@ -442,7 +442,10 @@ describe('employee type package digest guard', () => {
     expect(backendPackage.scripts.dev).toContain('AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY=1')
     expect(backendPackage.scripts.start).not.toContain('AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY')
 
-    const start = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+    const start = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'bootstrap', 'daemonStart.ts'),
+      'utf8',
+    )
     expect(start).toMatch(
       /!IS_EMBEDDED\s*&&\s*devLockHandoffMs\(\) > 0\s*&&\s*process\.env\.AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY === '1'/,
     )

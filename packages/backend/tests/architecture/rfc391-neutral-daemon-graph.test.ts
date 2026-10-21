@@ -95,13 +95,6 @@ export function neutralDaemonViolations(units: readonly SourceUnit[]): string[] 
         )
           errors.push('provider comparison')
       }
-      if (
-        [PREFIX + 'cli/start.ts', PREFIX + 'cli/dev.ts'].includes(unit.path) &&
-        ts.isImportDeclaration(node) &&
-        ts.isStringLiteral(node.moduleSpecifier) &&
-        /(?:^|\/)bootstrap\//.test(node.moduleSpecifier.text)
-      )
-        errors.push('CLI imports bootstrap')
     })
   }
   if (lifecycle.length !== 1 || lifecycle[0] !== SESSION) errors.push('unique lifecycle')
@@ -164,8 +157,6 @@ test('compliant fixtures and every structural rejection use the same detector', 
     [APPLICATION, 'composeDaemonLifecycle({})', 'unique lifecycle'],
     [APPLICATION, "if (provider === 'sqlite') run()", 'provider comparison'],
     [ADAPTERS, "switch(provider) { case 'postgresql': run() }", 'provider comparison'],
-    [PREFIX + 'cli/start.ts', "import type { X } from '@/bootstrap/x'", 'CLI imports bootstrap'],
-    [PREFIX + 'cli/dev.ts', "import { X } from '../bootstrap/x'", 'CLI imports bootstrap'],
     ['other.ts', 'const DAEMON_SESSION_ADAPTERS = {}', 'adapter table location'],
   ])
     expect(neutralDaemonViolations([...valid(), unit(path!, source!)])).toContain(violation!)

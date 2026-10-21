@@ -7,7 +7,7 @@
 import {
   composeCrewStationRestoreNormalization,
   composeCrewStationStartOptions,
-} from '@/bootstrap/crewstation'
+} from './crewstation'
 import {
   composeCrewStationMigrationInstallation,
   crewStationDatabaseConfig,
@@ -16,7 +16,7 @@ import {
 } from '@/modules/system-operations/composition/crewstationDeployment'
 import { verifyCrewStationDatabaseRestore } from '@/modules/system-operations/composition/crewstationDatabaseRestore'
 import { prepareManualDatabaseMigration } from '@/modules/system-operations/composition/manualDatabaseMigration'
-import type { StartOptions } from './start'
+import type { StartOptions } from './daemonStart'
 
 export type DeploymentMode = 'standalone' | 'crewstation'
 

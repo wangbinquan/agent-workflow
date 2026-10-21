@@ -19,7 +19,7 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 
 function source(relativePath: string): string {
-  return /(?:^|\/)cli\/start\.ts$/.test(relativePath)
+  return /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(relativePath)
     ? readDaemonGraphSource()
     : readFileSync(resolve(import.meta.dir, '..', relativePath), 'utf8')
 }
@@ -164,12 +164,12 @@ describe('RFC-349 runtime registry provider operations', () => {
     expect(adapter).toContain('selection.freeze(binding.capability')
     const persistence = source('src/modules/task-execution/composition/taskExecutionPersistence.ts')
     expect(persistence).not.toContain('nodeRunRuntime:')
-    for (const path of ['src/cli/start.ts', 'src/bootstrap/daemonApplication.ts']) {
+    for (const path of ['src/bootstrap/daemonStart.ts', 'src/bootstrap/daemonApplication.ts']) {
       const root = source(path)
       expect(root).toContain('composeDaemonTaskExecutionModules({')
       expect(root).not.toContain('nodeRunRuntime: composeNodeRunRuntimePersistence(')
     }
-    const bundle = source('src/cli/daemonModules/taskExecution.ts')
+    const bundle = source('src/bootstrap/daemonModules/taskExecution.ts')
     expect(bundle).toContain(
       'nodeRunRuntime: composeNodeRunRuntimePersistence(db, composeRuntimeSelectionParticipantInTx)',
     )

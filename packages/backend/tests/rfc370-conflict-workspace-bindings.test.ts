@@ -86,8 +86,8 @@ test('RFC-383 shared conflict bindings and paired root selections retain the exp
     )
   }
   for (const path of [
-    'cli/daemonModules/digitalEmployee.ts',
-    'cli/daemonModules/developmentAutomation.ts',
+    'bootstrap/daemonModules/digitalEmployee.ts',
+    'bootstrap/daemonModules/developmentAutomation.ts',
   ]) {
     const source = ts.createSourceFile(
       path,

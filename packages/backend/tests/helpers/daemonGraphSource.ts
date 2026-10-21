@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
 
 export function readDaemonGraphSource(): string {
   return [
-    'cli/start.ts',
+    'bootstrap/daemonStart.ts',
     'bootstrap/daemonSession.ts',
     'bootstrap/daemonApplication.ts',
     'bootstrap/daemonSessionAdapters.ts',

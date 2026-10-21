@@ -4,14 +4,14 @@ import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 //
 // 此前 PostgreSQL 走永不返回的 `servePostgresqlDaemon`，SQLite 在 `startCommand` 尾部另有一段手写的
 // `Bun.serve` + `shutdown()`——同一件事两种写法，PG 那份漏掉的步骤（design §6）正是从这条分叉长出来的。
-// 这条源码锁钉住：`cli/start.ts` 只有一个 `Bun.serve(`、一个 `serveDaemon(` 定义、两个调用点
+// 这条源码锁钉住：`bootstrap/daemonStart.ts` 只有一个 `Bun.serve(`、一个 `serveDaemon(` 定义、两个调用点
 // （PG 分支与 SQLite 主路径；T16 把 provider 执行分支归零后只剩一个），以及两个会话的关闭参与者 id 集合相等。
 
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { DAEMON_CLOSE_PARTICIPANTS } from '../src/cli/daemonLifecycleProgram'
+import { DAEMON_CLOSE_PARTICIPANTS } from '../src/bootstrap/daemonLifecycleProgram'
 import { propertyBodies } from './helpers/daemonProgramSource'
 
 const START = readDaemonGraphSource()

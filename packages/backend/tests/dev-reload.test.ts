@@ -4,8 +4,11 @@ import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createDevelopmentDaemonState, reloadDevelopmentDaemon } from '../src/cli/dev'
-import type { StartOptions } from '../src/cli/start'
+import {
+  createDevelopmentDaemonState,
+  reloadDevelopmentDaemon,
+} from '../src/bootstrap/developmentReload'
+import type { StartOptions } from '../src/bootstrap/daemonStart'
 import { runDaemonHostApplication } from '../src/modules/system-operations/application/daemonHostApplication'
 import type { DaemonHostLifecyclePort } from '../src/modules/system-operations/application/ports/daemonHostLifecycle'
 import { selectDaemonHostLifecycle } from '../src/modules/system-operations/composition/daemonHostLifecycle'

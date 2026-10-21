@@ -696,7 +696,7 @@ test('源码锁：作者面持久化与 foreign ACL 不再有 provider 专属文
     'services/resourceAcl.ts',
     'server.ts',
     'bootstrap/daemonHttpComposition.ts',
-    'cli/daemonModules/resourceCatalog.ts',
+    'bootstrap/daemonModules/resourceCatalog.ts',
     'bootstrap/daemonApplication.ts',
   ]) {
     expect(code(relative)).not.toMatch(/SyncResourceAclIdentity|withMutation\(|identityPersistence/)

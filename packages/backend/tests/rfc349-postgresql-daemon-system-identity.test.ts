@@ -12,7 +12,7 @@ import { bootImplementation, bootDeclaration } from './helpers/daemonProgramSour
 //   2. `workgroupLaunchResources.loadExistingAgentIds()` —— 工作组启动
 //   3. 数字员工执行的 `agents.get` / `workflows.get`
 //   4. 数字员工执行的 `resourceAuthorityFor(deps.actor)`（launch 第一步）
-// SQLite 部署看不到这条：那边压根不用系统 actor——`cli/start.ts` 的动态工作流校验直接查库，
+// SQLite 部署看不到这条：那边压根不用系统 actor——`bootstrap/daemonStart.ts` 的动态工作流校验直接查库，
 // 数字员工执行走 `composeDigitalEmployeeExecution` 的 `startDeps` 依赖链。
 //
 // 判据：①正式 admit 出来的 daemon 身份，能同时穿过两种生产接线（`authorityFor` 用的
@@ -105,10 +105,10 @@ describeEachProvider('RFC-349 — PostgreSQL daemon 的系统身份', (harness) 
     // 也都有「daemon 自己要一个身份」的需求，判据必须一视同仁。
     const roots = [
       'src/bootstrap/daemonApplication.ts',
-      'src/cli/start.ts',
+      'src/bootstrap/daemonStart.ts',
       'src/server.ts',
-      'src/cli/daemonModules/observation.ts',
-      'src/cli/daemonModules/providerCore.ts',
+      'src/bootstrap/daemonModules/observation.ts',
+      'src/bootstrap/daemonModules/providerCore.ts',
     ] as const
     const offenders = roots.filter((root) =>
       readFileSync(resolve(import.meta.dir, '..', root), 'utf8').includes('buildActor('),
@@ -134,7 +134,10 @@ describeEachProvider('RFC-349 — PostgreSQL daemon 的系统身份', (harness) 
     )
     expect(source).not.toContain('let systemActor')
     expect(
-      readFileSync(resolve(import.meta.dir, '../src/cli/daemonModules/providerCore.ts'), 'utf8'),
+      readFileSync(
+        resolve(import.meta.dir, '../src/bootstrap/daemonModules/providerCore.ts'),
+        'utf8',
+      ),
     ).toContain('await admitDaemonIdentity(identityAccess)')
     expect(
       source.includes('buildActor('),

@@ -18,7 +18,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import { migrateForDeployment } from '@/cli/deployment'
+import { migrateForDeployment } from '@/bootstrap/deployment'
 import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { authLoginPolicy } from '@/db/schema'
 import { prepareCrewStationDatabase } from '@/modules/system-operations/composition/crewstationDeployment'

@@ -132,14 +132,19 @@ describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
   test('the daemon binds the live window, not the always-writable default', () => {
     const start = readDaemonGraphSource()
     const bootstrap = readFileSync(
-      resolve(backendRoot, 'src/cli/daemonProviderBootstrap.ts'),
+      resolve(backendRoot, 'src/bootstrap/daemonProviderBootstrap.ts'),
       'utf8',
     )
     // RFC-359 W12：bootstrap 先构造真实 admission，再把同一组 bindings 交给初始/切换会话。
     const sessionInput = start.indexOf('const sessionInput = Object.freeze({')
     expect(sessionInput).toBeGreaterThan(-1)
     // RFC-370: root dependency additions must not truncate the actual bootstrap call.
-    const source = ts.createSourceFile('cli/start.ts', start, ts.ScriptTarget.Latest, true)
+    const source = ts.createSourceFile(
+      'bootstrap/daemonStart.ts',
+      start,
+      ts.ScriptTarget.Latest,
+      true,
+    )
     const calls: ts.CallExpression[] = []
     const visit = (node: ts.Node) => {
       if (

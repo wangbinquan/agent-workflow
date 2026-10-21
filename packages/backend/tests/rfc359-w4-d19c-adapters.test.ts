@@ -502,7 +502,7 @@ test('源码锁：回合只有一份实现与一份装配，legacy 薄壳与 pro
     expect(read(bootstrap)).not.toContain('composeWorkgroupTurnsOperations(')
   }
   expect(
-    read('cli/daemonModules/taskExecution.ts').match(/composeWorkgroupTurnsOperations\(/g),
+    read('bootstrap/daemonModules/taskExecution.ts').match(/composeWorkgroupTurnsOperations\(/g),
   ).toHaveLength(1)
   expect(
     read('modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts'),

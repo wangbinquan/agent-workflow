@@ -1,13 +1,13 @@
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-317 / RFC-383: reverses RFC-359 W12's deliberate separate SQLite OS instance.
 // HTTP, work-start and the OS worker use one initialized employee bundle per session.
-import { DAEMON_BACKGROUND_JOBS } from '../src/cli/daemonLifecycleProgram'
+import { DAEMON_BACKGROUND_JOBS } from '../src/bootstrap/daemonLifecycleProgram'
 import { propertyBodies } from './helpers/daemonProgramSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 const source = (path: string) =>
-  path === 'cli/start.ts'
+  path === 'bootstrap/daemonStart.ts'
     ? readDaemonGraphSource()
     : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
 describe('RFC-383 single employee and lexical work-start forwarding', () => {
@@ -16,7 +16,7 @@ describe('RFC-383 single employee and lexical work-start forwarding', () => {
     expect(integration).not.toContain('DeferredDigitalEmployeeWorkStart')
     expect(integration).not.toContain('DigitalEmployeeWorkStartPort | null')
   })
-  for (const path of ['cli/start.ts', 'bootstrap/daemonApplication.ts']) {
+  for (const path of ['bootstrap/daemonStart.ts', 'bootstrap/daemonApplication.ts']) {
     test(`${path}: the integration forwarder resolves the one completed employee bundle`, () => {
       const root = source(path)
       const portAt = root.indexOf('const digitalEmployeeWorkStart = Object.freeze<')
@@ -64,7 +64,7 @@ describe('RFC-383 single employee and lexical work-start forwarding', () => {
     const server = source('server.ts'),
       http = source('bootstrap/daemonHttpComposition.ts'),
       graph = source('bootstrap/daemonApplication.ts'),
-      bundle = source('cli/daemonModules/digitalEmployee.ts')
+      bundle = source('bootstrap/daemonModules/digitalEmployee.ts')
     expect(http).toContain('const digitalEmployee = digitalEmployeeModules.module')
     expect(graph).toContain('launch: (request) => digitalEmployeeModules.workStart.launch(request)')
     expect(http).toContain(

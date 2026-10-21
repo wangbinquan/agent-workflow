@@ -16,7 +16,7 @@
 // (a) **启动序列恰有一个调用方**：boot 链上每个函数的**调用点数**逐字相等（`STARTUP_SEQUENCE_CALL_SITES`）。
 //     再复制一条启动路径必然要再调一次其中某个函数——多一个就红。少一个也红：函数被改名 /
 //     删除时数到 0 绝不能被读成「收敛了」（RFC-317 T13「零与合规同形」）。
-// (b) **入口里没有 provider 执行分支**：`cli/start.ts` 与 `cli/postgresqlDaemonApplication.ts`
+// (b) **入口里没有 provider 执行分支**：`bootstrap/daemonStart.ts` 与 `cli/postgresqlDaemonApplication.ts`
 //     里按 provider 轴决定**执行流程**的条件，逐条记账、只降不升
 //     （`PROVIDER_EXECUTION_BRANCH_DEBT`）。
 //
@@ -104,7 +104,7 @@ const STARTUP_SEQUENCE_CALL_SITES: readonly string[] = [
   // RFC-392: both engines and direct binding fixtures share this sole call site.
   'composeDaemonApplication @ packages/backend/tests/helpers/providerHttpApplication.ts: 1',
   'composeDaemonApplication @ packages/backend/tests/rfc391-neutral-daemon-graph.test.ts: 1',
-  'serveDaemon @ packages/backend/src/cli/start.ts: 1',
+  'serveDaemon @ packages/backend/src/bootstrap/daemonStart.ts: 1',
   // One real listener fixture exercises the same exported serve path; no second boot sequence.
   'serveDaemon @ packages/backend/tests/rfc370-daemon-host-lifecycle.test.ts: 1',
   'startCommand @ packages/backend/src/main.ts: 1',
@@ -127,7 +127,7 @@ const PROVIDER_SESSION_COMPOSER_REFERENCES: readonly string[] = [
 
 /** (b) 的被扫面：两个 daemon 入口文件。 */
 const DAEMON_ENTRY_FILES: readonly string[] = [
-  'packages/backend/src/cli/start.ts',
+  'packages/backend/src/bootstrap/daemonStart.ts',
   'packages/backend/src/bootstrap/daemonApplication.ts',
   'packages/backend/src/bootstrap/daemonSession.ts',
   'packages/backend/src/bootstrap/daemonSessionAdapters.ts',
@@ -173,11 +173,7 @@ interface DirectoryEntry {
 }
 
 function readEntries(dir: string): DirectoryEntry[] {
-  try {
-    return readdirSync(dir, { withFileTypes: true })
-  } catch {
-    return []
-  }
+  return readdirSync(dir, { withFileTypes: true })
 }
 
 /** 全仓 `.ts` / `.tsx` 源文件绝对路径。 */
@@ -194,11 +190,8 @@ export function listRepoSources(roots: readonly string[] = CORPUS_ROOTS): string
   }
   for (const root of roots) {
     const abs = resolve(REPO_ROOT, root)
-    try {
-      if (statSync(abs).isDirectory()) walk(abs)
-    } catch {
-      // 扫描根不存在——由语料下限用例报出来，不在这里静默
-    }
+    if (!statSync(abs).isDirectory()) throw new Error(`source root is not a directory: ${root}`)
+    walk(abs)
   }
   return out.sort()
 }
@@ -469,15 +462,7 @@ function scan(): Scan {
   for (const name of names) declarations.set(name, [])
   let parsedFiles = 0
   for (const file of files) {
-    // 枚举与读取之间文件可能消失（本仓是多 session 共享工作树，别人正在写盘）。
-    // 跳过读不到的文件是**安全方向**：少读一个文件只会让调用点数偏小、逐字相等断言转红，
-    // 不会把「多出来的启动路径」变绿；而让 ENOENT 直接抛出去只是把并发噪声报成守卫失败。
-    let text: string
-    try {
-      text = readFileSync(file, 'utf8')
-    } catch {
-      continue
-    }
+    const text = readFileSync(file, 'utf8')
     const present = names.filter((name) => text.includes(name))
     if (present.length === 0) continue
     parsedFiles += 1
@@ -558,10 +543,10 @@ describe('RFC-359 W5-T19c —— 语料下限（扫空 = 假绿）', () => {
   })
 
   test('判别式判据在真文件上确实识别得出东西（识别到 0 = 判据瞎了）', () => {
-    const start = readFileSync(resolve(BACKEND_SRC, 'cli', 'start.ts'), 'utf8')
+    const start = readFileSync(resolve(BACKEND_SRC, 'bootstrap', 'daemonStart.ts'), 'utf8')
     expect(
-      providerConditions(start, 'cli/start.ts').length,
-      'cli/start.ts 里一个 provider 判别式都没识别出来。' +
+      providerConditions(start, 'bootstrap/daemonStart.ts').length,
+      'bootstrap/daemonStart.ts 里一个 provider 判别式都没识别出来。' +
         '识别成 0 说明判据失效，此时「没有执行分支」的绿是假绿。',
       // RFC-359 AC-10 §5fd：门槛 2 → **1**（实测 1）。原来这里写「至少有两处『拒绝装配』的
       // provider 收窄」——那两处正是本波销掉的：`storage === 'embedded-file'` 换成了按
@@ -615,7 +600,7 @@ describe('RFC-359 W5-T19c (a) —— 启动序列恰有一个调用方', () => {
   )
 
   test('initial and migration target sessions use the injected composer exactly twice', () => {
-    const start = readFileSync(resolve(BACKEND_SRC, 'cli/start.ts'), 'utf8')
+    const start = readFileSync(resolve(BACKEND_SRC, 'bootstrap/daemonStart.ts'), 'utf8')
     expect(namedCallCount(start, 'composeSession')).toBe(2)
     const main = readFileSync(resolve(BACKEND_SRC, 'main.ts'), 'utf8')
     expect(main).toContain(
@@ -799,4 +784,8 @@ describe('RFC-359 W5-T19c 负向 fixture —— 判据自证', () => {
     const text = 'serveDaemon({})\nawait serveDaemon({})\nobj.serveDaemon()\nconst f = serveDaemon'
     expect(namedCallCount(text, 'serveDaemon')).toBe(2)
   })
+})
+
+test('RFC-393: a missing source root fails before scanning', () => {
+  expect(() => listRepoSources(['missing-rfc393-source-root'])).toThrow()
 })

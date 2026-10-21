@@ -606,7 +606,7 @@ test('第 12 刀 · 引擎差异只剩三个端口：认领策略 / 活跃度 / 
   expect(provider).toContain('legacyConnection: execution.legacyConnection')
   expect(provider.match(/coordinatorFactory: dependencies.coordinatorFactory/g)).toHaveLength(1)
   const bundle = readFileSync(
-    resolve(import.meta.dir, '../src/cli/daemonModules/taskExecution.ts'),
+    resolve(import.meta.dir, '../src/bootstrap/daemonModules/taskExecution.ts'),
     'utf8',
   )
   expect(bundle).toContain('attach: (request) => provider.driverLifecycle.attach(request)')

@@ -260,7 +260,7 @@ describe('RFC-370 complete Task run selection', () => {
 
   test('all actual roots pass the same whole selection while common runtime no longer names a local binding', () => {
     const read = (path: string) =>
-      path === 'cli/start.ts'
+      path === 'bootstrap/daemonStart.ts'
         ? readDaemonGraphSource()
         : readFileSync(resolve(import.meta.dir, '../src', path), 'utf8')
     for (const path of ['bootstrap/daemonApplication.ts']) {
@@ -280,7 +280,7 @@ describe('RFC-370 complete Task run selection', () => {
       expect(calls).toHaveLength(1)
       expect(calls[0]).toMatch(/^(input|deps)\.taskRunSelection$/)
     }
-    const start = read('cli/start.ts')
+    const start = read('bootstrap/daemonStart.ts')
     expect(start).toContain('taskRunSelection: opts.taskRunSelection')
     expect(start).toContain('taskRunSelection: input.taskRunSelection')
     const runtime = read(

@@ -6,8 +6,8 @@ import {
   createPausableDaemonRuntimeServiceBindings,
   createPollingDaemonRuntimeHandleFactory,
   type PausableDaemonRuntimeService,
-} from '../src/cli/daemonProviderRuntimeHandles'
-import type { DaemonProviderSessionLifecycleInput } from '../src/cli/daemonProviderSession'
+} from '../src/bootstrap/daemonProviderRuntimeHandles'
+import type { DaemonProviderSessionLifecycleInput } from '../src/bootstrap/daemonProviderSession'
 
 const lifecycle: DaemonProviderSessionLifecycleInput = {
   operationId: 'operation-1',

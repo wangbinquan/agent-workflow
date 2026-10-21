@@ -512,7 +512,10 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<voi
 test('源码锁：三个组合根接上同一对 launcher 与终态观察者；两个 composer 是薄壳，执行器只有一份', () => {
   const root = resolve(import.meta.dir, '..', 'src')
   // RFC-383: one session bundle owns both launchers and the lexical terminal cycle.
-  const bundle = readFileSync(join(root, 'cli/daemonModules/developmentAutomation.ts'), 'utf8')
+  const bundle = readFileSync(
+    join(root, 'bootstrap/daemonModules/developmentAutomation.ts'),
+    'utf8',
+  )
   expect(bundle).toContain('agentLauncher: composeAgentActionExecution({')
   expect(bundle).toContain('scriptLauncher: composeScriptActionExecution({')
   expect(bundle).toContain('createDevelopmentMissionExecutionTerminalObserver({')
@@ -523,7 +526,7 @@ test('源码锁：三个组合根接上同一对 launcher 与终态观察者；�
   expect(automationAt).toBeGreaterThan(observerAt)
   expect(bundle.slice(automationAt)).toContain('composeDevelopmentAutomation({')
   expect(bundle.match(/\.\.\.hostTasks,/g)).toHaveLength(2)
-  const tasks = readFileSync(join(root, 'cli/daemonModules/taskExecution.ts'), 'utf8')
+  const tasks = readFileSync(join(root, 'bootstrap/daemonModules/taskExecution.ts'), 'utf8')
   expect(tasks).toContain('launch: provider.routeLaunch.workflow')
   for (const file of ['bootstrap/daemonApplication.ts']) {
     const source = readFileSync(join(root, file), 'utf8')

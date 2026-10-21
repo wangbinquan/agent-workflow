@@ -24,7 +24,7 @@ type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 
 function source(path: string): string {
-  return /(?:^|\/)cli\/start\.ts$/.test(path)
+  return /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
     ? readDaemonGraphSource()
     : readFileSync(resolve(REPO_ROOT, path), 'utf8')
 }

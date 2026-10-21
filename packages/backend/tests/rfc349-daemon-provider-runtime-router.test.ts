@@ -6,12 +6,12 @@ import {
   type DaemonProviderRuntimeWebSocketHandlers,
   type DaemonProviderUpgradeServer,
   type DaemonProviderWebSocketMessage,
-} from '../src/cli/daemonProviderRuntimeRouter'
+} from '../src/bootstrap/daemonProviderRuntimeRouter'
 import {
   createDaemonProviderRuntimeSession,
   type DaemonProviderRuntimeAdmission,
-} from '../src/cli/daemonProviderRuntimeSession'
-import { createDaemonProviderSessionController } from '../src/cli/daemonProviderSession'
+} from '../src/bootstrap/daemonProviderRuntimeSession'
+import { createDaemonProviderSessionController } from '../src/bootstrap/daemonProviderSession'
 
 interface TestWebSocket {
   readonly id: string

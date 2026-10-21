@@ -6,7 +6,7 @@ import { backendUnits, sourceUnit, type SourceUnit } from './census'
 
 const PREFIX = 'packages/backend/src/'
 const FACTORY = 'modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts'
-const BUNDLE = 'cli/daemonModules/taskExecution.ts'
+const BUNDLE = 'bootstrap/daemonModules/taskExecution.ts'
 const CONSTRUCTION_SITES = [`${FACTORY}#createTaskDriveCoordinatorFactory/coordinatorFor`] as const
 const ASSEMBLY_SITES = [
   `${BUNDLE}#composeDaemonTaskExecutionModules`,
@@ -64,7 +64,7 @@ export function driveFactoryViolations(units: readonly SourceUnit[]): string[] {
       if (path !== 'services/task.ts' && TEST_ONLY.some((name) => called(node, name)))
         errors.push(`${path}: production caller of a test-only entry`)
       if (
-        path === 'cli/daemonModules/adapters.ts' &&
+        path === 'bootstrap/daemonModules/adapters.ts' &&
         ts.isIdentifier(node) &&
         node.text === 'roomContinuation'
       )
@@ -105,7 +105,7 @@ function valid(): SourceUnit[] {
       'services/task.ts',
       'function composeTestTaskDriveFactory() { return createTaskDriveCoordinatorFactory({}); }',
     ),
-    unit('cli/daemonModules/adapters.ts', 'const adapters = {};'),
+    unit('bootstrap/daemonModules/adapters.ts', 'const adapters = {};'),
     unit(
       BUNDLE,
       'function composeDaemonTaskExecutionModules() { const factory = createTaskDriveCoordinatorFactory({}); }',
@@ -176,7 +176,7 @@ describe('RFC-386 coordinator construction inventory', () => {
       'const adapters = { roomContinuation() {} }',
     ]) {
       expect(
-        driveFactoryViolations([...valid(), unit('cli/daemonModules/adapters.ts', text)]),
+        driveFactoryViolations([...valid(), unit('bootstrap/daemonModules/adapters.ts', text)]),
       ).not.toEqual([])
     }
   })

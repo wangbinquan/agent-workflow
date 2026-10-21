@@ -309,7 +309,7 @@ describe('RFC-368 实现门 findings', () => {
       taskStopProjection({ kind: 'resource-reaped', summary: 'task-idle-timeout', message: 'm' }),
     ).toEqual({ code: 'resource-reaped', summary: 'task-idle-timeout' })
     const read = (path: string) =>
-      /(?:^|\/)cli\/start\.ts$/.test(path)
+      /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
         ? readDaemonGraphSource()
         : readFileSync(resolve(ROOT, 'packages/backend', path), 'utf8')
     expect(read('src/services/limits.ts')).toContain('await operations.cancelTask(t.id, reason)')
@@ -319,7 +319,7 @@ describe('RFC-368 实现门 findings', () => {
     expect(read('src/modules/system-operations/composition/resourceLimits.ts')).toContain(
       "kind: 'resource-reaped'",
     )
-    expect(read('src/cli/start.ts')).toContain("kind: 'resource-reaped'")
+    expect(read('src/bootstrap/daemonStart.ts')).toContain("kind: 'resource-reaped'")
     expect(
       read('src/bootstrap/daemonApplication.ts').match(/kind: 'resource-reaped'/g),
     ).toHaveLength(2)

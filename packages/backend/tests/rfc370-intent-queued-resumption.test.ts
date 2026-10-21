@@ -1,5 +1,5 @@
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
-import { DAEMON_RUNTIME_JOBS } from '../src/cli/daemonLifecycleProgram'
+import { DAEMON_RUNTIME_JOBS } from '../src/bootstrap/daemonLifecycleProgram'
 // Queued admission must await the selected reader and settle before provider
 // close. These controls do not start an Intent turn, daemon, or local process.
 import { describe, expect, test } from 'bun:test'

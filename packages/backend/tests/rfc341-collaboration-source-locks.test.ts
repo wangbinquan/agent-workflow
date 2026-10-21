@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 function source(path: string): string {
-  return path === 'cli/start.ts'
+  return path === 'bootstrap/daemonStart.ts'
     ? readDaemonGraphSource()
     : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
 }
@@ -165,7 +165,7 @@ describe('RFC-341 collaboration owner source locks', () => {
   })
 
   test('daemon composes one continuous owner and maintenance no longer schedules boot recovery', () => {
-    const start = source('cli/start.ts')
+    const start = source('bootstrap/daemonStart.ts')
     const catalog = source('platform/background/maintenanceCatalog.ts')
     const service = source('platform/background/maintenanceService.ts')
     expect(start).toContain('createHumanGateContinuationWorkerDefinition')
@@ -199,7 +199,7 @@ describe('RFC-341 collaboration owner source locks', () => {
     const taskService = source('services/task.ts')
     const taskExecutionComposition = source('modules/task-execution/composition/humanGate.ts')
     expect(taskService).not.toContain('export function composeHumanGateContinuationDriver')
-    expect(source('cli/daemonModules/taskExecution.ts')).toContain(
+    expect(source('bootstrap/daemonModules/taskExecution.ts')).toContain(
       'const gateContinuation = createGateContinuationDriver({',
     )
     expect(taskExecutionComposition).not.toContain("from '@/services/task'")
@@ -223,6 +223,6 @@ describe('RFC-341 collaboration owner source locks', () => {
         ),
       ),
     ).toBe(false)
-    expect(source('cli/start.ts')).not.toContain('registerTerminalTaskHook')
+    expect(source('bootstrap/daemonStart.ts')).not.toContain('registerTerminalTaskHook')
   })
 })

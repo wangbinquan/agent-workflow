@@ -318,7 +318,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts',
   ],
   'deployment-mode-branch-sites': [
-    'packages/backend/src/cli/start.ts#startCommand#comparison#1',
+    'packages/backend/src/bootstrap/daemonStart.ts#startCommand#comparison#1',
     'packages/backend/src/embed.ts#withDeploymentMarker#comparison#1',
     'packages/backend/src/modules/integration/application/ports/crewStationEventInbox.ts#CrewStationEventChannel#port-literal#1',
     'packages/backend/src/modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort#port-literal#1',
@@ -966,7 +966,7 @@ describe('RFC-376 G9 deployment branches', () => {
     "read() ?? { mode: 'standalone' }",
     'process.env.AW_DEPLOYMENT_MODE',
     "process.env['AW_DEPLOYMENT_MODE']",
-    "import '@/cli/deployment'",
+    "import '@/bootstrap/deployment'",
     "import '@/bootstrap/crewstation'",
   ])('branch %s is recorded', (code) => {
     expect(
@@ -985,8 +985,8 @@ describe('RFC-376 G9 deployment branches', () => {
     'main.ts',
     'server.ts',
     'embed.ts',
-    'cli/start.ts',
-    'cli/dev.ts',
+    'bootstrap/daemonStart.ts',
+    'bootstrap/developmentReload.ts',
   ])('business scope includes %s', (path) => {
     expect(deploymentBranchSites(fixture(path, "if (mode === 'crewstation') run()"))).toHaveLength(
       1,
@@ -1012,7 +1012,7 @@ describe('RFC-376 G9 deployment branches', () => {
   })
   test('selection points and true-only exhaustive or throwing fences are exempt', () => {
     for (const path of [
-      'cli/deployment.ts',
+      'bootstrap/deployment.ts',
       'bootstrap/app.ts',
       'platform/crewstation/client.ts',
       'modules/a/composition.ts',
@@ -1021,7 +1021,7 @@ describe('RFC-376 G9 deployment branches', () => {
       expect(deploymentBranchSites(fixture(path, "if (mode === 'standalone') run()"))).toEqual([])
     expect(
       deploymentBranchSites(
-        fixture('main.ts', "import '@/cli/deployment'; import '@/bootstrap/app'"),
+        fixture('main.ts', "import '@/bootstrap/deployment'; import '@/bootstrap/app'"),
       ),
     ).toEqual([])
     expect(
@@ -1050,6 +1050,26 @@ describe('RFC-376 G9 deployment branches', () => {
         fixture('server.ts', "if (mode === 'crewstation') { run(); throw new Error('x') }"),
       ),
     ).toHaveLength(1)
+  })
+  test('bootstrap startup imports remain assembly, not deployment branch sites', () => {
+    expect(
+      deploymentBranchSites(
+        fixture(
+          'bootstrap/daemonStart.ts',
+          "import { composeDaemonSession } from './daemonSession'",
+        ),
+      ),
+    ).toEqual([])
+  })
+  test('bootstrap startup mode comparisons still count beside internal imports', () => {
+    expect(
+      deploymentBranchSites(
+        fixture(
+          'bootstrap/daemonStart.ts',
+          "import { composeDaemonSession } from './daemonSession'; export function startCommand() { if (opts.executionHost === 'local') run() }",
+        ),
+      ),
+    ).toEqual(['packages/backend/src/bootstrap/daemonStart.ts#startCommand#comparison#1'])
   })
   test('site identities survive unrelated line movement', () => {
     const code = "export function run() { return options.host ?? 'standalone' }"

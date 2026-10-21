@@ -20,14 +20,14 @@
 // 「工作组自主撤销」。这条判据在 `services/clarify/rounds.ts:304-311` 与
 // `routes/clarify.detail.tsx:885-889` 两处各写了一遍注释，说明它被踩过。
 //
-// 另外，封存的钩子是在 **daemon 装配处**接线的（`cli/start.ts:1013`
+// 另外，封存的钩子是在 **daemon 装配处**接线的（`bootstrap/daemonStart.ts:1013`
 // `sealOpenHumanGatesForTask(hookDb, taskId, 'task-' + to)`），`services/lifecycle.ts`
 // 因为循环依赖拿不到它。也就是说「这个钩子到底有没有被挂上」只有跑真 daemon 才验得出来
 // ——正是 system-mock e2e 的职责。
 //
 // 判据取自源码单一事实源：
 //   services/terminalSweep.ts:76-110   self 轮 → 'canceled'，park run → canceled + errorMessage=cause
-//   cli/start.ts:1013                  cause = `task-${to}`（done / canceled）
+//   bootstrap/daemonStart.ts:1013      cause = `task-${to}`（done / canceled）
 //   services/clarify/rounds.ts:312-320 canceled/abandoned 轮才带 sealedCause
 //   services/clarify/autoDispatch.ts:550-555  非 awaiting_human 的轮次作答 ⇒ 409 clarify-already-answered
 //   routes/clarify.detail.tsx:660-666  readonly ⇒ draftStatus='sealed'，footer 改口
@@ -231,7 +231,7 @@ test('任务走到终态时，开着的那一轮反问必须被封存并说明�
   // 但把 'wg-clarify-disabled' 写成 'task-canceled' 会让界面把撤销说成任务结束。
   expect(
     detail.sealedCause,
-    '原因取自 park 载体 run 的 errorMessage（cli/start.ts:1013 传入的 `task-${to}`）',
+    '原因取自 park 载体 run 的 errorMessage（bootstrap/daemonStart.ts:1013 传入的 `task-${to}`）',
   ).toBe('task-canceled')
 
   // ── 服务端：这时候再作答必须被**拒绝**，不能收下 ──────────────────────────

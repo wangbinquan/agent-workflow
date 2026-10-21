@@ -61,7 +61,6 @@ import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/
 import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
 import { createExecutionExitRequests } from './executionActivation'
 import { ensureTokenFile } from '@/auth/token'
-import type { loadConfig } from '@/config'
 import {
   type EvidenceDocumentCommands,
   type EvidenceArtifactPort,
@@ -72,7 +71,6 @@ import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission
 import { IS_EMBEDDED } from '@/embed'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { type BootExecutionRecoveryFactory } from '@/modules/task-execution/composition/bootRecovery'
-import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { maybePreMigrationBackup } from '@/services/backupScheduler'
 import {
   composeDaemonHostApplication,
@@ -96,22 +94,14 @@ import { Paths } from '@/util/paths'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { type CustomObserverProgramFactory } from '@/modules/event-center/composition'
-import {
-  resolveDatabaseProviderRuntime,
-  type ResolvedDatabaseProviderRuntime,
-} from '@/platform/persistence/databaseProviderRuntime'
+import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import type { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
 import {
   composeDaemonProviderBootstrap,
   type DaemonProviderBootstrap,
 } from './daemonProviderBootstrap'
-import type { DaemonProviderListenerRuntimeSession } from './daemonProviderRuntimeRouter'
-import {
-  describeDaemonProviderSessionFailure,
-  type DaemonProviderSessionLifecycleInput,
-} from './daemonProviderSession'
+import { describeDaemonProviderSessionFailure } from './daemonProviderSession'
 import { type SignalledDaemonRuntimeOwner } from './daemonProviderRuntimeHandles'
 import type { MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'
 import type {
@@ -146,11 +136,11 @@ import {
   selectDaemonHostLifecycle,
   type DaemonHostLifecyclePort,
 } from '@/modules/system-operations/composition/daemonHostLifecycle'
-import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 import {
   selectRepositoryWorkspaceReadQueries,
   type RepositoryWorkspaceReadQueries,
 } from '@/modules/source-control/public/queries'
+import type { DaemonProviderSessionComposer } from './daemonSessionInput'
 
 export interface StartOptions {
   port?: number
@@ -250,112 +240,6 @@ export interface StartOptions {
    */
   executionHost?: 'local' | 'remote'
 }
-
-type DatabaseMigrationAdmission = Parameters<typeof composeDatabaseMigrationModule>[0]['admission']
-
-/** RFC-359 W3-T16：两个 provider 的会话装配器共用的输入——`startCommand` 只准备这一份。 */
-export interface DaemonProviderSessionComposeInput {
-  readonly provider: ResolvedDatabaseProviderRuntime
-  readonly lifecycle: DaemonProviderSessionLifecycleInput
-  readonly config: ReturnType<typeof loadConfig>
-  readonly configuration: ApplicationConfigurationQueries
-  readonly applicationConfiguration: ApplicationConfigurationBinding
-  readonly taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>
-  readonly runtimeLegacyConfiguration: RuntimeLegacyConfigurationPort
-  readonly taskArchive?: TaskArchiveContentBinding
-  readonly skillContent?: SkillContentBinding
-  readonly employeePrograms?: ProgramArtifactPort
-  readonly programFixtureProcess?: ScriptFixtureProcess
-  readonly actionWorkspaceEntries?: ActionWorkspaceEntries
-  readonly repositoryRevisionContent?: RepositoryRevisionContentFactory
-  readonly codeReviewArtifacts?: CodeReviewArtifactStore
-  readonly employeeInputArtifacts?: EmployeeInputArtifactPort
-  readonly missionInputBlobs?: MissionInputBlobPersistence
-  readonly pluginInstaller?: PluginInstallerPort
-  readonly beforeEventObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
-  readonly humanGateArtifactRecovery?: HumanGateArtifactRecovery
-  readonly databaseBackup?: DatabaseBackupEffects
-  readonly archivedNodeEvents?: TaskArchivedEventsReader
-  readonly crewStationEvents?: CrewStationEventIngress
-  readonly intentArtifacts?: IntentArtifactSelection
-  readonly evidenceArtifacts?: EvidenceArtifactPort
-  readonly resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
-  readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
-  readonly resourcePackageSkillContent?: SkillPackageContentReader
-  readonly workspaceContent?: WorkspaceContentEffectsFactory
-  readonly repositoryRemote?: RepositoryRemoteEffects
-  readonly workspaceUploads: WorkspaceUploadContentFactory
-  readonly isolationWorkspaces: IsolationWorkspaceFactory
-  readonly repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
-  readonly repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
-  readonly workspaceReads: RepositoryWorkspaceReadQueries
-  readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
-  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
-  readonly verificationCommands?: VerificationCommandEffectsFactory
-  readonly customObserverPrograms?: CustomObserverProgramFactory
-  readonly bootExecutionRecovery?: BootExecutionRecoveryFactory
-  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
-  readonly actionWorkspaceEffects?: ActionWorkspaceEffects
-  readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
-  readonly taskDeletionEffects?: TaskDeletionEffects
-  readonly repositoryPublicationTransport?: RepositoryPublicationTransport
-  readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
-  portArtifactContentEffects?: PortArtifactContentEffects
-  runtimeInventoryContent?: TaskRuntimeInventoryContent
-  readonly taskRunSelection?: TaskRunRootSelection
-  readonly taskRecovery?: TaskRecoveryDeploymentSelection
-  readonly taskInputFiles?: TaskInputFiles
-  readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
-  readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
-  /** RFC-370 §10 V20 — hosted only: the fusion engine task's volume workspace. */
-  readonly fusionWorkspaceEffects?: FusionWorkspaceEffects
-  readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
-  readonly workspacePresence?: WorkspacePresenceQueries
-  readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
-  readonly recoveredExecutionTaskIds?: () => readonly string[]
-  readonly hostedBackgroundOwners?: readonly SignalledDaemonRuntimeOwner[]
-  readonly runtimeManagement?: typeof composeLocalRuntimeManagement
-  readonly reviewArtifacts?: ReviewArtifactSelection
-  readonly reviewRollbackSnapshots?: WorkspaceRollbackSnapshotInspector
-  readonly systemAgentRunFamily?: typeof composeLocalSystemAgentRunFamily
-  readonly mcpDiagnostics?: typeof composeLocalMcpDiagnostics
-  readonly developmentPurposes?: DevelopmentPurposeSelection
-  readonly developmentWorkspaceRepositoryPreparation?: ReturnType<
-    typeof createDevelopmentWorkspaceRepositoryPreparation
-  >
-  readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
-  readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
-  readonly evidenceRead?: EvidenceReadBinding
-  readonly evidenceDocumentCommands?: EvidenceDocumentCommands
-  readonly attemptContext?: AttemptContextStorePort
-  readonly daemonRuntime: DaemonRuntimeQueries
-  readonly token: string
-  readonly secretBox: SecretBox
-  readonly executionAuthority?: ExecutionAuthorityPort
-  readonly credentials?: CredentialAdapterSelection
-  /** Reported when a background handle fails to start on activation. */
-  readonly onExecutionActivationFailure?: (error: unknown) => void
-  readonly dbVersion: number
-  readonly migrationAdmission: DatabaseMigrationAdmission
-  readonly sourceWriteWindow: DatabaseSourceWriteWindow
-  readonly log: ReturnType<typeof createLogger>
-  readonly lock: DaemonStartupLease
-  readonly migrationsFolder: string
-  readonly digitalEmployeeTypePackageDriftPolicy: 'draft-overlay' | 'reject'
-}
-
-export interface ComposedDaemonProviderSession {
-  readonly application: {
-    readonly core: {
-      readonly authRuntime: Pick<AuthRuntime, 'isBootstrapRequired'>
-    }
-  }
-  readonly session: DaemonProviderListenerRuntimeSession
-}
-
-export type DaemonProviderSessionComposer = (
-  input: DaemonProviderSessionComposeInput,
-) => Promise<ComposedDaemonProviderSession>
 
 /**
  * RFC-359 W3-T14 —— 监听器与关机序列只有一份，两个 provider 共用。

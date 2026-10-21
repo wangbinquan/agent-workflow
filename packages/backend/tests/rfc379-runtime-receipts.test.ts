@@ -1,11 +1,11 @@
 // RFC-379: dependency ordering, ready/health and shutdown-only stop budgets.
 import { expect, test } from 'bun:test'
-import { startOnExecutionActive } from '../src/cli/executionActivation'
+import { startOnExecutionActive } from '../src/bootstrap/executionActivation'
 import type { ExecutionFence } from '../src/modules/system-operations/public/participants'
 import {
   createPollingDaemonRuntimeHandleFactory,
   createManagedWorkerRuntimeHandleFactory,
-} from '../src/cli/daemonProviderRuntimeHandles'
+} from '../src/bootstrap/daemonProviderRuntimeHandles'
 import { deferred, runtimeSession, lifecycle } from './helpers/daemonLifecycle'
 
 const factory = (id: string, dependsOn?: readonly string[]) => ({

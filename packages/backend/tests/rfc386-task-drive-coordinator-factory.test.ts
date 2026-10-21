@@ -10,7 +10,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DEFAULT_DISTILL_POLICY, type Config } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import { composeDaemonTaskExecutionModules } from '@/cli/daemonModules/taskExecution'
+import { composeDaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
 import {
   tasks,

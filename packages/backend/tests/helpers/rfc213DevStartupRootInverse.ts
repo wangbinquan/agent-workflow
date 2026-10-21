@@ -83,7 +83,7 @@ function inverseRevision(text: string, changes: readonly Change[]): string {
 // concurrent host/observation edits; a partial or changed binding must fail closed.
 export function inverseRfc213DevStartupRoot(source: ts.SourceFile): ts.SourceFile {
   const path = '/' + source.fileName.replaceAll('\\', '/')
-  const changes = path.endsWith('/cli/start.ts')
+  const changes = path.endsWith('/bootstrap/daemonStart.ts')
     ? preparation
     : path.endsWith('/bootstrap/daemonApplication.ts')
       ? declarationCheck

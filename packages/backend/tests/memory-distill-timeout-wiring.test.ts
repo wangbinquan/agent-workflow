@@ -22,7 +22,7 @@ import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import ts from 'typescript'
 
-import { DAEMON_BACKGROUND_JOBS } from '../src/cli/daemonLifecycleProgram'
+import { DAEMON_BACKGROUND_JOBS } from '../src/bootstrap/daemonLifecycleProgram'
 import { propertyBodies } from './helpers/daemonProgramSource'
 
 const START = readDaemonGraphSource()

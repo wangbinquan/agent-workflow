@@ -2238,7 +2238,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(maintenanceWorker).toContain('ResourcePackageApplyMaintenanceCommand')
     expect(maintenanceWorker).toContain('resourcePackageMaintenance.command')
     expect(
-      readFileSync(resolve(sourceRoot, 'cli/daemonModules/resourceCatalog.ts'), 'utf8'),
+      readFileSync(resolve(sourceRoot, 'bootstrap/daemonModules/resourceCatalog.ts'), 'utf8'),
     ).toContain('SkillCatalogBootParticipant')
     expect(daemonStart).toContain('skillCatalogBoot')
     // RFC-376: zero-consumer public symbols are report-only; the C7 ledger is retired.

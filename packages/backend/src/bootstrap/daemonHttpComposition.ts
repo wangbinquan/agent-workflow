@@ -1,17 +1,17 @@
 // RFC-392: passive HTTP composition from the application graph's session bundles.
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
-import { type DaemonIntentModules } from '@/cli/daemonModules/intent'
-import { type DaemonDigitalEmployeeModules } from '@/cli/daemonModules/digitalEmployee'
-import { type DaemonDevelopmentAutomationModules } from '@/cli/daemonModules/developmentAutomation'
-import { type DaemonTaskExecutionModules } from '@/cli/daemonModules/taskExecution'
-import { type DaemonScheduledTaskModules } from '@/cli/daemonModules/scheduledTasks'
-import { type DaemonIntegrationModules } from '@/cli/daemonModules/integration'
-import { type DaemonFusionModules } from '@/cli/daemonModules/fusion'
-import { type DaemonMemoryModules } from '@/cli/daemonModules/memory'
-import { type DaemonObservationModules } from '@/cli/daemonModules/observation'
-import { type SelectedDaemonProviderCore } from '@/cli/daemonModules/providerCore'
-import { type DaemonRepositoryCredentials } from '@/cli/daemonModules/repositoryCredentials'
-import { type DaemonResourceCatalogModules } from '@/cli/daemonModules/resourceCatalog'
+import { type DaemonIntentModules } from '@/bootstrap/daemonModules/intent'
+import { type DaemonDigitalEmployeeModules } from '@/bootstrap/daemonModules/digitalEmployee'
+import { type DaemonDevelopmentAutomationModules } from '@/bootstrap/daemonModules/developmentAutomation'
+import { type DaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
+import { type DaemonScheduledTaskModules } from '@/bootstrap/daemonModules/scheduledTasks'
+import { type DaemonIntegrationModules } from '@/bootstrap/daemonModules/integration'
+import { type DaemonFusionModules } from '@/bootstrap/daemonModules/fusion'
+import { type DaemonMemoryModules } from '@/bootstrap/daemonModules/memory'
+import { type DaemonObservationModules } from '@/bootstrap/daemonModules/observation'
+import { type SelectedDaemonProviderCore } from '@/bootstrap/daemonModules/providerCore'
+import { type DaemonRepositoryCredentials } from '@/bootstrap/daemonModules/repositoryCredentials'
+import { type DaemonResourceCatalogModules } from '@/bootstrap/daemonModules/resourceCatalog'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
 import type {
@@ -298,7 +298,9 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     },
   })
 
-  const integrationRoutes: ProviderAppCompositionInput<P>['integration'] = Object.freeze({
+  const integrationRoutes: ProviderAppCompositionInput<
+    SelectedDaemonProviderCore<P>
+  >['integration'] = Object.freeze({
     scheduledTasks: Object.freeze({
       identityAccess: integrationIdentityAccess,
       scheduledTaskRuntime,
@@ -322,96 +324,104 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     }),
   })
 
-  const digitalDevelopmentRoutes: ProviderAppCompositionInput<P>['digitalDevelopment'] =
-    Object.freeze({
-      executionContracts,
-      digitalEmployees: Object.freeze({
-        persistence: digitalEmployeePersistence,
-        module: digitalEmployee,
-        activityOperations: developmentActivityOperations,
-        contexts: identityAccess.directAuthority,
-      }),
-      developmentConfig: Object.freeze({
-        aclRoutes: developmentAclRoutes,
-        operations: developmentConfig,
-        contexts: identityAccess.directAuthority,
-      }),
-      developmentMissions: Object.freeze({
-        operations: developmentMissions,
-        contexts: identityAccess.directAuthority,
-      }),
-      missionInputUploads: developmentAutomation.missionInputUploads,
-    })
+  const digitalDevelopmentRoutes: ProviderAppCompositionInput<
+    SelectedDaemonProviderCore<P>
+  >['digitalDevelopment'] = Object.freeze({
+    executionContracts,
+    digitalEmployees: Object.freeze({
+      persistence: digitalEmployeePersistence,
+      module: digitalEmployee,
+      activityOperations: developmentActivityOperations,
+      contexts: identityAccess.directAuthority,
+    }),
+    developmentConfig: Object.freeze({
+      aclRoutes: developmentAclRoutes,
+      operations: developmentConfig,
+      contexts: identityAccess.directAuthority,
+    }),
+    developmentMissions: Object.freeze({
+      operations: developmentMissions,
+      contexts: identityAccess.directAuthority,
+    }),
+    missionInputUploads: developmentAutomation.missionInputUploads,
+  })
 
   const taskCatalog = composeTaskCatalog({
     sources: [...taskExecutionProvider.catalogSources, digitalEmployeeModules.taskCatalogSource],
   })
-  const publicRoutes: ProviderAppCompositionInput<P>['public'] = Object.freeze({
-    health: Object.freeze({
-      deps: Object.freeze({
-        opencodeVersion: input.opencodeVersion,
-        dbVersion: input.dbVersion,
+  const publicRoutes: ProviderAppCompositionInput<SelectedDaemonProviderCore<P>>['public'] =
+    Object.freeze({
+      health: Object.freeze({
+        deps: Object.freeze({
+          opencodeVersion: input.opencodeVersion,
+          dbVersion: input.dbVersion,
+        }),
+        identityAccess: identityAccess.diagnostics,
+        database: core.healthDatabase,
       }),
-      identityAccess: identityAccess.diagnostics,
-      database: core.healthDatabase,
-    }),
-    documentation: Object.freeze({ configuration }),
-    webhookIngress: composeWebhookIngressTransport({
-      crewStationEvents: integrationModules.crewStationEvents,
-      webhookIngressPersistence: integrationModules.webhookIngressPersistence,
-      secretBox: input.secretBox,
-      digitalEmployeeEventCenter: eventCenter,
-      webhookDispatcher,
-      webhookTerminalControl,
-    }),
-  })
+      documentation: Object.freeze({ configuration }),
+      webhookIngress: composeWebhookIngressTransport({
+        crewStationEvents: integrationModules.crewStationEvents,
+        webhookIngressPersistence: integrationModules.webhookIngressPersistence,
+        secretBox: input.secretBox,
+        digitalEmployeeEventCenter: eventCenter,
+        webhookDispatcher,
+        webhookTerminalControl,
+      }),
+    })
 
   // One overview projection binds the session-owned domain queries.
-  const overviewQuery: ProviderAppCompositionInput<P>['platform']['overview']['query'] =
-    composeSystemOverviewQuery({
-      resourceCatalog: composeResourceCatalogOverviewQuery(input.db),
-      repositories: core.repositoryWorkspaceOperations.overviewQueries,
-      integration: scheduledTaskRuntime.overview,
-      memories: memoryCatalog,
-      tasks: taskExecutionProvider.overview,
-    })
-  const platformRoutes: ProviderAppCompositionInput<P>['platform'] = Object.freeze({
-    observability: composeRunObservation({
-      db: input.db,
-      tasks: createTaskObservationFacts(input.db),
-      runtimes: runtimeManagement.observations,
-    }),
-    config: Object.freeze({
-      configuration: applicationConfiguration.composeCommands({
-        runtimeRegistry:
-          runtimeManagement.configuration satisfies RuntimeProfileConfigurationCommands,
-        withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(
-          applicationConfiguration.notificationKey,
-        ),
-        runtimeTests: mcpRuntimeTests.reconciliation,
-        concurrencyHotApply: composeConfigConcurrencyHotApply(
-          taskExecutionProvider.processConcurrencyScope,
-        ),
-      }),
-    }),
-    maintenance: Object.freeze({
-      configuration,
-      maintenanceStatus: input.maintenanceStatus,
-      databaseTelemetry: input.databaseTelemetry,
-    }),
-    daemon: Object.freeze({
-      runtime: selectDaemonRuntimeQueries(input.daemonRuntime, { infoPath: input.daemonInfoPath }),
-    }),
-    plantuml: Object.freeze({ configuration }),
-    runtime: runtimeManagement.models,
-    runtimes: runtimeManagement.runtimes,
-    overview: Object.freeze({
-      authorization: Object.freeze({ directAuthority: identityAccess.directAuthority }),
-      query: overviewQuery,
-    }),
+  const overviewQuery: ProviderAppCompositionInput<
+    SelectedDaemonProviderCore<P>
+  >['platform']['overview']['query'] = composeSystemOverviewQuery({
+    resourceCatalog: composeResourceCatalogOverviewQuery(input.db),
+    repositories: core.repositoryWorkspaceOperations.overviewQueries,
+    integration: scheduledTaskRuntime.overview,
+    memories: memoryCatalog,
+    tasks: taskExecutionProvider.overview,
   })
+  const platformRoutes: ProviderAppCompositionInput<SelectedDaemonProviderCore<P>>['platform'] =
+    Object.freeze({
+      observability: composeRunObservation({
+        db: input.db,
+        tasks: createTaskObservationFacts(input.db),
+        runtimes: runtimeManagement.observations,
+      }),
+      config: Object.freeze({
+        configuration: applicationConfiguration.composeCommands({
+          runtimeRegistry:
+            runtimeManagement.configuration satisfies RuntimeProfileConfigurationCommands,
+          withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(
+            applicationConfiguration.notificationKey,
+          ),
+          runtimeTests: mcpRuntimeTests.reconciliation,
+          concurrencyHotApply: composeConfigConcurrencyHotApply(
+            taskExecutionProvider.processConcurrencyScope,
+          ),
+        }),
+      }),
+      maintenance: Object.freeze({
+        configuration,
+        maintenanceStatus: input.maintenanceStatus,
+        databaseTelemetry: input.databaseTelemetry,
+      }),
+      daemon: Object.freeze({
+        runtime: selectDaemonRuntimeQueries(input.daemonRuntime, {
+          infoPath: input.daemonInfoPath,
+        }),
+      }),
+      plantuml: Object.freeze({ configuration }),
+      runtime: runtimeManagement.models,
+      runtimes: runtimeManagement.runtimes,
+      overview: Object.freeze({
+        authorization: Object.freeze({ directAuthority: identityAccess.directAuthority }),
+        query: overviewQuery,
+      }),
+    })
 
-  const resourceCatalogRoutes: ProviderAppCompositionInput<P>['resourceCatalog'] = Object.freeze({
+  const resourceCatalogRoutes: ProviderAppCompositionInput<
+    SelectedDaemonProviderCore<P>
+  >['resourceCatalog'] = Object.freeze({
     agents: Object.freeze({
       ...agentCatalog,
       authorityFor,
@@ -477,7 +487,9 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     workgroupTasks: Object.freeze({ module: workgroupTaskRoom, authorityFor }),
   })
 
-  const taskExecutionRoutes: ProviderAppCompositionInput<P>['taskExecution'] = Object.freeze({
+  const taskExecutionRoutes: ProviderAppCompositionInput<
+    SelectedDaemonProviderCore<P>
+  >['taskExecution'] = Object.freeze({
     tasks: taskRoutes,
     catalog: taskCatalog,
     archive: Object.freeze({
@@ -497,7 +509,9 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     }),
   })
 
-  const sourceControlRoutes: ProviderAppCompositionInput<P>['sourceControl'] = Object.freeze({
+  const sourceControlRoutes: ProviderAppCompositionInput<
+    SelectedDaemonProviderCore<P>
+  >['sourceControl'] = Object.freeze({
     codeHosts: Object.freeze({
       deps: input.testSeams?.codeHostRuntime ?? Object.freeze({}),
       service: codeHostConnections,
@@ -512,102 +526,108 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     worktreeFiles,
   })
 
-  const codeRoutes: ProviderAppCompositionInput<P>['code'] = Object.freeze({
-    history: codeHistoryQueries,
-    capabilityTemplates: Object.freeze({
-      codeHistoryQueries,
-      capabilityTemplates: capabilityTemplateOperations,
-      capabilityTemplateAcl,
-    }),
-  })
+  const codeRoutes: ProviderAppCompositionInput<SelectedDaemonProviderCore<P>>['code'] =
+    Object.freeze({
+      history: codeHistoryQueries,
+      capabilityTemplates: Object.freeze({
+        codeHistoryQueries,
+        capabilityTemplates: capabilityTemplateOperations,
+        capabilityTemplateAcl,
+      }),
+    })
 
-  const collaborationRoutes: ProviderAppCompositionInput<P>['collaboration'] = Object.freeze({
+  const collaborationRoutes: ProviderAppCompositionInput<
+    SelectedDaemonProviderCore<P>
+  >['collaboration'] = Object.freeze({
     operations: collaborationRouteOperations,
     appHome: input.appHome,
   })
 
-  const memoryRoutes: ProviderAppCompositionInput<P>['memory'] = Object.freeze({
-    fusion: Object.freeze({
-      operations: fusionOperations,
-      directAuthority: identityAccess.directAuthority,
-    }),
-    // RFC-353 T9：技能来源追溯——版本流水来自 resource-catalog，融合记录来自 memory，
-    // 拼装归 knowledge-evolution，所以路由挂在 KE 的 inbound 上。
-    skillProvenance: Object.freeze({
-      skills: skillCatalog.queries,
-      versions: skillCatalog.versionQueries,
-      authorityFor: (actor: Actor) =>
-        directOperationAuthority(identityAccess.directAuthority, actor),
-      memoryAuthorityFor: (actor: Actor) => ({
-        actor,
-        authority: directRequestAuthority(identityAccess.directAuthority, actor),
-      }),
-      listFusedInto: (skillId: string) => memoryCatalog.queries.listFusedInto(skillId),
-      filterVisibleMemories: (
-        authority: Parameters<
-          ProviderMemoryRouteComposition['skillProvenance']['filterVisibleMemories']
-        >[0],
-        rows: Parameters<
-          ProviderMemoryRouteComposition['skillProvenance']['filterVisibleMemories']
-        >[1],
-      ) => memoryCatalog.queries.filterVisible(authority, rows),
-    }),
-    memories: Object.freeze({
-      catalog: memoryCatalog,
-      identityAccess: Object.freeze({
-        contexts: identityAccess.contexts,
+  const memoryRoutes: ProviderAppCompositionInput<SelectedDaemonProviderCore<P>>['memory'] =
+    Object.freeze({
+      fusion: Object.freeze({
+        operations: fusionOperations,
         directAuthority: identityAccess.directAuthority,
       }),
-    }),
-    distillJobs: Object.freeze({
-      memoryDistillCommands: memoryOperations.distillCommands,
-      memoryDistillQueries: memoryOperations.distillQueries,
-    }),
-  })
+      // RFC-353 T9：技能来源追溯——版本流水来自 resource-catalog，融合记录来自 memory，
+      // 拼装归 knowledge-evolution，所以路由挂在 KE 的 inbound 上。
+      skillProvenance: Object.freeze({
+        skills: skillCatalog.queries,
+        versions: skillCatalog.versionQueries,
+        authorityFor: (actor: Actor) =>
+          directOperationAuthority(identityAccess.directAuthority, actor),
+        memoryAuthorityFor: (actor: Actor) => ({
+          actor,
+          authority: directRequestAuthority(identityAccess.directAuthority, actor),
+        }),
+        listFusedInto: (skillId: string) => memoryCatalog.queries.listFusedInto(skillId),
+        filterVisibleMemories: (
+          authority: Parameters<
+            ProviderMemoryRouteComposition['skillProvenance']['filterVisibleMemories']
+          >[0],
+          rows: Parameters<
+            ProviderMemoryRouteComposition['skillProvenance']['filterVisibleMemories']
+          >[1],
+        ) => memoryCatalog.queries.filterVisible(authority, rows),
+      }),
+      memories: Object.freeze({
+        catalog: memoryCatalog,
+        identityAccess: Object.freeze({
+          contexts: identityAccess.contexts,
+          directAuthority: identityAccess.directAuthority,
+        }),
+      }),
+      distillJobs: Object.freeze({
+        memoryDistillCommands: memoryOperations.distillCommands,
+        memoryDistillQueries: memoryOperations.distillQueries,
+      }),
+    })
 
-  const identityRoutes: ProviderAppCompositionInput<P>['identity'] = Object.freeze({
-    auth: Object.freeze({
-      deps: Object.freeze({ configuration }),
-      identityAccess,
-      bindings: Object.freeze({
-        auth: core.authRuntime,
-        listIdentitiesForUser: (userId: string) => oidcIdentities.listIdentitiesForUser(userId),
-        listTokenAuditForUser: (userId: string) => core.tokenCallAudit.listForUser(userId),
-      }),
-    }),
-    oidcAuth: Object.freeze({
-      deps: Object.freeze({ configuration }),
-      bindings: Object.freeze({
-        auth: core.authRuntime,
-        providers: oidcProviders,
-        identities: oidcIdentities,
-      }),
-    }),
-    oidc: Object.freeze({ auth: core.authRuntime, providers: oidcProviders }),
-    users: Object.freeze({
+  const identityRoutes: ProviderAppCompositionInput<SelectedDaemonProviderCore<P>>['identity'] =
+    Object.freeze({
       auth: Object.freeze({
-        auth: core.authRuntime,
-        listTokenAudit: () => core.tokenCallAudit.list(),
+        deps: Object.freeze({ configuration }),
+        identityAccess,
+        bindings: Object.freeze({
+          auth: core.authRuntime,
+          listIdentitiesForUser: (userId: string) => oidcIdentities.listIdentitiesForUser(userId),
+          listTokenAuditForUser: (userId: string) => core.tokenCallAudit.listForUser(userId),
+        }),
       }),
-      identityAccess: Object.freeze({
-        contexts: identityAccess.contexts,
-        directAuthority: identityAccess.directAuthority,
-        operations: identityUserOperations,
+      oidcAuth: Object.freeze({
+        deps: Object.freeze({ configuration }),
+        bindings: Object.freeze({
+          auth: core.authRuntime,
+          providers: oidcProviders,
+          identities: oidcIdentities,
+        }),
       }),
-    }),
-  })
+      oidc: Object.freeze({ auth: core.authRuntime, providers: oidcProviders }),
+      users: Object.freeze({
+        auth: Object.freeze({
+          auth: core.authRuntime,
+          listTokenAudit: () => core.tokenCallAudit.list(),
+        }),
+        identityAccess: Object.freeze({
+          contexts: identityAccess.contexts,
+          directAuthority: identityAccess.directAuthority,
+          operations: identityUserOperations,
+        }),
+      }),
+    })
 
-  const systemRoutes: ProviderAppCompositionInput<P>['system'] = Object.freeze({
-    maintenanceDisk: core.maintenanceDisk,
-    backup: Object.freeze({ operations: core.systemOperations, identityAccess }),
-    restore: Object.freeze({ operations: core.systemOperations, identityAccess }),
-    databaseMigration: Object.freeze({
-      operations: input.databaseMigration.operations,
-      identityAccess,
-    }),
-  })
+  const systemRoutes: ProviderAppCompositionInput<SelectedDaemonProviderCore<P>>['system'] =
+    Object.freeze({
+      maintenanceDisk: core.maintenanceDisk,
+      backup: Object.freeze({ operations: core.systemOperations, identityAccess }),
+      restore: Object.freeze({ operations: core.systemOperations, identityAccess }),
+      databaseMigration: Object.freeze({
+        operations: input.databaseMigration.operations,
+        identityAccess,
+      }),
+    })
 
-  const composition: ProviderAppCompositionInput<P> = Object.freeze({
+  const composition: ProviderAppCompositionInput<SelectedDaemonProviderCore<P>> = Object.freeze({
     token: input.token,
     configuration,
     authentication: core.httpAuthentication,
@@ -700,6 +720,6 @@ function composeConfigConcurrencyHotApply(daemonScope: object): ConfigConcurrenc
   })
 }
 export interface ProviderAppComposition<P extends DatabaseProvider> {
-  readonly composition: ProviderAppCompositionInput<P>
+  readonly composition: ProviderAppCompositionInput<SelectedDaemonProviderCore<P>>
   readonly resourcePackageApplyActivity: ResourcePackageApplyActivityQuery
 }

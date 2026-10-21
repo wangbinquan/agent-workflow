@@ -116,7 +116,7 @@ describeEachProviderHttpApplication(
     //（e2e `rfc319-task-wizard` TASK-06 两条断言同时红）。
     test('the Agent/Workgroup route launch keeps its synchronous repo-preparation contract', () => {
       const source = readFileSync(
-        resolve(import.meta.dir, '..', 'src', 'cli', 'daemonModules', 'taskExecution.ts'),
+        resolve(import.meta.dir, '..', 'src', 'bootstrap', 'daemonModules', 'taskExecution.ts'),
         'utf8',
       )
       const routeLaunch = /routeLaunch: \{[\s\S]*?\n {4}\},/.exec(source)?.[0]

@@ -18,8 +18,8 @@ import type { LocalSystemOperationContext } from '@/modules/system-operations/pu
 import {
   composeDaemonProviderCore,
   type DaemonProviderCore,
-} from '@/cli/daemonModules/providerCore'
-import { DAEMON_PROVIDER_CORE_ADAPTERS } from '@/cli/daemonModules/adapters'
+} from '@/bootstrap/daemonModules/providerCore'
+import { DAEMON_PROVIDER_CORE_ADAPTERS } from '@/bootstrap/daemonModules/adapters'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -244,11 +244,11 @@ describe('RFC-349 daemon provider core', () => {
 
   test('the PostgreSQL branch has no SQLite fallback or hidden client opener', () => {
     const source = readFileSync(
-      resolve(import.meta.dir, '../src/cli/daemonModules/providerCore.ts'),
+      resolve(import.meta.dir, '../src/bootstrap/daemonModules/providerCore.ts'),
       'utf8',
     )
     const adapters = readFileSync(
-      resolve(import.meta.dir, '../src/cli/daemonModules/adapters.ts'),
+      resolve(import.meta.dir, '../src/bootstrap/daemonModules/adapters.ts'),
       'utf8',
     )
     const pg = adapters.slice(
@@ -282,14 +282,10 @@ describe('RFC-349 daemon provider core', () => {
     const boundary = source.slice(inputStart, namedEntries)
     const compose = source.slice(composeStart, namedEntries)
 
-    expect(boundary).toContain('readonly core: SelectedDaemonProviderCore<TProvider>')
-    expect(boundary).toContain(
-      "export type SqliteAppCompositionInput = ProviderAppCompositionInput<'sqlite'>",
-    )
-    expect(boundary).toContain(
-      "export type PostgresqlAppCompositionInput = ProviderAppCompositionInput<'postgresql'>",
-    )
-    expect(compose).toContain('input: ProviderAppCompositionInput<TProvider>')
+    expect(boundary).toContain('readonly core: TCore')
+    expect(boundary).toContain("AppHttpProviderCore & { readonly provider: 'sqlite' }")
+    expect(boundary).toContain("AppHttpProviderCore & { readonly provider: 'postgresql' }")
+    expect(compose).toContain('input: ProviderAppCompositionInput<TCore>')
     expect(compose).toContain('return freezeComposedAppDeps({')
     expect(compose).not.toMatch(/\bDbClient\b|PostgresqlDatabaseClient|\bopenDb\b/)
     expect(compose).not.toMatch(/(?:create|compose)(?:Sqlite|Postgresql)/)

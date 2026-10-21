@@ -1,7 +1,10 @@
 // RFC-379: source locks inspect real implementation records and the canonical program.
 import { expect } from 'bun:test'
 import ts from 'typescript'
-import { DAEMON_BOOT_STEPS, type DaemonBootStepId } from '../../src/cli/daemonLifecycleProgram'
+import {
+  DAEMON_BOOT_STEPS,
+  type DaemonBootStepId,
+} from '../../src/bootstrap/daemonLifecycleProgram'
 
 export function expectBootOrder(ids: readonly DaemonBootStepId[]): void {
   let previous = -1

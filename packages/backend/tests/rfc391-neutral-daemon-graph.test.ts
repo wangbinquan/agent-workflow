@@ -25,8 +25,8 @@ import {
   DAEMON_BOOT_STEPS,
   NotApplicable,
   type DaemonBootStepDeclaration,
-} from '@/cli/daemonLifecycleProgram'
-import * as resourceCatalog from '@/cli/daemonModules/resourceCatalog'
+} from '@/bootstrap/daemonLifecycleProgram'
+import * as resourceCatalog from '@/bootstrap/daemonModules/resourceCatalog'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { materializingSpaces } from '@/services/gc'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'

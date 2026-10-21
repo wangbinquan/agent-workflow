@@ -17,7 +17,7 @@ import { MAINTENANCE_PHASE } from '@/services/daemonCadence'
 const BACKEND = resolve(import.meta.dir, '..')
 const ROOT = resolve(BACKEND, '..', '..')
 const readBackend = (path: string): string =>
-  /(?:^|\/)cli\/start\.ts$/.test(path)
+  /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
     ? readDaemonGraphSource()
     : readFileSync(resolve(BACKEND, path), 'utf8')
 

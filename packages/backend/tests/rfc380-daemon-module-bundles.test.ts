@@ -7,18 +7,18 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { composeDaemonProviderCore } from '@/cli/daemonModules/providerCore'
+import { composeDaemonProviderCore } from '@/bootstrap/daemonModules/providerCore'
 import {
   DAEMON_PROVIDER_CORE_ADAPTERS,
   standaloneModuleAdapters,
-} from '@/cli/daemonModules/adapters'
-import { composeDaemonRepositoryCredentials } from '@/cli/daemonModules/repositoryCredentials'
+} from '@/bootstrap/daemonModules/adapters'
+import { composeDaemonRepositoryCredentials } from '@/bootstrap/daemonModules/repositoryCredentials'
 import {
   composeDaemonResourceCatalogModules,
   type DaemonResourceCatalogModules,
-} from '@/cli/daemonModules/resourceCatalog'
-import { composeDaemonObservationModules } from '@/cli/daemonModules/observation'
-import { composeDaemonMemoryModules } from '@/cli/daemonModules/memory'
+} from '@/bootstrap/daemonModules/resourceCatalog'
+import { composeDaemonObservationModules } from '@/bootstrap/daemonModules/observation'
+import { composeDaemonMemoryModules } from '@/bootstrap/daemonModules/memory'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { buildStartTaskDeps } from './helpers/startTaskDeps'

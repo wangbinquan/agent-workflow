@@ -258,7 +258,7 @@ describe('RFC-347 exact production source locks', () => {
       'src/modules/identity-access/composition.ts',
     ])
     expect(callPaths('createIdentityAccessRuntime(')).toEqual([
-      'src/cli/daemonModules/providerCore.ts',
+      'src/bootstrap/daemonModules/providerCore.ts',
       'src/main.ts',
       'src/modules/identity-access/composition.ts',
       'src/modules/identity-access/infrastructure/legacyUserService.ts',
@@ -271,11 +271,12 @@ describe('RFC-347 exact production source locks', () => {
       'src/bootstrap/crewstation.ts',
       'src/bootstrap/daemonApplication.ts',
       'src/bootstrap/daemonHttpComposition.ts',
-      'src/cli/daemonModules/providerCore.ts',
-      // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：`cli/start.ts` 是 SQLite 的第三个
+      'src/bootstrap/daemonModules/providerCore.ts',
+      // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：`bootstrap/daemonStart.ts` 是 SQLite 的第三个
       // 组合根，列表行的 owner 身份投影在这里装配后注入任务路由——与另外两个根同形
       //（`server.ts` / `postgresqlDaemonApplication.ts` 早就在这张表上）。
-      'src/cli/start.ts',
+      'src/bootstrap/daemonSessionInput.ts',
+      'src/bootstrap/daemonStart.ts',
       'src/main.ts',
       'src/modules/identity-access/composition/userOperations.ts',
       'src/server.ts',

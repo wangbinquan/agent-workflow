@@ -58,7 +58,7 @@ import type {
 import type { TaskRouteOperationsDependencies } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { DaemonTaskExecutionModules } from '@/cli/daemonModules/taskExecution'
+import type { DaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { describeEachProvider } from './helpers/eachProvider'
 import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 

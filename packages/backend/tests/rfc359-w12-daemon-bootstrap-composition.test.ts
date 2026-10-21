@@ -6,17 +6,17 @@ import {
   composeDaemonProviderBootstrap,
   type ComposeDaemonProviderBootstrapInput,
   type DaemonProviderBootstrapBindings,
-} from '../src/cli/daemonProviderBootstrap'
+} from '../src/bootstrap/daemonProviderBootstrap'
 import {
   createDaemonProviderMigrationAdmission,
   type DaemonProviderMigrationLifecycle,
-} from '../src/cli/daemonProviderMigrationAdmission'
-import type { DaemonProviderListenerRuntimeSession } from '../src/cli/daemonProviderRuntimeRouter'
-import type { DaemonProviderRuntimeSessionPhase } from '../src/cli/daemonProviderRuntimeSession'
+} from '../src/bootstrap/daemonProviderMigrationAdmission'
+import type { DaemonProviderListenerRuntimeSession } from '../src/bootstrap/daemonProviderRuntimeRouter'
+import type { DaemonProviderRuntimeSessionPhase } from '../src/bootstrap/daemonProviderRuntimeSession'
 import type {
   DaemonProviderSessionLifecycleInput,
   ManagedDaemonProviderSession,
-} from '../src/cli/daemonProviderSession'
+} from '../src/bootstrap/daemonProviderSession'
 import { createDatabaseMigrationDaemonAdmission } from '../src/modules/system-operations/composition'
 
 type TestSession = DaemonProviderListenerRuntimeSession
@@ -61,7 +61,10 @@ function session(
 
 describe('RFC-359 complete asynchronous daemon bootstrap', () => {
   test('production awaits complete initialization before resuming the initial session and serving', () => {
-    const start = readFileSync(resolve(import.meta.dir, '..', 'src/cli/start.ts'), 'utf8')
+    const start = readFileSync(
+      resolve(import.meta.dir, '..', 'src/bootstrap/daemonStart.ts'),
+      'utf8',
+    )
     const composeAt = start.indexOf('await composeDaemonProviderBootstrap({')
     const resumeAt = start.indexOf('await initial.session.resume(lifecycle)', composeAt)
     const serveAt = start.indexOf('await serveDaemon({', resumeAt)

@@ -7,7 +7,7 @@ import ts from 'typescript'
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -93,12 +93,12 @@ test('RFC-383 roots forward baselines and the three bundle consumers retain thei
   }
   for (const [path, factories, ownerName] of [
     [
-      'cli/daemonModules/digitalEmployee.ts',
+      'bootstrap/daemonModules/digitalEmployee.ts',
       ['composeDevelopmentEmployeePlatformWorkItems'],
       'composeDaemonDigitalEmployeeModules',
     ],
     [
-      'cli/daemonModules/developmentAutomation.ts',
+      'bootstrap/daemonModules/developmentAutomation.ts',
       ['composeDevelopmentAutomation', 'composeDevelopmentMissionOperations'],
       'composeDaemonDevelopmentAutomationModules',
     ],
@@ -156,7 +156,7 @@ function forwarded(
 }
 
 test('CLI initial and replacement sessions forward the same selected storage objects and Worker descriptor', () => {
-  const source = load('cli/start.ts')
+  const source = load('bootstrap/daemonStart.ts')
   forwarded(oneRoot(source, 'composeDaemonApplication'), source, 'input')
   const sqliteHttp = oneRoot(source, 'composeProviderAppComposition')
   expect(sqliteHttp.properties.some((node) => node.name?.getText(source) === 'selections')).toBe(
@@ -294,7 +294,7 @@ test('RFC-383 one employee case participant supplies workspace and platform work
     )
     expect(namedCalls(source, source, 'bindEmployeeCaseWorkspaceParticipant')).toHaveLength(0)
   }
-  const source = load('cli/daemonModules/digitalEmployee.ts')
+  const source = load('bootstrap/daemonModules/digitalEmployee.ts')
   const calls = namedCalls(source, source, 'bindEmployeeCaseWorkspaceParticipant')
   expect(calls).toHaveLength(1)
   expectLexicalInput(calls[0]!, source, 'composeDaemonDigitalEmployeeModules')
@@ -337,7 +337,8 @@ test('all three original checkpoint consumers await the selected receipt before 
 
 test('public root types expose existing complete contracts without adding partial callback ports', () => {
   for (const [path, names] of [
-    ['cli/start.ts', ['StartOptions', 'DaemonProviderSessionComposeInput']],
+    ['bootstrap/daemonStart.ts', ['StartOptions']],
+    ['bootstrap/daemonSessionInput.ts', ['DaemonProviderSessionComposeInput']],
     ['bootstrap/daemonApplication.ts', ['DaemonApplicationInput']],
   ] as const) {
     const source = load(path)
@@ -348,7 +349,7 @@ test('public root types expose existing complete contracts without adding partia
       )
       expect(interfaces).toHaveLength(1)
       const expected =
-        path === 'cli/start.ts'
+        path !== 'bootstrap/daemonApplication.ts'
           ? { ...fields, maintenanceEffectsBootstrap: 'MaintenanceWorkerEffectsDescriptor' }
           : fields
       for (const [key, type] of Object.entries(expected)) {
@@ -394,10 +395,10 @@ test('RFC-383 workspace selection reaches the three shared consumers and the HTT
   }
   for (const [path, names] of [
     [
-      'cli/daemonModules/digitalEmployee.ts',
+      'bootstrap/daemonModules/digitalEmployee.ts',
       ['composeDevelopmentEmployeeWorkspace', 'composeDevelopmentEmployeePlatformWorkItems'],
     ],
-    ['cli/daemonModules/developmentAutomation.ts', ['composeDevelopmentAutomation']],
+    ['bootstrap/daemonModules/developmentAutomation.ts', ['composeDevelopmentAutomation']],
   ] as const) {
     const source = load(path)
     for (const name of names) {

@@ -7,13 +7,13 @@ import {
   DAEMON_RUNTIME_JOBS,
   DAEMON_BACKGROUND_JOBS,
   DAEMON_CLOSE_PARTICIPANTS,
-} from '../../src/cli/daemonLifecycleProgram'
+} from '../../src/bootstrap/daemonLifecycleProgram'
 
 const PREFIX = 'packages/backend/src/'
-const PROGRAM = `${PREFIX}cli/daemonLifecycleProgram.ts`
+const PROGRAM = `${PREFIX}bootstrap/daemonLifecycleProgram.ts`
 const ROOTS = new Set(
   [
-    'cli/start.ts',
+    'bootstrap/daemonStart.ts',
     'bootstrap/daemonApplication.ts',
     'bootstrap/daemonHttpComposition.ts',
     'bootstrap/developmentPurposeRoot.ts',
@@ -21,7 +21,7 @@ const ROOTS = new Set(
     'bootstrap/daemonSessionAdapters.ts',
     'server.ts',
     'main.ts',
-    'cli/dev.ts',
+    'bootstrap/developmentReload.ts',
   ].map((path) => PREFIX + path),
 )
 const LISTS = new Set([

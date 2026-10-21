@@ -16,9 +16,12 @@ import {
   composeDeploymentStartOptions,
   DeploymentModeError,
   readDeploymentMode,
-} from '@/cli/deployment'
-import { createExecutionExitRequests, startOnExecutionActive } from '@/cli/executionActivation'
-import type { DaemonProviderRuntimeHandleFactory } from '@/cli/daemonProviderRuntimeSession'
+} from '@/bootstrap/deployment'
+import {
+  createExecutionExitRequests,
+  startOnExecutionActive,
+} from '@/bootstrap/executionActivation'
+import type { DaemonProviderRuntimeHandleFactory } from '@/bootstrap/daemonProviderRuntimeSession'
 import { getEmbeddedFrontendResponse, withDeploymentMarker } from '@/embed'
 import {
   createPluginOperationDescriptors,

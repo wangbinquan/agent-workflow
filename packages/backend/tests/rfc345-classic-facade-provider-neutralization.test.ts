@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
 const backendRoot = resolve(import.meta.dir, '..')
 
 function source(path: string): string {
-  return /(?:^|\/)cli\/start\.ts$/.test(path)
+  return /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
     ? readDaemonGraphSource()
     : readFileSync(resolve(backendRoot, path), 'utf8')
 }
@@ -64,7 +64,7 @@ describe('RFC-345 classic facade provider neutralization', () => {
   })
 
   // RFC-345 T9: bootstrap used to hand Resource Catalog its OWN row mappers back
-  // through the compatibility services (server.ts / cli/start.ts imported
+  // through the compatibility services (server.ts / bootstrap/daemonStart.ts imported
   // rowToAgent / rowToWorkflowDetail / rowToWorkgroup only to pass them into
   // composeIntegrationTriggerResourceBinding). The PostgreSQL twin never needed
   // them, which is the proof the SQLite adapter can read its own legacy module.
@@ -105,8 +105,8 @@ describe('RFC-345 classic facade provider neutralization', () => {
     for (const bootstrap of [
       'src/server.ts',
       'src/bootstrap/daemonHttpComposition.ts',
-      'src/cli/daemonModules/resourceCatalog.ts',
-      'src/cli/start.ts',
+      'src/bootstrap/daemonModules/resourceCatalog.ts',
+      'src/bootstrap/daemonStart.ts',
       'src/bootstrap/daemonApplication.ts',
     ]) {
       expect(source(bootstrap), bootstrap).not.toMatch(

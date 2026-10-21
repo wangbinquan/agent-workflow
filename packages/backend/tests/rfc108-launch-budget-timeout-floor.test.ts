@@ -57,7 +57,7 @@ describe('RFC-108 T4 resolveLaunchRuntimeConfig — 接线 per-node timeout floo
 
 describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps 站点）', () => {
   const src = (rel: string): string =>
-    rel === 'cli/start.ts'
+    rel === 'bootstrap/daemonStart.ts'
       ? readDaemonGraphSource()
       : readFileSync(join(import.meta.dir, '../src', rel), 'utf8')
 
@@ -71,8 +71,8 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
   })
 
   test('gate continuation and fusion share the session configuration floor', () => {
-    const start = src('cli/start.ts')
-    const bundle = src('cli/daemonModules/taskExecution.ts')
+    const start = src('bootstrap/daemonStart.ts')
+    const bundle = src('bootstrap/daemonModules/taskExecution.ts')
     expect(start).toContain('drive: runtime.driveHumanGateContinuation')
     expect(bundle).toContain('const fresh = await taskLaunchConfiguration.start()')
     expect(bundle).toContain('...runtimeConfigOpts({')

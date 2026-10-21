@@ -40,7 +40,7 @@ test('RFC-383 roots forward the selected candidate factory to both shared derive
   const load = (path: string) =>
     ts.createSourceFile(
       path,
-      /(?:^|\/)cli\/start\.ts$/.test(path)
+      /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
         ? readDaemonGraphSource()
         : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
       ts.ScriptTarget.Latest,
@@ -63,8 +63,8 @@ test('RFC-383 roots forward the selected candidate factory to both shared derive
     expect(source.text).toContain('repositoryCandidateEffects?: RepositoryCandidateEffectsFactory')
   }
   for (const path of [
-    'cli/daemonModules/digitalEmployee.ts',
-    'cli/daemonModules/developmentAutomation.ts',
+    'bootstrap/daemonModules/digitalEmployee.ts',
+    'bootstrap/daemonModules/developmentAutomation.ts',
   ]) {
     const source = load(path)
     for (const name of ['bindChangeCandidateParticipant', 'bindCandidateDeliveryParticipant']) {
@@ -79,7 +79,7 @@ test('RFC-383 roots forward the selected candidate factory to both shared derive
         )
     }
   }
-  const start = load('cli/start.ts').text
+  const start = load('bootstrap/daemonStart.ts').text
   expect(start).toContain('repositoryCandidateEffects: opts.repositoryCandidateEffects,')
   expect(start.split('repositoryCandidateEffects: input.repositoryCandidateEffects,')).toHaveLength(
     4,

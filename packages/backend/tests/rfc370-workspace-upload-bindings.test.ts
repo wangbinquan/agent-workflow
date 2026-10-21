@@ -385,7 +385,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
 test('real roots, provider reassembly, SQLite arms and PG preselection preserve the same complete factory', () => {
   const root = resolve(import.meta.dir, '../src')
   const source = (path: string) => readFileSync(join(root, path), 'utf8')
-  const cli = source('cli/start.ts'),
+  const cli = source('bootstrap/daemonStart.ts'),
     session = source('bootstrap/daemonSession.ts'),
     pg = source('bootstrap/daemonApplication.ts'),
     http = source('bootstrap/daemonHttpComposition.ts')
@@ -412,7 +412,7 @@ test('real roots, provider reassembly, SQLite arms and PG preselection preserve 
   expect(http).toContain('taskLaunch: taskExecutionProvider.routeLaunch.workgroup')
   expect(http).toContain('operations: taskExecutionProvider.routes.tasks')
   expect(http).not.toContain('createSqliteTaskExecutionLaunchParticipant(')
-  expect(source('cli/daemonModules/taskExecution.ts')).toContain(
+  expect(source('bootstrap/daemonModules/taskExecution.ts')).toContain(
     'workspaceUploads: selection.workspaceUploads,',
   )
   const providers = source('modules/task-execution/composition/providerRuntime.ts')

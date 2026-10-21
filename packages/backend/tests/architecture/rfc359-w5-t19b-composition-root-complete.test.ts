@@ -22,7 +22,7 @@
 //                  `'task-drive-coordinator-not-bound'` / `'mcp-catalog-not-composed'` 是原型。
 //                  **不限于 `throw`**：`cli/package.ts` 把它当命令输出返回，同样是「没装配」。
 //                  也是唯一能覆盖 `const ref: {current: T|null}` 这类**对象盒 holder** 的形态
-//                  （`cli/start.ts` 的 `developmentAutomationRef`），结构式判据够不着它。
+//                  （`bootstrap/daemonStart.ts` 的 `developmentAutomationRef`），结构式判据够不着它。
 //   - `prose`   —— `new Error(<字面量>)` 且文案是「… is / are not bound|composed」。只认
 //                  `Error` 实参，所以 `employeeTypePackage.ts` 里那些含 "not bound" 的 **prompt
 //                  文案**不会误伤；`'… is already bound'`（重复 bind 守卫，正当）也不匹配。
@@ -58,7 +58,7 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
 export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // RFC-370 v2 P1 removed the two v1 host execution bootstrap files and their six slots.
   // RFC-213: the existing development hot-reload startup retains its original preparation across retries.
-  'cli/dev.ts: marker=0, prose=0, holder=1',
+  'bootstrap/developmentReload.ts: marker=0, prose=0, holder=1',
   // W12：realtime policy 改为构造参数，两个根都交齐词法闭包，不再有 bind 步骤。
   // SQLite 根的 scheduler / collaboration / MCP / development 与 PG maintenance status
   // 空槽同步拆除；明确传 catalogBinding/runtime 的返回类型保证相应成员存在。
@@ -170,20 +170,47 @@ const PROSE =
   /\b(?:is|are|was|were)\s+not\s+(?:yet\s+)?(?:bound|composed)\b|未绑定|尚未绑定|未装配|尚未装配|未组装/
 
 /**
- * 扫描面：daemon 入口目录 `cli/**` + HTTP 侧装配点 `server.ts` + 任意 context 的
+ * 扫描面：CLI 目录 `cli/**` + 迁入 `bootstrap/` 的全部 daemon 文件 + HTTP 侧装配点 `server.ts` + 任意 context 的
  * `composition.ts` / `composition/**`。
  *
  * **`server.ts` 是按名字点进来的**，因为它事实上就是 HTTP 侧的组合根——只是不叫
  * `composition*`。按目录/文件名划扫描面会正好把它漏掉，而它身上曾经挂着与账本里
- * 一模一样的形态：两个晚绑定 holder（MCP 目录与代理目录，后者与 `cli/start.ts` 里
+ * 一模一样的形态：两个晚绑定 holder（MCP 目录与代理目录，后者与 `bootstrap/daemonStart.ts` 里
  * 那个同款）+ 五句进门 throw。RFC-359 W11 把它们拆到只剩一处
  * `intent-resource-catalog-context-not-bound`（那处是每请求的 WeakMap 旁路，不是装配
  * 缺口）——**但扫描面不能因此收窄**：这个文件仍然在装配依赖并把它交给下游，
- * 而 `cli/start.ts` 里同款的 holder 一个没少。
+ * 而 `bootstrap/daemonStart.ts` 里同款的 holder 一个没少。
  * 命名不是判据，装配职责才是：谁在装配依赖并把它交给下游，谁就进扫描面。
  */
 const NAMED_ROOTS: ReadonlySet<string> = new Set([
   'server.ts',
+  'bootstrap/daemonModules/adapters.ts',
+  'bootstrap/daemonModules/developmentAutomation.ts',
+  'bootstrap/daemonModules/digitalEmployee.ts',
+  'bootstrap/daemonModules/fusion.ts',
+  'bootstrap/daemonModules/integration.ts',
+  'bootstrap/daemonModules/intent.ts',
+  'bootstrap/daemonModules/memory.ts',
+  'bootstrap/daemonModules/observation.ts',
+  'bootstrap/daemonModules/providerCore.ts',
+  'bootstrap/daemonModules/repositoryCredentials.ts',
+  'bootstrap/daemonModules/resourceCatalog.ts',
+  'bootstrap/daemonModules/scheduledTasks.ts',
+  'bootstrap/daemonModules/taskExecution.ts',
+  'bootstrap/daemonLifecycleProgram.ts',
+  'bootstrap/daemonProviderSession.ts',
+  'bootstrap/daemonProviderRuntimeSession.ts',
+  'bootstrap/daemonProviderRuntimeHandles.ts',
+  'bootstrap/daemonProviderRuntimeRouter.ts',
+  'bootstrap/daemonProviderMigrationAdmission.ts',
+  'bootstrap/daemonProviderBootstrap.ts',
+  'bootstrap/daemonRealtimePolicy.ts',
+  'bootstrap/executionActivation.ts',
+  'bootstrap/daemonStart.ts',
+  'bootstrap/developmentReload.ts',
+  'bootstrap/deployment.ts',
+  'bootstrap/migrate.ts',
+  'bootstrap/daemonSessionInput.ts',
   'bootstrap/daemonApplication.ts',
   'bootstrap/daemonHttpComposition.ts',
   'bootstrap/developmentPurposeRoot.ts',

@@ -19,7 +19,7 @@ import {
   workflows,
   memoryDistillJobs,
 } from '@/db/schema'
-import { composeDaemonTaskExecutionModules } from '@/cli/daemonModules/taskExecution'
+import { composeDaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { createLogger } from '@/util/log'
 import { createTaskDriveCoordinatorFactory } from '@/modules/task-execution/application/drive/taskDriveCoordinatorFactory'
 import {

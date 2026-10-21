@@ -22,12 +22,12 @@ import {
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
-import { composeDaemonResourceCatalogModules } from '@/cli/daemonModules/resourceCatalog'
+import { composeDaemonResourceCatalogModules } from '@/bootstrap/daemonModules/resourceCatalog'
 import {
   composeDaemonTaskExecutionModules,
   type DaemonTaskExecutionInput,
-} from '@/cli/daemonModules/taskExecution'
-import { DAEMON_TASK_EXECUTION_ADAPTERS } from '@/cli/daemonModules/adapters'
+} from '@/bootstrap/daemonModules/taskExecution'
+import { DAEMON_TASK_EXECUTION_ADAPTERS } from '@/bootstrap/daemonModules/adapters'
 import type {
   TaskDriveRequest,
   SchedulerDriverPort,

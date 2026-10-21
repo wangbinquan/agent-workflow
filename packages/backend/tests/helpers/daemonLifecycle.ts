@@ -7,11 +7,11 @@ import {
   NotApplicable,
   composeDaemonLifecycle,
   type DaemonLifecycleInput,
-} from '../../src/cli/daemonLifecycleProgram'
+} from '../../src/bootstrap/daemonLifecycleProgram'
 import {
   createDaemonProviderRuntimeSession,
   type CreateDaemonProviderRuntimeSessionInput,
-} from '../../src/cli/daemonProviderRuntimeSession'
+} from '../../src/bootstrap/daemonProviderRuntimeSession'
 
 export function deferred<T = void>() {
   let resolve!: (value: T) => void

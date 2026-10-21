@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
-import { migrateForDeployment } from '@/cli/deployment'
+import { migrateForDeployment } from '@/bootstrap/deployment'
 import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import {
   hostedDatabaseBackups,

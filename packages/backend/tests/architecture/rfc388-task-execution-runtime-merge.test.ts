@@ -5,8 +5,8 @@ import { resolve } from 'node:path'
 import { backendUnits, sourceUnit, type SourceUnit } from './census'
 
 const PREFIX = 'packages/backend/src/'
-const ADAPTERS = 'cli/daemonModules/adapters.ts'
-const BUNDLE = 'cli/daemonModules/taskExecution.ts'
+const ADAPTERS = 'bootstrap/daemonModules/adapters.ts'
+const BUNDLE = 'bootstrap/daemonModules/taskExecution.ts'
 const RUNTIME = 'modules/task-execution/composition/providerRuntime.ts'
 const RETIRED = new Set([
   'composeSqliteTaskExecutionProviderRuntime',

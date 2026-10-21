@@ -18,7 +18,7 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -52,7 +52,7 @@ function bind(source: ts.SourceFile, expression: string, key: string, receiver: 
 }
 
 test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the same complete object', () => {
-  const start = load('cli/start.ts'),
+  const start = load('bootstrap/daemonStart.ts'),
     pg = load('bootstrap/daemonApplication.ts')
   for (const [source, receiver] of [
     [start, 'input'],
@@ -65,8 +65,8 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
   }
   bind(start, 'composeDaemonApplication', 'evidenceArtifacts', 'input')
   bind(start, 'composeDaemonDigitalEmployeeModules', 'evidenceArtifacts', 'input')
-  const development = load('cli/daemonModules/developmentAutomation.ts')
-  const employee = load('cli/daemonModules/digitalEmployee.ts')
+  const development = load('bootstrap/daemonModules/developmentAutomation.ts')
+  const employee = load('bootstrap/daemonModules/digitalEmployee.ts')
   bind(development, 'composeDevelopmentAutomation', 'evidenceArtifacts', 'developmentPurposeRoot')
   bind(development, 'composeMissionInputUploadOperations', 'artifacts', 'input')
   bind(employee, 'composeDevelopmentEmployeePlatformWorkItems', 'evidenceArtifacts', 'input')

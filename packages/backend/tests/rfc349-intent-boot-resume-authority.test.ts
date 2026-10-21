@@ -323,7 +323,7 @@ describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
 
   test('the SQLite daemon composes the authorized intent persistence, like the app and the PostgreSQL daemon', () => {
     const source = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'cli', 'daemonModules', 'intent.ts'),
+      resolve(import.meta.dir, '..', 'src', 'bootstrap', 'daemonModules', 'intent.ts'),
       'utf8',
     )
     // 只把那一段截出来断言：整份 start.ts 进断言消息会把失败输出淹掉。

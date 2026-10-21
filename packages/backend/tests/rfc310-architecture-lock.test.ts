@@ -45,23 +45,19 @@ const PUBLIC_ALLOWED = new Set([
 /** 消费者账本：import 这两个入口的仓内生产文件（相对 backend/src）。 */
 const COMPOSITION_CONSUMERS: string[] = [
   'bootstrap/daemonApplication.ts',
+  'bootstrap/daemonModules/developmentAutomation.ts',
+  'bootstrap/daemonModules/digitalEmployee.ts',
+  'bootstrap/daemonModules/integration.ts',
+  'bootstrap/daemonModules/repositoryCredentials.ts',
+  'bootstrap/daemonSessionInput.ts',
+  'bootstrap/daemonStart.ts',
   'bootstrap/developmentPurposeRoot.ts',
   'bootstrap/maintenanceWorkerGraph.ts',
-  'cli/daemonModules/developmentAutomation.ts',
-  'cli/daemonModules/digitalEmployee.ts',
-  'cli/daemonModules/integration.ts',
-  'cli/daemonModules/repositoryCredentials.ts',
-  'cli/start.ts',
 ]
 const REQUIRED_PORTS_CONSUMERS: string[] = []
 
 function walk(dir: string, out: string[] = []): string[] {
-  let names: string[] = []
-  try {
-    names = readdirSync(dir)
-  } catch {
-    return out
-  }
+  const names = readdirSync(dir)
   for (const name of names.sort()) {
     const abs = join(dir, name)
     const st = statSync(abs)
@@ -82,7 +78,7 @@ interface Edge {
 }
 
 // Imports are routinely formatted across multiple lines. Keeping this to one
-// physical line silently dropped cli/start.ts from the exact consumer ledger.
+// physical line silently dropped bootstrap/daemonStart.ts from the exact consumer ledger.
 const FROM_RE = /(?:^|\n)\s*(import|export)\s+(type\s+)?[\s\S]*?\bfrom\s*['"]([^'"]+)['"]/g
 const BARE_IMPORT_RE = /(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g
 const DYNAMIC_RE = /\b(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)/g
@@ -115,12 +111,7 @@ describe('rfc310 development-automation architecture lock', () => {
       }
     }
     const publicDir = join(MODULE_ROOT, 'public')
-    let publicNames: string[] = []
-    try {
-      publicNames = readdirSync(publicDir)
-    } catch {
-      publicNames = []
-    }
+    const publicNames = readdirSync(publicDir)
     for (const name of publicNames.sort()) {
       if (!PUBLIC_ALLOWED.has(name)) offenders.push(`public:${name}`)
     }
@@ -360,4 +351,8 @@ describe('RFC-317 T14 —— matcher 自证：五种 import 语法都必须被�
     expect(typeOnly?.[2]).toBeDefined()
     expect(valueEdge?.[2]).toBeUndefined()
   })
+})
+
+test('RFC-393: a missing consumer scan directory fails instead of returning an empty corpus', () => {
+  expect(() => walk(join(BACKEND_SRC, 'missing-rfc393-consumer-root'))).toThrow()
 })

@@ -1,5 +1,5 @@
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
-import { createPollingDaemonRuntimeHandleFactory } from '../src/cli/daemonProviderRuntimeHandles'
+import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
 import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -516,7 +516,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
 function source(path: string) {
   return ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -673,11 +673,14 @@ function optionalPromptContract(sf: ts.SourceFile, name: string, withOperations 
 }
 
 test('CLI initial and replacement sessions carry one prompt selection through SQLite and PG', () => {
-  const sf = source('cli/start.ts'),
+  const sf = source('bootstrap/daemonStart.ts'),
     body = compositionBody(sf, 'composeDaemonApplication'),
     selected = onlyCall(body, sf, 'composeNodeRunPromptOperations')
   optionalPromptContract(sf, 'StartOptions')
-  optionalPromptContract(sf, 'DaemonProviderSessionComposeInput')
+  optionalPromptContract(
+    source('bootstrap/daemonSessionInput.ts'),
+    'DaemonProviderSessionComposeInput',
+  )
   expect(selected.arguments.map((value) => compact(value, sf))).toEqual([
     'input.nodeRunPromptContentEffects',
     "join(input.appHome,'runs')",
@@ -796,7 +799,7 @@ test('PG application carries its one prompt receiver through memory, runtime and
 
 // RFC-382: the selected prompt receiver must survive the newly shared bundle boundary.
 test('the bundle forwards selected prompts to both unchanged provider route factories', () => {
-  const sf = source('cli/daemonModules/taskExecution.ts')
+  const sf = source('bootstrap/daemonModules/taskExecution.ts')
   const selected = onlyCall(sf, sf, 'composeTaskExecutionProviderRuntime')
   const routes = properties(selected.arguments[0]!, sf).get('routes')!
   expect(compact(properties(factoryResult(routes), sf).get('nodeRunPrompts')!, sf)).toBe(

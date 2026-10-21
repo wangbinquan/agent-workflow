@@ -1,11 +1,14 @@
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { taskBundleInput } from './helpers/daemonTaskExecutionBundle'
-import { composeDaemonTaskExecutionModules } from '@/cli/daemonModules/taskExecution'
+import { composeDaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { execFileSync } from 'node:child_process'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { workflows, users } from '@/db/schema'
-import { composeDaemonFusionModules, type DaemonFusionModules } from '@/cli/daemonModules/fusion'
+import {
+  composeDaemonFusionModules,
+  type DaemonFusionModules,
+} from '@/bootstrap/daemonModules/fusion'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { composeMemoryCatalogOperations } from '@/modules/memory/composition'
@@ -19,7 +22,7 @@ import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthor
 // RFC-319 CFG-45 —— 设置页把默认运行时改到另一行之后，**新任务**必须按新那一行派发。
 //
 // 由来：`POST /api/tasks` 的启动走一台在 daemon boot 时建好、之后一直服务每一次请求的长驻
-// 协调器（`cli/start.ts` 的 `routeLaunchDriveCoordinator` / PG daemon 的
+// 协调器（`bootstrap/daemonStart.ts` 的 `routeLaunchDriveCoordinator` / PG daemon 的
 // `boundTaskDriveCoordinator`）。RFC-359 AC-1 把路由启动改走这台协调器之后，`createTaskDriveCoordinator`
 // 在**构造时**就把 17 个运行期旋钮解析成不可变快照——于是用户在设置页点了「设为默认」、
 // `config.defaultRuntime` 也确实落库了，新任务却照旧冻结着老运行时的档案：
@@ -124,7 +127,7 @@ describe('RFC-319 CFG-45 —— 默认运行时的热读', () => {
       expect(source.match(/composeDaemonTaskExecutionModules\(/g)).toHaveLength(1)
     }
     const bundle = readFileSync(
-      resolve(ROOT, 'packages/backend/src/cli/daemonModules/taskExecution.ts'),
+      resolve(ROOT, 'packages/backend/src/bootstrap/daemonModules/taskExecution.ts'),
       'utf8',
     )
     expect(bundle.match(/createTaskDriveCoordinatorFactory\(/g)).toHaveLength(1)
@@ -279,11 +282,11 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
 
 test('RFC-381 roots connect fusion adapters and routes to the same live session configuration', () => {
   const source = (file: string) =>
-    (/(?:^|\/)cli\/start\.ts$/.test(file)
+    (/(?:^|\/)bootstrap\/daemonStart\.ts$/.test(file)
       ? readDaemonGraphSource()
       : readFileSync(resolve(ROOT, 'packages/backend/src', file), 'utf8')
     ).replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
-  const bundle = source('cli/daemonModules/taskExecution.ts')
+  const bundle = source('bootstrap/daemonModules/taskExecution.ts')
   expect(bundle).toContain('const coordinatorFactory = createTaskDriveCoordinatorFactory({')
   expect(bundle).toContain('    runConfiguration,')
   expect(bundle).not.toContain('resolveLaunchRuntimeConfig')
@@ -306,5 +309,5 @@ test('RFC-381 roots connect fusion adapters and routes to the same live session 
     'launchConfiguration',
   )
   expect(bundle).toContain('const fresh = await taskLaunchConfiguration.start()')
-  expect(source('cli/daemonModules/fusion.ts')).not.toContain('runConfiguration')
+  expect(source('bootstrap/daemonModules/fusion.ts')).not.toContain('runConfiguration')
 })

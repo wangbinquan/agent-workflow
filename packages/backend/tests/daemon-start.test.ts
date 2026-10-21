@@ -1,5 +1,5 @@
 // RFC-379 also locks the canonical lifecycle order of every real spawned SQLite daemon.
-import { DAEMON_BOOT_STEPS } from '../src/cli/daemonLifecycleProgram'
+import { DAEMON_BOOT_STEPS } from '../src/bootstrap/daemonLifecycleProgram'
 // RFC-226 regression: OpenCode is an optional runtime. Daemon startup must
 // neither execute its configured binary nor fail because that binary is
 // missing/incompatible; version admission belongs to explicit runtime checks.

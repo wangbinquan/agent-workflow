@@ -1,9 +1,12 @@
 // RFC-391 — the sole daemon session graph and lifecycle composition.
 import { composeDaemonApplication } from './daemonApplication'
 import { DAEMON_SESSION_ADAPTERS, type DaemonSessionAdapter } from './daemonSessionAdapters'
-import type { DaemonProviderSessionComposeInput, ComposedDaemonProviderSession } from '@/cli/start'
+import type {
+  DaemonProviderSessionComposeInput,
+  ComposedDaemonProviderSession,
+} from './daemonSessionInput'
 import { createTaskExecutionShutdownController } from '@/modules/task-execution/composition'
-import { composeDaemonLifecycle, type DaemonLifecycle } from '@/cli/daemonLifecycleProgram'
+import { composeDaemonLifecycle, type DaemonLifecycle } from '@/bootstrap/daemonLifecycleProgram'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 
@@ -61,13 +64,13 @@ import {
   type DaemonProviderCloseParticipant,
   type DaemonProviderRuntimeAdmission,
   type DaemonProviderRuntimeHandleFactory,
-} from '@/cli/daemonProviderRuntimeSession'
+} from '@/bootstrap/daemonProviderRuntimeSession'
 import {
   createLazyPausableDaemonRuntimeServiceBindings,
   createManagedWorkerRuntimeHandleFactory,
   createPollingDaemonRuntimeHandleFactory,
   createSignalledDaemonRuntimeHandleFactory,
-} from '@/cli/daemonProviderRuntimeHandles'
+} from '@/bootstrap/daemonProviderRuntimeHandles'
 import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'
 import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
 import {

@@ -65,8 +65,8 @@ describe('RFC-319 TASK-27 —— 演员发起的仓库准备重试必须带着�
   })
 
   test('两个组合根共用的适配器把 authorization.actorUserId 原样传下去（写死 SYSTEM 就红）', () => {
-    for (const path of ['cli/start.ts']) {
-      const root = /(?:^|\/)cli\/start\.ts$/.test(path)
+    for (const path of ['bootstrap/daemonStart.ts']) {
+      const root = /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
         ? readDaemonGraphSource()
         : readFileSync(resolve(ROOT, 'packages/backend/src', path), 'utf8')
       expect(root).toContain('composeDaemonTaskExecutionModules({')
@@ -162,7 +162,7 @@ describe('RFC-319 DE-28 —— 启动前必须播种，中立应用图与 SQLite
       expect(source).not.toContain('composeDatabaseDigitalEmployeeExecutionPorts(')
     }
     const bundle = readFileSync(
-      resolve(ROOT, 'packages/backend/src/cli/daemonModules/digitalEmployee.ts'),
+      resolve(ROOT, 'packages/backend/src/bootstrap/daemonModules/digitalEmployee.ts'),
       'utf-8',
     )
     expect(bundle).toContain('composeReactionExecutionProvider({')

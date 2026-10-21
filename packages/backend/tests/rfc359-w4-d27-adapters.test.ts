@@ -231,7 +231,7 @@ test('源码锁：资源快照只剩一份读面 + 一份绑定，四个 provide
   }
 
   expect(
-    read('cli/daemonModules/taskExecution.ts').match(/createTaskExecutionResourceBinding\(/g),
+    read('bootstrap/daemonModules/taskExecution.ts').match(/createTaskExecutionResourceBinding\(/g),
   ).toHaveLength(1)
   // RFC-382: three roots consume the single session binding.
   for (const bootstrap of ['bootstrap/daemonApplication.ts']) {

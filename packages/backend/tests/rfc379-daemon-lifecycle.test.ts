@@ -7,7 +7,7 @@ import {
   DAEMON_CLOSE_PARTICIPANTS,
   NotApplicable,
   composeDaemonLifecycle,
-} from '../src/cli/daemonLifecycleProgram'
+} from '../src/bootstrap/daemonLifecycleProgram'
 import { selectExecutionInitialization } from '../src/bootstrap/executionInitialization'
 import type {
   ExecutionFence,

@@ -108,13 +108,16 @@ export function neutralHttpViolations(units: readonly SourceUnit[]): string[] {
         errors.push(`${ownerName ?? 'top-level'}: second route table (${callee})`)
     })
   for (const path of [
-    'cli/start.ts',
+    'bootstrap/daemonStart.ts',
     'bootstrap/daemonApplication.ts',
     'bootstrap/daemonSession.ts',
     'bootstrap/daemonSessionAdapters.ts',
   ]) {
     const unit = units.find((unit) => unit.path === PREFIX + path)
-    if (!unit) continue
+    if (!unit) {
+      errors.push(`${path}: required HTTP caller missing`)
+      continue
+    }
     for (const factory of HTTP_OWNERS)
       if (calls(unit.source, factory).length) errors.push(`${path}: HTTP owner ${factory}`)
   }
@@ -126,6 +129,18 @@ describe('RFC-390 neutral HTTP binding', () => {
   test('scans the real backend and binds each caller exactly once', () => {
     expect(units.length).toBeGreaterThanOrEqual(2000)
     expect(neutralHttpViolations(units)).toEqual([])
+  })
+  test('negative fixtures reject every missing HTTP caller', () => {
+    for (const path of [
+      'bootstrap/daemonStart.ts',
+      'bootstrap/daemonApplication.ts',
+      'bootstrap/daemonSession.ts',
+      'bootstrap/daemonSessionAdapters.ts',
+    ]) {
+      expect(neutralHttpViolations(units.filter((unit) => unit.path !== PREFIX + path))).toContain(
+        `${path}: required HTTP caller missing`,
+      )
+    }
   })
   test('negative fixtures reject duplicate bindings, bundle reconstruction and a second route table', () => {
     const http = units.find((unit) => unit.path === PREFIX + 'bootstrap/daemonHttpComposition.ts')!

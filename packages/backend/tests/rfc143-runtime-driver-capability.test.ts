@@ -41,7 +41,7 @@ import { assembleOpencodePersonaSpawn } from '../src/services/runtime/opencode/d
 import type { AgentSpawnContext } from '../src/services/runtime/types'
 
 const SRC = (rel: string) =>
-  rel === 'cli/start.ts'
+  rel === 'bootstrap/daemonStart.ts'
     ? readDaemonGraphSource()
     : readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
 
@@ -270,7 +270,7 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
       // RFC-237: boot-time probe prewarm keyed off config.defaultRuntime — a
       // startup probability optimization, not spawn assembly; removing it
       // needs a driver boot-probe declaration, out of proportion (design §5).
-      'cli/start.ts',
+      'bootstrap/daemonStart.ts',
       // RFC-317 T33（RT-03）—— `RuntimeBinaryConfig` 的 `opencodePath` /
       // `claudeCodePath` 两个键**镜像的是用户可见的 config schema 字段名**，不是这里
       // 自己发明的 kind 判别。把它收成 `Record<RuntimeKind, string | null>` 要连
@@ -428,7 +428,7 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     )
     expect(fusionsRoute).not.toContain('resolveOpencodeCmd')
     expect(fusionsRoute).not.toContain('configPath: deps.configPath')
-    expect(SRC('cli/daemonModules/taskExecution.ts')).toContain(
+    expect(SRC('bootstrap/daemonModules/taskExecution.ts')).toContain(
       'const fresh = await taskLaunchConfiguration.start()',
     )
     expect(
@@ -439,8 +439,8 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
       expect(src).not.toContain('resolveOpencodeCmd')
       expect(src).not.toContain('configPath: deps.configPath')
     }
-    expect(SRC('cli/start.ts')).toContain('configPath: Paths.config')
-    expect(SRC('cli/start.ts')).toContain('drive: runtime.driveHumanGateContinuation')
+    expect(SRC('bootstrap/daemonStart.ts')).toContain('configPath: Paths.config')
+    expect(SRC('bootstrap/daemonStart.ts')).toContain('drive: runtime.driveHumanGateContinuation')
     expect(SRC('services/runtime/opencode/util.ts')).not.toContain(
       'export function resolveOpencodeCmd',
     )
@@ -508,7 +508,7 @@ describe('RFC-317 T19 —— kind 判别豁免表无死条目', () => {
   const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
   // 与上面扫描用的是同一个集合语义；这里重新声明是因为原表声明在 it() 体内。
   // 两处一旦不一致，下面第一条断言会红。
-  const ALLOWLIST = ['cli/start.ts', 'services/runtime/types.ts'] as const
+  const ALLOWLIST = ['bootstrap/daemonStart.ts', 'services/runtime/types.ts'] as const
 
   it('豁免表与扫描里用的那份一致（防两份各改各的）', () => {
     const source = readFileSync(
@@ -545,7 +545,7 @@ describe('RFC-317 T19 —— kind 判别豁免表无死条目', () => {
 
   it('自证：豁免机制确实会跳过文件（否则上一条断言可能只是恰好为空）', () => {
     const allowlisted = new Set<string>(ALLOWLIST)
-    expect(allowlisted.has('cli/start.ts')).toBe(true)
+    expect(allowlisted.has('bootstrap/daemonStart.ts')).toBe(true)
     expect(allowlisted.has('services/scheduler.ts')).toBe(false)
     expect(KIND_DISCRIMINATION.test("if (config.defaultRuntime === 'claude-code') prewarm()")).toBe(
       true,

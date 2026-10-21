@@ -197,7 +197,7 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     expect(routeOperations).toContain('runtime: await dependencies.resumeRuntimeFor(actor, taskId)')
     // RFC-382 fixes the raw local-sync spread: every resume now goes through the same projection.
     const bundle = readFileSync(
-      join(import.meta.dir, '../src/cli/daemonModules/taskExecution.ts'),
+      join(import.meta.dir, '../src/bootstrap/daemonModules/taskExecution.ts'),
       'utf8',
     )
     const provider = readFileSync(

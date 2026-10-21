@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import ts from 'typescript'
 import { inverseRfc213DevStartupRoot } from './helpers/rfc213DevStartupRootInverse'
 
-for (const path of ['cli/start.ts', 'bootstrap/daemonApplication.ts']) {
+for (const path of ['bootstrap/daemonStart.ts', 'bootstrap/daemonApplication.ts']) {
   const name = `packages/backend/src/${path}`
   const current = readFileSync(resolve(import.meta.dir, '../src', path), 'utf8')
   const parse = (text: string, file = name) =>
@@ -16,13 +16,13 @@ for (const path of ['cli/start.ts', 'bootstrap/daemonApplication.ts']) {
     // The old combined 154-byte delta included two declaration checks; the
     // command now owns 422 bytes and the single graph check owns -86 bytes.
     expect(Buffer.byteLength(current) - Buffer.byteLength(original)).toBe(
-      path === 'cli/start.ts' ? 422 : -86,
+      path === 'bootstrap/daemonStart.ts' ? 422 : -86,
     )
     expect(restore(original)).toBe(original)
     expect(inverseRfc213DevStartupRoot(parse(current, name.replaceAll('/', '\\'))).text).toBe(
       original,
     )
-    if (path === 'cli/start.ts') {
+    if (path === 'bootstrap/daemonStart.ts') {
       expect(original).not.toContain('developmentIntegrity')
       expect(original).not.toContain('agent-workflow-http:')
       expect(original).toContain('  const server = Bun.serve({\n    port: input.bindPort,\n')
@@ -42,7 +42,8 @@ for (const path of ['cli/start.ts', 'bootstrap/daemonApplication.ts']) {
         ),
       ).toThrow('dev startup root inverse unreviewed')
     }
-    const marker = path === 'cli/start.ts' ? 'readyBrowserUrl' : 'boot snapshot reverify'
+    const marker =
+      path === 'bootstrap/daemonStart.ts' ? 'readyBrowserUrl' : 'boot snapshot reverify'
     const mutate = (text: string) => text.replace(marker, 'unrelated-source-edit')
     expect(mutate(current)).not.toBe(current)
     expect(restore(mutate(current))).toBe(mutate(original))
@@ -51,7 +52,7 @@ for (const path of ['cli/start.ts', 'bootstrap/daemonApplication.ts']) {
   })
   test(`${path}: partial and duplicated approved fragments remain visible`, () => {
     const fragments =
-      path === 'cli/start.ts'
+      path === 'bootstrap/daemonStart.ts'
         ? [
             '  developmentIntegrity?: { validatedDatabase?: string }\n',
             '    id: `agent-workflow-http:${input.bindHost}:${input.bindPort}`,\n',

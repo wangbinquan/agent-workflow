@@ -16,45 +16,51 @@ import {
   initializeRuntimeRegistryBoot,
   type RuntimeLegacyConfigurationPort,
 } from '@/modules/runtime-management/composition/runtimeRegistry'
-import { composeDaemonIntentModules, type DaemonIntentModules } from '@/cli/daemonModules/intent'
+import {
+  composeDaemonIntentModules,
+  type DaemonIntentModules,
+} from '@/bootstrap/daemonModules/intent'
 import {
   composeDaemonDigitalEmployeeModules,
   type DaemonDigitalEmployeeModules,
-} from '@/cli/daemonModules/digitalEmployee'
+} from '@/bootstrap/daemonModules/digitalEmployee'
 import {
   composeDaemonDevelopmentAutomationModules,
   type DaemonDevelopmentAutomationModules,
-} from '@/cli/daemonModules/developmentAutomation'
+} from '@/bootstrap/daemonModules/developmentAutomation'
 import {
   composeDaemonTaskExecutionModules,
   type DaemonTaskExecutionModules,
-} from '@/cli/daemonModules/taskExecution'
+} from '@/bootstrap/daemonModules/taskExecution'
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import {
   composeDaemonScheduledTaskModules,
   type DaemonScheduledTaskModules,
-} from '@/cli/daemonModules/scheduledTasks'
+} from '@/bootstrap/daemonModules/scheduledTasks'
 import {
   composeDaemonIntegrationModules,
   type DaemonIntegrationModules,
-} from '@/cli/daemonModules/integration'
-import { composeDaemonFusionModules, type DaemonFusionModules } from '@/cli/daemonModules/fusion'
-import { standaloneModuleAdapters } from '@/cli/daemonModules/adapters'
-import { composeDaemonMemoryModules } from '@/cli/daemonModules/memory'
-import { composeDaemonObservationModules } from '@/cli/daemonModules/observation'
+} from '@/bootstrap/daemonModules/integration'
+import {
+  composeDaemonFusionModules,
+  type DaemonFusionModules,
+} from '@/bootstrap/daemonModules/fusion'
+import { standaloneModuleAdapters } from '@/bootstrap/daemonModules/adapters'
+import { composeDaemonMemoryModules } from '@/bootstrap/daemonModules/memory'
+import { composeDaemonObservationModules } from '@/bootstrap/daemonModules/observation'
 import {
   composeDaemonProviderCore,
   type SelectedDaemonProviderCore,
-} from '@/cli/daemonModules/providerCore'
-import { composeDaemonRepositoryCredentials } from '@/cli/daemonModules/repositoryCredentials'
-import { composeDaemonResourceCatalogModules } from '@/cli/daemonModules/resourceCatalog'
+} from '@/bootstrap/daemonModules/providerCore'
+import { composeDaemonRepositoryCredentials } from '@/bootstrap/daemonModules/repositoryCredentials'
+import { composeDaemonResourceCatalogModules } from '@/bootstrap/daemonModules/resourceCatalog'
 import {
   DAEMON_BOOT_STEPS,
   NotApplicable,
   type DaemonBootStepId,
   type DaemonBootSteps,
   type DaemonBootStepDeclaration,
-} from '@/cli/daemonLifecycleProgram'
+} from '@/bootstrap/daemonLifecycleProgram'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { TaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
 import type { TaskRecoveryDeploymentSelection } from '@/modules/task-execution/composition/taskRecoverySelection'
@@ -215,7 +221,7 @@ import { buildWebSocketAdapter } from '@/ws/server'
 import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
-import { composeDaemonRealtimePolicy } from '@/cli/daemonRealtimePolicy'
+import { composeDaemonRealtimePolicy } from '@/bootstrap/daemonRealtimePolicy'
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { type SkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
 import type {
@@ -328,7 +334,9 @@ export interface DaemonApplicationInput<P extends DatabaseProvider = DatabasePro
   readonly databaseMigration: DatabaseMigrationModule
   readonly dbVersion: number
   readonly maintenanceStatus?: NonNullable<
-    ProviderAppCompositionInput<P>['platform']['maintenance']['maintenanceStatus']
+    ProviderAppCompositionInput<
+      SelectedDaemonProviderCore<P>
+    >['platform']['maintenance']['maintenanceStatus']
   >
   /** Test-only instance ports. The production session never supplies this object. */
   readonly testSeams?: DaemonApplicationTestSeams<P>
@@ -346,7 +354,9 @@ export interface DaemonApplicationTestSeams<P extends DatabaseProvider = Databas
   readonly intentTestDependencies?: {
     readonly runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
   }
-  readonly workflowRuntime?: ProviderAppCompositionInput<P>['resourceCatalog']['workflows']['runtime']
+  readonly workflowRuntime?: ProviderAppCompositionInput<
+    SelectedDaemonProviderCore<P>
+  >['resourceCatalog']['workflows']['runtime']
   readonly opencodeVersion?: string | null
   readonly codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
   readonly webhookTerminalControl?: ReturnType<typeof composeMrTerminalControl>

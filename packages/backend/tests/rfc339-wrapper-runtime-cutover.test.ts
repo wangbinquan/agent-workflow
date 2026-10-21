@@ -19,7 +19,7 @@ import { WrapperRuntime } from '../src/modules/task-execution/engine/wrapper/wra
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 const read = (path: string): string =>
-  /(?:^|\/)cli\/start\.ts$/.test(path)
+  /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
     ? readDaemonGraphSource()
     : readFileSync(resolve(ROOT, path), 'utf8')
 const ok: NodeStepOutcome = { kind: 'ok', summary: '', message: '' }
@@ -379,7 +379,7 @@ describe('RFC-339 WrapperRuntime cutover', () => {
   test('bootstrap is the only runtime composer and every continuation caller receives a public driver', () => {
     const server = read('packages/backend/src/server.ts')
     const http = read('packages/backend/src/bootstrap/daemonHttpComposition.ts')
-    const cli = read('packages/backend/src/cli/start.ts')
+    const cli = read('packages/backend/src/bootstrap/daemonStart.ts')
     const runtime = read(
       'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
     )
@@ -393,7 +393,7 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(
       existsSync(resolve(ROOT, 'packages/backend/src/modules/task-execution/public/topology.ts')),
     ).toBe(false)
-    expect(http).toContain('@/cli/daemonModules/taskExecution')
+    expect(http).toContain('@/bootstrap/daemonModules/taskExecution')
     expect(cli).not.toContain('@/modules/task-execution/public/topology')
 
     const callers = [
@@ -427,7 +427,7 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(http).toContain('taskLaunch: taskExecutionProvider.routeLaunch.agent')
     expect(http).toContain('taskLaunch: taskExecutionProvider.routeLaunch.workgroup')
     expect(http).toContain('taskExecutionReadModels: taskExecutionProvider.readModels')
-    const bundle = read('packages/backend/src/cli/daemonModules/taskExecution.ts')
+    const bundle = read('packages/backend/src/bootstrap/daemonModules/taskExecution.ts')
     expect(bundle).toContain('schedulerDriver: input.testSeams?.schedulerDriver,')
     expect(cli).toContain('taskExecution: taskExecutionModules')
 

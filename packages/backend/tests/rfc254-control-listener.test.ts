@@ -252,7 +252,10 @@ describe('RFC-254 T7 — `stop` picks its transport by platform', () => {
 })
 
 describe('RFC-254 T7 — the daemon publishes and retracts the endpoint', () => {
-  const start = readFileSync(join(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+  const start = readFileSync(
+    join(import.meta.dir, '..', 'src', 'bootstrap', 'daemonStart.ts'),
+    'utf8',
+  )
   const host = readFileSync(
     join(
       import.meta.dir,

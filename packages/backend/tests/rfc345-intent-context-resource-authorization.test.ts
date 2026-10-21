@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 
 const sourceRoot = resolve(import.meta.dir, '../src/modules/resource-catalog')
 const source = (path: string): string =>
-  /(?:^|\/)cli\/start\.ts$/.test(path)
+  /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
     ? readDaemonGraphSource()
     : readFileSync(resolve(sourceRoot, path), 'utf8')
 

@@ -13,7 +13,7 @@ test('the explicit committed corpus and extra inputs come from the exact Git rev
   expect(selected.sourceSha).toMatch(/^[a-f0-9]{40}$/)
   expect(selected.units.length).toBeGreaterThan(1000)
   for (const path of [
-    'packages/backend/src/cli/start.ts',
+    'packages/backend/src/bootstrap/daemonStart.ts',
     'packages/shared/src/index.ts',
     'packages/frontend/src/routes/intent.detail.tsx',
     '.dependency-cruiser.cjs',

@@ -221,7 +221,10 @@ export function daemonBundleViolations(units: readonly SourceUnit[]): string[] {
         })
       if (count !== 1) errors.push(`${path}: ${name} must call ${bundle} once; got ${count}`)
     }
-    if (!unit) continue
+    if (!unit) {
+      errors.push(`${path}: required bundle root missing`)
+      continue
+    }
     walk(unit.source, (node) => {
       const names = callNames(node)
       for (const factory of names)
@@ -238,14 +241,14 @@ export function daemonBundleViolations(units: readonly SourceUnit[]): string[] {
       if (ts.isFunctionDeclaration(node) && RETIRED.includes(node.name?.text ?? ''))
         errors.push(`${unit.path}: retired constructor ${node.name!.text}`)
     })
-    if (!unit.path.startsWith(PREFIX + 'cli/daemonModules/')) continue
+    if (!unit.path.startsWith(PREFIX + 'bootstrap/daemonModules/')) continue
     if (/\/(?:sqlite|postgresql)/i.test(unit.path))
       errors.push(`${unit.path}: provider-named bundle`)
     walk(unit.source, (node) => {
       if (ts.isFunctionDeclaration(node) && /Sqlite|Postgresql/.test(node.name?.text ?? ''))
         errors.push(`${unit.path}: provider-named function`)
       if (
-        unit.path !== PREFIX + 'cli/daemonModules/providerCore.ts' &&
+        unit.path !== PREFIX + 'bootstrap/daemonModules/providerCore.ts' &&
         ts.isImportDeclaration(node) &&
         ts.isStringLiteral(node.moduleSpecifier) &&
         node.moduleSpecifier.text.startsWith('@/modules/identity-access/')
@@ -255,7 +258,7 @@ export function daemonBundleViolations(units: readonly SourceUnit[]): string[] {
         ts.isImportDeclaration(node) &&
         valueImport(node) &&
         ts.isStringLiteral(node.moduleSpecifier) &&
-        /(?:^|\/)(?:server|start|daemonApplication|daemonSession|daemonSessionAdapters)(?:\.ts)?$/.test(
+        /(?:^|\/)(?:server|daemonStart|daemonApplication|daemonSession|daemonSessionAdapters)(?:\.ts)?$/.test(
           node.moduleSpecifier.text,
         )
       )
@@ -277,14 +280,22 @@ describe('RFC-380 daemon module bundles', () => {
   test('complete source corpus keeps the twelve application-session bundles', () => {
     const units = backendUnits(resolve(import.meta.dir, '../../../..'))
     expect(units.length).toBeGreaterThanOrEqual(2000)
-    expect(units.filter((u) => u.path.startsWith(PREFIX + 'cli/daemonModules/'))).toHaveLength(13)
+    expect(
+      units.filter((u) => u.path.startsWith(PREFIX + 'bootstrap/daemonModules/')),
+    ).toHaveLength(13)
     expect(daemonBundleViolations(units)).toEqual([])
   })
   test('accepts one bundle per session', () => {
     expect(daemonBundleViolations(valid())).toEqual([])
   })
   test('rejects missing and duplicated session calls', () => {
-    expect(daemonBundleViolations([])).toHaveLength(12)
+    expect(daemonBundleViolations([])).toEqual([
+      ...BUNDLES.map(
+        (bundle) =>
+          `bootstrap/daemonApplication.ts: composeDaemonApplication must call ${bundle} once; got 0`,
+      ),
+      'bootstrap/daemonApplication.ts: required bundle root missing',
+    ])
     const units = valid()
     units[0] = unit(
       ROOTS[0][0],
@@ -316,21 +327,28 @@ describe('RFC-380 daemon module bundles', () => {
         daemonBundleViolations([...valid(), unit('old.ts', `function ${name}() {}`)]),
       ).toContain(`packages/backend/src/old.ts: retired constructor ${name}`)
     const bad = unit(
-      'cli/daemonModules/sqliteBad.ts',
+      'bootstrap/daemonModules/sqliteBad.ts',
       "import { x } from '@/server'; function composeSqliteBad() {}",
     )
     expect(daemonBundleViolations([...valid(), bad])).toHaveLength(3)
+    const startup = unit(
+      'bootstrap/daemonModules/startup.ts',
+      "import { startCommand } from '@/bootstrap/daemonStart'",
+    )
+    expect(daemonBundleViolations([...valid(), startup])).toEqual([
+      'packages/backend/src/bootstrap/daemonModules/startup.ts: entry root value import',
+    ])
     const good = unit(
-      'cli/daemonModules/good.ts',
-      "import type { X } from '@/server'; import { type Y } from '@/cli/start'; function composeGood() {}",
+      'bootstrap/daemonModules/good.ts',
+      "import type { X } from '@/server'; import { type Y } from '@/bootstrap/daemonStart'; function composeGood() {}",
     )
     expect(daemonBundleViolations([...valid(), good])).toEqual([])
     const identity = unit(
-      'cli/daemonModules/integration.ts',
+      'bootstrap/daemonModules/integration.ts',
       "import { binding } from '@/modules/identity-access/composition';",
     )
     expect(daemonBundleViolations([...valid(), identity])).toEqual([
-      'packages/backend/src/cli/daemonModules/integration.ts: identity-access import outside provider core',
+      'packages/backend/src/bootstrap/daemonModules/integration.ts: identity-access import outside provider core',
     ])
   })
 })
@@ -358,7 +376,7 @@ function legacyRecoveryRestrictions(source: SourceUnit): number {
 }
 test('both providers register legacy recovery; provider restrictions are rejected', () => {
   const lifecycle = backendUnits(resolve(import.meta.dir, '../../../..')).find(
-    (u) => u.path === PREFIX + 'cli/daemonLifecycleProgram.ts',
+    (u) => u.path === PREFIX + 'bootstrap/daemonLifecycleProgram.ts',
   )!
   expect(lifecycle).toBeDefined()
   expect(lifecycle.text).toContain("id: 'legacy-mission-recovery'")
@@ -366,7 +384,7 @@ test('both providers register legacy recovery; provider restrictions are rejecte
   expect(
     legacyRecoveryRestrictions(
       unit(
-        'cli/daemonLifecycleProgram.ts',
+        'bootstrap/daemonLifecycleProgram.ts',
         "const steps = [{ id: 'legacy-mission-recovery', providers: ['sqlite'] }]",
       ),
     ),

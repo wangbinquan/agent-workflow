@@ -2,16 +2,16 @@
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { composeDaemonProviderCore } from '@/cli/daemonModules/providerCore'
-import { DAEMON_PROVIDER_CORE_ADAPTERS } from '@/cli/daemonModules/adapters'
-import { composeDaemonRepositoryCredentials } from '@/cli/daemonModules/repositoryCredentials'
-import { composeDaemonIntegrationModules } from '@/cli/daemonModules/integration'
-import { composeDaemonScheduledTaskModules } from '@/cli/daemonModules/scheduledTasks'
+import { composeDaemonProviderCore } from '@/bootstrap/daemonModules/providerCore'
+import { DAEMON_PROVIDER_CORE_ADAPTERS } from '@/bootstrap/daemonModules/adapters'
+import { composeDaemonRepositoryCredentials } from '@/bootstrap/daemonModules/repositoryCredentials'
+import { composeDaemonIntegrationModules } from '@/bootstrap/daemonModules/integration'
+import { composeDaemonScheduledTaskModules } from '@/bootstrap/daemonModules/scheduledTasks'
 import {
   composeDaemonDigitalEmployeeModules,
   type DaemonDigitalEmployeeInput,
-} from '@/cli/daemonModules/digitalEmployee'
-import { composeDaemonDevelopmentAutomationModules } from '@/cli/daemonModules/developmentAutomation'
+} from '@/bootstrap/daemonModules/digitalEmployee'
+import { composeDaemonDevelopmentAutomationModules } from '@/bootstrap/daemonModules/developmentAutomation'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import { selectDevelopmentWorkspaceEffectBinding } from '@/modules/development-automation/composition'

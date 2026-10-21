@@ -11,7 +11,10 @@ import { ulid } from 'ulid'
 import { DEFAULT_CONFIG, canonicalIntentJson, type Config } from '@agent-workflow/shared'
 import { admitDurableWorkOwner, actorOfDirectAuthority } from '@/auth/session'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { composeDaemonIntentModules, type DaemonIntentInput } from '@/cli/daemonModules/intent'
+import {
+  composeDaemonIntentModules,
+  type DaemonIntentInput,
+} from '@/bootstrap/daemonModules/intent'
 import { intentDrafts, intentSessions, intentWorkingSetChanges } from '@/db/schema'
 import * as applyComposition from '@/modules/intent/composition/apply'
 import * as persistenceComposition from '@/modules/intent/composition/persistence'

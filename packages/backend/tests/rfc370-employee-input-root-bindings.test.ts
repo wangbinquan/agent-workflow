@@ -12,7 +12,7 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -41,7 +41,7 @@ test('real boot and HTTP roots choose one complete input receiver for both intak
     )
     expect(calls(root, 'createEmployeeInputArtifactStore')).toHaveLength(0)
   }
-  const source = load('cli/daemonModules/digitalEmployee.ts')
+  const source = load('bootstrap/daemonModules/digitalEmployee.ts')
   const defaults = calls(source, 'createEmployeeInputArtifactStore')
   expect(defaults).toHaveLength(1)
   const selection = defaults[0]!.parent
@@ -55,7 +55,7 @@ test('real boot and HTTP roots choose one complete input receiver for both intak
       'inputArtifacts:employeeInputArtifacts',
     )
   }
-  const start = load('cli/start.ts')
+  const start = load('bootstrap/daemonStart.ts')
   expect(start.text).toContain('employeeInputArtifacts: opts.employeeInputArtifacts,')
   expect(start.text.split('employeeInputArtifacts: input.employeeInputArtifacts,')).toHaveLength(3)
   expect(start.text).toContain('readonly employeeInputArtifacts?: EmployeeInputArtifactPort')

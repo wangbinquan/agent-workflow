@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 
-import type { DaemonProviderSessionLifecycleInput } from '../src/cli/daemonProviderSession'
+import type { DaemonProviderSessionLifecycleInput } from '../src/bootstrap/daemonProviderSession'
 import {
   createDaemonProviderRuntimeSession,
   type DaemonProviderCloseParticipant,
   type DaemonProviderRuntimeAdmission,
   type DaemonProviderRuntimeHandleFactory,
-} from '../src/cli/daemonProviderRuntimeSession'
+} from '../src/bootstrap/daemonProviderRuntimeSession'
 import { registerRfc370SqliteAffectedRowsCases } from './helpers/rfc370SqliteAffectedRowsCases'
 
 // This suite is already selected by the complete Windows platform workflow.

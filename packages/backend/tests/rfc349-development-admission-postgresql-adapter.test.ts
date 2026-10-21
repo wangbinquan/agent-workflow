@@ -99,7 +99,7 @@ describe('RFC-349 PostgreSQL development admission lookup', () => {
     expect(server).toContain('developmentAutomation: DaemonDevelopmentAutomationModules')
     expect(server).toContain('const developmentMissions = developmentAutomation.missionOperations')
     const bundle = readFileSync(
-      resolve(import.meta.dir, '../src/cli/daemonModules/developmentAutomation.ts'),
+      resolve(import.meta.dir, '../src/bootstrap/daemonModules/developmentAutomation.ts'),
       'utf8',
     )
     expect(bundle).toContain('composeDevelopmentAdmissionLookup(db)')

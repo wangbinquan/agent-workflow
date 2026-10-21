@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 
-import { createDaemonProviderMigrationAdmission } from '../src/cli/daemonProviderMigrationAdmission'
+import { createDaemonProviderMigrationAdmission } from '../src/bootstrap/daemonProviderMigrationAdmission'
 import {
   createDaemonProviderSessionController,
   type DaemonProviderSessionLifecycleInput,
   type ManagedDaemonProviderSession,
-} from '../src/cli/daemonProviderSession'
+} from '../src/bootstrap/daemonProviderSession'
 
 function deferred<T>() {
   let resolve!: (value: T) => void

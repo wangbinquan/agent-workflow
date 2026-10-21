@@ -6,7 +6,7 @@ import ts from 'typescript'
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -81,7 +81,7 @@ test('both actual provider route closures and standalone HTTP bind the same whol
     ).toBe(selected!)
     expect(calls(source, source, 'createTaskRouteOperations')).toHaveLength(0)
   }
-  const source = load('cli/daemonModules/taskExecution.ts')
+  const source = load('bootstrap/daemonModules/taskExecution.ts')
   const call = oneCall(source, 'composeTaskExecutionProviderRuntime')
   const dependencies = object(call.arguments[0]!)
   expect(
@@ -111,7 +111,7 @@ test('both real boot recovery calls retain db and default store before the whole
 })
 
 test('frozen start choice reaches initial and replacement sessions, PG session and SQLite HTTP', () => {
-  const source = load('cli/start.ts')
+  const source = load('bootstrap/daemonStart.ts')
   const declarations = nodes(
     source,
     (node): node is ts.VariableDeclaration =>
@@ -160,7 +160,8 @@ test('actual route delete forwards required activity and whole effects to the or
 
 test('root choice uses exact TE public type and SC offers its own independent native factory', () => {
   for (const [path, names] of [
-    ['cli/start.ts', ['StartOptions', 'DaemonProviderSessionComposeInput']],
+    ['bootstrap/daemonStart.ts', ['StartOptions']],
+    ['bootstrap/daemonSessionInput.ts', ['DaemonProviderSessionComposeInput']],
     ['bootstrap/daemonApplication.ts', ['DaemonApplicationInput']],
   ] as const) {
     const source = load(path)

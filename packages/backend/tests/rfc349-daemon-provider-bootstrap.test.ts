@@ -1,16 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 
-import { createDaemonProviderBootstrap } from '../src/cli/daemonProviderBootstrap'
+import { createDaemonProviderBootstrap } from '../src/bootstrap/daemonProviderBootstrap'
 import {
   type DaemonProviderListenerRuntimeSession,
   type DaemonProviderRuntimeWebSocketHandlers,
   type DaemonProviderUpgradeServer,
   type DaemonProviderWebSocketMessage,
-} from '../src/cli/daemonProviderRuntimeRouter'
+} from '../src/bootstrap/daemonProviderRuntimeRouter'
 import {
   createDaemonProviderRuntimeSession,
   type DaemonProviderRuntimeAdmission,
-} from '../src/cli/daemonProviderRuntimeSession'
+} from '../src/bootstrap/daemonProviderRuntimeSession'
 
 interface TestWebSocket {
   readonly id: string

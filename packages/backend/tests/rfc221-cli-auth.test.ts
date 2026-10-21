@@ -1,7 +1,7 @@
 // RFC-221 — ready output never advertises a retired daemon token.
 
 import { expect, test } from 'bun:test'
-import { readyBrowserUrl } from '../src/cli/start'
+import { readyBrowserUrl } from '../src/bootstrap/daemonStart'
 
 test('ready URL includes daemon token only while bootstrap is required', () => {
   expect(readyBrowserUrl('http://127.0.0.1:3000/', 'secret', true)).toBe(

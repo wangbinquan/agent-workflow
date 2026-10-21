@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
 const backendRoot = resolve(import.meta.dir, '..')
 
 function source(path: string): string {
-  return /(?:^|\/)cli\/start\.ts$/.test(path)
+  return /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
     ? readDaemonGraphSource()
     : readFileSync(resolve(backendRoot, path), 'utf8')
 }
@@ -54,9 +54,9 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
 
     expect(bundle).toContain('export function composeClassicCatalogs(')
     expect(bundle).toContain('readonly db: ProviderNeutralDatabase')
-    for (const root of ['src/cli/start.ts', 'src/bootstrap/daemonApplication.ts']) {
+    for (const root of ['src/bootstrap/daemonStart.ts', 'src/bootstrap/daemonApplication.ts']) {
       expect(source(root), root).toContain('composeDaemonResourceCatalogModules({')
-      expect(source('src/cli/daemonModules/resourceCatalog.ts')).toContain(
+      expect(source('src/bootstrap/daemonModules/resourceCatalog.ts')).toContain(
         'composeClassicCatalogs({',
       )
     }

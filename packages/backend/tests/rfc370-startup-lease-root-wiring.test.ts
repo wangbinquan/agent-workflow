@@ -6,7 +6,7 @@ import ts from 'typescript'
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -25,7 +25,7 @@ function calls(source: ts.SourceFile, expression: string) {
 }
 
 test('the real startup root selects one lazy lease and encloses boot in its failure lifetime', () => {
-  const start = load('cli/start.ts')
+  const start = load('bootstrap/daemonStart.ts')
   const selected = calls(start, 'composeDaemonStartupLease')
   expect(selected).toHaveLength(1)
   const argument = selected[0]!.arguments[0]!
@@ -56,7 +56,7 @@ test('the real startup root selects one lazy lease and encloses boot in its fail
 })
 
 test('provider recompose keeps the acquired lease and both boot roots wait for its proof', () => {
-  const start = load('cli/start.ts')
+  const start = load('bootstrap/daemonStart.ts')
   const pg = load('bootstrap/daemonApplication.ts')
   const pgBinding = calls(start, 'composeDaemonApplication')[0]!.arguments[0]!
   expect(pgBinding.getText(start)).toContain('daemonStartupLease: input.lock')

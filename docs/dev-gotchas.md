@@ -62,7 +62,7 @@ MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionM
 
 ## 会话任务协调器与续跑配置（RFC-382）
 
-会话级任务协调器与实时 `runConfiguration()` 只在 `cli/daemonModules/taskExecution.ts` 构造；HTTP、MCP、集成触发、宿主任务与根续跑复用该会话产物。续跑必须经 `runtimeConfigOpts` 投影（直接展开启动配置会丢提交推送与合并 Agent 设置），并携带记忆提炼入队器。会话引擎异常必须交给失败上报，置任务为 failed 并终结对应意图，不能只记日志。每次调用的旧协调器及房间续跑仍由后继 RFC-385 处理。
+会话级任务协调器与实时 `runConfiguration()` 只在 `bootstrap/daemonModules/taskExecution.ts` 构造；HTTP、MCP、集成触发、宿主任务与根续跑复用该会话产物。续跑必须经 `runtimeConfigOpts` 投影（直接展开启动配置会丢提交推送与合并 Agent 设置），并携带记忆提炼入队器。会话引擎异常必须交给失败上报，置任务为 failed 并终结对应意图，不能只记日志。每次调用的旧协调器及房间续跑仍由后继 RFC-385 处理。
 
 ## 测试 / CI
 
@@ -8536,7 +8536,7 @@ PostgreSQL 侧留 NULL、被 `parseLineage` 兜底成 `workflowRevision: null`�
 按文本数引用的棘轮（见上一条「按测试文件**文本**计数的棘轮」），
 两者的通用形式是一句话：**任何以「文件当前内容」为输入的判据，都必须在最后一次编辑之后再跑**。
 
-## 改了 `server.ts` / `cli/start.ts` 就必须跑 `rfc359-w29-unstarted-application-composition`（2026-09-17 连撞两次）
+## 改了 `server.ts` / `bootstrap/daemonStart.ts` 就必须跑 `rfc359-w29-unstarted-application-composition`（2026-09-17 连撞两次）
 
 那条守卫对两个组合根的几个装配函数体取 **AST 摘要**（`composeSqliteApiRouteMounts` /
 `composeSqliteApplicationDeps` / `composeApplicationEventCenter`）。它**不在**
@@ -8547,7 +8547,7 @@ PostgreSQL 侧留 NULL、被 `parseLineage` 兜底成 `workflowRevision: null`�
 （39 个测试文件提到它），一次半径检索里很容易被淹掉。
 
 **判据**：`git diff --cached --name-only` 里只要出现
-`packages/backend/src/server.ts` 或 `packages/backend/src/cli/start.ts`，
+`packages/backend/src/server.ts` 或 `packages/backend/src/bootstrap/daemonStart.ts`，
 就**点名**跑这一条：
 
 ```
@@ -8573,7 +8573,7 @@ bun test tests/rfc359-w29-unstarted-application-composition.test.ts
 改完所有代码 → bunx prettier --write <改过的文件>
              → bun run scripts/architecture-census.ts --write --snapshot-sha HEAD
              → bun test tests/architecture/ tests/*architecture*.test.ts
-             → （若碰了 server.ts / cli/start.ts）bun test tests/rfc359-w29-...
+             → （若碰了 server.ts / bootstrap/daemonStart.ts）bun test tests/rfc359-w29-...
              → git add / commit
 ```
 
@@ -8766,19 +8766,19 @@ RFC-370 生命周期清单曾混入并行未提交源码：只替换 `node:fs` �
 
 ## RFC-379: daemon lifecycle belongs to one program
 
-Add boot steps, background jobs and close participants to `packages/backend/src/cli/daemonLifecycleProgram.ts`; provider roots supply implementations keyed by id, never ordered lifecycle arrays. Keep construction passive: no timers, Workers, catalog writes or detached initialization until the declared phase or session resume. Seed employee templates before loading the tool catalog. Hosted execution recovery and its maintenance snapshot wait for execution authority; prepare finishes before authority starts. A `daemon-shutdown` timeout is recorded and permits final survivor cleanup, while pause and provider-switch must still prove quiescence without a timeout. Update the program order tests, both real-daemon order tests and the RFC-379 structural guard when extending the program.
+Add boot steps, background jobs and close participants to `packages/backend/src/bootstrap/daemonLifecycleProgram.ts`; provider roots supply implementations keyed by id, never ordered lifecycle arrays. Keep construction passive: no timers, Workers, catalog writes or detached initialization until the declared phase or session resume. Seed employee templates before loading the tool catalog. Hosted execution recovery and its maintenance snapshot wait for execution authority; prepare finishes before authority starts. A `daemon-shutdown` timeout is recorded and permits final survivor cleanup, while pause and provider-switch must still prove quiescence without a timeout. Update the program order tests, both real-daemon order tests and the RFC-379 structural guard when extending the program.
 
 ## RFC-380：同构守护进程模块按会话装配一次
 
-provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行时管理、记忆只在 `cli/daemonModules/` 的共享函数构造。中立应用图按会话调用一次，HTTP 组合只消费该会话的实例；HTTP 测试也通过同一应用图装配。根与 `server.ts` 不再自行构造组内成员。粒度是 provider 会话，迁移目标必须有独立实例；构造不执行 SQL、不启动定时器，启动恢复与 MCP 诊断作业仍归 `daemonLifecycleProgram.ts`。 RFC-390 后 HTTP 绑定也已中立：`composeProviderAppComposition` 只消费这 12 个模块组，不再调用组工厂；并发热应用取任务执行组的 `processConcurrencyScope`，与调度器使用同一对象。
+provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行时管理、记忆只在 `bootstrap/daemonModules/` 的共享函数构造。中立应用图按会话调用一次，HTTP 组合只消费该会话的实例；HTTP 测试也通过同一应用图装配。根与 `server.ts` 不再自行构造组内成员。粒度是 provider 会话，迁移目标必须有独立实例；构造不执行 SQL、不启动定时器，启动恢复与 MCP 诊断作业仍归 `daemonLifecycleProgram.ts`。 RFC-390 后 HTTP 绑定也已中立：`composeProviderAppComposition` 只消费这 12 个模块组，不再调用组工厂；并发热应用取任务执行组的 `processConcurrencyScope`，与调度器使用同一对象。
 
 ## RFC-383：数字员工与开发自动化按会话装配，两个引擎共用写者门控
 
-数字员工与开发自动化只在 `cli/daemonModules/digitalEmployee.ts`、`developmentAutomation.ts` 构造；SQLite 的 HTTP、工作启动、启动初始化与 OS 作业共用一个数字员工实例（取代 RFC-359 W12 的两实例决定），`server.ts` 不再保留测试回退。写者切换每会话一份，迁移状态、任务准入、启动与周期共用；两个引擎的唤醒先刷新状态，遗留恢复读当前状态，门控在 development-automation 应用层。宿主任务共用任务执行组的 `hostTasks` 与会话取消成员，守护身份经 provider 核心每次准入。新增接线不要让生产创建无人使用的实例；测试替身只经应用图的 `testSeams` 注入（RFC-392）。
+数字员工与开发自动化只在 `bootstrap/daemonModules/digitalEmployee.ts`、`developmentAutomation.ts` 构造；SQLite 的 HTTP、工作启动、启动初始化与 OS 作业共用一个数字员工实例（取代 RFC-359 W12 的两实例决定），`server.ts` 不再保留测试回退。写者切换每会话一份，迁移状态、任务准入、启动与周期共用；两个引擎的唤醒先刷新状态，遗留恢复读当前状态，门控在 development-automation 应用层。宿主任务共用任务执行组的 `hostTasks` 与会话取消成员，守护身份经 provider 核心每次准入。新增接线不要让生产创建无人使用的实例；测试替身只经应用图的 `testSeams` 注入（RFC-392）。
 
 ## RFC-384：意图按会话装配，维护直接读取同一应用引擎
 
-意图图只由 `cli/daemonModules/intent.ts` 的 `composeDaemonIntentModules` 构造，每个 provider 会话一次，并在维护服务之前完成。工作者运行族服务排队 / 启动续跑，HTTP 运行族服务路由轮次；两者的 runtime binding 与夹具必须保持分离。维护直接读 `intentModules.maintenance`，它引用路由使用的同一应用引擎；排队通知直接交给 `queuedResumption.enqueue`，启动前由续跑器缓冲。转储默认运行时通过实时配置读取口兜底，不得在构造时读取配置。
+意图图只由 `bootstrap/daemonModules/intent.ts` 的 `composeDaemonIntentModules` 构造，每个 provider 会话一次，并在维护服务之前完成。工作者运行族服务排队 / 启动续跑，HTTP 运行族服务路由轮次；两者的 runtime binding 与夹具必须保持分离。维护直接读 `intentModules.maintenance`，它引用路由使用的同一应用引擎；排队通知直接交给 `queuedResumption.enqueue`，启动前由续跑器缓冲。转储默认运行时通过实时配置读取口兜底，不得在构造时读取配置。
 
 ## RFC-385：执行世代与数据库世代不能混用
 
@@ -8801,6 +8801,6 @@ provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行�
 
 ### RFC-391 中立守护图的维护约定
 
-`main.ts` 将 `composeDaemonSession` 注入 `startCommand`；`cli/start.ts` / `cli/dev.ts` 不得导入 `bootstrap/`。应用图只构造被动模块，`unstarted` 相位仅做有限初始化；会话图拥有唯一 `composeDaemonLifecycle` 调用。冷恢复经适配表的 `afterCore` 在核心组之后、资源目录之前执行。受限启动步骤只读 `DAEMON_BOOT_STEPS`，不得在图里另写 provider 分支。恢复证明保留 SQLite 的进程世代与 PostgreSQL 的数据库世代，执行 owner 仍统一使用 `DAEMON_GENERATION`。
+`main.ts` 将 `composeDaemonSession` 注入 `startCommand`；启动序列与开发热重载位于 `bootstrap/daemonStart.ts` / `bootstrap/developmentReload.ts`；`cli/` 与 `bootstrap/` 两个方向均不得互相导入，`server.ts` 也不得导入这两个目录（RFC-393 目录级硬门）。应用图只构造被动模块，`unstarted` 相位仅做有限初始化；会话图拥有唯一 `composeDaemonLifecycle` 调用。冷恢复经适配表的 `afterCore` 在核心组之后、资源目录之前执行。受限启动步骤只读 `DAEMON_BOOT_STEPS`，不得在图里另写 provider 分支。恢复证明保留 SQLite 的进程世代与 PostgreSQL 的数据库世代，执行 owner 仍统一使用 `DAEMON_GENERATION`。
 
 维护 Worker 的任务保护集取会话驱动注册表与 `materializingSpaces.keys()` 的并集。新增源代码锁应读取真实图文件；跨层接线锁可用 `tests/helpers/daemonGraphSource.ts`，它每个文件只读取一次。不要恢复两个 provider 副本的计数或按旧 `backgroundJobs[1]` 找 SQLite。RFC-392 已将 `composeProviderAppComposition` 迁到 `bootstrap/daemonHttpComposition.ts`；它只类型依赖挂载表，`server.ts` 不导入 bootstrap。开发用途类型留在 development-automation composition，CLI 不新增 bootstrap 边。`readDaemonGraphSource()` 不包含 HTTP owner 文件，需要该源码的锁单独读取。测试绑定由 `tests/helpers/providerHttpApplication.ts` 补齐临时路径、配置、日志和写窗口，生产会话不传 `testSeams`；入口根瘦身与机制目录迁移留给 S2c。

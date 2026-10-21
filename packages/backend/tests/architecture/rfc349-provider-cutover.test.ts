@@ -65,8 +65,8 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
 
 /** Only these roots may resolve the durable provider generation. */
 const PROVIDER_SELECTION_SITES = [
+  'packages/backend/src/bootstrap/daemonStart.ts',
   'packages/backend/src/cli/dbCompact.ts',
-  'packages/backend/src/cli/start.ts',
   'packages/backend/src/main.ts',
   'packages/backend/src/modules/system-operations/composition.ts',
   'packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts',
@@ -353,7 +353,7 @@ describe('RFC-349 provider cutover', () => {
   })
 
   test('daemon bootstrap selects the verified provider and mounts live migration admission', () => {
-    const source = unit('packages/backend/src/cli/start.ts').text
+    const source = unit('packages/backend/src/bootstrap/daemonStart.ts').text
 
     expect(source).not.toMatch(/from\s+['"]@\/db\/client['"]/) // provider factory owns SQLite
     expect(source).toContain('resolveDatabaseProviderRuntime')

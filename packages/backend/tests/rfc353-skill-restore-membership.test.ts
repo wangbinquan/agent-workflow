@@ -91,8 +91,8 @@ describe('RFC-353 T7 装配面：resource-catalog 不认识 memory，也不认�
   // ——同步那条（`createSyncSkillRestoreMembership`）随之退役。
   test.each([
     [
-      'cli/daemonModules/resourceCatalog.ts',
-      ['cli', 'daemonModules', 'resourceCatalog.ts'],
+      'bootstrap/daemonModules/resourceCatalog.ts',
+      ['bootstrap', 'daemonModules', 'resourceCatalog.ts'],
       'createAsyncSkillRestoreMembership',
     ],
   ] as const)('%s 在 bootstrap 把 KE 的协调器交给 resource-catalog', (_name, parts, factory) => {

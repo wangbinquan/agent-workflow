@@ -4,7 +4,7 @@
 // migration coverage. No daemon, worker or provider connection is started here.
 import { describe, expect, test } from 'bun:test'
 import { DatabaseConfigSchema } from '@agent-workflow/shared'
-import { migrateCommand } from '@/cli/migrate'
+import { migrateCommand } from '@/bootstrap/migrate'
 import type { DatabaseConfigurationPort } from '@/modules/system-operations/application/ports/databaseConfiguration'
 import type { DatabaseInstallationPort } from '@/modules/system-operations/application/ports/databaseInstallation'
 import type { PreparedManualDatabaseMigration } from '@/modules/system-operations/composition/manualDatabaseMigration'

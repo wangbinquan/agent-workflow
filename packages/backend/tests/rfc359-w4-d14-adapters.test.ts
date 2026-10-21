@@ -250,16 +250,19 @@ test('源码锁：Agent 聚合没有 provider 命名的仓库 / 语义 / 快照�
     expect(source, neutral).toContain('ProviderNeutralDatabase')
   }
   for (const file of [
-    'src/cli/daemonModules/resourceCatalog.ts',
+    'src/bootstrap/daemonModules/resourceCatalog.ts',
     'src/server.ts',
     'src/bootstrap/daemonHttpComposition.ts',
     'src/bootstrap/daemonApplication.ts',
   ]) {
-    const source = /(?:^|\/)cli\/start\.ts$/.test(file)
+    const source = /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(file)
       ? readDaemonGraphSource()
       : readFileSync(join(import.meta.dir, '..', file), 'utf8')
     expect(
-      readFileSync(join(import.meta.dir, '../src/cli/daemonModules/resourceCatalog.ts'), 'utf8'),
+      readFileSync(
+        join(import.meta.dir, '../src/bootstrap/daemonModules/resourceCatalog.ts'),
+        'utf8',
+      ),
       file,
     ).toContain('composeClassicCatalogs({')
     expect(source, file).not.toContain('resource-catalog/infrastructure/')

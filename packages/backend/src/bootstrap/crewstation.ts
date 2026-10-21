@@ -30,7 +30,7 @@ import {
 } from '@/modules/intent/composition/crewstationArtifacts'
 import { composeCrewStationTaskArchive } from '@/modules/task-execution/composition/crewstationArchive'
 import { z } from 'zod'
-import type { StartOptions } from '@/cli/start'
+import type { StartOptions } from './daemonStart'
 import { composeCrewStationResourceContent } from '@/modules/resource-catalog/composition/skillContentBinding'
 import {
   HOSTED_TASK_CONTRACT_VERSION,

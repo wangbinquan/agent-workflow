@@ -19,7 +19,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { DAEMON_BACKGROUND_JOBS } from '../src/cli/daemonLifecycleProgram'
+import { DAEMON_BACKGROUND_JOBS } from '../src/bootstrap/daemonLifecycleProgram'
 import { propertyBodies } from './helpers/daemonProgramSource'
 
 const backendRoot = resolve(import.meta.dir, '..')

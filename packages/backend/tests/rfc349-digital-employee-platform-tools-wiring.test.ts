@@ -95,7 +95,7 @@ describeEachProvider('RFC-349 digital employee platform tool wiring', (harness) 
     const source = readDaemonGraphSource()
     // RFC-383: the session bundle builds and owns the catalog before HTTP assembly.
     const bundle = readFileSync(
-      resolve(backendRoot, 'src/cli/daemonModules/digitalEmployee.ts'),
+      resolve(backendRoot, 'src/bootstrap/daemonModules/digitalEmployee.ts'),
       'utf8',
     )
     expect(source).toMatch(

@@ -80,7 +80,7 @@ describe('doctor evaluateGitCheck — floor raised 2.5.0 → 2.38.0', () => {
 
 describe('boot wiring (source locks + real probe)', () => {
   test('start.ts wires detectGitCapabilities + gate BEFORE the DB opens', () => {
-    const src = readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8')
+    const src = readFileSync(resolve(import.meta.dir, '../src/bootstrap/daemonStart.ts'), 'utf8')
     const probeIdx = src.indexOf('detectGitCapabilities()')
     const gateIdx = src.indexOf('mergeTreeGateError(')
     const dbIdx = src.indexOf('openDb(')

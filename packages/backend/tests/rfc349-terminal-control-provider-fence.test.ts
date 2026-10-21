@@ -34,7 +34,7 @@ import type {
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 
-import { DAEMON_BACKGROUND_JOBS } from '../src/cli/daemonLifecycleProgram'
+import { DAEMON_BACKGROUND_JOBS } from '../src/bootstrap/daemonLifecycleProgram'
 import { propertyBodies } from './helpers/daemonProgramSource'
 
 function guards(abortRevoked: () => number | Promise<number>): MrLaunchGuardCoordinator {

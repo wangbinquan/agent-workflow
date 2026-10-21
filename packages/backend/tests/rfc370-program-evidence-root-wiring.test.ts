@@ -9,7 +9,7 @@ import ts from 'typescript'
 function source(path: string): ts.SourceFile {
   return ts.createSourceFile(
     path,
-    path === 'cli/start.ts'
+    path === 'bootstrap/daemonStart.ts'
       ? readDaemonGraphSource()
       : readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -42,7 +42,7 @@ function calls(node: ts.Node, file: ts.SourceFile, name: string): ts.CallExpress
 const compact = (node: ts.Node, file: ts.SourceFile): string =>
   node.getText(file).replace(/\s/g, '')
 
-const start = source('cli/start.ts')
+const start = source('bootstrap/daemonStart.ts')
 const pg = source('bootstrap/daemonApplication.ts')
 
 function selected(node: ts.Node, file: ts.SourceFile, name: string, property: string): void {
@@ -101,10 +101,10 @@ test('both daemon owners consume the same program and evidence read selection', 
     )
     selected(
       declaration(
-        source('cli/daemonModules/developmentAutomation.ts'),
+        source('bootstrap/daemonModules/developmentAutomation.ts'),
         'composeDaemonDevelopmentAutomationModules',
       ),
-      source('cli/daemonModules/developmentAutomation.ts'),
+      source('bootstrap/daemonModules/developmentAutomation.ts'),
       'composeDevelopmentAutomation',
       'evidenceDocumentCommands:developmentPurposeRoot.requirement.documentCommands,',
     )
@@ -124,7 +124,7 @@ test('both daemon owners consume the same program and evidence read selection', 
 })
 
 test('RFC-383 selects one program source for module authoring, reaction and contract fixtures', () => {
-  const employee = source('cli/daemonModules/digitalEmployee.ts')
+  const employee = source('bootstrap/daemonModules/digitalEmployee.ts')
   const root = declaration(employee, 'composeDaemonDigitalEmployeeModules')
   selected(root, employee, 'composeDigitalEmployee', 'programArtifacts:employeePrograms,')
   expect(calls(root, employee, 'createArtifactProgramToolSource')).toHaveLength(1)

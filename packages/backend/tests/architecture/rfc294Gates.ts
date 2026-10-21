@@ -813,7 +813,7 @@ function deploymentScope(path: string): boolean {
     /^modules\/[^/]+\/(?:domain|application|engine|inbound|public)\//.test(rel) ||
     (rel.startsWith('platform/') && !rel.startsWith('platform/crewstation/')) ||
     /^(?:routes|mcp|ws)\//.test(rel) ||
-    /^(?:main|server|embed)\.ts$|^cli\/(?:start|dev)\.ts$/.test(rel)
+    /^(?:main|server|embed)\.ts$|^bootstrap\/(?:daemonStart|developmentReload)\.ts$/.test(rel)
   )
 }
 function fenceOnly(node: ts.Node): boolean {
@@ -864,8 +864,12 @@ export function deploymentBranchSites(corpus: GateCorpus): string[] {
     if (!deploymentScope(unit.path)) continue
     const record = siteRecorder(unit.path)
     for (const edge of corpus.imports.get(unit.path) ?? []) {
-      if (unit.path === BACKEND_PREFIX + 'main.ts') continue
-      if (/^packages\/backend\/src\/(?:cli\/deployment(?:\.ts)?$|bootstrap\/)/.test(edge.target))
+      if (
+        unit.path === BACKEND_PREFIX + 'main.ts' ||
+        unit.path.startsWith(BACKEND_PREFIX + 'bootstrap/')
+      )
+        continue
+      if (/^packages\/backend\/src\/bootstrap\//.test(edge.target))
         sites.push(`${unit.path}#$file#import:${edge.target}#1`)
     }
     walk(unit.source, (node) => {

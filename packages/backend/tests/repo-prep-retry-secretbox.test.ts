@@ -23,7 +23,7 @@ import { unsealRepoUrl } from '../src/services/repoCredentials'
 
 const SRC = join(import.meta.dir, '..', 'src')
 const read = (rel: string): string =>
-  /(?:^|\/)cli\/start\.ts$/.test(rel)
+  /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(rel)
     ? readDaemonGraphSource()
     : readFileSync(join(SRC, rel), 'utf8')
 
@@ -52,10 +52,10 @@ describe('仓库准备重试 / boot 恢复必须带上 secretBox', () => {
   })
 
   test('bootstrap 只构造一次带 secretBox 的 start deps，重试与 boot 恢复复用 closed command', () => {
-    const src = read('cli/start.ts')
+    const src = read('bootstrap/daemonStart.ts')
     const runtime = read('modules/task-execution/composition/providerRuntime.ts')
     const autoResume = read('modules/task-execution/composition/taskAutoResume.ts')
-    const bundle = read('cli/daemonModules/taskExecution.ts')
+    const bundle = read('bootstrap/daemonModules/taskExecution.ts')
     expect(src).toContain('composeDaemonTaskExecutionModules({')
     expect(src).toContain('secretBox,')
     expect(bundle).toMatch(/composeRepositoryPreparation\(\{[\s\S]*?secretBox,/)

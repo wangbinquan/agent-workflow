@@ -6,7 +6,7 @@ import ts from 'typescript'
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -61,7 +61,7 @@ test('the actual DA composition selects one context receiver and invokes its nat
 })
 
 test('all real startup and HTTP roots forward the same selected context through provider recomposition', () => {
-  const start = load('cli/start.ts')
+  const start = load('bootstrap/daemonStart.ts')
   const pg = load('bootstrap/daemonApplication.ts')
   const pgRoot = calls(start, 'composeDaemonApplication')
   expect(pgRoot).toHaveLength(1)
@@ -75,7 +75,7 @@ test('all real startup and HTTP roots forward the same selected context through 
     binding(source, roots[0]!, receiver)
     expect(source.text).toContain('attemptContext?: AttemptContextStorePort')
   }
-  const bundle = load('cli/daemonModules/developmentAutomation.ts')
+  const bundle = load('bootstrap/daemonModules/developmentAutomation.ts')
   const consumers = calls(bundle, 'composeDevelopmentAutomation')
   expect(consumers).toHaveLength(1)
   binding(bundle, consumers[0]!, 'input')

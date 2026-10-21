@@ -35,7 +35,7 @@ interface PublicationLedger {
 }
 
 function read(relativePath: string): string {
-  return /(?:^|\/)cli\/start\.ts$/.test(relativePath)
+  return /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(relativePath)
     ? readDaemonGraphSource()
     : readFileSync(resolve(REPO_ROOT, relativePath), 'utf8')
 }
@@ -281,16 +281,16 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(composition).toContain('{ publicationTransport: input.publicationTransport }')
     // RFC-383: the shared employee/automation bundles own these publication participants.
     for (const bundle of ['digitalEmployee', 'developmentAutomation']) {
-      const source = read(`packages/backend/src/cli/daemonModules/${bundle}.ts`)
+      const source = read(`packages/backend/src/bootstrap/daemonModules/${bundle}.ts`)
       expect(
         source.match(/publicationTransport: repository\.repositoryPublicationTransport/g)?.length,
       ).toBe(bundle === 'digitalEmployee' ? 2 : 1)
     }
     expect(cli).toContain('repository: repositoryCredentials')
-    expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
+    expect(read('packages/backend/src/bootstrap/daemonModules/repositoryCredentials.ts')).toContain(
       'composeRepositoryTransportCredentials',
     )
-    expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
+    expect(read('packages/backend/src/bootstrap/daemonModules/repositoryCredentials.ts')).toContain(
       'repositoryTransport: repositoryTransport.adminConnections',
     )
     expect(bootDeclaration('transport-projections')).toMatchObject({
@@ -387,10 +387,10 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(publication).toContain('password: credential.token')
     expect(publication).not.toContain('token: credential.token')
     expect(publication).not.toContain('globalLookupToken')
-    expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
+    expect(read('packages/backend/src/bootstrap/daemonModules/repositoryCredentials.ts')).toContain(
       'const connection = await codeHostConnections.resolve(provider)',
     )
-    expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
+    expect(read('packages/backend/src/bootstrap/daemonModules/repositoryCredentials.ts')).toContain(
       'token: connection.token',
     )
     expect(endpointDiscovery).toContain(
@@ -407,9 +407,9 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(nodeMechanics).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')
     expect(developmentRest).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')
 
-    const repository = read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')
+    const repository = read('packages/backend/src/bootstrap/daemonModules/repositoryCredentials.ts')
     expect(repository).toContain('composeRepositoryTransportCredentials')
-    expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
+    expect(read('packages/backend/src/bootstrap/daemonModules/repositoryCredentials.ts')).toContain(
       'repositoryTransport: repositoryTransport.adminConnections',
     )
     expect(repository).toMatch(

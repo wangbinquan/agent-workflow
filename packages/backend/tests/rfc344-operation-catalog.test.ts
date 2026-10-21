@@ -802,7 +802,7 @@ describe('RFC-344 single inbound root source locks', () => {
 
     expect(http).toContain('const developmentMissions = developmentAutomation.missionOperations')
     const bundle = readFileSync(
-      join(ROOT, 'src/cli/daemonModules/developmentAutomation.ts'),
+      join(ROOT, 'src/bootstrap/daemonModules/developmentAutomation.ts'),
       'utf8',
     )
     expect(bundle).toContain('composeDevelopmentMissionOperations({')

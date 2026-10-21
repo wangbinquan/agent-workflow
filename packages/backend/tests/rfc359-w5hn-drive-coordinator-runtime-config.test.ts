@@ -18,7 +18,7 @@ test('all root callers share one coordinator with the complete live projection',
     expect(source.match(/composeDaemonTaskExecutionModules\(/g)).toHaveLength(1)
     expect(source).not.toMatch(/(?:createTaskDriveCoordinator|new DefaultTaskDriveCoordinator)\(/)
   }
-  const bundle = readFileSync(resolve(SRC, 'cli/daemonModules/taskExecution.ts'), 'utf8')
+  const bundle = readFileSync(resolve(SRC, 'bootstrap/daemonModules/taskExecution.ts'), 'utf8')
   const factory = readFileSync(
     resolve(SRC, 'modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts'),
     'utf8',

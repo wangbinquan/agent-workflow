@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { configGetCommand, configSetCommand } from '../src/cli/config-cli'
 import { doctorCommand, formatDoctor } from '../src/cli/doctor'
-import { migrateCommand } from '../src/cli/migrate'
+import { migrateCommand } from '../src/bootstrap/migrate'
 import { statusCommand, formatStatus } from '../src/cli/status'
 import { stopCommand } from '../src/cli/stop'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -111,7 +111,10 @@ describe('CLI subcommands (P-1-05)', () => {
   // is the afterEach itself; this source anchor makes a revert red on POSIX CI
   // too. (Root-caused on the ARM64 VM: 0 lingering processes, leaked DB handle.)
   test('migrateCommand closes its DB handle (no leaked bun:sqlite lock)', () => {
-    const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'migrate.ts'), 'utf8')
+    const source = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'bootstrap', 'migrate.ts'),
+      'utf8',
+    )
     // RFC-359 AC-10 起这条判据**变强了**。此前两条 provider 路径各有一处关闭（PG 在
     // `finally`、SQLite 先关再返回），所以只能分别钉两个源码位置、并数出「恰好两处 close」。
     // 现在两条路径合成一条：消息在 `prepareDatabaseProviderForBoot` 里就定稿，这里只剩
@@ -421,7 +424,7 @@ describe('CLI subcommands (P-1-05)', () => {
  * `child` 是可选的**诊断**参数（2026-08-24 加）：`daemon exited before ready` 这条失败
  * 此前只带 stdout/stderr，而 CI 上真出现过一次**日志停在 `git probe ok`、之后一个字都没有**
  * 的静默退出——`main().catch` 会打印 `err.message`，所以「什么都没打印」本身就说明它不是
- * 抛错退出的（`process.exit` 路径在 `cli/start.ts` 里也都先写了 stderr）。
+ * 抛错退出的（`process.exit` 路径在 `bootstrap/daemonStart.ts` 里也都先写了 stderr）。
  * 剩下的可能是被信号杀死或原生崩溃，而**退出码与信号恰恰是当时唯一没被记下来的东西**。
  * 传入 child 之后，下一次再发生时失败信息里直接带 `exit=… signal=…`，不必再猜。
  */

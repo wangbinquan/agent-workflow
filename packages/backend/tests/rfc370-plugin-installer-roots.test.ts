@@ -11,7 +11,7 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 const load = (path: string) =>
   ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -43,7 +43,7 @@ test('the complete plugin installer receiver reaches the real startup and HTTP c
     expect(bindings).toHaveLength(1)
     expect(bindings[0]!.initializer.getText(source)).toBe(`${receiver}.pluginInstaller`)
   }
-  const bundle = load('cli/daemonModules/resourceCatalog.ts')
+  const bundle = load('bootstrap/daemonModules/resourceCatalog.ts')
   expect(calls(bundle, 'composePluginCatalog')).toHaveLength(1)
   expect(calls(bundle, 'composePluginCatalog')[0]!.getText(bundle)).toContain(
     'installer: input.pluginInstaller',
@@ -56,7 +56,7 @@ test('the complete plugin installer receiver reaches the real startup and HTTP c
   if (!ts.isBinaryExpression(selection)) throw new Error('installer selection is missing')
   expect(selection.left.getText(composition)).toBe('input.installer')
   expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
-  const start = load('cli/start.ts')
+  const start = load('bootstrap/daemonStart.ts')
   expect(start.text).toContain('pluginInstaller: opts.pluginInstaller,')
   for (const expression of ['composeDaemonApplication', 'composeDaemonResourceCatalogModules']) {
     const roots = calls(start, expression)

@@ -144,7 +144,7 @@ function scan(): string[] {
  */
 export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   // RFC-383: the two terminal callbacks move from both roots into one session bundle.
-  'cli/daemonModules/developmentAutomation.ts: 2',
+  'bootstrap/daemonModules/developmentAutomation.ts: 2',
   'mcp/server.ts: 1',
   // RFC-370 H8: the existing observer nudge moved out of the HTTP transport unchanged.
   'modules/integration/application/verifiedWebhookIngress.ts: 1',

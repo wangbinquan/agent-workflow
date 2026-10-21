@@ -24,7 +24,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
-const START_TS = resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts')
+const START_TS = resolve(import.meta.dir, '..', 'src', 'bootstrap', 'daemonStart.ts')
 const INSTALLER_TS = resolve(
   import.meta.dir,
   '..',
@@ -36,7 +36,7 @@ const INSTALLER_TS = resolve(
   'filePluginInstallation.ts',
 )
 
-describe('cli/start.ts — Bun.serve idleTimeout', () => {
+describe('bootstrap/daemonStart.ts — Bun.serve idleTimeout', () => {
   test('Bun.serve passes an explicit idleTimeout that covers the install timeout', () => {
     const src = readFileSync(START_TS, 'utf-8')
     const match = src.match(/idleTimeout:\s*(\d+)/)

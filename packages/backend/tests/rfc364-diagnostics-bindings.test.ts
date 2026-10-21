@@ -8,7 +8,7 @@ const root = resolve(import.meta.dir, '../src')
 function parse(path: string) {
   return ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(resolve(root, path), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -38,7 +38,7 @@ describe('RFC-364 production bindings', () => {
     )
   })
 
-  for (const path of ['cli/daemonModules/observation.ts']) {
+  for (const path of ['bootstrap/daemonModules/observation.ts']) {
     test(
       path + ' binds one cold diagnostics instance to the same coordinator and admitted catalog',
       () => {
@@ -69,7 +69,7 @@ describe('RFC-364 production bindings', () => {
             'loadVisibleMcp:(authority,id)=>input.mcpCatalog().queries.get(authority,{id}),}',
         )
         expect(source.text).not.toContain('getMcpRuntimeTestService')
-        expect(parse('cli/daemonModules/adapters.ts').text).toContain(
+        expect(parse('bootstrap/daemonModules/adapters.ts').text).toContain(
           'mcpDiagnostics: composeLocalMcpDiagnostics',
         )
         expect(parse('bootstrap/daemonApplication.ts').text).toContain(
@@ -107,7 +107,7 @@ describe('RFC-364 production bindings', () => {
     )
   }
   test('both roots give the same observation bundle to the neutral HTTP owner', () => {
-    for (const path of ['cli/start.ts', 'bootstrap/daemonApplication.ts']) {
+    for (const path of ['bootstrap/daemonStart.ts', 'bootstrap/daemonApplication.ts']) {
       expect(parse(path).text).toContain('observation: observationModules')
       expect(parse(path).text).toContain('composeProviderAppComposition({')
     }
@@ -116,7 +116,7 @@ describe('RFC-364 production bindings', () => {
     )
   })
   test('shared runtime management consumes the same diagnostic reconciliation', () => {
-    const source = parse('cli/daemonModules/observation.ts')
+    const source = parse('bootstrap/daemonModules/observation.ts')
     expect(source.text).toContain('runtimeTests: mcpRuntimeTests.reconciliation')
   })
   test('diagnostics HTTP handlers only decode, call and map; service facades are retired', () => {

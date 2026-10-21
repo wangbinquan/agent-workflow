@@ -452,7 +452,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
 function source(path: string) {
   return ts.createSourceFile(
     path,
-    /(?:^|\/)cli\/start\.ts$/.test(path)
+    /(?:^|\/)bootstrap\/daemonStart\.ts$/.test(path)
       ? readDaemonGraphSource()
       : readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
@@ -525,7 +525,7 @@ test('the real drive binds its exact selected artifact receiver into the family 
 })
 
 test('CLI initial and replacement sessions carry raw content selection into the real SQLite and PG composers', () => {
-  const sf = source('cli/start.ts')
+  const sf = source('bootstrap/daemonStart.ts')
   const sqlite = calls(sf, sf, 'composePortArtifactOperations')
   expect(sqlite).toHaveLength(1)
   expect(sqlite[0]!.arguments.map((arg) => arg.getText(sf))).toEqual([
@@ -556,7 +556,7 @@ test('PG and HTTP roots share one selected service between runtime, review and t
     'input.appHome',
   ])
   expect(pg.text).toContain('taskRunBinding: taskRunRoot.drive')
-  const bundle = source('cli/daemonModules/taskExecution.ts')
+  const bundle = source('bootstrap/daemonModules/taskExecution.ts')
   const pgBundle = calls(pg, pg, 'composeDaemonTaskExecutionModules')
   expect(pgBundle).toHaveLength(1)
   expect(pgBundle[0]!.arguments[0]!.getText(pg)).toMatch(/selection:\s*\{[\s\S]*?\bportArtifacts,/)

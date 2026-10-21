@@ -1,5 +1,5 @@
 import { taskBundleInput } from './helpers/daemonTaskExecutionBundle'
-import { composeDaemonTaskExecutionModules } from '@/cli/daemonModules/taskExecution'
+import { composeDaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { afterEach, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
