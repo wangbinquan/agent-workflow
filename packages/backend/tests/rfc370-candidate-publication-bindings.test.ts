@@ -35,39 +35,55 @@ function property(source: ts.SourceFile, call: ts.CallExpression, key: string) {
   return named[0]!.initializer.getText(source)
 }
 
-test('all six actual derive and delivery groups forward the same candidate factory and original transport', () => {
-  for (const [path, receiver] of [
-    ['cli/start.ts', 'input'],
-    ['cli/postgresqlDaemonApplication.ts', 'input'],
-    ['server.ts', 'deps'],
-  ] as const) {
-    const source = ts.createSourceFile(
+test('RFC-383 roots forward the selected candidate factory to both shared derive/delivery groups', () => {
+  const load = (path: string) =>
+    ts.createSourceFile(
       path,
       readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
       ts.ScriptTarget.Latest,
       true,
     )
-    for (const name of ['bindChangeCandidateParticipant', 'bindCandidateDeliveryParticipant']) {
+  for (const [path, receiver] of [
+    ['cli/start.ts', 'input'],
+    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['server.ts', 'deps'],
+  ] as const) {
+    const source = load(path)
+    for (const name of [
+      'composeDaemonDigitalEmployeeModules',
+      'composeDaemonDevelopmentAutomationModules',
+    ]) {
       const bindings = calls(source, name)
-      expect(bindings).toHaveLength(2)
-      for (const binding of bindings) {
-        expect(property(source, binding, 'candidateEffects')).toBe(
-          `${receiver}.repositoryCandidateEffects`,
-        )
-        if (name === 'bindCandidateDeliveryParticipant') {
-          expect([
-            'repositoryPublicationTransport',
-            'deps.repositoryPublicationTransport',
-          ]).toContain(property(source, binding, 'publicationTransport'))
-        }
-      }
+      expect(bindings).toHaveLength(1)
+      expect(property(source, bindings[0]!, 'repositoryCandidateEffects')).toBe(
+        `${receiver}.repositoryCandidateEffects`,
+      )
     }
+    for (const name of ['bindChangeCandidateParticipant', 'bindCandidateDeliveryParticipant'])
+      expect(calls(source, name)).toHaveLength(0)
     expect(source.text).toContain('repositoryCandidateEffects?: RepositoryCandidateEffectsFactory')
   }
-  const start = readFileSync(new URL('../src/cli/start.ts', import.meta.url), 'utf8')
+  for (const path of [
+    'cli/daemonModules/digitalEmployee.ts',
+    'cli/daemonModules/developmentAutomation.ts',
+  ]) {
+    const source = load(path)
+    for (const name of ['bindChangeCandidateParticipant', 'bindCandidateDeliveryParticipant']) {
+      const bindings = calls(source, name)
+      expect(bindings).toHaveLength(1)
+      expect(property(source, bindings[0]!, 'candidateEffects')).toBe(
+        'input.repositoryCandidateEffects',
+      )
+      if (name === 'bindCandidateDeliveryParticipant')
+        expect(property(source, bindings[0]!, 'publicationTransport')).toBe(
+          'repository.repositoryPublicationTransport',
+        )
+    }
+  }
+  const start = load('cli/start.ts').text
   expect(start).toContain('repositoryCandidateEffects: opts.repositoryCandidateEffects,')
   expect(start.split('repositoryCandidateEffects: input.repositoryCandidateEffects,')).toHaveLength(
-    3,
+    5,
   )
 })
 

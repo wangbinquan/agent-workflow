@@ -39,7 +39,7 @@ export const DAEMON_BOOT_STEPS = [
     failure: 'fail-closed',
     providers: ['postgresql'],
     providerReason:
-      'PostgreSQL admits its daemon identity once; SQLite retains per-operation admission (S2b).',
+      'PostgreSQL retains its daemon identity boot check; both providers admit per operation.',
   },
   { id: 'skill-identity-barrier', phase: 'prepare', failure: 'fail-closed' },
   { id: 'fusion-provenance', phase: 'prepare', failure: 'fail-closed' },
@@ -67,8 +67,6 @@ export const DAEMON_BOOT_STEPS = [
     id: 'legacy-mission-recovery',
     phase: 'execution-recovery',
     failure: 'best-effort',
-    providers: ['sqlite'],
-    providerReason: 'Only SQLite retains the legacy-draining mission recovery path (S2b).',
   },
   { id: 'employee-upgrade-settlement', phase: 'execution-recovery', failure: 'fail-closed' },
   { id: 'maintenance-boot-snapshot', phase: 'execution-recovery', failure: 'fail-closed' },

@@ -1,4 +1,12 @@
 import {
+  composeDaemonDigitalEmployeeModules,
+  type DaemonDigitalEmployeeModules,
+} from '@/cli/daemonModules/digitalEmployee'
+import {
+  composeDaemonDevelopmentAutomationModules,
+  type DaemonDevelopmentAutomationModules,
+} from '@/cli/daemonModules/developmentAutomation'
+import {
   composeDaemonTaskExecutionModules,
   type DaemonTaskExecutionModules,
 } from '@/cli/daemonModules/taskExecution'
@@ -107,7 +115,6 @@ import type {
   RepositoryBaselineEffectsFactory,
   VerificationCommandEffectsFactory,
 } from '@/modules/development-automation/composition'
-import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import {
   composeRunObservation,
   type RunObservation,
@@ -131,20 +138,14 @@ import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
 } from '@/modules/system-operations/composition/applicationConfiguration'
-import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
-import { createArtifactProgramToolSource } from '@/modules/task-execution/composition/programTools'
-import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 // Hono app factory. Routes that touch DB / config / version probe receive
 // their dependencies via the `AppDeps` interface so tests can inject mocks
 // without monkey-patching the module.
 
-import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { Hono } from 'hono'
 import type {
   DatabaseRuntimeTelemetry,
   MaintenanceStatus,
-  ResourceAcl,
-  UpdateResourceAclBody,
   WorkflowRevision,
 } from '@agent-workflow/shared'
 import { join } from 'node:path'
@@ -153,8 +154,6 @@ import type { AuthRuntime } from '@/auth/application/authRuntime'
 import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import type { SecretBox } from '@/auth/secretBox'
-import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
-import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
 import { takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
@@ -209,11 +208,7 @@ import {
   composeWorkgroupTaskRoomDynamicWorkflow,
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import type { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import { type ProviderResourceCatalogComposition } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { type ComposedResourcePackageCatalog } from '@/modules/resource-catalog/composition/resourcePackageOperations'
-import type { updateResourceAcl } from '@/modules/resource-catalog/composition/resourceAcl'
-import { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
-import { resourceAclAudienceAuthority } from '@/modules/resource-catalog/domain/resourceAccess'
 
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type {
@@ -239,7 +234,7 @@ import {
 import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
 import { createOidcProvidersService } from '@/services/oidcProviders'
-import { type LocalMcpDiagnosticsCompositionInput as McpDiagnosticsCompositionInput } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
+import type { LocalMcpDiagnosticsCompositionInput as McpDiagnosticsCompositionInput } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { McpDiagnosticsRuntime } from '@/modules/resource-catalog/composition/mcpDiagnostics'
 import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
@@ -333,11 +328,7 @@ import {
 } from '@/routes/capabilityTemplates'
 import { mountDevelopmentConfigRoutes } from '@/routes/developmentConfig'
 import { mountDevelopmentMissionRoutes } from '@/routes/developmentMissions'
-import {
-  mountDigitalEmployeeRoutes,
-  type DigitalEmployeeAclResourceType,
-  type DigitalEmployeeRoutePersistence,
-} from '@/routes/digitalEmployees'
+import { mountDigitalEmployeeRoutes } from '@/routes/digitalEmployees'
 import { mountEventCenterRoutes } from '@/routes/eventCenter'
 import { mountExecutionContractRoutes } from '@/routes/executionContracts'
 import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
@@ -351,56 +342,30 @@ import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
 import { Paths } from '@/util/paths'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { mountWorktreeFilesRoutes, type WorktreeFilesRouteDeps } from '@/routes/worktree-files'
-import { mountAclEndpoints } from '@/routes/resourceAcl'
 import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
-import { errorHandler, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { errorHandler, ForbiddenError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
-import {
-  composeDigitalEmployee,
-  composeDigitalEmployeePlatformInventoryParticipant,
-  composeDigitalEmployeeTaskCatalogSource,
-  composeDigitalEmployeeWriterCutoverFor,
-  createEmployeeInputArtifactStore,
-} from '@/modules/digital-employee/composition'
 
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
 import type {
   DigitalEmployeePlatformToolCatalogParticipant,
   EmployeeCaseDetailProjectionParticipant,
 } from '@/modules/digital-employee/public/types'
-import {
-  developmentExecutionContractRegistrations,
-  developmentEmployeeRuntimeCodec,
-  developmentEmployeeTypePackage,
-  developmentImplicitAgentContractDeclarations,
-} from '@/modules/development-automation/composition/employeeTypePackage'
-import {
-  composeDevelopmentMissionOperations,
-  createLegacyMissionAdmissionsEnabledQuery,
-} from '@/modules/development-automation/composition/missionOperations'
-import {
-  composeMissionInputUploadOperations,
-  type MissionInputBlobPersistence,
-} from '@/modules/development-automation/composition/missionInputUploads'
+import { type MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/composition/codeReviewArtifacts'
 import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
-import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import type {
   DevelopmentConfigOperations,
   DevelopmentMissionOperations,
 } from '@/modules/development-automation/public/operations'
-import { composeExecutionContract } from '@/modules/execution-contract/composition'
+import type { composeExecutionContract } from '@/modules/execution-contract/composition'
 import {
   type EventCenterModule,
   type CustomObserverProgramFactory,
 } from '@/modules/event-center/composition'
 
-import {
-  composeDatabaseDigitalEmployeeExecutionPorts,
-  composeReactionExecutionProvider,
-} from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import type { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import {
   createDrizzleTaskArchiveMaintenanceCommand,
@@ -420,10 +385,7 @@ import {
   composeNodeRunPromptOperations,
   selectNodeRunPromptOperations,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
-import {
-  createSqliteCollaborationTaskAccessPort,
-  planMembersReplacement,
-} from '@/modules/collaboration/composition'
+import { createSqliteCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 
@@ -445,51 +407,28 @@ import { setChildTaskBudgetCapacity } from '@/services/execution/childBudget'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import {
-  composeDevelopmentEmployeeWorkspace,
-  createDevelopmentEmployeeCaseWorkspaceDetailReader,
-} from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
-import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
-import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
-import {
-  composeDevelopmentAutomation,
   type EvidenceDocumentCommands,
   type EvidenceArtifactPort,
   type AttemptContextStorePort,
-  composeDevelopmentAdmissionLookup,
-  createDevelopmentMissionExecutionTerminalObserver,
   type DevelopmentAdmissionLookup,
   type DevelopmentAutomationModule,
 } from '@/modules/development-automation/composition'
 
 import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
-import {
-  buildDevelopmentDeliveryDeps,
-  buildDevelopmentMrFactsDeps,
-  buildDevelopmentPipelineDeps,
-} from '@/services/developmentDeliveryDeps'
 
 import type { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
-import { composeSelectedRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
 
 import { type WebhookIngressPersistence } from '@/modules/integration/composition/webhookIngress'
 
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { triggerRevalidation } from '@/ws/revalidationHook'
-import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
-import { canManageCaseMembers } from '@/services/employeeCaseMembers'
 import {
-  bindCandidateDeliveryParticipant,
-  bindChangeCandidateParticipant,
-  bindConflictMergeParticipant,
-  bindEmployeeCaseWorkspaceParticipant,
   type RepositoryTransportCredentialModule,
   type RepositoryTransportCredentialRepository,
   type RepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
-import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
-import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 
 import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
@@ -524,6 +463,8 @@ export interface AppDeps {
   resourceCatalogModules?: DaemonResourceCatalogModules
   observationModules?: DaemonObservationModules
   memoryModules?: DaemonMemoryModules
+  digitalEmployeeModules?: DaemonDigitalEmployeeModules
+  developmentAutomationModules?: DaemonDevelopmentAutomationModules
   taskExecutionModules?: DaemonTaskExecutionModules<'sqlite'>
   repositoryPreparationEffects?: NonNullable<
     Parameters<typeof composeDaemonTaskExecutionModules>[0]['selection']['preparationEffects']
@@ -804,6 +745,8 @@ export interface AppDeps {
 type SqliteAppDeps = AppDeps & { readonly db: DbClient }
 
 type RuntimeComposedAppDeps = SqliteAppDeps & {
+  readonly digitalEmployeeModules: DaemonDigitalEmployeeModules
+  readonly developmentAutomationModules: DaemonDevelopmentAutomationModules
   readonly taskExecutionModules: DaemonTaskExecutionModules<'sqlite'>
   readonly scheduledTaskModules: DaemonScheduledTaskModules
   readonly integrationModules: DaemonIntegrationModules
@@ -850,7 +793,6 @@ type RepositoryBootstrap = DaemonRepositoryCredentials
 type SqliteComposedAppDeps = RuntimeComposedAppDeps &
   RepositoryBootstrap & {
     readonly workspacePresence: WorkspacePresenceQueries
-    readonly developmentAutomation: DevelopmentAutomationModule
     readonly developmentAdapterAclIdentity: ReturnType<
       typeof composeDevelopmentAdapterConfigOperationsFor
     >['resourceAclIdentity']
@@ -981,6 +923,8 @@ export interface ComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProv
 export interface SqliteAppComposition<
   TCore extends AppHttpProviderCore = AppHttpProviderCore,
 > extends ComposedAppDeps<TCore> {
+  readonly digitalEmployeeModules: DaemonDigitalEmployeeModules
+  readonly developmentAutomationModules: DaemonDevelopmentAutomationModules
   readonly taskExecutionModules: DaemonTaskExecutionModules<'sqlite'>
   readonly digitalEmployeeWorkStart: DigitalEmployeeWorkStartPort
   readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
@@ -1418,90 +1362,6 @@ function composeLegacyConfigConcurrencyHotApply(
   })
 }
 
-function composeFallbackDevelopmentAutomation(
-  deps: RuntimeComposedAppDeps &
-    RepositoryBootstrap & { readonly workspacePresence: WorkspacePresenceQueries },
-  appHome: string,
-  // RFC-345：Agent 查询由 bootstrap 从模块的目录查询面提供，本文件不再经 services/agent 门面。
-  agents: Parameters<typeof composeAgentActionExecution>[0]['agents'],
-): DevelopmentAutomationModule {
-  const hostActionEnvironment = {
-    db: deps.db,
-    launch: deps.taskExecutionModules.routeLaunch.workflow,
-    resolveActor: async () => {
-      const identity = await admitDaemonIdentity(deps.identityAccess)
-      if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')
-      return actorOfDirectAuthority(identity)
-    },
-    resourceAuthorityFor: (actor: Actor) => ({
-      actor,
-      authority: deps.identityAccess.directAuthority.authorityForLegacyProjection(actor),
-      resources: deps.identityAccess.taskExecutionResources,
-    }),
-    cancelTask: (taskId: string) => composeTaskCancellation(deps.db).cancel(taskId),
-    readModels: deps.taskExecutionReadModels,
-  }
-  // RFC-359 W11：终态观察者要回调 `automation.drive`，而 automation 的两个 launcher 又要这个
-  // 观察者。环打在**词法作用域**上，不再打在一个可空的盒子上：`automation` 是同一作用域里的
-  // `const`，箭头只在运行期取值。这样「忘了回填」在类型层不可表达——删掉下面那行
-  // `const automation = …`，tsc 立刻报「Cannot find name 'automation'」，而不是留下一个
-  // 编译通过、跑起来每次都 reject 的组合根。
-  const terminalObserver = createDevelopmentMissionExecutionTerminalObserver({
-    db: deps.db,
-    drive: (missionId) => automation.drive(missionId),
-  })
-  const automation = composeDevelopmentAutomation({
-    verificationCommands:
-      deps.verificationCommands === undefined
-        ? createLocalVerificationCommandEffectsFactory()
-        : deps.verificationCommands,
-    actionWorkspaceEffects: deps.actionWorkspaceEffects,
-    automationWorkspaceEffects: deps.automationWorkspaceEffects,
-    repositoryBaselines: deps.repositoryBaselines,
-    db: deps.db,
-    appHome,
-    evidenceArtifacts: deps.developmentPurposeRoot.evidenceArtifacts,
-    evidenceRead: deps.evidenceRead,
-    evidenceDocumentCommands: deps.developmentPurposeRoot.requirement.documentCommands,
-    requirementStaging: deps.developmentPurposeRoot.requirement.staging,
-    attemptContext: deps.attemptContext,
-    admissionLookup: deps.developmentAdmissionLookup,
-    requirementSource: composeSelectedRequirementSourceRunnerFor(
-      deps.db,
-      deps.developmentPurposeRoot.requirement,
-    ),
-    changeCandidate: bindChangeCandidateParticipant({
-      candidateEffects: deps.repositoryCandidateEffects,
-    }),
-    candidateDelivery: bindCandidateDeliveryParticipant({
-      candidateEffects: deps.repositoryCandidateEffects,
-      publicationTransport: deps.repositoryPublicationTransport,
-    }),
-    conflictMerge: bindConflictMergeParticipant({ effects: deps.conflictMergeWorkspaceEffects }),
-    ...buildDevelopmentDeliveryDeps(
-      deps.developmentDeliveryProvider,
-      deps.developmentPurposeRoot.pipeline.staging,
-    ),
-    ...buildDevelopmentPipelineDeps(
-      deps.developmentDeliveryProvider.pipeline,
-      deps.developmentPurposeRoot.pipeline.staging,
-    ),
-    ...buildDevelopmentMrFactsDeps(deps.developmentDeliveryProvider),
-    agentLauncher: composeAgentActionExecution({
-      ...hostActionEnvironment,
-      agents,
-      onTerminal: terminalObserver.agent,
-    }),
-    scriptLauncher: composeScriptActionExecution({
-      ...hostActionEnvironment,
-      agents,
-      onTerminal: terminalObserver.script,
-    }),
-    approvalGateway: deps.integrationModules.developmentApprovalGateway,
-  })
-  return automation
-}
-
 /** Owned finite resource initialization and runtime-test composition for one application. */
 export interface UnstartedApplicationScope {
   readonly trackReady: <T>(ready: Promise<T>) => Promise<T>
@@ -1616,6 +1476,7 @@ export function composeSqliteApplicationDeps(
       configuration,
       notificationKey: applicationConfiguration.notificationKey,
       identityAccess: baseIdentityAccess,
+      daemonActor: providerCore.daemonActor,
       runtimeRegistry,
       mcpCatalog: () => mcpCatalog,
       adapters: {
@@ -1705,7 +1566,7 @@ export function composeSqliteApplicationDeps(
         repositoryWorkspaceStore: repositoryBootstrap.repositoryWorkspaceStore,
       },
       observation: observationModules,
-      resources: { agentResourceIntegrity, owners: composeOwnerIdentityQueries(deps.db) },
+      resources: { ...resourceCatalogModules, owners: composeOwnerIdentityQueries(deps.db) },
       repository: repositoryBootstrap,
       memory: memoryModules,
       selection: {
@@ -1774,7 +1635,7 @@ export function composeSqliteApplicationDeps(
       }),
       taskExecutions: taskExecutionModules.trigger.taskExecutions,
       digitalEmployeeWorkStart: {
-        launch: (request) => apiComposition.digitalEmployeeWorkStart.launch(request),
+        launch: (request) => digitalEmployeeModules.workStart.launch(request),
       },
       developmentDeliveryProvider: repositoryBootstrap.developmentDeliveryProvider,
       developmentPurposeRoot,
@@ -1790,8 +1651,77 @@ export function composeSqliteApplicationDeps(
   if (deps.integrationModules === undefined && deps.digitalEmployeeEventCenter === undefined) {
     void unstarted?.trackReady(integrationModules.eventCenter.initialize())
   }
+  const developmentWorkspaceEffects = selectDevelopmentWorkspaceEffectBinding({
+    actionWorkspaceEffects: deps.actionWorkspaceEffects,
+    automationWorkspaceEffects: deps.automationWorkspaceEffects,
+    conflictWorkspaceSelected: deps.conflictMergeWorkspaceEffects !== undefined,
+  })
+  const digitalEmployeeModules: DaemonDigitalEmployeeModules =
+    deps.digitalEmployeeModules ??
+    composeDaemonDigitalEmployeeModules({
+      db: deps.db,
+      appHome,
+      configuration,
+      log: createLogger('digital-employee'),
+      typePackageDriftPolicy: deps.digitalEmployeeTypePackageDriftPolicy,
+      core: {
+        daemonActor: providerCore.daemonActor,
+        userDirectory: identityAccess.userDirectory,
+        directAuthority: identityAccess.directAuthority,
+      },
+      resources: {
+        ...resourceCatalogModules,
+        digitalEmployeeAgentTemplates:
+          deps.digitalEmployeeAgentTemplates ??
+          resourceCatalogModules.digitalEmployeeAgentTemplates,
+      },
+      repository: repositoryBootstrap,
+      integration: integrationModules,
+      taskExecution: taskExecutionModules,
+      developmentPurposeRoot,
+      workspaceEffects: developmentWorkspaceEffects,
+      repositoryBaselines: deps.repositoryBaselines,
+      evidenceArtifacts: deps.evidenceArtifacts,
+      repositoryCandidateEffects: deps.repositoryCandidateEffects,
+      conflictMergeWorkspaceEffects: deps.conflictMergeWorkspaceEffects,
+      adapters: {
+        employeePrograms: deps.employeePrograms,
+        employeeInputArtifacts: deps.employeeInputArtifacts,
+        employeeCaseWorkspaceEffects: deps.employeeCaseWorkspaceEffects,
+        platformTools: deps.digitalEmployeePlatformTools,
+        executionContracts: deps.executionContracts,
+        caseDetailProjection: deps.digitalEmployeeCaseDetailProjection,
+      },
+    })
+  const developmentAutomationModules: DaemonDevelopmentAutomationModules =
+    deps.developmentAutomationModules ??
+    composeDaemonDevelopmentAutomationModules({
+      db: deps.db,
+      appHome,
+      log: createLogger('development-automation'),
+      developmentPurposeRoot,
+      workspaceEffects: developmentWorkspaceEffects,
+      repository: repositoryBootstrap,
+      integration: integrationModules,
+      hostTasks: taskExecutionModules.hostTasks,
+      writerCutover: digitalEmployeeModules.writerCutover,
+      verificationCommands: deps.verificationCommands,
+      repositoryBaselines: deps.repositoryBaselines,
+      evidenceRead: deps.evidenceRead,
+      attemptContext: deps.attemptContext,
+      repositoryCandidateEffects: deps.repositoryCandidateEffects,
+      conflictMergeWorkspaceEffects: deps.conflictMergeWorkspaceEffects,
+      missionInputBlobs: deps.missionInputBlobs,
+      evidenceArtifacts: deps.evidenceArtifacts,
+      adapters: {
+        automation: deps.developmentAutomation,
+        admissionLookup: deps.developmentAdmissionLookup,
+      },
+    })
   const runtimeDeps: RuntimeComposedAppDeps = {
     ...deps,
+    digitalEmployeeModules,
+    developmentAutomationModules,
     taskExecutionModules,
     scheduledTaskModules,
     integrationModules,
@@ -1802,11 +1732,7 @@ export function composeSqliteApplicationDeps(
     webhookDispatcher: deps.integrationModules?.webhookDispatcher ?? deps.webhookDispatcher,
     webhookTerminalControl:
       deps.integrationModules?.webhookTerminalControl ?? deps.webhookTerminalControl,
-    ...selectDevelopmentWorkspaceEffectBinding({
-      actionWorkspaceEffects: deps.actionWorkspaceEffects,
-      automationWorkspaceEffects: deps.automationWorkspaceEffects,
-      conflictWorkspaceSelected: deps.conflictMergeWorkspaceEffects !== undefined,
-    }),
+    ...developmentWorkspaceEffects,
     developmentPurposeRoot,
     observationModules,
     resourceCatalogModules,
@@ -1821,63 +1747,18 @@ export function composeSqliteApplicationDeps(
     runtimeRegistry,
     configConcurrencyHotApply,
     identityAccess,
-    digitalEmployeeCaseDetailProjection:
-      deps.digitalEmployeeCaseDetailProjection ??
-      composeDevelopmentEmployeeCaseDetailProjection(
-        createDevelopmentEmployeeCaseWorkspaceDetailReader(deps.db),
-      ),
+    digitalEmployeeCaseDetailProjection: digitalEmployeeModules.caseDetailProjection,
     schedulerDriver,
     taskExecutionReadModels,
-    executionContracts:
-      deps.executionContracts ??
-      composeExecutionContract({
-        registrations: developmentExecutionContractRegistrations,
-        resources: createExecutionContractResourceAdapter(
-          deps.db,
-          developmentImplicitAgentContractDeclarations,
-        ),
-        // RFC-370 §10 V19: a selected program store answers fixture reads
-        // too (the same store the authoring wrote), on both roots.
-        programFixtures: createExecutionContractProgramFixtureAdapter({
-          appHome: appHome,
-          ...(deps.employeePrograms === undefined
-            ? {}
-            : { programs: createArtifactProgramToolSource(deps.employeePrograms) }),
-        }),
-      }),
+    executionContracts: digitalEmployeeModules.executionContracts,
     codeHistoryQueries: deps.codeHistoryQueries ?? composeCodeHistoryQueries(deps.db),
-    developmentAdmissionLookup:
-      deps.developmentAdmissionLookup ?? composeDevelopmentAdmissionLookup(deps.db),
+    developmentAdmissionLookup: developmentAutomationModules.admissionLookup,
     memoryDistillCommands: memoryOperations.distillCommands,
     memoryDistillQueries: deps.memoryDistillQueries ?? memoryOperations.distillQueries,
     memoryOperations,
     collaborationContext,
   }
-  const developmentAutomation =
-    runtimeDeps.developmentAutomation ??
-    composeFallbackDevelopmentAutomation(
-      { ...runtimeDeps, ...repositoryBootstrap, workspacePresence },
-      appHome,
-      {
-        // RFC-359 W11：动作执行只在运行期查代理，目录是同一作用域里的 `const agentCatalog`
-        // （下面几十行）。词法闭包代替了「先留空、装配完再回填」的槽。
-        get: async (id) => {
-          const identity = await admitDaemonIdentity(identityAccess)
-          if (identity === null) throw new Error('agent-action-authority-not-admitted')
-          return agentCatalog.queries.get(identity.actor, { id })
-        },
-      },
-    )
-  const developmentMissionOperations = composeDevelopmentMissionOperations({
-    repositoryBaselines: deps.repositoryBaselines,
-    db: runtimeDeps.db,
-    deliveryProvider: repositoryBootstrap.developmentDeliveryProvider,
-    admissionLookup: runtimeDeps.developmentAdmissionLookup,
-    automation: developmentAutomation,
-    legacyAdmissionsEnabled: createLegacyMissionAdmissionsEnabledQuery(
-      composeDigitalEmployeeWriterCutoverFor(runtimeDeps.db),
-    ),
-  })
+  const developmentMissionOperations = developmentAutomationModules.missionOperations
   const effectiveDeps: SqliteComposedAppDeps = {
     ...runtimeDeps,
     workspaceUploads,
@@ -1890,7 +1771,6 @@ export function composeSqliteApplicationDeps(
     ...repositoryBootstrap,
     // RFC-317 T54：装配落在 bootstrap。HTTP 与 MCP operation adapter
     // 拿到的是**同一个**实例；MCP 不再另建 route table。
-    developmentAutomation,
     developmentAdapterAclIdentity: developmentAdapterConfigOperations.resourceAclIdentity,
     developmentConfigOperations,
     developmentMissionOperations,
@@ -1989,7 +1869,6 @@ export function composeSqliteApplicationDeps(
     taskExecutionPersistence,
     applicationConfiguration,
     configuration,
-    unstarted,
   )
   const application = freezeComposedAppDeps({
     token: effectiveDeps.token,
@@ -2024,6 +1903,8 @@ export function composeSqliteApplicationDeps(
   })
   return Object.freeze({
     ...application,
+    digitalEmployeeModules,
+    developmentAutomationModules,
     taskExecutionModules,
     digitalEmployeeWorkStart: apiComposition.digitalEmployeeWorkStart,
     repositoryWorkspaceStore: repositoryBootstrap.repositoryWorkspaceStore,
@@ -2035,160 +1916,6 @@ export function composeSqliteApplicationDeps(
       activeJournalIds: () => intentApply.activeJournalIds(),
     }),
   })
-}
-
-export function composeDigitalEmployeeRoutePersistence(input: {
-  readonly identityAccess: IdentityAccessRuntime
-  readonly resourceCatalog: ProviderResourceCatalogComposition
-  readonly acl: {
-    getResourceAcl(
-      actor: Actor,
-      type: DigitalEmployeeAclResourceType,
-      row: {
-        readonly id: string
-        readonly ownerUserId?: string | null
-        readonly visibility?: 'private' | 'public'
-      },
-    ): Promise<ResourceAcl>
-    updateResourceAcl(
-      actor: Actor,
-      type: DigitalEmployeeAclResourceType,
-      row: {
-        readonly id: string
-        readonly ownerUserId?: string | null
-        readonly visibility?: 'private' | 'public'
-      },
-      body: UpdateResourceAclBody,
-      options?: Parameters<typeof updateResourceAcl>[5],
-    ): Promise<ResourceAcl>
-  }
-}): DigitalEmployeeRoutePersistence {
-  async function assertActiveMembers(subject: {
-    readonly ownerUserId?: string
-    readonly members?: readonly { readonly userId: string }[]
-  }): Promise<void> {
-    const referenced = new Set((subject.members ?? []).map((member) => member.userId))
-    if (subject.ownerUserId !== undefined) referenced.add(subject.ownerUserId)
-    if (referenced.size === 0) return
-    const people = await input.identityAccess.userDirectory.lookup([...referenced])
-    const active = new Set(
-      people.filter((person) => person.status === 'active').map((person) => person.id),
-    )
-    const invalid = [...referenced].filter(
-      (userId) => userId === SYSTEM_USER_ID || !active.has(userId),
-    )
-    if (invalid.length === 0) return
-    throw new ValidationError('members-user-invalid', 'referenced user(s) not active', {
-      userIds: invalid,
-    })
-  }
-
-  async function getCaseMembers(
-    actor: Parameters<DigitalEmployeeRoutePersistence['getCaseMembers']>[0],
-    runtime: Parameters<DigitalEmployeeRoutePersistence['getCaseMembers']>[1],
-    row: Parameters<DigitalEmployeeRoutePersistence['getCaseMembers']>[2],
-  ): ReturnType<DigitalEmployeeRoutePersistence['getCaseMembers']> {
-    const memberRows = await runtime.queries.listCaseMembers(row.id)
-    const wanted = [
-      ...new Set([
-        ...(row.ownerUserId === null ? [] : [row.ownerUserId]),
-        ...memberRows.map((member) => member.userId),
-      ]),
-    ]
-    const people =
-      wanted.length === 0 ? [] : await input.identityAccess.userDirectory.lookup(wanted)
-    const byId = new Map(people.map((person) => [person.id, person]))
-    const owner =
-      row.ownerUserId === null || row.ownerUserId === SYSTEM_USER_ID
-        ? null
-        : (byId.get(row.ownerUserId) ?? null)
-    const members = memberRows.flatMap((member) => {
-      const user = byId.get(member.userId)
-      return user === undefined ? [] : [{ user, role: member.role }]
-    })
-    const canManage = canManageCaseMembers(actor, row)
-    return {
-      caseId: row.id,
-      ownerUserId: row.ownerUserId,
-      owner,
-      members,
-      canManage,
-      canOperate:
-        canManage ||
-        memberRows.some(
-          (member) => member.role === 'collaborator' && member.userId === actor.user.id,
-        ),
-    }
-  }
-
-  return Object.freeze({
-    assertNameUnchangedForEditor,
-    adapterVisibilitySubject(actor: Actor) {
-      return { userId: actor.user.id, authority: resourceAclAudienceAuthority(actor) }
-    },
-    projectVisibleRowsWithAccess: (actor, type, rows) =>
-      input.resourceCatalog.authorization.projectVisibleRowsWithAccess(actor, type, rows),
-    filterVisibleRows: (actor, type, rows) =>
-      input.resourceCatalog.authorization.filterVisibleRows(actor, type, rows),
-    requireResourceEdit: (actor, type, row) =>
-      input.resourceCatalog.authorization.requireResourceEdit(actor, type, row),
-    requireResourceGovern: (actor, type, row) =>
-      input.resourceCatalog.authorization.requireResourceGovern(actor, type, row),
-    getCaseMembers,
-    async updateCaseMembers(actor, runtime, row, body) {
-      if (!canManageCaseMembers(actor, row)) {
-        throw new ForbiddenError(
-          'forbidden',
-          'only the employee case owner or an actor with resource-acl:bypass can manage members',
-        )
-      }
-      await assertActiveMembers(body)
-      const current = await runtime.queries.listCaseMembers(row.id)
-      const plan = planMembersReplacement({
-        prevOwner: row.ownerUserId,
-        requestedOwner: body.ownerUserId,
-        requestedMembers: body.members,
-        currentMembers: current,
-      })
-      const committed = await runtime.commands.replaceCaseMembers({
-        caseId: row.id,
-        ownerUserId: plan.nextOwner,
-        members: [...plan.nextMembers].map(([userId, role]) => ({ userId, role })),
-        addedBy: actor.user.id,
-        now: Date.now(),
-      })
-      const visibleUserIds = new Set<string>()
-      if (committed.previousOwnerUserId !== null) {
-        visibleUserIds.add(committed.previousOwnerUserId)
-      }
-      if (plan.nextOwner !== null) visibleUserIds.add(plan.nextOwner)
-      for (const userId of committed.previousMemberUserIds) visibleUserIds.add(userId)
-      for (const userId of plan.nextMembers.keys()) visibleUserIds.add(userId)
-      tasksListBroadcaster.broadcast(
-        TASKS_LIST_CHANNEL,
-        { type: 'employee-case.members.changed', caseId: row.id },
-        { kind: 'employee-case.members-changed-audience', caseId: row.id, visibleUserIds },
-      )
-      return await getCaseMembers(actor, runtime, { ...row, ownerUserId: plan.nextOwner })
-    },
-    assertMembersUsersActive: assertActiveMembers,
-    mountAcl({ app, type, base, load, notFoundCode }) {
-      mountAclEndpoints(app, {
-        type,
-        base,
-        param: 'id',
-        load,
-        canView: (actor, row) =>
-          input.resourceCatalog.authorization.canViewResource(actor, type, row),
-        read: (actor, row) => input.acl.getResourceAcl(actor, type, row),
-        update: (actor, row, body, updatedAt) =>
-          input.acl.updateResourceAcl(actor, type, row, body, {
-            ...(updatedAt === undefined ? {} : { updatedAt }),
-          }),
-        ...(notFoundCode === undefined ? {} : { notFoundCode }),
-      })
-    },
-  } satisfies DigitalEmployeeRoutePersistence)
 }
 
 interface SqliteApiRouteComposition {
@@ -2234,16 +1961,8 @@ function composeSqliteApiRouteMounts(
   taskExecutionPersistence: ReturnType<typeof createTaskExecutionPersistence>,
   applicationConfiguration: ApplicationConfigurationBinding,
   configuration: ApplicationConfigurationQueries,
-  unstarted?: UnstartedApplicationScope,
 ): SqliteApiRouteComposition {
   const appHome = deps.appHome ?? Paths.root
-  const inputArtifacts =
-    deps.employeeInputArtifacts ??
-    createEmployeeInputArtifactStore(join(appHome, 'artifacts', 'employee-inputs'))
-  const developmentDelivery = buildDevelopmentDeliveryDeps(
-    deps.developmentDeliveryProvider,
-    deps.developmentPurposeRoot.pipeline.staging,
-  )
   const repositoryTransportModule = deps.repositoryTransport
   const repositoryWorkspaceStore = deps.repositoryWorkspaceStore
   // RFC-370 §10 V17: SQLite is standalone only, so its mirrors are local clones.
@@ -2310,147 +2029,21 @@ function composeSqliteApiRouteMounts(
     },
     collaborationContext: deps.collaborationContext,
   }
-  const approvalGateway = deps.integrationModules.developmentApprovalGateway
-  const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
-    automationWorkspaceEffects: deps.automationWorkspaceEffects,
-    db: deps.db,
-    appHome,
-    reactionRounds: createEmployeeReactionRoundQueries(deps.db),
-    inputArtifacts,
-    repositoryPreparation: deps.repositoryCredentials.developmentWorkspaceRepositoryPreparation,
-    sourceControl: bindEmployeeCaseWorkspaceParticipant({
-      publicationTransport: repositoryPublicationTransport,
-      effects: deps.employeeCaseWorkspaceEffects,
-    }),
-    conflictMerge: bindConflictMergeParticipant({ effects: deps.conflictMergeWorkspaceEffects }),
-  })
-  const executionContracts = deps.executionContracts
+  const executionContracts = deps.digitalEmployeeModules.executionContracts
   const eventCenter = deps.integrationModules.eventCenter
   const digitalEmployeeAgentTemplates =
     deps.digitalEmployeeAgentTemplates ?? deps.resourceCatalogModules.digitalEmployeeAgentTemplates
-  const digitalEmployee = composeDigitalEmployee({
-    db: deps.db,
-    appHome,
-    programArtifacts: deps.employeePrograms,
-    typePackages: [developmentEmployeeTypePackage],
-    typePackageDriftPolicy: deps.digitalEmployeeTypePackageDriftPolicy,
-    ...(deps.digitalEmployeePlatformTools === undefined
-      ? {}
-      : { platformTools: deps.digitalEmployeePlatformTools }),
-    executionContracts,
-    retryLimits: {
-      async current() {
-        const config = await configuration.read()
-        return {
-          defaultNodeRetries: config.defaultNodeRetries,
-          sessionRestartBudget: config.sessionRestartBudget,
-        }
-      },
-    },
-    inputArtifacts,
-    connectionCatalog: deps.integrationModules.developmentToolConnections,
-    runtime: {
-      eventCenter: eventCenter.participant,
-      codecs: [developmentEmployeeRuntimeCodec],
-      detailProjectionParticipants:
-        deps.digitalEmployeeCaseDetailProjection === undefined
-          ? []
-          : [deps.digitalEmployeeCaseDetailProjection],
-      // RFC-368 T17 —— Reaction 执行走 `ReactionExecutionPortV1` + 同事务 admission 参与者。
-      reactionExecution: composeReactionExecutionProvider({
-        db: deps.db,
-        // RFC-359 AC-1（plan §5hl）：数字员工执行合成一份——端口 + 启动内核，
-        // 与 PostgreSQL daemon 同一条路。此前这一侧在 composer 函数体里直接读库、
-        // 用 `startTask` + `preCreatedWorktree` 启动（按定义只服务 SQLite）。
-        appHome,
-        ...(deps.employeePrograms === undefined
-          ? {}
-          : { programs: createArtifactProgramToolSource(deps.employeePrograms) }),
-        resolveActor: async () => {
-          const identity = await admitDaemonIdentity(identityAccess)
-          if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')
-          return actorOfDirectAuthority(identity)
-        },
-        resourceAuthorityFor: (actor) => ({
-          actor,
-          authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
-          resources: identityAccess.taskExecutionResources,
-        }),
-        launch: deps.taskExecutionModules.routeLaunch.workflow,
-        ...composeDatabaseDigitalEmployeeExecutionPorts(deps.db),
-        tasks: taskRouteOperations,
-        readModels: deps.taskExecutionReadModels,
-        agents: {
-          get: async (id) => {
-            const identity = await admitDaemonIdentity(identityAccess)
-            if (identity === null)
-              throw new Error('digital-employee-catalog-authority-not-admitted')
-            return agentCatalog.queries.get(identity.actor, { id })
-          },
-        },
-        workflows: {
-          get: async (id) => {
-            const identity = await admitDaemonIdentity(identityAccess)
-            if (identity === null)
-              throw new Error('digital-employee-catalog-authority-not-admitted')
-            return workflowCatalog.queries.get(identity.actor, { id })
-          },
-        },
-        workspace: developmentWorkspace,
-        executionContracts,
-      }),
-      platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
-        automationWorkspaceEffects: deps.automationWorkspaceEffects,
-        repositoryBaselines: deps.repositoryBaselines,
-        evidenceArtifacts: deps.evidenceArtifacts,
-        reactionRounds: createEmployeeReactionRoundQueries(deps.db),
-        db: deps.db,
-        appHome,
-        approvalGateway,
-        ...developmentDelivery,
-        conflictMerge: bindConflictMergeParticipant({
-          effects: deps.conflictMergeWorkspaceEffects,
-        }),
-        sourceControl: {
-          ...bindChangeCandidateParticipant({ candidateEffects: deps.repositoryCandidateEffects }),
-          ...bindCandidateDeliveryParticipant({
-            candidateEffects: deps.repositoryCandidateEffects,
-            publicationTransport: repositoryPublicationTransport,
-          }),
-          ...bindEmployeeCaseWorkspaceParticipant({
-            publicationTransport: repositoryPublicationTransport,
-            effects: deps.employeeCaseWorkspaceEffects,
-          }),
-        },
-      }),
-    },
-  })
-  void unstarted?.trackReady(digitalEmployee.maintenance.ready())
-  const digitalEmployeeWorkStart = Object.freeze<DigitalEmployeeWorkStartPort>({
-    async launch(input) {
-      const result = await digitalEmployee.runtime.commands.launchWork({
-        employeeId: input.employeeId,
-        intake: input.intake,
-        actorUserId: input.actorUserId,
-        eventOrigin: input.origin,
-      })
-      return { caseId: result.caseRef.id }
-    },
-  })
+  const digitalEmployee = deps.digitalEmployeeModules.module
+  const digitalEmployeeWorkStart = deps.digitalEmployeeModules.workStart
   const taskCatalog = composeTaskCatalog({
     sources: [
       // RFC-357：owner 身份是 identity-access 的能力，由装配根注入；
       // task-execution 只声明端口，不去 compose 别的 context 的 provider。
       ...deps.taskExecutionModules.catalogSources,
-      composeDigitalEmployeeTaskCatalogSource(digitalEmployee.runtime),
+      deps.digitalEmployeeModules.taskCatalogSource,
     ],
   })
-  // RFC-359 W11：worker 是必填实参，就地装配。此前是 `composeSqliteAppDeps` 先造一个空槽
-  // `operations`、经 deps 传过来，再在这个函数里补一句 `.bind(digitalEmployee.runtime.worker)`
-  // ——绕一圈只为把「已经能被调用但还没装配」的窗口拉长跨两个函数。
-  const developmentActivityOperations = composeDevelopmentActivityOperations(
-    digitalEmployee.runtime.worker,
-  )
+  const developmentActivityOperations = deps.digitalEmployeeModules.activityOperations
   const developmentConfigOperations = deps.developmentConfigOperations
   const developmentMissionOperations = deps.developmentMissionOperations
   const databaseMigration = deps.databaseMigration
@@ -2548,10 +2141,7 @@ function composeSqliteApiRouteMounts(
     authorityFor: intentAuthorityFor,
     capabilityTemplates: capabilityTemplateRouteDeps.capabilityTemplates,
     developmentConfig: developmentConfigOperations,
-    digitalEmployee: composeDigitalEmployeePlatformInventoryParticipant({
-      queries: digitalEmployee.queries,
-      access: providerResourceCatalog.authorization,
-    }),
+    digitalEmployee: deps.digitalEmployeeModules.platformInventory,
   })
   const intentDumpAuxiliaryBase = composeIntentDumpAuxiliaryQueries({
     persistence: intentPersistence,
@@ -2606,28 +2196,8 @@ function composeSqliteApiRouteMounts(
           }),
         }),
   } satisfies IntentSessionRouteDependencies)
-  // RFC-359 W4-D6c：employee_* 的 ACL 走目录的中立 foreign-owner 路径（与 development_adapter 同一条），
-  // identity 行由 digital-employee 在目录写事务里交出。
-  const digitalEmployeeAclFor = (type: DigitalEmployeeAclResourceType) =>
-    deps.resourceCatalogModules.digitalEmployeeAcl[type]
-  const digitalEmployeePersistence = composeDigitalEmployeeRoutePersistence({
-    identityAccess,
-    resourceCatalog: providerResourceCatalog,
-    acl: Object.freeze({
-      getResourceAcl: (actor, type, row) =>
-        digitalEmployeeAclFor(type).getResourceAcl(actor, type, row),
-      updateResourceAcl: (actor, type, row, body, options) =>
-        digitalEmployeeAclFor(type).updateResourceAcl(actor, type, row, body, {
-          ...(options?.updatedAt === undefined ? {} : { updatedAt: options.updatedAt }),
-        }),
-    }),
-  })
-  const missionInputUploads = composeMissionInputUploadOperations({
-    db: deps.db,
-    appHome,
-    blobs: deps.missionInputBlobs,
-    artifacts: deps.evidenceArtifacts,
-  })
+  const digitalEmployeePersistence = deps.digitalEmployeeModules.routePersistence
+  const missionInputUploads = deps.developmentAutomationModules.missionInputUploads
   const collaborationRouteOperations = composeCollaborationRouteOperations({
     followupGenerator: composeClarifyFollowupGenerator({
       db: deps.db,

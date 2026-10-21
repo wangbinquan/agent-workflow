@@ -1,3 +1,4 @@
+// RFC-383: daemon HTTP/OS now share one module; these concurrent constructions model separate sessions.
 // RFC-359 W4-D6c 补 —— 启动期并发注册的幂等性。作者面存储改成真异步之后（4c7069b06），同一拍里构造的两份
 // DigitalEmployeeAuthoringService（路由层一份、worker 一份）并发注册同一个类型包，读—插之间出现让出点，第二个
 // insert 撞 (type_id, revision) 主键，daemon 在 8f89a3ee4 / d03fc3694 的 CI 上直接起不来：
@@ -119,7 +120,7 @@ describeEachProvider('RFC-359 W4-D6c 补 —— 启动期并发注册的幂等�
     expect((await second.ensureExecutionPolicy(input)).revision).toBe(left.revision)
   })
 
-  test('两份装配同拍构造：ready() 都成立，类型包在两边都可见', async () => {
+  test('两个独立会话同拍构造：ready() 都成立，类型包在两边都可见', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc359-d6c-bootstrap-'))
     roots.push(appHome)
     const options = {

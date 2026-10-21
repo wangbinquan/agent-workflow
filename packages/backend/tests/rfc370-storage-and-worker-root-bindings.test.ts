@@ -53,6 +53,16 @@ function oneRoot(source: ts.SourceFile, name: string) {
   expect(calls).toHaveLength(1)
   return objectArgument(calls[0]!)
 }
+function expectLexicalInput(node: ts.Node, source: ts.SourceFile, expected: string) {
+  let owner: ts.Node | undefined = node.parent
+  while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent
+  if (owner === undefined || !ts.isFunctionDeclaration(owner))
+    throw new Error('lexical composition owner missing')
+  expect(owner.name?.text).toBe(expected)
+  expect(owner.parameters.some((parameter) => compact(parameter.name, source) === 'input')).toBe(
+    true,
+  )
+}
 const fields = {
   resourcePackageSkillArtifacts: 'ResourcePackageSkillArtifactOwner',
   resourcePackagePluginArtifacts: 'ResourcePackagePluginArtifactOwner',
@@ -63,57 +73,45 @@ const fields = {
   automationWorkspaceEffects: 'AutomationWorkspaceEffectsFactory',
 } as const
 
-test('all eight actual baseline owners forward the selected factory from their lexical root parameter', () => {
-  for (const [path, roots, receiver, owners] of [
+test('RFC-383 roots forward baselines and the three bundle consumers retain their lexical selection', () => {
+  for (const [path, receiver] of [
+    ['cli/start.ts', 'input'],
+    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['server.ts', 'deps'],
+  ] as const) {
+    const source = load(path)
+    for (const name of [
+      'composeDaemonDigitalEmployeeModules',
+      'composeDaemonDevelopmentAutomationModules',
+    ]) {
+      expect(compact(property(oneRoot(source, name), source, 'repositoryBaselines'), source)).toBe(
+        receiver + '.repositoryBaselines',
+      )
+    }
+  }
+  for (const [path, factories, ownerName] of [
     [
-      'cli/start.ts',
-      ['composeDevelopmentAutomation', 'composeDevelopmentEmployeePlatformWorkItems'],
-      'input',
-      ['composeSqliteProviderSession', 'composeSqliteProviderSession'],
+      'cli/daemonModules/digitalEmployee.ts',
+      ['composeDevelopmentEmployeePlatformWorkItems'],
+      'composeDaemonDigitalEmployeeModules',
     ],
     [
-      'cli/postgresqlDaemonApplication.ts',
-      [
-        'composeDevelopmentAutomation',
-        'composeDevelopmentEmployeePlatformWorkItems',
-        'composeDevelopmentMissionOperations',
-      ],
-      'input',
-      [
-        'composePostgresqlApplication',
-        'composePostgresqlApplication',
-        'composePostgresqlApplication',
-      ],
-    ],
-    [
-      'server.ts',
-      [
-        'composeDevelopmentAutomation',
-        'composeDevelopmentEmployeePlatformWorkItems',
-        'composeDevelopmentMissionOperations',
-      ],
-      'deps',
-      [
-        'composeFallbackDevelopmentAutomation',
-        'composeSqliteApiRouteMounts',
-        'composeSqliteApplicationDeps',
-      ],
+      'cli/daemonModules/developmentAutomation.ts',
+      ['composeDevelopmentAutomation', 'composeDevelopmentMissionOperations'],
+      'composeDaemonDevelopmentAutomationModules',
     ],
   ] as const) {
     const source = load(path)
-    for (const [index, root] of roots.entries()) {
-      const calls = namedCalls(source, source, root)
+    for (const name of factories) {
+      const calls = namedCalls(source, source, name)
       expect(calls).toHaveLength(1)
-      const call = calls[0]!
-      expect(compact(property(objectArgument(call), source, 'repositoryBaselines'), source)).toBe(
-        `${receiver}.repositoryBaselines`,
-      )
-      let owner: ts.Node | undefined = call.parent
-      while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent
-      if (owner === undefined || !ts.isFunctionDeclaration(owner))
-        throw new Error('baseline lexical root missing')
-      expect(owner.name?.text).toBe(owners[index])
-      expect(owner.parameters.some((param) => compact(param.name, source) === receiver)).toBe(true)
+      expect(
+        compact(property(objectArgument(calls[0]!), source, 'repositoryBaselines'), source),
+      ).toBe('input.repositoryBaselines')
+      let owner: ts.Node | undefined = calls[0]!.parent
+      while (owner && !ts.isFunctionDeclaration(owner)) owner = owner.parent
+      expect(owner && ts.isFunctionDeclaration(owner) && owner.name?.text).toBe(ownerName)
+      expectLexicalInput(calls[0]!, source, ownerName)
     }
   }
 })
@@ -260,29 +258,32 @@ test('both actual HTTP composers select complete workspace and package owners wi
   }
 })
 
-test('all six actual EmployeeCase binders receive the factory declared by their composition owner', () => {
-  for (const [path, receiver, ownerName] of [
-    ['cli/start.ts', 'input', 'composeSqliteProviderSession'],
-    ['cli/postgresqlDaemonApplication.ts', 'input', 'composePostgresqlApplication'],
-    ['server.ts', 'deps', 'composeSqliteApiRouteMounts'],
+test('RFC-383 one employee case participant supplies workspace and platform work items', () => {
+  for (const [path, receiver] of [
+    ['cli/start.ts', 'input'],
+    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['server.ts', 'deps'],
   ] as const) {
     const source = load(path)
-    const calls = namedCalls(source, source, 'bindEmployeeCaseWorkspaceParticipant')
-    expect(calls).toHaveLength(2)
-    for (const call of calls) {
-      expect(compact(property(objectArgument(call), source, 'effects'), source)).toBe(
-        `${receiver}.employeeCaseWorkspaceEffects`,
-      )
-      let owner: ts.Node | undefined = call.parent
-      while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent
-      if (owner === undefined || !ts.isFunctionDeclaration(owner))
-        throw new Error('EmployeeCase binder must have an actual composition owner')
-      expect(owner.name?.text).toBe(ownerName)
-      expect(owner.parameters.map((parameter) => compact(parameter.name, source))).toContain(
-        receiver,
-      )
-    }
+    const root = oneRoot(source, 'composeDaemonDigitalEmployeeModules')
+    expect(compact(root, source)).toContain(
+      `employeeCaseWorkspaceEffects:${receiver}.employeeCaseWorkspaceEffects`,
+    )
+    expect(namedCalls(source, source, 'bindEmployeeCaseWorkspaceParticipant')).toHaveLength(0)
   }
+  const source = load('cli/daemonModules/digitalEmployee.ts')
+  const calls = namedCalls(source, source, 'bindEmployeeCaseWorkspaceParticipant')
+  expect(calls).toHaveLength(1)
+  expectLexicalInput(calls[0]!, source, 'composeDaemonDigitalEmployeeModules')
+  expect(compact(property(objectArgument(calls[0]!), source, 'effects'), source)).toBe(
+    'input.adapters?.employeeCaseWorkspaceEffects',
+  )
+  expect(compact(oneRoot(source, 'composeDevelopmentEmployeeWorkspace'), source)).toContain(
+    'sourceControl,',
+  )
+  expect(compact(oneRoot(source, 'composeDevelopmentEmployeePlatformWorkItems'), source)).toContain(
+    '...sourceControl,',
+  )
 })
 
 test('all three original checkpoint consumers await the selected receipt before their next owner statement', () => {
@@ -340,46 +341,14 @@ test('public root types expose existing complete contracts without adding partia
   }
 })
 
-test('all nine actual automation workspace roots bind the complete factory from their lexical receiver', () => {
-  const roots = [
-    'composeDevelopmentAutomation',
-    'composeDevelopmentEmployeeWorkspace',
-    'composeDevelopmentEmployeePlatformWorkItems',
-  ] as const
-  for (const [path, receiver, factoryReceiver, ownerNames] of [
-    [
-      'cli/start.ts',
-      'input',
-      'developmentWorkspaceEffects',
-      [
-        'composeSqliteProviderSession',
-        'composeSqliteProviderSession',
-        'composeSqliteProviderSession',
-      ],
-    ],
-    [
-      'cli/postgresqlDaemonApplication.ts',
-      'input',
-      'developmentWorkspaceEffects',
-      [
-        'composePostgresqlApplication',
-        'composePostgresqlApplication',
-        'composePostgresqlApplication',
-      ],
-    ],
-    [
-      'server.ts',
-      'deps',
-      'deps',
-      [
-        'composeFallbackDevelopmentAutomation',
-        'composeSqliteApiRouteMounts',
-        'composeSqliteApiRouteMounts',
-      ],
-    ],
+test('RFC-383 workspace selection reaches the three shared consumers and the HTTP fallback', () => {
+  for (const [path, receiver] of [
+    ['cli/start.ts', 'input'],
+    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['server.ts', 'deps'],
   ] as const) {
-    const source = load(path)
-    const selection = oneRoot(source, 'selectDevelopmentWorkspaceEffectBinding')
+    const source = load(path),
+      selection = oneRoot(source, 'selectDevelopmentWorkspaceEffectBinding')
     expect(compact(property(selection, source, 'automationWorkspaceEffects'), source)).toBe(
       receiver + '.automationWorkspaceEffects',
     )
@@ -389,50 +358,50 @@ test('all nine actual automation workspace roots bind the complete factory from 
     expect(compact(property(selection, source, 'conflictWorkspaceSelected'), source)).toBe(
       receiver + '.conflictMergeWorkspaceEffects!==undefined',
     )
-    for (const [index, name] of roots.entries()) {
-      const calls = namedCalls(source, source, name)
-      expect(calls).toHaveLength(1)
-      const call = calls[0]!
-      expect(
-        compact(property(objectArgument(call), source, 'automationWorkspaceEffects'), source),
-      ).toBe(factoryReceiver + '.automationWorkspaceEffects')
-      let owner: ts.Node | undefined = call.parent
-      while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent
-      if (owner === undefined || !ts.isFunctionDeclaration(owner))
-        throw new Error('workspace lexical owner missing')
-      expect(owner.name?.text).toBe(ownerNames[index])
-      expect(
-        owner.parameters.some((parameter) => compact(parameter.name, source) === receiver),
-      ).toBe(true)
+    for (const name of [
+      'composeDaemonDigitalEmployeeModules',
+      'composeDaemonDevelopmentAutomationModules',
+    ]) {
+      expect(compact(property(oneRoot(source, name), source, 'workspaceEffects'), source)).toBe(
+        'developmentWorkspaceEffects',
+      )
     }
     if (path === 'server.ts') {
       const variables = descendants(source, ts.isVariableDeclaration)
       const variable = (name: string) => {
-        const matching = variables.filter((node) => compact(node.name, source) === name)
-        expect(matching).toHaveLength(1)
-        return matching[0]!
+        const found = variables.filter((n) => compact(n.name, source) === name)
+        expect(found).toHaveLength(1)
+        return found[0]!
       }
-      const runtime = variable('runtimeDeps').initializer!
-      if (!ts.isObjectLiteralExpression(runtime)) throw new Error('runtime deps object required')
-      const selected = runtime.properties.filter(
-        (node) =>
-          ts.isSpreadAssignment(node) &&
-          ts.isCallExpression(node.expression) &&
-          compact(node.expression.expression, source) === 'selectDevelopmentWorkspaceEffectBinding',
+      expect(compact(variable('runtimeDeps').initializer!, source)).toContain(
+        '...developmentWorkspaceEffects,',
       )
-      expect(selected).toHaveLength(1)
-      const effective = variable('effectiveDeps').initializer!
-      if (!ts.isObjectLiteralExpression(effective))
-        throw new Error('effective deps object required')
-      expect(compact(effective.properties[0]!, source)).toBe('...runtimeDeps')
-      const fallback = namedCalls(source, source, 'composeFallbackDevelopmentAutomation')
-      expect(fallback).toHaveLength(1)
-      expect(compact(fallback[0]!.arguments[0]!, source)).toBe(
-        '{...runtimeDeps,...repositoryBootstrap,workspacePresence}',
-      )
+      expect(compact(variable('effectiveDeps').initializer!, source)).toContain('...runtimeDeps,')
       const mounts = namedCalls(source, source, 'composeSqliteApiRouteMounts')
       expect(mounts).toHaveLength(1)
       expect(compact(mounts[0]!.arguments[0]!, source)).toBe('effectiveDeps')
+    }
+  }
+  for (const [path, names] of [
+    [
+      'cli/daemonModules/digitalEmployee.ts',
+      ['composeDevelopmentEmployeeWorkspace', 'composeDevelopmentEmployeePlatformWorkItems'],
+    ],
+    ['cli/daemonModules/developmentAutomation.ts', ['composeDevelopmentAutomation']],
+  ] as const) {
+    const source = load(path)
+    for (const name of names) {
+      const call = oneRoot(source, name)
+      expectLexicalInput(
+        call,
+        source,
+        path.endsWith('/digitalEmployee.ts')
+          ? 'composeDaemonDigitalEmployeeModules'
+          : 'composeDaemonDevelopmentAutomationModules',
+      )
+      expect(compact(property(call, source, 'automationWorkspaceEffects'), source)).toBe(
+        'input.workspaceEffects.automationWorkspaceEffects',
+      )
     }
   }
 })

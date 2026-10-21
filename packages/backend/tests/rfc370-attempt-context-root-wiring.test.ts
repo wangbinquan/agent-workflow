@@ -69,11 +69,15 @@ test('all real startup and HTTP roots forward the same selected context through 
     [pg, 'input'],
     [server, 'deps'],
   ] as const) {
-    const roots = calls(source, 'composeDevelopmentAutomation')
+    const roots = calls(source, 'composeDaemonDevelopmentAutomationModules')
     expect(roots).toHaveLength(1)
     binding(source, roots[0]!, receiver)
     expect(source.text).toContain('attemptContext?: AttemptContextStorePort')
   }
+  const bundle = load('cli/daemonModules/developmentAutomation.ts')
+  const consumers = calls(bundle, 'composeDevelopmentAutomation')
+  expect(consumers).toHaveLength(1)
+  binding(bundle, consumers[0]!, 'input')
   const http = calls(start, 'composeSqliteAppDeps')
   expect(http).toHaveLength(1)
   binding(start, http[0]!, 'input')

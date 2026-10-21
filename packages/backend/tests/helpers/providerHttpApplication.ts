@@ -209,8 +209,11 @@ export function composePostgresqlUnstartedApplication(input: PostgresqlApplicati
 
 /** Test-only lifetime around the same complete composer called by createApp. */
 export function composeSqliteUnstartedApplication(deps: AppDeps) {
-  return composeUnstartedApplication((scope) => {
+  return composeUnstartedApplication(async (scope) => {
     const composed = composeSqliteApplicationDeps(deps, scope)
+    // RFC-383: direct HTTP fixtures initialize the same bundle the daemon boots.
+    await composed.digitalEmployeeModules.platformTools.load()
+    await composed.digitalEmployeeModules.module.maintenance.ready()
     return {
       app: createComposedApp(composed),
       repositoryWorkspaceStore: composed.repositoryWorkspaceStore,

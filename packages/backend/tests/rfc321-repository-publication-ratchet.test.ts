@@ -277,9 +277,14 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(platformWorkItems.match(/publicationSubject: publicationSubject\(\)/g)?.length).toBe(4)
     expect(composition).toMatch(/fetchEmployeeWorkspaceRemoteHead\(\s*\{/)
     expect(composition).toContain('{ publicationTransport: input.publicationTransport }')
-    expect(
-      cli.match(/publicationTransport: repositoryPublicationTransport/g)?.length,
-    ).toBeGreaterThanOrEqual(4)
+    // RFC-383: the shared employee/automation bundles own these publication participants.
+    for (const bundle of ['digitalEmployee', 'developmentAutomation']) {
+      const source = read(`packages/backend/src/cli/daemonModules/${bundle}.ts`)
+      expect(
+        source.match(/publicationTransport: repository\.repositoryPublicationTransport/g)?.length,
+      ).toBe(bundle === 'digitalEmployee' ? 2 : 1)
+    }
+    expect(cli).toContain('repository: repositoryCredentials')
     expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
       'input.repositoryTransport ?? composeRepositoryTransportCredentials',
     )
@@ -294,9 +299,8 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'reconcileRepositoryTransportConnectionProjections(',
     )
     expect(cli).toContain('await lifecycleProgram.initialize(input.initializeExecution)')
-    expect(
-      server.match(/publicationTransport: repositoryPublicationTransport/g)?.length,
-    ).toBeGreaterThanOrEqual(3)
+    // Task execution and both employee bundles receive the same selected repository member.
+    expect(server.match(/repository: repositoryBootstrap,/g)).toHaveLength(3)
   })
 
   test('personal credential routes are interactive-session-only and never accept PAT access', () => {

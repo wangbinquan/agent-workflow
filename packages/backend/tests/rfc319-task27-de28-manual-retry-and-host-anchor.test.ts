@@ -149,26 +149,22 @@ describe('RFC-319 DE-28 —— 启动前必须播种，三个组合根一个都�
   })
 
   test('三个组合根都绑上了这个端口（漏一个 = 那条路的评审页打不开）', () => {
-    // SQLite 的两个根经共享的 `composeDatabaseDigitalEmployeeExecutionPorts` 拿到它。
+    // RFC-383: all three roots select the employee bundle; the execution core supplies its hostWorkflow default once.
     for (const relative of [
       'packages/backend/src/server.ts',
       'packages/backend/src/cli/start.ts',
+      'packages/backend/src/cli/postgresqlDaemonApplication.ts',
     ]) {
       const source = readFileSync(resolve(ROOT, relative), 'utf-8')
-      expect(`${relative}: shared ports`).toBe(
-        source.includes('composeDatabaseDigitalEmployeeExecutionPorts(')
-          ? `${relative}: shared ports`
-          : `${relative}: MISSING shared digital-employee ports`,
-      )
+      expect(source).toContain('composeDaemonDigitalEmployeeModules({')
+      expect(source).not.toContain('composeDatabaseDigitalEmployeeExecutionPorts(')
     }
-    // PostgreSQL daemon 自己绑。
-    const postgresql = readFileSync(
-      resolve(ROOT, 'packages/backend/src/cli/postgresqlDaemonApplication.ts'),
+    const bundle = readFileSync(
+      resolve(ROOT, 'packages/backend/src/cli/daemonModules/digitalEmployee.ts'),
       'utf-8',
     )
-    expect(postgresql).toContain(
-      'hostWorkflow: { ensure: () => ensureDigitalEmployeeHostWorkflow(input.db) }',
-    )
+    expect(bundle).toContain('composeReactionExecutionProvider({')
+    expect(bundle).not.toContain('hostWorkflow:')
     // 共享端口工厂确实绑到了那份幂等 upsert。
     const composer = readFileSync(
       resolve(

@@ -1,3 +1,5 @@
+import type { Actor } from '@/auth/actor'
+import { admitDaemonIdentity, actorOfDirectAuthority } from '@/auth/session'
 import {
   ALWAYS_WRITABLE_DATABASE_SOURCE,
   type DatabaseSourceWriteWindow,
@@ -95,6 +97,8 @@ export interface DaemonProviderCore<
   /** The one window both the auth runtime and the token-call audit consult. */
   readonly sourceWriteWindow: DatabaseSourceWriteWindow
   readonly identityAccess: IdentityAccessRuntime
+  /** RFC-383: admission belongs to each call, never a boot-time actor holder. */
+  daemonActor(errorCode?: string): Promise<Actor>
   /** The selected credential mechanism's HTTP admission (WebSocket uses its twin). */
   readonly httpAuthentication: HttpAuthenticationParticipant
   readonly healthDatabase: HealthDatabaseReadModel
@@ -175,6 +179,11 @@ export function composeDaemonProviderCore<P extends DatabaseProvider>(
     sourceWriteWindow,
     tokenCallAudit: createTokenCallAudit(input.db),
     identityAccess,
+    async daemonActor(errorCode = 'digital-employee-host-identity-not-admitted') {
+      const identity = await admitDaemonIdentity(identityAccess)
+      if (identity === null) throw new Error(errorCode)
+      return actorOfDirectAuthority(identity)
+    },
     httpAuthentication: credentials.http,
     healthDatabase: createHealthDatabaseReadModel(input.db),
     runtimeRegistry: composeRuntimeRegistryOperations(

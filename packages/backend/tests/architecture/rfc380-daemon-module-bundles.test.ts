@@ -1,4 +1,4 @@
-// RFC-380 / RFC-381 / RFC-382 / RFC-376 hard gate: bundles are session-scoped, and HTTP only composes fallbacks.
+// RFC-380 / RFC-381 / RFC-382 / RFC-383 / RFC-376 hard gate: bundles are session-scoped, and HTTP only composes fallbacks.
 import { describe, expect, test } from 'bun:test'
 import ts from 'typescript'
 import { resolve } from 'node:path'
@@ -15,6 +15,8 @@ const BUNDLES = [
   'composeDaemonIntegrationModules',
   'composeDaemonFusionModules',
   'composeDaemonTaskExecutionModules',
+  'composeDaemonDigitalEmployeeModules',
+  'composeDaemonDevelopmentAutomationModules',
 ] as const
 const ROOTS = [
   ['cli/start.ts', 'composeSqliteProviderSession'],
@@ -22,6 +24,26 @@ const ROOTS = [
   ['server.ts', 'composeSqliteApplicationDeps'],
 ] as const
 const FACTORIES = new Set([
+  'composeDigitalEmployee',
+  'composeDevelopmentAutomation',
+  'composeReactionExecutionProvider',
+  'composeDevelopmentMissionOperations',
+  'composeMissionInputUploadOperations',
+  'composeDigitalEmployeeWriterCutoverFor',
+  'composeDevelopmentEmployeeWorkspace',
+  'composeDevelopmentEmployeePlatformWorkItems',
+  'createEmployeeReactionRoundQueries',
+  'createEmployeeInputArtifactStore',
+  'composeDigitalEmployeeBuiltinToolCatalog',
+  'composeDigitalEmployeePlatformInventoryParticipant',
+  'composeDevelopmentActivityOperations',
+  'composeDigitalEmployeeTaskCatalogSource',
+  'composeDigitalEmployeeRoutePersistence',
+  'composeDevelopmentAdmissionLookup',
+  'createDevelopmentMissionExecutionTerminalObserver',
+  'composeAgentActionExecution',
+  'composeScriptActionExecution',
+
   'createTaskDriveCoordinator',
   'DefaultTaskDriveCoordinator',
   'composeSqliteTaskExecutionProviderRuntime',
@@ -133,6 +155,7 @@ const FACTORIES = new Set([
   'composeSkillVersionCommitParticipantFactory',
 ])
 const RETIRED = [
+  'composeFallbackDevelopmentAutomation',
   'composeSqliteDaemonProviderCore',
   'composePostgresqlDaemonProviderCore',
   'createPostgresqlAuthRuntime',
@@ -245,23 +268,23 @@ function valid() {
   )
 }
 describe('RFC-380 daemon module bundles', () => {
-  test('complete source corpus keeps the nine session bundles and the HTTP fallbacks', () => {
+  test('complete source corpus keeps the eleven session bundles and the HTTP fallbacks', () => {
     const units = backendUnits(resolve(import.meta.dir, '../../../..'))
     expect(units.length).toBeGreaterThanOrEqual(2000)
-    expect(units.filter((u) => u.path.startsWith(PREFIX + 'cli/daemonModules/'))).toHaveLength(10)
+    expect(units.filter((u) => u.path.startsWith(PREFIX + 'cli/daemonModules/'))).toHaveLength(12)
     expect(daemonBundleViolations(units)).toEqual([])
   })
   test('accepts one bundle per session and nullish HTTP fallbacks', () => {
     expect(daemonBundleViolations(valid())).toEqual([])
   })
   test('rejects missing and duplicated session calls', () => {
-    expect(daemonBundleViolations([])).toHaveLength(27)
+    expect(daemonBundleViolations([])).toHaveLength(33)
     const units = valid()
     units[0] = unit(
       ROOTS[0][0],
       `function composeSqliteProviderSession() { ${BUNDLES.map((b) => `${b}({}); ${b}({});`).join(' ')} }`,
     )
-    expect(daemonBundleViolations(units).filter((e) => e.includes('got 2'))).toHaveLength(9)
+    expect(daemonBundleViolations(units).filter((e) => e.includes('got 2'))).toHaveLength(11)
   })
   test('rejects process-level construction and unconditional HTTP construction', () => {
     const units = valid()
@@ -306,4 +329,42 @@ describe('RFC-380 daemon module bundles', () => {
       'packages/backend/src/cli/daemonModules/integration.ts: identity-access import outside provider core',
     ])
   })
+})
+
+// RFC-383: legacy recovery is provider-neutral, unlike the retained PG identity boot check.
+function legacyRecoveryRestrictions(source: SourceUnit): number {
+  let restrictions = 0
+  walk(source.source, (node) => {
+    if (!ts.isObjectLiteralExpression(node)) return
+    const id = node.properties.find(
+      (p) => ts.isPropertyAssignment(p) && p.name.getText(source.source) === 'id',
+    )
+    if (
+      !id ||
+      !ts.isPropertyAssignment(id) ||
+      !ts.isStringLiteral(id.initializer) ||
+      id.initializer.text !== 'legacy-mission-recovery'
+    )
+      return
+    restrictions += node.properties.filter(
+      (p) => ts.isPropertyAssignment(p) && p.name.getText(source.source) === 'providers',
+    ).length
+  })
+  return restrictions
+}
+test('both providers register legacy recovery; provider restrictions are rejected', () => {
+  const lifecycle = backendUnits(resolve(import.meta.dir, '../../../..')).find(
+    (u) => u.path === PREFIX + 'cli/daemonLifecycleProgram.ts',
+  )!
+  expect(lifecycle).toBeDefined()
+  expect(lifecycle.text).toContain("id: 'legacy-mission-recovery'")
+  expect(legacyRecoveryRestrictions(lifecycle)).toBe(0)
+  expect(
+    legacyRecoveryRestrictions(
+      unit(
+        'cli/daemonLifecycleProgram.ts',
+        "const steps = [{ id: 'legacy-mission-recovery', providers: ['sqlite'] }]",
+      ),
+    ),
+  ).toBe(1)
 })

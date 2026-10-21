@@ -33,6 +33,9 @@ import { createResourceGrantReadPort } from '../infrastructure/resourceVisibilit
 import { createResourceAclMutationPort } from '../infrastructure/resourceAclRepository'
 import { loadGrantLevelInTx } from '../infrastructure/sqliteResourceGrantRepository'
 
+// RFC-383: bootstrap route persistence consumes the same audience projection through composition.
+export { resourceAclAudienceAuthority }
+
 function buildAclApplications(db: ProviderNeutralDatabase): AclApplications {
   const authorization = createResourceAuthorizationApplication(createResourceGrantReadPort(db))
   return Object.freeze({

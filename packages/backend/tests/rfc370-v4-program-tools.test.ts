@@ -190,11 +190,11 @@ test('every daemon root reads program tools from the selected store', () => {
   expect(core).toContain('deps.programs ?? createFileProgramToolSource(deps.appHome)')
   expect(core).not.toContain('readFileSync')
   const postgresql = readFileSync(
-    join(import.meta.dir, '../src/cli/postgresqlDaemonApplication.ts'),
+    join(import.meta.dir, '../src/cli/daemonModules/digitalEmployee.ts'),
     'utf8',
   )
-  expect(postgresql).toContain('createArtifactProgramToolSource(input.employeePrograms)')
-  expect(postgresql).toContain('process: input.programFixtureProcess')
+  expect(postgresql).toContain('createArtifactProgramToolSource(employeePrograms)')
+  expect(postgresql).toContain('process: input.adapters?.programFixtureProcess')
   const hosted = readFileSync(join(import.meta.dir, '../src/bootstrap/crewstation.ts'), 'utf8')
   expect(hosted).toContain('programFixtureProcess: createHostedScriptFixtureProcess(')
 })

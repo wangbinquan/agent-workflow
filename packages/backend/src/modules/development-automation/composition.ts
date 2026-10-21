@@ -43,6 +43,11 @@ import {
   resumeMission,
 } from './application/commands/missionHandover'
 import { sweepMissionWakes } from './application/missionWakeSweep'
+export {
+  sweepWakesWhileDraining,
+  recoverWhileDraining,
+  type DevelopmentWriterCutover,
+} from './application/writerCutoverGates'
 import type {
   AgentActionLauncherPort,
   ApprovalGatewayPort,
@@ -286,7 +291,7 @@ function composeDevelopmentAutomationFromPersistence(
 
   const now = (): number => Date.now()
   const store = persistence.store
-  const lookup = deps.admissionLookup ?? persistence.admissionLookup
+  const lookup = persistence.admissionLookup
   const snapshots = persistence.snapshots
   const evidence = deps.evidenceArtifacts ?? new EvidenceStore(join(deps.appHome, 'evidence'))
   const evidenceContents = deps.evidenceRead?.contents ?? deps.evidenceContents ?? evidence.contents
@@ -467,7 +472,7 @@ export function composeDevelopmentAutomation(
   const repositories = createRepositoryLocationRead(deps.db)
   return composeDevelopmentAutomationFromPersistence(deps, {
     store: createMissionPersistence(deps.db),
-    admissionLookup: createAdmissionLookup(deps.db),
+    admissionLookup: deps.admissionLookup ?? createAdmissionLookup(deps.db),
     snapshots: createFactSnapshotReader(deps.db),
     bundleRefs: createRequirementBundleRefPersistence(deps.db),
     uploadPlacement: createUploadPlacementPersistence(deps.db),

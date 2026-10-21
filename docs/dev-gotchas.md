@@ -8744,3 +8744,7 @@ Add boot steps, background jobs and close participants to `packages/backend/src/
 ## RFC-380：同构守护进程模块按会话装配一次
 
 provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行时管理、记忆只在 `cli/daemonModules/` 的共享函数构造。两个 provider 的会话根各调用一次，SQLite 将同一实例注入 `server.ts`，HTTP 测试回退也调用同一函数。根与 `server.ts` 不再自行构造组内成员。粒度是 provider 会话，迁移目标必须有独立实例；构造不执行 SQL、不启动定时器，启动恢复与 MCP 诊断作业仍归 `daemonLifecycleProgram.ts`。
+
+## RFC-383：数字员工与开发自动化按会话装配，两个引擎共用写者门控
+
+数字员工与开发自动化只在 `cli/daemonModules/digitalEmployee.ts`、`developmentAutomation.ts` 构造；SQLite 的 HTTP、工作启动、启动初始化与 OS 作业共用一个数字员工实例（取代 RFC-359 W12 的两实例决定），`server.ts` 仅保留同构测试回退。写者切换每会话一份，迁移状态、任务准入、启动与周期共用；两个引擎的唤醒先刷新状态，遗留恢复读当前状态，门控在 development-automation 应用层。宿主任务共用任务执行组的 `hostTasks` 与会话取消成员，守护身份经 provider 核心每次准入。新增接线不要把构造挪出 `??` 回退而让生产创建无人使用的实例。

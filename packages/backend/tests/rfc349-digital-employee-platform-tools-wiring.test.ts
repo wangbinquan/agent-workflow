@@ -106,9 +106,13 @@ describe('RFC-349 digital employee platform tool wiring', () => {
 
   test('the SQLite daemon hands its one catalog to the app composition, not only to the OS runtime', () => {
     const source = readFileSync(resolve(backendRoot, 'src/cli/start.ts'), 'utf8')
-    // 目录必须先于 app 组装建好，并**同时**交给 app 与 employeeOs。
+    // RFC-383: the session bundle builds and owns the catalog before HTTP assembly.
+    const bundle = readFileSync(
+      resolve(backendRoot, 'src/cli/daemonModules/digitalEmployee.ts'),
+      'utf8',
+    )
     expect(source).toMatch(
-      /const digitalEmployeePlatformTools = composeDigitalEmployeeBuiltinToolCatalog\(/,
+      /const digitalEmployeePlatformTools = digitalEmployeeModules\.platformTools/,
     )
     // RFC-370 adds required composition fields before this catalog. Bind the
     // exact argument member instead of relying on its character distance.
@@ -136,13 +140,16 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     )
     expect(catalogMembers).toHaveLength(1)
     expect(ts.isShorthandPropertyAssignment(catalogMembers[0]!)).toBe(true)
-    expect(source).toContain('platformTools: digitalEmployeePlatformTools,')
+    expect(bundle).toContain('composeDigitalEmployeeBuiltinToolCatalog({')
+    expect(bundle).toContain('platformTools,')
+    expect(source).toContain('const employeeOs = digitalEmployeeModules.module')
     expect(bootImplementation(source, 'employee-tool-catalog')).toContain(
       'await digitalEmployeePlatformTools.load()',
     )
     expectBootOrder(['employee-agent-templates', 'employee-tool-catalog'])
     // 单一实例：不允许再出现第二次组装（两份目录 = 两种真值）。
-    expect(source.split('composeDigitalEmployeeBuiltinToolCatalog(').length - 1).toBe(1)
+    expect(source.split('composeDigitalEmployeeBuiltinToolCatalog(').length - 1).toBe(0)
+    expect(bundle.split('composeDigitalEmployeeBuiltinToolCatalog(').length - 1).toBe(1)
   })
 
   test('the completed HTTP composition exposes a required WorkStart port without a bind phase', async () => {

@@ -698,9 +698,11 @@ function propertiesOf(node: ts.Node, source: ts.SourceFile) {
 }
 describe('RFC-370 verification command composition contract', () => {
   for (const [path, name, receiver] of [
-    ['server.ts', 'composeFallbackDevelopmentAutomation', 'deps'],
-    ['cli/postgresqlDaemonApplication.ts', 'composePostgresqlApplication', 'input'],
-    ['cli/start.ts', 'composeSqliteProviderSession', 'input'],
+    [
+      'cli/daemonModules/developmentAutomation.ts',
+      'composeDaemonDevelopmentAutomationModules',
+      'input',
+    ],
   ] as const) {
     test(`${name} selects the complete native factory only for an absent override`, () => {
       const source = readSource(path)
@@ -714,7 +716,7 @@ describe('RFC-370 verification command composition contract', () => {
       expect(selected).toHaveLength(1)
       expect(selected[0]!.parent).toBe(arg)
       expect(selected[0]!.initializer.getText(source).replace(/\s/g, '')).toBe(
-        `${receiver}.verificationCommands===undefined?createLocalVerificationCommandEffectsFactory():${receiver}.verificationCommands`,
+        `${receiver}.verificationCommands??createLocalVerificationCommandEffectsFactory()`,
       )
       expect(source.text).toContain(
         "from '@/modules/development-automation/composition/localVerificationCommands'",
@@ -731,8 +733,25 @@ describe('RFC-370 verification command composition contract', () => {
       const forwards = propertiesOf(bodyOf(source, name), source).filter((p) =>
         ts.isPropertyAccessExpression(p.initializer),
       )
-      expect(forwards).toHaveLength(1)
-      expect(forwards[0]!.initializer.getText(source)).toBe(receiver + '.verificationCommands')
+      expect(forwards).toHaveLength(name === 'composeSqliteProviderSession' ? 2 : 1)
+      for (const forward of forwards)
+        expect(forward.initializer.getText(source)).toBe(receiver + '.verificationCommands')
+    }
+  })
+  test('RFC-383 each root forwards verification selection into the shared bundle', () => {
+    for (const [path, root, receiver] of [
+      ['server.ts', 'composeSqliteApplicationDeps', 'deps'],
+      ['cli/postgresqlDaemonApplication.ts', 'composePostgresqlApplication', 'input'],
+      ['cli/start.ts', 'composeSqliteProviderSession', 'input'],
+    ] as const) {
+      const source = readSource(path)
+      const calls = descendants(bodyOf(source, root), ts.isCallExpression).filter(
+        (call) => call.expression.getText(source) === 'composeDaemonDevelopmentAutomationModules',
+      )
+      expect(calls).toHaveLength(1)
+      const properties = propertiesOf(calls[0]!.arguments[0]!, source)
+      expect(properties).toHaveLength(1)
+      expect(properties[0]!.initializer.getText(source)).toBe(receiver + '.verificationCommands')
     }
   })
   test('the module requires the family and creates it with the original evidence before parsing its profile', () => {

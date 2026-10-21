@@ -14,6 +14,8 @@
       "publicEntries": ["commands.ts", "events.ts", "participants.ts", "types.ts"],
       "externalImports": [
         "bootstrap/crewstation.ts -> composition",
+        "cli/daemonModules/digitalEmployee.ts -> composition",
+        "cli/daemonModules/digitalEmployee.ts -> public/types",
         "cli/daemonModules/integration.ts -> composition",
         "cli/daemonModules/integration.ts -> public/events",
         "cli/daemonModules/resourceCatalog.ts -> composition",
@@ -85,8 +87,7 @@
       "topLevelEntries": ["application", "composition", "composition.ts", "domain", "public"],
       "publicEntries": ["commands.ts", "types.ts"],
       "externalImports": [
-        "cli/postgresqlDaemonApplication.ts -> composition",
-        "cli/start.ts -> composition",
+        "cli/daemonModules/digitalEmployee.ts -> composition",
         "modules/development-automation/composition/digitalEmployeeToolContractsV2.ts -> public/types",
         "modules/development-automation/composition/employeeTypePackage.ts -> public/types",
         "modules/digital-employee/application/authoringService.ts -> public/types",

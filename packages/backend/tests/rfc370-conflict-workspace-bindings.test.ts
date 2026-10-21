@@ -53,7 +53,7 @@ function property(source: ts.SourceFile, call: ts.CallExpression, name: string) 
   return entries[0]!.initializer.getText(source)
 }
 
-test('all nine actual conflict bindings and the paired bootstrap selection retain the explicit receiver', () => {
+test('RFC-383 shared conflict bindings and paired root selections retain the explicit receiver', () => {
   for (const [path, receiver] of [
     ['cli/start.ts', 'input'],
     ['cli/postgresqlDaemonApplication.ts', 'input'],
@@ -65,10 +65,17 @@ test('all nine actual conflict bindings and the paired bootstrap selection retai
       ts.ScriptTarget.Latest,
       true,
     )
-    const bindings = calls(source, 'bindConflictMergeParticipant')
-    expect(bindings).toHaveLength(3)
-    for (const binding of bindings)
-      expect(property(source, binding, 'effects')).toBe(`${receiver}.conflictMergeWorkspaceEffects`)
+    expect(calls(source, 'bindConflictMergeParticipant')).toHaveLength(0)
+    for (const name of [
+      'composeDaemonDigitalEmployeeModules',
+      'composeDaemonDevelopmentAutomationModules',
+    ]) {
+      const bindings = calls(source, name)
+      expect(bindings).toHaveLength(1)
+      expect(property(source, bindings[0]!, 'conflictMergeWorkspaceEffects')).toBe(
+        `${receiver}.conflictMergeWorkspaceEffects`,
+      )
+    }
     const selection = calls(source, 'selectDevelopmentWorkspaceEffectBinding')
     expect(selection).toHaveLength(1)
     expect(property(source, selection[0]!, 'actionWorkspaceEffects')).toBe(
@@ -81,10 +88,36 @@ test('all nine actual conflict bindings and the paired bootstrap selection retai
       `${receiver}.conflictMergeWorkspaceEffects !== undefined`,
     )
   }
+  for (const path of [
+    'cli/daemonModules/digitalEmployee.ts',
+    'cli/daemonModules/developmentAutomation.ts',
+  ]) {
+    const source = ts.createSourceFile(
+      path,
+      readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const bindings = calls(source, 'bindConflictMergeParticipant')
+    expect(bindings).toHaveLength(1)
+    expect(property(source, bindings[0]!, 'effects')).toBe('input.conflictMergeWorkspaceEffects')
+    if (path.endsWith('/digitalEmployee.ts')) {
+      for (const name of [
+        'composeDevelopmentEmployeeWorkspace',
+        'composeDevelopmentEmployeePlatformWorkItems',
+      ]) {
+        const consumers = calls(source, name)
+        expect(consumers).toHaveLength(1)
+        expect(consumers[0]!.arguments[0]!.getText(source)).toContain('conflictMerge,')
+      }
+    }
+  }
   const start = readFileSync(new URL('../src/cli/start.ts', import.meta.url), 'utf8')
   for (const name of ['actionWorkspaceEffects', 'conflictMergeWorkspaceEffects']) {
     expect(start).toContain(`${name}: opts.${name},`)
-    expect(start.split(`${name}: input.${name},`)).toHaveLength(3)
+    expect(start.split(`${name}: input.${name},`)).toHaveLength(
+      name === 'actionWorkspaceEffects' ? 3 : 5,
+    )
   }
 })
 

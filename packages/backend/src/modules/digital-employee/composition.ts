@@ -23,6 +23,7 @@ import type {
   ToolConnectionVisibilitySubject,
 } from './composition/required-ports'
 import { createProgramArtifactStore } from './infrastructure/programArtifactStore'
+export { createProgramArtifactStore } from './infrastructure/programArtifactStore'
 import { createReactionRoundQueries } from './infrastructure/reactionRoundQueries'
 import type { EmployeeReactionRoundQueryPort } from './public/types'
 import { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
@@ -466,6 +467,7 @@ type DigitalEmployeeRuntimeBinding = {
 export interface ComposeDigitalEmployeeOptions extends DigitalEmployeeCompositionOptions {
   /** 两个 provider 同一份持久化（RFC-359 W4-D6c/D7a/D7b），装配入口收中立句柄。 */
   readonly db: ProviderNeutralDatabase
+  readonly writerCutover?: ReturnType<typeof composeDigitalEmployeeWriterCutoverFor>
   /** Explicit Bun-dev escape hatch; normal start and embedded builds stay immutable. */
   readonly typePackageDriftPolicy?: 'reject' | 'draft-overlay'
 }
@@ -1135,6 +1137,7 @@ export function composeDigitalEmployee(
   options: ComposeDigitalEmployeeOptions,
 ): DigitalEmployeeModule {
   const persisted = createDigitalEmployeeAuthoringPersistence(options.db)
+  const writerCutover = options.writerCutover ?? composeDigitalEmployeeWriterCutoverFor(options.db)
   return composeDigitalEmployeeFromPersistence(options, {
     authoring:
       options.typePackageDriftPolicy === 'draft-overlay'
@@ -1148,7 +1151,7 @@ export function composeDigitalEmployee(
     ),
     reactionArtifacts: createReactionArtifactPersistence(options.db),
     inputUploads: createEmployeeInputUploadPersistence(options.db),
-    migrationStatus: () => composeDigitalEmployeeWriterCutoverFor(options.db).analyze(),
+    migrationStatus: () => writerCutover.analyze(),
   })
 }
 

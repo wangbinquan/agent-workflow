@@ -70,6 +70,7 @@ function graph(
     configuration: configuration.queries,
     notificationKey: configuration.notificationKey,
     identityAccess: core.identityAccess,
+    daemonActor: core.daemonActor,
     runtimeRegistry: core.runtimeRegistry,
     mcpCatalog: () => resourceCatalogModules.mcpCatalog,
     adapters: {

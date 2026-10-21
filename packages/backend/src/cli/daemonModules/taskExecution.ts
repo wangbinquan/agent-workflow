@@ -1,3 +1,4 @@
+import { directOperationAuthority } from '@/routes/operationAuthority'
 // RFC-382: one passive task-execution graph and one live configuration source per session.
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
@@ -112,13 +113,16 @@ export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseP
   readonly taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>
   readonly core: Pick<
     DaemonProviderCore,
-    'identityAccess' | 'runtimeRegistry' | 'repositoryWorkspaceStore'
+    'identityAccess' | 'runtimeRegistry' | 'repositoryWorkspaceStore' | 'daemonActor'
   >
   readonly observation: Pick<
     DaemonObservationModules,
     'observationCalls' | 'workspacePresence' | 'runtimeSessionLeases'
   >
-  readonly resources: Pick<DaemonResourceCatalogModules, 'agentResourceIntegrity'> & {
+  readonly resources: Pick<
+    DaemonResourceCatalogModules,
+    'agentResourceIntegrity' | 'agentCatalog' | 'workflowCatalog'
+  > & {
     readonly owners: Parameters<typeof composeTaskExecutionCatalogSources>[1]
   }
   readonly repository: Pick<
@@ -399,8 +403,40 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       },
     },
   })
+  const hostTasks = Object.freeze({
+    db,
+    launch: provider.routeLaunch.workflow,
+    resolveActor: () => core.daemonActor('digital-employee-host-identity-not-admitted'),
+    resourceAuthorityFor,
+    cancelTask: (taskId: string) =>
+      provider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
+    readModels: provider.readModels,
+    agents: Object.freeze({
+      async get(id: string, errorCode = 'digital-employee-catalog-authority-not-admitted') {
+        return input.resources.agentCatalog.queries.get(
+          directOperationAuthority(
+            core.identityAccess.directAuthority,
+            await core.daemonActor(errorCode),
+          ),
+          { id },
+        )
+      },
+    }),
+    workflows: Object.freeze({
+      async get(id: string) {
+        return input.resources.workflowCatalog.queries.get(
+          directOperationAuthority(
+            core.identityAccess.directAuthority,
+            await core.daemonActor('digital-employee-catalog-authority-not-admitted'),
+          ),
+          { id },
+        )
+      },
+    }),
+  })
   return Object.freeze({
     ...provider,
+    hostTasks,
     collaboration,
     resourceSnapshots,
     resources,

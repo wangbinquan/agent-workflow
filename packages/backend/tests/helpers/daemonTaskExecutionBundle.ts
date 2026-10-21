@@ -1,3 +1,4 @@
+import { admitDaemonIdentity, actorOfDirectAuthority } from '@/auth/session'
 // RFC-382: compose the real provider task bundle with recorded scheduler delivery and real database participants.
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { join } from 'node:path'
@@ -94,6 +95,11 @@ export function taskBundleInput(
     taskLaunchConfiguration: configuration,
     core: {
       identityAccess,
+      async daemonActor(errorCode = 'digital-employee-host-identity-not-admitted') {
+        const identity = await admitDaemonIdentity(identityAccess)
+        if (identity === null) throw new Error(errorCode)
+        return actorOfDirectAuthority(identity)
+      },
       runtimeRegistry,
       repositoryWorkspaceStore: composeRepositoryWorkspaceStore(db),
     },
@@ -103,6 +109,7 @@ export function taskBundleInput(
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
     },
     resources: {
+      ...resourceCatalog,
       agentResourceIntegrity: resourceCatalog.agentResourceIntegrity,
       owners: composeOwnerIdentityQueries(db),
     },

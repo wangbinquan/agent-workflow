@@ -55,6 +55,7 @@ function expectClosedCore(core: DaemonProviderCore, provider: DaemonProviderCore
       'sourceWriteWindow',
       'tokenCallAudit',
       'identityAccess',
+      'daemonActor',
       'httpAuthentication',
       'healthDatabase',
       'runtimeRegistry',

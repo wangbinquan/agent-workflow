@@ -56,8 +56,14 @@ describe('RFC-338 maintenance architecture', () => {
     expect(start.split('.bootstrap.stop()').length - 1).toBe(1)
     expect(start).toContain('startBatchImportGc(')
     expect(start).toMatch(
-      /const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory\(\{[\s\S]*?employeeWriterCutover\.refresh\(\)[\s\S]*?onError\(err\) \{[\s\S]*?development writer refresh failed/u,
+      /const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory\(\{[\s\S]*?developmentAutomationModules\.sweepWakesWhileDraining\(\)/u,
     )
+
+    const gates = readBackend(
+      'src/modules/development-automation/application/writerCutoverGates.ts',
+    )
+    expect(gates).toContain('await input.writerCutover.refresh()')
+    expect(gates).toContain('development writer refresh failed')
 
     for (const forbidden of [
       'startWorktreeGc(',

@@ -28,39 +28,37 @@ function calls(source: ts.SourceFile, expression: string) {
 }
 
 test('real boot and HTTP roots choose one complete input receiver for both intake and materialization', () => {
-  for (const [path, receiver, variable] of [
-    ['cli/start.ts', 'input', 'employeeInputArtifacts'],
-    ['cli/postgresqlDaemonApplication.ts', 'input', 'employeeInputArtifacts'],
-    ['server.ts', 'deps', 'inputArtifacts'],
-  ]) {
-    const source = load(path!)
-    const defaults = calls(source, 'createEmployeeInputArtifactStore')
-    expect(defaults).toHaveLength(1)
-    const selection = defaults[0]!.parent
-    expect(ts.isBinaryExpression(selection)).toBe(true)
-    if (!ts.isBinaryExpression(selection)) throw new Error('selected input store is missing')
-    expect(selection.left.getText(source)).toBe(`${receiver}.employeeInputArtifacts`)
-    expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
-    for (const expression of ['composeDigitalEmployee', 'composeDevelopmentEmployeeWorkspace']) {
-      const consumers = calls(source, expression)
-      expect(consumers).toHaveLength(1)
-      const input = consumers[0]!.arguments[0]!
-      expect(ts.isObjectLiteralExpression(input)).toBe(true)
-      if (!ts.isObjectLiteralExpression(input)) throw new Error('consumer binding is missing')
-      const bindings = input.properties.filter(
-        (property): property is ts.PropertyAssignment | ts.ShorthandPropertyAssignment =>
-          (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
-          property.name.getText(source) === 'inputArtifacts',
-      )
-      expect(bindings).toHaveLength(1)
-      const binding = bindings[0]!
-      const value = ts.isShorthandPropertyAssignment(binding) ? binding.name : binding.initializer
-      expect(value.getText(source)).toBe(variable!)
-    }
+  // RFC-383: roots forward their selection; the one bundle chooses and shares the receiver.
+  for (const [path, receiver] of [
+    ['cli/start.ts', 'input'],
+    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['server.ts', 'deps'],
+  ] as const) {
+    const root = load(path)
+    const forwarded = calls(root, 'composeDaemonDigitalEmployeeModules')
+    expect(forwarded).toHaveLength(1)
+    expect(forwarded[0]!.arguments[0]!.getText(root).replace(/\s/g, '')).toContain(
+      `employeeInputArtifacts:${receiver}.employeeInputArtifacts`,
+    )
+    expect(calls(root, 'createEmployeeInputArtifactStore')).toHaveLength(0)
+  }
+  const source = load('cli/daemonModules/digitalEmployee.ts')
+  const defaults = calls(source, 'createEmployeeInputArtifactStore')
+  expect(defaults).toHaveLength(1)
+  const selection = defaults[0]!.parent
+  if (!ts.isBinaryExpression(selection)) throw new Error('selected input store is missing')
+  expect(selection.left.getText(source)).toBe('input.adapters?.employeeInputArtifacts')
+  expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
+  for (const expression of ['composeDigitalEmployee', 'composeDevelopmentEmployeeWorkspace']) {
+    const consumers = calls(source, expression)
+    expect(consumers).toHaveLength(1)
+    expect(consumers[0]!.arguments[0]!.getText(source).replace(/\s/g, '')).toContain(
+      'inputArtifacts:employeeInputArtifacts',
+    )
   }
   const start = load('cli/start.ts')
   expect(start.text).toContain('employeeInputArtifacts: opts.employeeInputArtifacts,')
-  expect(start.text.split('employeeInputArtifacts: input.employeeInputArtifacts,')).toHaveLength(3)
+  expect(start.text.split('employeeInputArtifacts: input.employeeInputArtifacts,')).toHaveLength(4)
   expect(start.text).toContain('readonly employeeInputArtifacts?: EmployeeInputArtifactPort')
   expect(start.text).toContain('...sessionInput,')
 })

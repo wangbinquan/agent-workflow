@@ -1,3 +1,5 @@
+import { composeDaemonDigitalEmployeeModules } from './daemonModules/digitalEmployee'
+import { composeDaemonDevelopmentAutomationModules } from './daemonModules/developmentAutomation'
 import {
   composeDaemonTaskExecutionModules,
   type DaemonTaskExecutionModules,
@@ -85,20 +87,16 @@ import type {
   RepositoryBaselineEffectsFactory,
   VerificationCommandEffectsFactory,
 } from '@/modules/development-automation/composition'
-import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
 } from '@/modules/system-operations/composition/applicationConfiguration'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
-import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
-import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 // `agent-workflow start` — daemon foreground entry.
 
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
-import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createSecretBox, type SecretBox } from '@/auth/secretBox'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
@@ -117,26 +115,16 @@ import {
 
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import {
-  composeDevelopmentAutomation,
   type EvidenceDocumentCommands,
   type EvidenceArtifactPort,
   type AttemptContextStorePort,
-  composeDevelopmentAdmissionLookup,
-  createDevelopmentMissionExecutionTerminalObserver,
 } from '@/modules/development-automation/composition'
 
-import { composeSelectedRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
 import {
-  bindCandidateDeliveryParticipant,
-  bindChangeCandidateParticipant,
-  bindConflictMergeParticipant,
-  bindEmployeeCaseWorkspaceParticipant,
   cleanupOrphanedGitCredentialLeases,
   reconcileRepositoryTransportConnectionProjections,
 } from '@/modules/source-control/composition'
-import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
-import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import {
   type TaskExecutionBackgroundControl,
   type TaskExecutionBackgroundStartDependencies,
@@ -149,12 +137,6 @@ import {
 } from '@/modules/intent/composition/queuedResumption'
 
 import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
-import {
-  buildDevelopmentDeliveryDeps,
-  buildDevelopmentWorkspaceRepositoryPreparation,
-  buildDevelopmentMrFactsDeps,
-  buildDevelopmentPipelineDeps,
-} from '@/services/developmentDeliveryDeps'
 
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
 import { IS_EMBEDDED } from '@/embed'
@@ -212,7 +194,6 @@ import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { startBatchImportGc } from '@/services/repoBatchImport'
 import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
-import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import { type PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
 import { setMemoryDistillPolicyProvider } from '@/modules/memory/composition'
@@ -238,39 +219,12 @@ import {
   type CustomObserverProgramFactory,
 } from '@/modules/event-center/composition'
 
-import {
-  composeDigitalEmployeeWriterCutoverFor,
-  composeDigitalEmployee,
-  createEmployeeInputArtifactStore,
-  readPersistedDigitalEmployeeTypePackageDescriptorJsons,
-  runDigitalEmployeeOsCycle,
-} from '@/modules/digital-employee/composition'
+import { runDigitalEmployeeOsCycle } from '@/modules/digital-employee/composition'
 
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
-import {
-  developmentExecutionContractRegistrations,
-  developmentEmployeeRuntimeCodec,
-  developmentEmployeeTypePackage,
-  developmentImplicitAgentContractDeclarations,
-} from '@/modules/development-automation/composition/employeeTypePackage'
-import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
-
-import {
-  composeDevelopmentEmployeeWorkspace,
-  createDevelopmentEmployeeCaseWorkspaceDetailReader,
-} from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
-import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
-import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
-
-import {
-  composeDatabaseDigitalEmployeeExecutionPorts,
-  composeReactionExecutionProvider,
-} from '@/modules/task-execution/composition/digitalEmployeeExecution'
-import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
-
 import {
   createTaskLifecycleDurableConsumerDefinitions,
   taskLifecycleCommittedEventCodec,
@@ -327,7 +281,6 @@ import {
   composeIntentTurnRuntimeResolver,
 } from '@/modules/intent/composition/auxiliaryQueries'
 import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
-import { composeDigitalEmployeePlatformInventoryParticipant } from '@/modules/digital-employee/composition'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
 import {
@@ -745,6 +698,7 @@ async function composePostgresqlProviderSession(
     daemonStartupLease: input.lock,
     token: input.token,
     appHome: Paths.root,
+    digitalEmployeeTypePackageDriftPolicy: input.digitalEmployeeTypePackageDriftPolicy,
     configPath: Paths.config,
     daemonInfoPath: Paths.daemonInfo,
     lockPath: Paths.lock,
@@ -1012,10 +966,10 @@ async function composePostgresqlProviderSession(
   const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'development-wake',
     intervalMs: DAEMON_CADENCE.developmentWakeSweep,
-    run: () => runtime.developmentAutomation.sweepWakes().then(() => undefined),
+    run: () => runtime.developmentAutomationModules.sweepWakesWhileDraining(),
     onError(error) {
-      input.log.warn('PostgreSQL development wake sweep failed', {
-        error: error instanceof Error ? error.message : String(error),
+      input.log.warn('development wake sweep failed', {
+        err: error instanceof Error ? error.message : String(error),
       })
     },
   })
@@ -2191,6 +2145,7 @@ async function composeSqliteProviderSession(
     configuration,
     notificationKey: applicationConfiguration.notificationKey,
     identityAccess,
+    daemonActor: providerCore.daemonActor,
     runtimeRegistry,
     adapters: standaloneModuleAdapters(),
     mcpCatalog: () => mcpCatalog,
@@ -2242,7 +2197,6 @@ async function composeSqliteProviderSession(
     repositoryTransport: repositoryTransportModule,
     codeHostConnections: repositoryMetadataConnections,
     developmentDeliveryProvider,
-    developmentWorkspaceRepositoryPreparation,
     repositoryPublicationTransport,
   } = repositoryCredentials
   const repositoryTransportRepository = providerCore.repositoryTransportCredentialRepository
@@ -2287,7 +2241,7 @@ async function composeSqliteProviderSession(
       adapters: DAEMON_TASK_EXECUTION_ADAPTERS.sqlite({ db }),
       core: providerCore,
       observation: observationModules,
-      resources: { agentResourceIntegrity, owners: composeOwnerIdentityQueries(db) },
+      resources: { ...resourceCatalogModules, owners: composeOwnerIdentityQueries(db) },
       repository: repositoryCredentials,
       memory: memoryModules,
       selection: {
@@ -2357,9 +2311,9 @@ async function composeSqliteProviderSession(
     isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
     invalidateWorkspacePath: invalidateCallGraphIndex,
   })
-  // HTTP and webhook work-start share the completed employee instance; the OS worker is separate.
+  // RFC-383: integration forwards to the same session instance as HTTP and the OS worker.
   const digitalEmployeeWorkStart = Object.freeze<DigitalEmployeeWorkStartPort>({
-    launch: (request) => appComposition.digitalEmployeeWorkStart.launch(request),
+    launch: (request) => digitalEmployeeModules.workStart.launch(request),
   })
   const integrationModules = composeDaemonIntegrationModules({
     db,
@@ -2380,124 +2334,62 @@ async function composeSqliteProviderSession(
     webhookTerminalControl,
     webhookDeliveryPersistence,
     webhookDispatcher,
-    developmentApprovalGateway,
     eventCenter: employeeHttpEventCenter,
   } = integrationModules
-  const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(db)
-  let employeeWriterState: Awaited<ReturnType<typeof employeeWriterCutover.activate>> | undefined
-
-  // RFC-310 PR-3/PR-4 + RFC-344 —— bootstrap owns exactly one
-  // development-automation composition. HTTP and MCP receive this participant;
-  // boot recovery, terminal callbacks and wake sweeps drive the same instance.
-  const developmentAdmissionLookup = composeDevelopmentAdmissionLookup(db)
-  const developmentTerminalObserver = createDevelopmentMissionExecutionTerminalObserver({
-    db,
-    async drive(missionId) {
-      try {
-        const outcome = await developmentAutomation.drive(missionId)
-        if (outcome.stop === 'step-budget') {
-          log.warn('development mission drive reached its bounded step budget', {
-            missionId,
-            steps: outcome.steps,
-          })
-        }
-        return outcome
-      } catch (err) {
-        log.warn('development mission drive after execution terminal failed', {
-          missionId,
-          err: err instanceof Error ? err.message : String(err),
-        })
-        throw err
-      }
-    },
-  })
-  // RFC-382: host tasks use the session workflow kernel and its live configuration.
-  const hostActionEnvironment = {
-    db,
-    launch: taskExecutionProvider.routeLaunch.workflow,
-    resolveActor: async () => {
-      const identity = await admitDaemonIdentity(identityAccess)
-      if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')
-      return actorOfDirectAuthority(identity)
-    },
-    resourceAuthorityFor: (actor: Actor) => ({
-      actor,
-      authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
-      resources: taskExecutionResources,
-    }),
-    cancelTask: (taskId: string) => composeTaskCancellation(db).cancel(taskId),
-    readModels: taskExecutionProvider.readModels,
-  }
-  const developmentAutomation = composeDevelopmentAutomation({
-    verificationCommands:
-      input.verificationCommands === undefined
-        ? createLocalVerificationCommandEffectsFactory()
-        : input.verificationCommands,
-    actionWorkspaceEffects: developmentWorkspaceEffects.actionWorkspaceEffects,
-    automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
-    repositoryBaselines: input.repositoryBaselines,
+  const digitalEmployeeModules = composeDaemonDigitalEmployeeModules({
     db,
     appHome: Paths.root,
-    evidenceArtifacts: developmentPurposeRoot.evidenceArtifacts,
-    evidenceRead: input.evidenceRead,
-    evidenceDocumentCommands: developmentPurposeRoot.requirement.documentCommands,
-    requirementStaging: developmentPurposeRoot.requirement.staging,
-    attemptContext: input.attemptContext,
-    admissionLookup: developmentAdmissionLookup,
-    requirementSource: composeSelectedRequirementSourceRunnerFor(
-      db,
-      developmentPurposeRoot.requirement,
-    ),
-    changeCandidate: bindChangeCandidateParticipant({
-      candidateEffects: input.repositoryCandidateEffects,
-    }),
-    candidateDelivery: bindCandidateDeliveryParticipant({
-      candidateEffects: input.repositoryCandidateEffects,
-      publicationTransport: repositoryPublicationTransport,
-    }),
-    conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
-    ...buildDevelopmentDeliveryDeps(
-      developmentDeliveryProvider,
-      developmentPurposeRoot.pipeline.staging,
-    ),
-    ...buildDevelopmentPipelineDeps(
-      developmentDeliveryProvider.pipeline,
-      developmentPurposeRoot.pipeline.staging,
-    ),
-    ...buildDevelopmentMrFactsDeps(developmentDeliveryProvider),
-    agentLauncher: composeAgentActionExecution({
-      ...hostActionEnvironment,
-      agents: {
-        // RFC-345：bootstrap 只从模块的目录查询面取 Agent，不再经 services/agent 门面。
-        get: async (id) => {
-          const identity = await admitDaemonIdentity(identityAccess)
-          if (identity === null) throw new Error('agent-action-authority-not-admitted')
-          return agentCatalog.queries.get(identity.actor, { id })
-        },
-      },
-      onTerminal: (executionRef) => {
-        void developmentTerminalObserver.agent(executionRef)
-      },
-    }),
-    scriptLauncher: composeScriptActionExecution({
-      ...hostActionEnvironment,
-      agents: {
-        // RFC-345：bootstrap 只从模块的目录查询面取 Agent，不再经 services/agent 门面。
-        get: async (id) => {
-          const identity = await admitDaemonIdentity(identityAccess)
-          if (identity === null) throw new Error('agent-action-authority-not-admitted')
-          return agentCatalog.queries.get(identity.actor, { id })
-        },
-      },
-      onTerminal: (executionRef) => {
-        void developmentTerminalObserver.script(executionRef)
-      },
-    }),
-    approvalGateway: developmentApprovalGateway,
+    configuration,
+    log,
+    typePackageDriftPolicy: digitalEmployeeTypePackageDriftPolicy,
+    core: {
+      daemonActor: providerCore.daemonActor,
+      userDirectory: identityAccess.userDirectory,
+      directAuthority: identityAccess.directAuthority,
+    },
+    resources: resourceCatalogModules,
+    repository: repositoryCredentials,
+    integration: integrationModules,
+    taskExecution: taskExecutionModules,
+    developmentPurposeRoot,
+    workspaceEffects: developmentWorkspaceEffects,
+    repositoryBaselines: input.repositoryBaselines,
+    evidenceArtifacts: input.evidenceArtifacts,
+    repositoryCandidateEffects: input.repositoryCandidateEffects,
+    conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
+    adapters: {
+      employeePrograms: input.employeePrograms,
+      employeeInputArtifacts: input.employeeInputArtifacts,
+      employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
+    },
   })
-  const employeeCaseDetailProjection = composeDevelopmentEmployeeCaseDetailProjection(
-    createDevelopmentEmployeeCaseWorkspaceDetailReader(db),
-  )
+  const developmentAutomationModules = composeDaemonDevelopmentAutomationModules({
+    db,
+    appHome: Paths.root,
+    log,
+    developmentPurposeRoot,
+    workspaceEffects: developmentWorkspaceEffects,
+    repository: repositoryCredentials,
+    integration: integrationModules,
+    hostTasks: taskExecutionModules.hostTasks,
+    writerCutover: digitalEmployeeModules.writerCutover,
+    verificationCommands: input.verificationCommands,
+    repositoryBaselines: input.repositoryBaselines,
+    evidenceRead: input.evidenceRead,
+    attemptContext: input.attemptContext,
+    repositoryCandidateEffects: input.repositoryCandidateEffects,
+    conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
+    missionInputBlobs: input.missionInputBlobs,
+    evidenceArtifacts: input.evidenceArtifacts,
+  })
+  const employeeEventCenter = employeeHttpEventCenter
+  const employeeOs = digitalEmployeeModules.module
+  const employeeWriterCutover = digitalEmployeeModules.writerCutover
+  const employeeExecutionContracts = digitalEmployeeModules.executionContracts
+  const digitalEmployeePlatformTools = digitalEmployeeModules.platformTools
+  const employeeCaseDetailProjection = digitalEmployeeModules.caseDetailProjection
+  const developmentAutomation = developmentAutomationModules.automation
+  const developmentAdmissionLookup = developmentAutomationModules.admissionLookup
 
   const gateContinuationDeps = {
     launchConfiguration: taskLaunchConfiguration.continuationQueries,
@@ -2729,17 +2621,6 @@ async function composeSqliteProviderSession(
     closeParticipantId: 'maintenance-final-close',
     service: maintenanceService,
   })
-  // RFC-349 T5 — compose this provider-neutral participant once at daemon
-  // bootstrap. HTTP and the Digital Employee worker must not independently
-  // choose or reopen a database provider.
-  const employeeExecutionContracts = composeExecutionContract({
-    registrations: developmentExecutionContractRegistrations,
-    resources: createExecutionContractResourceAdapter(
-      db,
-      developmentImplicitAgentContractDeclarations,
-    ),
-    programFixtures: createExecutionContractProgramFixtureAdapter({ appHome: Paths.root }),
-  })
   const codeHistoryQueries = composeCodeHistoryQueries(db)
   const databaseMigration = composeDatabaseMigrationModule({
     admission: migrationAdmission,
@@ -2756,21 +2637,10 @@ async function composeSqliteProviderSession(
     },
   })
 
-  // 7. HTTP server.
-  //
-  // The authoring HTTP surface and the OS runtime must read ONE platform tool
-  // catalog. `composeSqliteAppDeps` creates the HTTP digital-employee module, so a
-  // catalog built later (for `employeeOs` alone) leaves every
-  // `/work-items/:ref/tools` response empty and the job-template editor with no
-  // built-in tool to bind.
-  const digitalEmployeePlatformTools = composeDigitalEmployeeBuiltinToolCatalog({
-    agentTemplates: digitalEmployeeAgentTemplates,
-    typePackageDescriptorJsons: async () => [
-      ...(await readPersistedDigitalEmployeeTypePackageDescriptorJsons(db)),
-      developmentEmployeeTypePackage.descriptorJson,
-    ],
-  })
+  // 7. HTTP receives the completed session bundles.
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
+    digitalEmployeeModules,
+    developmentAutomationModules,
     repositoryCredentials,
     resourceCatalogModules,
     observationModules,
@@ -3070,137 +2940,15 @@ async function composeSqliteProviderSession(
   const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'development-wake',
     intervalMs: DAEMON_CADENCE.developmentWakeSweep,
-    async run() {
-      const writer = await employeeWriterCutover.refresh()
-      if (writer.mode === 'os-active' && !writer.legacyAdmissionsEnabled) return
-      await developmentAutomation.sweepWakes()
-    },
-    onError(err) {
-      // This correctness sweep shares the foreground connection with HTTP.
-      // A bounded maintenance write may own SQLite briefly; keep the daemon
-      // alive and retry on the next cadence instead of leaking BUSY from the
-      // timer callback as an uncaught process-level exception.
-      log.warn('development writer refresh failed', {
-        err: err instanceof Error ? err.message : String(err),
+    run: () => developmentAutomationModules.sweepWakesWhileDraining(),
+    onError(error) {
+      log.warn('development wake sweep failed', {
+        err: error instanceof Error ? error.message : String(error),
       })
     },
   })
-  // Upload/input/retention sweeps are direct RFC-338 Worker adapters. The
-  // development wake driver remains a separate 30s correctness loop.
+  // Upload/input/retention sweeps remain RFC-338 Worker adapters.
 
-  // RFC-310 OS runtime: the HTTP composition is intentionally stateless and
-  // may be recreated by tests; the daemon owns the one durable driver that
-  // gives Event Center, Case outbox/queue, Reaction planning and TaskEngine
-  // settlement bounded turns. All business state and leases remain in SQLite.
-  const employeeInputArtifacts =
-    input.employeeInputArtifacts ??
-    createEmployeeInputArtifactStore(join(Paths.root, 'artifacts', 'employee-inputs'))
-  const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
-    automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
-    db,
-    appHome: Paths.root,
-    reactionRounds: createEmployeeReactionRoundQueries(db),
-    inputArtifacts: employeeInputArtifacts,
-    repositoryPreparation: buildDevelopmentWorkspaceRepositoryPreparation(
-      developmentWorkspaceRepositoryPreparation,
-    ),
-    sourceControl: bindEmployeeCaseWorkspaceParticipant({
-      publicationTransport: repositoryPublicationTransport,
-      effects: input.employeeCaseWorkspaceEffects,
-    }),
-    conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
-  })
-  const employeeEventCenter = employeeHttpEventCenter
-  const employeeDelivery = buildDevelopmentDeliveryDeps(
-    developmentDeliveryProvider,
-    developmentPurposeRoot.pipeline.staging,
-  )
-  const employeeOs = composeDigitalEmployee({
-    db,
-    appHome: Paths.root,
-    programArtifacts: input.employeePrograms,
-    typePackages: [developmentEmployeeTypePackage],
-    typePackageDriftPolicy: digitalEmployeeTypePackageDriftPolicy,
-    platformTools: digitalEmployeePlatformTools,
-    onAutomaticUpgradeIssue: (issue) => {
-      log.warn('automatic digital employee type upgrade could not prove compatibility', {
-        ...issue,
-      })
-    },
-    executionContracts: employeeExecutionContracts,
-    retryLimits: {
-      async current() {
-        const config = await configuration.read()
-        return {
-          defaultNodeRetries: config.defaultNodeRetries,
-          sessionRestartBudget: config.sessionRestartBudget,
-        }
-      },
-    },
-    inputArtifacts: employeeInputArtifacts,
-    connectionCatalog: integrationModules.developmentToolConnections,
-    runtime: {
-      eventCenter: employeeEventCenter.participant,
-      codecs: [developmentEmployeeRuntimeCodec],
-      detailProjectionParticipants: [employeeCaseDetailProjection],
-      // RFC-368 T17 —— Reaction 执行走 `ReactionExecutionPortV1` + 同事务 admission 参与者。
-      reactionExecution: composeReactionExecutionProvider({
-        db: db,
-        // RFC-359 AC-1（plan §5hl）：数字员工执行也合成一份——端口 + 启动内核，
-        // 与 PostgreSQL daemon 同一条路。启动内核与身份面复用上面那个
-        // `hostActionEnvironment`（同一作用域的 `const`），三个库内端口取缺省实现。
-        appHome: Paths.root,
-        resolveActor: hostActionEnvironment.resolveActor,
-        resourceAuthorityFor: hostActionEnvironment.resourceAuthorityFor,
-        ...composeDatabaseDigitalEmployeeExecutionPorts(db),
-        launch: hostActionEnvironment.launch,
-        tasks: taskExecutionProvider.routes.tasks,
-        readModels: taskExecutionProvider.readModels,
-        agents: {
-          get: async (id) => {
-            const identity = await admitDaemonIdentity(identityAccess)
-            if (identity === null)
-              throw new Error('digital-employee-catalog-authority-not-admitted')
-            return agentCatalog.queries.get(identity.actor, { id })
-          },
-        },
-        workflows: {
-          get: async (id) => {
-            const identity = await admitDaemonIdentity(identityAccess)
-            if (identity === null)
-              throw new Error('digital-employee-catalog-authority-not-admitted')
-            return workflowCatalog.queries.get(identity.actor, { id })
-          },
-        },
-        workspace: employeeWorkspace,
-        executionContracts: employeeExecutionContracts,
-      }),
-      platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
-        automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
-        repositoryBaselines: input.repositoryBaselines,
-        evidenceArtifacts: input.evidenceArtifacts,
-        reactionRounds: createEmployeeReactionRoundQueries(db),
-        db,
-        appHome: Paths.root,
-        approvalGateway: developmentApprovalGateway,
-        ...employeeDelivery,
-        conflictMerge: bindConflictMergeParticipant({
-          effects: input.conflictMergeWorkspaceEffects,
-        }),
-        sourceControl: {
-          ...bindChangeCandidateParticipant({ candidateEffects: input.repositoryCandidateEffects }),
-          ...bindCandidateDeliveryParticipant({
-            candidateEffects: input.repositoryCandidateEffects,
-            publicationTransport: repositoryPublicationTransport,
-          }),
-          ...bindEmployeeCaseWorkspaceParticipant({
-            publicationTransport: repositoryPublicationTransport,
-            effects: input.employeeCaseWorkspaceEffects,
-          }),
-        },
-      }),
-    },
-  })
   const intentAuthorityFor = (actor: Actor) =>
     directOperationAuthority(identityAccess.directAuthority, actor)
   const intentCatalogActors = new WeakMap<object, Actor>()
@@ -3244,10 +2992,7 @@ async function composeSqliteProviderSession(
     authorityFor: intentAuthorityFor,
     capabilityTemplates: capabilityTemplateOperations,
     developmentConfig: developmentConfigOperations,
-    digitalEmployee: composeDigitalEmployeePlatformInventoryParticipant({
-      queries: employeeOs.queries,
-      access: resourceCatalog.authorization,
-    }),
+    digitalEmployee: digitalEmployeeModules.platformInventory,
   })
   const intentDumpAuxiliaryBase = composeIntentDumpAuxiliaryQueries({
     persistence: intentPersistence,
@@ -3569,8 +3314,8 @@ async function composeSqliteProviderSession(
         await employeeOs.maintenance.ready()
       },
       'employee-writer-state': async () => {
-        employeeWriterState = await employeeWriterCutover.activate()
-        log.info('digital employee writer activated', { ...employeeWriterState })
+        const writer = await employeeWriterCutover.activate()
+        log.info('digital employee writer activated', { ...writer })
       },
       'task-execution-recovery': async () => {
         const taskExecutionLockProof = createDaemonRecoveryAuthorityProof(
@@ -3616,21 +3361,7 @@ async function composeSqliteProviderSession(
           log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
         }
       },
-      'legacy-mission-recovery': async () => {
-        if (
-          employeeWriterState &&
-          (employeeWriterState.mode === 'legacy-draining' ||
-            employeeWriterState.legacyAdmissionsEnabled)
-        ) {
-          const recovered = await developmentAutomation.recover()
-          if (
-            recovered.settledFences > 0 ||
-            recovered.invalidatedEffects > 0 ||
-            recovered.firedWakes > 0
-          )
-            log.info('draining legacy development mission recovery on boot', recovered)
-        }
-      },
+      'legacy-mission-recovery': () => developmentAutomationModules.recoverWhileDraining(),
       'employee-upgrade-settlement': async () => {
         await employeeOs.maintenance.settleAutomaticUpgrades()
       },

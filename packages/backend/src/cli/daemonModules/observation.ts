@@ -1,4 +1,3 @@
-import { admitDaemonIdentity } from '@/auth/session'
 import { type ProviderNeutralDatabase } from '@/db/query'
 import { composeMcpRuntimeTestProvider } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { type McpCatalogModule } from '@/modules/resource-catalog/public/operations'
@@ -8,6 +7,7 @@ import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/qu
 import { type ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { directOperationAuthority } from '@/routes/operationAuthority'
 import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { type DaemonModuleAdapters } from './adapters'
 import { type DaemonProviderCore } from './providerCore'
@@ -17,6 +17,7 @@ export interface DaemonObservationInput {
   readonly appHome: string
   readonly configuration: ApplicationConfigurationQueries
   readonly notificationKey: Parameters<typeof composeRuntimeProbeConfigFence>[0]
+  readonly daemonActor: DaemonProviderCore['daemonActor']
   readonly identityAccess: DaemonProviderCore['identityAccess']
   readonly runtimeRegistry: DaemonProviderCore['runtimeRegistry']
   readonly mcpCatalog: () => McpCatalogModule
@@ -86,9 +87,12 @@ export function composeDaemonObservationModules(input: DaemonObservationInput) {
         loadVisibleMcp: (authority, id) => input.mcpCatalog().queries.get(authority, { id }),
       },
       async loadMcp(mcpId) {
-        const identity = await admitDaemonIdentity(identityAccess)
-        if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')
-        return input.mcpCatalog().queries.get(identity.actor, { id: mcpId })
+        const actor = await input.daemonActor('mcp-runtime-test-authority-not-admitted')
+        return input
+          .mcpCatalog()
+          .queries.get(directOperationAuthority(identityAccess.directAuthority, actor), {
+            id: mcpId,
+          })
       },
       loadRuntime: (name) => runtimeRegistry.getRuntime(name),
       configuration: input.configuration,

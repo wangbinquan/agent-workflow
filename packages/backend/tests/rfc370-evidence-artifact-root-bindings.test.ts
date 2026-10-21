@@ -52,20 +52,23 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
   const start = load('cli/start.ts'),
     pg = load('cli/postgresqlDaemonApplication.ts'),
     server = load('server.ts')
-  for (const [source, receiver, purposeReceiver] of [
-    [start, 'input', 'developmentPurposeRoot'],
-    [pg, 'input', 'developmentPurposeRoot'],
-    [server, 'deps', 'deps.developmentPurposeRoot'],
+  for (const [source, receiver] of [
+    [start, 'input'],
+    [pg, 'input'],
+    [server, 'deps'],
   ] as const) {
     bind(source, 'composeDevelopmentPurposeRoot', 'evidenceArtifacts', receiver)
-    bind(source, 'composeDevelopmentAutomation', 'evidenceArtifacts', purposeReceiver)
-    bind(source, 'composeDevelopmentEmployeePlatformWorkItems', 'evidenceArtifacts', receiver)
+    bind(source, 'composeDaemonDevelopmentAutomationModules', 'evidenceArtifacts', receiver)
+    bind(source, 'composeDaemonDigitalEmployeeModules', 'evidenceArtifacts', receiver)
     expect(source.text).toContain('evidenceArtifacts?: EvidenceArtifactPort')
   }
   bind(start, 'composePostgresqlDaemonApplication', 'evidenceArtifacts', 'input')
   bind(start, 'composeSqliteAppDeps', 'evidenceArtifacts', 'input')
-  bind(pg, 'composeMissionInputUploadOperations', 'artifacts', 'input')
-  bind(server, 'composeMissionInputUploadOperations', 'artifacts', 'deps')
+  const development = load('cli/daemonModules/developmentAutomation.ts')
+  const employee = load('cli/daemonModules/digitalEmployee.ts')
+  bind(development, 'composeDevelopmentAutomation', 'evidenceArtifacts', 'developmentPurposeRoot')
+  bind(development, 'composeMissionInputUploadOperations', 'artifacts', 'input')
+  bind(employee, 'composeDevelopmentEmployeePlatformWorkItems', 'evidenceArtifacts', 'input')
   expect(start.text).toContain('evidenceArtifacts: opts.evidenceArtifacts,')
   expect(start.text).toContain('...sessionInput,')
   const composition = load('modules/development-automation/composition.ts')

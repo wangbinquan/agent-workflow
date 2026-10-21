@@ -129,8 +129,13 @@ describeEachProvider('RFC-349 — PostgreSQL daemon 的系统身份', (harness) 
       failure: 'fail-closed',
       providers: ['postgresql'],
     })
-    expect(body).toContain('await admitDaemonIdentity(identityAccess)')
-    expect(body).toContain('systemActor = actorOfDirectAuthority(systemIdentity)')
+    expect(body).toContain(
+      "await core.daemonActor('postgresql-daemon-system-identity-not-admitted')",
+    )
+    expect(source).not.toContain('let systemActor')
+    expect(
+      readFileSync(resolve(import.meta.dir, '../src/cli/daemonModules/providerCore.ts'), 'utf8'),
+    ).toContain('await admitDaemonIdentity(identityAccess)')
     expect(
       source.includes('buildActor('),
       'daemon 组合根又手捏 actor 了 ⇒ 注册表不认它，交给 authorityFor / resourceAuthorityFor 必炸',

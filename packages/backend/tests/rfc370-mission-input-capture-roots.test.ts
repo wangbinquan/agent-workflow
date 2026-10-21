@@ -36,22 +36,29 @@ test('mission upload capture is selected lazily and forwarded through every real
   expect(selection.left.getText(composition)).toBe('input.blobs ?? input.artifacts')
   expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
   for (const [path, receiver] of [
+    ['cli/start.ts', 'input'],
     ['cli/postgresqlDaemonApplication.ts', 'input'],
     ['server.ts', 'deps'],
   ] as const) {
     const source = load(path)
-    const roots = calls(source, 'composeMissionInputUploadOperations')
+    const roots = calls(source, 'composeDaemonDevelopmentAutomationModules')
     expect(roots).toHaveLength(1)
     const argument = roots[0]!.arguments[0]!
     expect(ts.isObjectLiteralExpression(argument)).toBe(true)
     if (!ts.isObjectLiteralExpression(argument)) throw new Error('capture root is missing')
     const selected = argument.properties.filter(
       (p): p is ts.PropertyAssignment =>
-        ts.isPropertyAssignment(p) && p.name.getText(source) === 'blobs',
+        ts.isPropertyAssignment(p) && p.name.getText(source) === 'missionInputBlobs',
     )
     expect(selected).toHaveLength(1)
     expect(selected[0]!.initializer.getText(source)).toBe(`${receiver}.missionInputBlobs`)
   }
+  const bundle = load('cli/daemonModules/developmentAutomation.ts')
+  const uploads = calls(bundle, 'composeMissionInputUploadOperations')
+  expect(uploads).toHaveLength(1)
+  expect(uploads[0]!.arguments[0]!.getText(bundle).replace(/\s/g, '')).toContain(
+    'blobs:input.missionInputBlobs',
+  )
   const start = load('cli/start.ts')
   expect(start.text).toContain('missionInputBlobs: opts.missionInputBlobs,')
   for (const expression of ['composePostgresqlDaemonApplication', 'composeSqliteAppDeps']) {

@@ -228,7 +228,7 @@ async function restoreMissingLegacyMissionLaunchers(): Promise<void> {
   const composeOriginal = original.composeDevelopmentAutomation
   // 01e4b1b7b: cli/postgresqlDaemonApplication.ts:1385–1400 constructed
   // composePostgresqlDevelopmentAutomation without either launcher. Restore
-  // that exact input omission at today's shared factory; its actual admission,
+  // that exact input omission at today's shared factory (called by the RFC-383 bundle); its actual admission,
   // materializer and orchestrator persist the original *-launcher-not-wired
   // block. No failure or database row is supplied by this preload.
   mock.module(target, () => ({
@@ -248,7 +248,8 @@ async function restoreMissingLegacyTerminalForwarding(): Promise<void> {
   )
   const original = await import(target)
   // 01e4b1b7b: cli/postgresqlDaemonApplication.ts has no execution terminal
-  // observer construction/call. Factor that omitted forwarding out from the
+  // observer construction/call. RFC-383 keeps the same composition barrel import.
+  // Factor that omitted forwarding out from the
   // missing launchers above: the real host can finish, but no wake/collection
   // occurs. These empty callbacks model the absent CALL, not historical function
   // bytes. They provide no task/attempt result and manufacture no exception.

@@ -511,46 +511,26 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<voi
 
 test('源码锁：三个组合根接上同一对 launcher 与终态观察者；两个 composer 是薄壳，执行器只有一份', () => {
   const root = resolve(import.meta.dir, '..', 'src')
-  const daemon = readFileSync(join(root, 'cli', 'postgresqlDaemonApplication.ts'), 'utf8')
-  expect(daemon).toContain('agentLauncher: composeAgentActionExecution({')
-  expect(daemon).toContain('scriptLauncher: composeScriptActionExecution({')
-  expect(daemon).toContain('createDevelopmentMissionExecutionTerminalObserver({')
-  // RFC-359 W11：观察者与 automation 之间那个 `{ current: … | null }` 的回填盒子已经拆掉
-  // ——环改打在词法作用域上，观察者直接闭包引用同作用域后面那个 `const developmentAutomation`。
-  // 这一条锁的意图没变（观察者接的必须是**这一个** automation，不是另造一个），只是锚点从
-  // 「回填那一行」换成「观察者体内直呼它」+「automation 确实在同一作用域里造出来」。
-  expect(daemon).toContain('await developmentAutomation.drive(missionId)')
-  expect(daemon).toContain('const developmentAutomation = composeDevelopmentAutomation({')
-  expect(daemon.indexOf('createDevelopmentMissionExecutionTerminalObserver({')).toBeLessThan(
-    daemon.indexOf('const developmentAutomation = composeDevelopmentAutomation({'),
-  )
-  expect(daemon.indexOf('const taskLaunchKernel = ')).toBeLessThan(
-    daemon.indexOf('agentLauncher: composeAgentActionExecution({'),
-  )
-  // RFC-359 AC-1（plan §5hi）：`composePostgresql*ActionExecution` 这对名字已经不存在——
-  // 两个 provider 合成一对 composer。三个组合根（PG daemon + 两个 SQLite 根）必须都接它，
-  // 且都得先在同作用域里造出启动内核：谁要是退回 `startTask` + `preCreatedWorktree`
-  // 那条只服务 SQLite 的老路，这条就红。
-  for (const file of ['cli/start.ts', 'server.ts'] as const) {
-    // 两个 SQLite 根都从模块的**组合入口**取内核（RFC-331：组合根不深挖 infrastructure/）。
-    const kernelAnchor =
-      file === 'cli/start.ts'
-        ? 'launch: taskExecutionProvider.routeLaunch.workflow'
-        : 'launch: deps.taskExecutionModules.routeLaunch.workflow'
-    const source = readFileSync(join(root, ...file.split('/')), 'utf8')
-    expect(source, `${file} 必须接合并后的 agent launcher`).toContain(
-      'agentLauncher: composeAgentActionExecution({',
-    )
-    expect(source, `${file} 必须接合并后的 script launcher`).toContain(
-      'scriptLauncher: composeScriptActionExecution({',
-    )
-    expect(source, `${file} 不得再出现 provider 前缀的 composer`).not.toContain(
-      'composePostgresqlAgentActionExecution',
-    )
-    expect(source.indexOf(kernelAnchor), `${file} 必须先造启动内核`).toBeGreaterThanOrEqual(0)
-    expect(source.indexOf(kernelAnchor)).toBeLessThan(
-      source.indexOf('agentLauncher: composeAgentActionExecution({'),
-    )
+  // RFC-383: one session bundle owns both launchers and the lexical terminal cycle.
+  const bundle = readFileSync(join(root, 'cli/daemonModules/developmentAutomation.ts'), 'utf8')
+  expect(bundle).toContain('agentLauncher: composeAgentActionExecution({')
+  expect(bundle).toContain('scriptLauncher: composeScriptActionExecution({')
+  expect(bundle).toContain('createDevelopmentMissionExecutionTerminalObserver({')
+  expect(bundle).toContain('await automation.drive(missionId)')
+  const observerAt = bundle.indexOf('createDevelopmentMissionExecutionTerminalObserver({')
+  const automationAt = bundle.indexOf('const automation =')
+  expect(observerAt).toBeGreaterThan(0)
+  expect(automationAt).toBeGreaterThan(observerAt)
+  expect(bundle.slice(automationAt)).toContain('composeDevelopmentAutomation({')
+  expect(bundle.match(/\.\.\.hostTasks,/g)).toHaveLength(2)
+  const tasks = readFileSync(join(root, 'cli/daemonModules/taskExecution.ts'), 'utf8')
+  expect(tasks).toContain('launch: provider.routeLaunch.workflow')
+  for (const file of ['cli/start.ts', 'cli/postgresqlDaemonApplication.ts', 'server.ts']) {
+    const source = readFileSync(join(root, file), 'utf8')
+    expect(source).toContain('composeDaemonDevelopmentAutomationModules({')
+    expect(source).toContain('hostTasks: taskExecutionModules.hostTasks')
+    expect(source).not.toContain('composePostgresqlAgentActionExecution')
+    expect(source).not.toContain('composeAgentActionExecution(')
   }
   for (const file of ['agentActionExecution.ts', 'scriptActionExecution.ts']) {
     const source = readFileSync(

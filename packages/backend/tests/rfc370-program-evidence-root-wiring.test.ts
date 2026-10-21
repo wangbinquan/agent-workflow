@@ -79,11 +79,24 @@ test('both daemon owners consume the same program and evidence read selection', 
     [pg, 'composePostgresqlApplication', 'input'],
   ] as const) {
     const root = declaration(file, rootName)
-    selected(root, file, 'composeDigitalEmployee', `programArtifacts:${receiver}.employeePrograms,`)
-    selected(root, file, 'composeDevelopmentAutomation', `evidenceRead:${receiver}.evidenceRead,`)
     selected(
       root,
       file,
+      'composeDaemonDigitalEmployeeModules',
+      `employeePrograms:${receiver}.employeePrograms,`,
+    )
+    selected(
+      root,
+      file,
+      'composeDaemonDevelopmentAutomationModules',
+      `evidenceRead:${receiver}.evidenceRead,`,
+    )
+    selected(
+      declaration(
+        source('cli/daemonModules/developmentAutomation.ts'),
+        'composeDaemonDevelopmentAutomationModules',
+      ),
+      source('cli/daemonModules/developmentAutomation.ts'),
       'composeDevelopmentAutomation',
       'evidenceDocumentCommands:developmentPurposeRoot.requirement.documentCommands,',
     )
@@ -104,22 +117,25 @@ test('both daemon owners consume the same program and evidence read selection', 
 
 test('standalone HTTP consumers preserve the selected receiver through fallback composition', () => {
   selected(
-    declaration(server, 'composeSqliteApiRouteMounts'),
+    declaration(server, 'composeSqliteApplicationDeps'),
     server,
-    'composeDigitalEmployee',
-    'programArtifacts:deps.employeePrograms,',
+    'composeDaemonDigitalEmployeeModules',
+    'employeePrograms:deps.employeePrograms,',
   )
   selected(
-    declaration(server, 'composeFallbackDevelopmentAutomation'),
+    declaration(server, 'composeSqliteApplicationDeps'),
     server,
-    'composeDevelopmentAutomation',
+    'composeDaemonDevelopmentAutomationModules',
     'evidenceRead:deps.evidenceRead,',
   )
   selected(
-    declaration(server, 'composeFallbackDevelopmentAutomation'),
-    server,
+    declaration(
+      source('cli/daemonModules/developmentAutomation.ts'),
+      'composeDaemonDevelopmentAutomationModules',
+    ),
+    source('cli/daemonModules/developmentAutomation.ts'),
     'composeDevelopmentAutomation',
-    'evidenceDocumentCommands:deps.developmentPurposeRoot.requirement.documentCommands,',
+    'evidenceDocumentCommands:developmentPurposeRoot.requirement.documentCommands,',
   )
   selected(
     declaration(server, 'composeSqliteApplicationDeps'),
@@ -132,5 +148,19 @@ test('standalone HTTP consumers preserve the selected receiver through fallback 
     server,
     'composeDevelopmentPurposeRoot',
     'selection:deps.developmentPurposes,',
+  )
+})
+
+test('RFC-383 selects one program source for module authoring, reaction and contract fixtures', () => {
+  const employee = source('cli/daemonModules/digitalEmployee.ts')
+  const root = declaration(employee, 'composeDaemonDigitalEmployeeModules')
+  selected(root, employee, 'composeDigitalEmployee', 'programArtifacts:employeePrograms,')
+  expect(calls(root, employee, 'createArtifactProgramToolSource')).toHaveLength(1)
+  selected(root, employee, 'composeReactionExecutionProvider', 'programs:programToolSource,')
+  selected(
+    root,
+    employee,
+    'createExecutionContractProgramFixtureAdapter',
+    'programs:programToolSource,',
   )
 })
