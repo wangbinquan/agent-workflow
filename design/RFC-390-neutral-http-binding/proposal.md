@@ -1,7 +1,7 @@
 # RFC-390 中立 HTTP 绑定：SQLite 守护进程改走 `composeProviderAppDeps`（RFC-294 S2b）
 
-- **状态**：Draft（2026-10-21 落档。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与实现门；
-  规则取舍由本会话按推荐决定，见 §6。在 RFC-389 提交后派发）
+- **状态**：In Progress（2026-10-21 落档；RFC-389 提交（`2b2919cee`）后派发 Codex 实施。用户 2026-10-20「按你推荐继续推进」：由本会话
+  设计、交 Codex 实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b「SQLite 与 PostgreSQL 的应用装配合并为一张
   provider-neutral 图，以 `server.ts` 现有的 provider 无关挂载表为起点」）；前置 [RFC-388](../RFC-388-task-execution-runtime-merge/proposal.md)、
   [RFC-389](../RFC-389-maintenance-worker-root-bootstrap/proposal.md)

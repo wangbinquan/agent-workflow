@@ -1,7 +1,8 @@
 # RFC-389 维护 Worker 根迁入 bootstrap：线程内一张中立图（RFC-294 S2b）
 
-- **状态**：In Progress（2026-10-21 落档；RFC-388 提交（`8186c9852`）后派发 Codex 实施。用户 2026-10-20「按你推荐继续推进」：由本会话
-  设计、交 Codex 实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6）
+- **状态**：Done（2026-10-21：`2b2919cee`，主 CI `39595529570` success，windows-platform `39595529681` success。实施时两处偏离：图工厂
+  端口增加 `registerConnectionClose`（图构造中途失败仍能关库，保持原行为）；部署分支计数只按精确语法形状识别纯入口路径常量模块，
+  未抬上限。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与实现门；规则取舍见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b「Worker 根迁出 `platform/`」）、
   review-2026-10-16 F4
 - **基线**：HEAD `3450e6872`（研究基线；行号仅作定位提示，以实施时源码为准）

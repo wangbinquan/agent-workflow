@@ -1,3 +1,9 @@
+## 2026-10-21 RFC-294 后继 S2b：RFC-389 Done，RFC-390 In Progress
+
+**RFC-389 Done**：`2b2919cee`（Codex 实施、本会话审核），主 CI `39595529570` success，windows-platform `39595529681` success。原 `platform/background/maintenanceWorker.ts` 拆为 platform 的 Worker 运行时（`maintenanceWorkerRuntime.ts`，经端口接收图工厂，不导入 modules）与中立系统维护工厂（`maintenanceSystemOperations.ts`），以及 bootstrap 的薄入口根（`bootstrap/maintenanceWorker.ts`）、线程内一张中立图 + provider 适配表（`bootstrap/maintenanceWorkerGraph.ts`）、无副作用的入口路径常量（`bootstrap/maintenanceWorkerEntries.ts`）；监督器入口由两个会话显式传入。`platform-to-modules-file-pairs` 49 → 30（上限同步下调），commons-debt R1 261 → 258。无功能变化。**对其他会话的影响**：维护 Worker 的组合只能落在 `bootstrap/maintenanceWorkerGraph.ts`，platform 不得出现 `bootstrap/` 路径或模块导入（`rfc389-maintenance-worker-root` 结构锁）；新增 Worker 入口要同步 `scripts/build-binary.ts` 的 `WORKER_ENTRIES` 与架构 `BINARY_ENTRIES`。另：本地只开 PostgreSQL lane 跑 `rfc311-perf-guards` 必然因缺 SQLite 对比而失败；`rfc359-w6-t26` 计划审计在多组并发压同一 PostgreSQL 时可能退回 Bitmap Heap Scan，单独复跑即过。
+
+**S2b 余下**：[RFC-390](design/RFC-390-neutral-http-binding/proposal.md)（中立 HTTP 绑定，In Progress，Codex 实施中）→ RFC-391（中立应用图，装配迁入 `bootstrap/`）→ RFC-392（删除 `deps.x ?? composeX(...)` 测试回退）→ S2c。
+
 ## 2026-10-21 RFC-294 后继 S2b：RFC-388 Done，RFC-389 In Progress
 
 **RFC-388 Done**：`8186c9852`（Codex 实施、本会话审核），主 CI `39583800149` success，windows-platform `39583800091` success。两个 provider 运行时函数合为一个中立的 `composeTaskExecutionProviderRuntime`；provider 差异只经执行绑定（`packages/backend/src/modules/task-execution/composition/taskExecutionBinding.ts`：进程级 `composeProcessTaskExecutionBinding` / 会话级 `composeSessionTaskExecutionBinding`）与进程并发作用域进入；适配器表的任务执行条目只剩 `provider` / `execution` / `processConcurrencyScope`。删除 SQLite 路由启动包装、重复的 DAG 协作与工作区参与者、provider 命名的修复与记忆注入别名、legacy 活动 / 停止包装与测试专用活动钩子（`__setActiveTaskForTesting` 等）。纯重构，无行为变化。**对其他会话的影响**：不要再新增 provider 命名的运行时 / 启动工厂（`rfc388-task-execution-runtime-merge` 结构锁）；测试要模拟「任务在跑」请用 `packages/backend/tests/helpers/taskRuntimeRegistry.ts` 走真实注册表。
