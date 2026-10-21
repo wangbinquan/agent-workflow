@@ -8752,3 +8752,7 @@ provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行�
 ## RFC-384：意图按会话装配，维护直接读取同一应用引擎
 
 意图图只由 `cli/daemonModules/intent.ts` 的 `composeDaemonIntentModules` 构造，每个 provider 会话一次，并在维护服务之前完成。工作者运行族服务排队 / 启动续跑，HTTP 运行族服务路由轮次；两者的 runtime binding 与夹具必须保持分离。维护直接读 `intentModules.maintenance`，它引用路由使用的同一应用引擎；排队通知直接交给 `queuedResumption.enqueue`，启动前由续跑器缓冲。转储默认运行时通过实时配置读取口兜底，不得在构造时读取配置。
+
+## RFC-385：执行世代与数据库世代不能混用
+
+执行 owner、运行配置（含融合与子任务继承）及单机锁证明使用每进程一个的 `DAEMON_GENERATION`；数据库的 `runtime.generationId` 跨重启不变，只用于数据库代际与写围栏，不能充当执行世代。启动恢复按世代差异处理旧 owner：崩溃留下的 `claimed` 先撤销再释放，正常关停幸存者的 `recovery-required` 直接进入最终释放。相同世代会分别导致孤儿任务写入抛出 `task-execution-stale-owner`，或恢复完成却仍不能续跑。托管的启动租约与 `lease.instanceId` 恢复证明保持原语义。

@@ -6,6 +6,7 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createLogger } from '@/util/log'
 import { runtimeConfigOpts } from '@/services/task'
+import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
@@ -90,7 +91,6 @@ export interface DaemonTaskProviderInput extends Omit<
 }
 export interface DaemonTaskExecutionAdapters<P extends DatabaseProvider = DatabaseProvider> {
   readonly provider: P
-  readonly daemonGeneration: string
   compose(
     input: DaemonTaskProviderInput,
   ): Extract<SelectedTaskExecutionProviderRuntime<CollaborationRouteContext>, { provider: P }>
@@ -216,7 +216,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     return Object.freeze({
       appHome,
       configPath,
-      daemonGeneration: input.adapters.daemonGeneration,
+      daemonGeneration: DAEMON_GENERATION,
       ...(fresh.subagentLiveCapture === undefined
         ? {}
         : { subagentLiveCapture: fresh.subagentLiveCapture }),

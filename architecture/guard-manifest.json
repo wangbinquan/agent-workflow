@@ -2224,6 +2224,18 @@
     {
       "assertsAbsence": true,
       "classified": true,
+      "corpusScanner": false,
+      "file": "packages/backend/tests/architecture/rfc385-execution-generation-guard.test.ts",
+      "id": "rfc385-execution-generation-guard",
+      "lines": 96,
+      "mechanism": "source-text",
+      "minCorpusFiles": null,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
       "corpusScanner": true,
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "id": "runtime-parameter-ratchet",

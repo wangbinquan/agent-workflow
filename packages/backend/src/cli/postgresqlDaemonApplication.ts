@@ -143,6 +143,7 @@ import {
 } from '@/modules/task-execution/composition/bootRecovery'
 import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
+import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import type { Config } from '@agent-workflow/shared'
 import { join } from 'node:path'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
@@ -950,7 +951,7 @@ export async function composePostgresqlApplication(
     tasks: taskExecutionProvider.fusion,
     taskLaunchConfiguration,
     configPath: input.configPath,
-    daemonGeneration: input.provider.runtime.generationId,
+    daemonGeneration: DAEMON_GENERATION,
   })
   const { fusionOperations } = fusionModules
   // RFC-223 PR-4 / RFC-359 W3-T15：融合 provenance 修复必须在任何融合恢复 / 播种 / HTTP 观察到历史
@@ -1596,7 +1597,7 @@ export async function composePostgresqlApplication(
             ? createDaemonLockProof({
                 lockPath: input.lockPath,
                 lockPid: process.pid,
-                daemonGeneration: input.provider.runtime.generationId,
+                daemonGeneration: DAEMON_GENERATION,
               })
             : createDaemonRecoveryAuthorityProof(
                 await readDaemonStartupRecoveryAuthority(

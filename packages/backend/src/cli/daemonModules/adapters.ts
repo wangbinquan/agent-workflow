@@ -79,7 +79,7 @@ type TaskAdapterInput = {
   readonly sqlite: { readonly db: DbClient }
   readonly postgresql: {
     readonly db: PostgresqlDatabaseClient
-    readonly runtime: object & { readonly generationId: string }
+    readonly runtime: object
   }
 }
 
@@ -87,7 +87,6 @@ type TaskAdapterInput = {
 export const DAEMON_TASK_EXECUTION_ADAPTERS = {
   sqlite: ({ db }) => ({
     provider: 'sqlite',
-    daemonGeneration: DAEMON_GENERATION,
     compose(input) {
       const persistence = input.persistence
       const driverLifecycle = createTaskDriverLifecyclePort({
@@ -171,11 +170,10 @@ export const DAEMON_TASK_EXECUTION_ADAPTERS = {
   }),
   postgresql: ({ db, runtime }) => ({
     provider: 'postgresql',
-    daemonGeneration: runtime.generationId,
     compose(input) {
       const persistence = input.persistence
       const executionModule = createProviderTaskExecutionModule({
-        daemonGeneration: runtime.generationId,
+        daemonGeneration: DAEMON_GENERATION,
         persistence,
       })
       const log = createLogger('task')
@@ -195,7 +193,7 @@ export const DAEMON_TASK_EXECUTION_ADAPTERS = {
           persistence,
           executionModule,
           processConcurrencyScope: runtime,
-          daemonGeneration: runtime.generationId,
+          daemonGeneration: DAEMON_GENERATION,
           finalizeWorkspace: input.finalizeWorkspace,
           log,
         },
