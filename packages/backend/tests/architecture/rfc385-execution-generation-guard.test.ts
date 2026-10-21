@@ -20,7 +20,7 @@ function executionGenerationViolations(source: string, expectedSites: number): s
 
 test('execution module, provider runtime, fusion, run configuration and standalone proof use the process generation', () => {
   for (const [path, sites] of [
-    ['cli/daemonModules/adapters.ts', 2],
+    ['cli/daemonModules/adapters.ts', 1],
     ['cli/daemonModules/taskExecution.ts', 1],
     ['cli/postgresqlDaemonApplication.ts', 1],
   ] as const) {
@@ -30,8 +30,12 @@ test('execution module, provider runtime, fusion, run configuration and standalo
   }
   const adapters = compact(read('cli/daemonModules/adapters.ts'))
   expect(adapters).not.toContain('generationId')
-  expect(adapters).toContain("sqlite:({db})=>({provider:'sqlite',compose(input)")
-  expect(adapters).toContain("postgresql:({db,runtime})=>({provider:'postgresql',compose(input)")
+  expect(adapters).toContain(
+    "sqlite:({db})=>({provider:'sqlite',execution:()=>composeProcessTaskExecutionBinding(db)",
+  )
+  expect(adapters).toContain(
+    "postgresql:({runtime})=>({provider:'postgresql',execution:(persistence)=>composeSessionTaskExecutionBinding(",
+  )
   const bundle = read('cli/daemonModules/taskExecution.ts')
   expect(bundle).not.toContain('input.adapters.daemonGeneration')
   expect(bundle).not.toContain('readonly daemonGeneration:')
@@ -75,9 +79,10 @@ test('SQLite, child runtime inheritance and CrewStation keep their existing gene
   expect(read('cli/start.ts')).toContain(
     'readDaemonStartupRecoveryAuthority(lock, DAEMON_GENERATION)',
   )
-  expect(read('modules/task-execution/composition/providerRuntime.ts')).toContain(
-    'daemonGeneration: dependencies.runtime.daemonGeneration',
+  expect(read('modules/task-execution/composition/taskExecutionBinding.ts')).toContain(
+    'const module = createProviderTaskExecutionModule(input)',
   )
+  expect(read('cli/daemonModules/adapters.ts')).toContain('daemonGeneration: DAEMON_GENERATION')
   // The selected startup lease contract is deliberately outside the standalone proof change.
   expect(compact(read('cli/postgresqlDaemonApplication.ts'))).toContain(
     'readDaemonStartupRecoveryAuthority(input.daemonStartupLease,input.provider.runtime.generationId,)',

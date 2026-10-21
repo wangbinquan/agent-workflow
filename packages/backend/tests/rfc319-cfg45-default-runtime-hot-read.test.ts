@@ -292,7 +292,7 @@ test('RFC-381 roots connect fusion adapters and routes to the same live session 
   expect(pg).not.toContain('fusionRunConfiguration')
   expect(bundle).not.toContain('fusionRunConfiguration')
   const providers = source('modules/task-execution/composition/providerRuntime.ts')
-  expect(providers.match(/fusion: createFusionEngineTaskOperations\(\{/g)).toHaveLength(2)
+  expect(providers.match(/fusion: createFusionEngineTaskOperations\(\{/g)).toHaveLength(1)
   for (const fusion of providers.matchAll(
     /fusion: createFusionEngineTaskOperations\(\{([\s\S]*?)\}\)/g,
   )) {

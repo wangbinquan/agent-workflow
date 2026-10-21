@@ -1,3 +1,4 @@
+import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 // RFC-222 (B 线) — admin-only hard delete of a terminal task.
 //
 //   D-1  admin deletes a terminal task → 200; row + cascade gone; task_feedback
@@ -9,11 +10,11 @@
 //   D-5  cleanup failure → 200 with cleanup:'pending', DB already deleted.
 //   D-6  concurrent/front gates: active-in-memory → 409; fusion-internal → 409.
 
-import { beforeEach, afterEach, describe, expect, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { beforeEach, afterEach, expect, test } from 'bun:test'
+import { taskExecutionModule, type TaskExecutionModule } from '@/modules/task-execution/composition'
 import type { Hono } from 'hono'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
@@ -38,16 +39,14 @@ import {
   tasksListBroadcaster,
 } from '../src/ws/broadcaster'
 import { createUser } from '../src/services/users'
-import { createInMemoryDb } from '../src/db/client'
-import { createApp } from '../src/server'
-import { __setActiveTaskForTesting } from '../src/services/task'
+import { attachTestTaskRuntime } from './helpers/taskRuntimeRegistry'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 interface H {
   db: ProviderNeutralDatabase
   app: Hono
+  execution: TaskExecutionModule
   adminToken: string
   userToken: string
   managerToken: string
@@ -55,7 +54,7 @@ interface H {
 
 async function harness(scope: ProviderHttpApplicationScope): Promise<H> {
   const db = scope.harness.db
-  const app = (await scope.open()).app
+  const application = await scope.open()
   const admin = await createUser(db, {
     username: 'root',
     displayName: 'Root',
@@ -76,7 +75,11 @@ async function harness(scope: ProviderHttpApplicationScope): Promise<H> {
   })
   return {
     db,
-    app,
+    app: application.app,
+    execution:
+      application.taskExecution.provider === 'sqlite'
+        ? taskExecutionModule
+        : application.taskExecution.selected.executionModule,
     adminToken: (await createSession({ db, userId: admin.id })).token,
     userToken: (await createSession({ db, userId: user.id })).token,
     managerToken: (await createSession({ db, userId: manager.id })).token,
@@ -127,7 +130,7 @@ async function del(h: H, token: string, id: string, confirm: string): Promise<Re
 }
 
 afterEach(() => {
-  __setActiveTaskForTesting(undefined)
+  clearTaskDriverLifecycleForTesting()
   resetBroadcastersForTests()
 })
 
@@ -377,6 +380,19 @@ describeEachProviderHttpApplication(
       h = await harness(scope)
     })
 
+    // RFC-388: both deployments use their application's real execution registry.
+    test('active-in-memory (canceled but controller live) → 409 task-active', async () => {
+      const id = await seedTask(h.db, { status: 'canceled' })
+      const active = attachTestTaskRuntime(h.execution, id)
+      try {
+        const res = await del(h, h.adminToken, id, `task-${id}`)
+        expect(res.status).toBe(409)
+        expect(((await res.json()) as { code: string }).code).toBe('task-active')
+      } finally {
+        active.release()
+      }
+    })
+
     test('fusion-internal task → 409 task-internal', async () => {
       const id = await seedTask(h.db, { spaceKind: 'internal' })
       const res = await del(h, h.adminToken, id, `task-${id}`)
@@ -413,41 +429,3 @@ describeEachProviderHttpApplication(
     })
   },
 )
-
-// RFC-359 AC-6 例外：单引擎，**不是「还没迁」**——测试钩子按 provider 不对称。
-//
-// 两侧的产品判据同形（都是「本进程还有没有 driver 在跑这个任务」）：SQLite 侧
-// `isActive: isTaskActive` = `runtimeRegistry.hasTask(id) || testActiveControllers`，PG 侧
-// `isActive: (id) => executionModule.runtimeRegistry.hasTask(id)`。差的是后面那个**测试注入项**
-// ——`__setActiveTaskForTesting` 往 `testActiveControllers` 里塞，只有 SQLite 那一支读它；
-// 而且两侧锚的还不是同一个模块实例（SQLite 进程级单例，PG 是装配出来的那个）。
-//
-// 于是 **PG 侧的 `task-active` 删除闸门今天没有任何用例覆盖**。这是真缺口，记在 plan §5z：
-// 补法是给夹具加一个 provider 中立的「把任务标成在跑」口子（SQLite 走现有钩子、PG 往
-// `selected.executionModule.runtimeRegistry` 注册），或先统一两侧锚模块实例的方式。
-// 两者都不该夹在一次用例迁移里做。
-describe('RFC-222 D-6 — front gates（active-in-memory，单引擎）', () => {
-  test('active-in-memory (canceled but controller live) → 409 task-active', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: DAEMON_TOKEN,
-      configPath: '/tmp/aw-rfc222-delete-config-never-used.json',
-      opencodeVersion: '1.14.25',
-      dbVersion: 1,
-      db,
-    })
-    const admin = await createUser(db, {
-      username: 'root-single',
-      displayName: 'Root',
-      role: 'admin',
-      password: 'longEnoughPassword',
-    })
-    const adminToken = (await createSession({ db, userId: admin.id })).token
-    const id = await seedTask(db, { status: 'canceled' })
-    __setActiveTaskForTesting(id)
-    const res = await del({ app } as H, adminToken, id, `task-${id}`)
-    expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe('task-active')
-  })
-})

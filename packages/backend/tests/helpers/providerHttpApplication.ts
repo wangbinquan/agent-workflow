@@ -14,7 +14,7 @@ import type { RepositoryWorkspaceStore } from '@/modules/source-control/composit
 import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { IdentityAccessRuntime } from '@/modules/identity-access/composition'
-import type { SelectedPostgresqlTaskExecutionProviderRuntime } from '@/modules/task-execution/composition/providerRuntime'
+import type { SelectedTaskExecutionProviderRuntime } from '@/modules/task-execution/composition/providerRuntime'
 import type { WorkspaceClaimFinalizationCommand } from '@/modules/source-control/public/commands'
 import {
   composeSqliteApplicationDeps,
@@ -141,7 +141,7 @@ export interface ProviderHttpApplication {
     | Readonly<{ provider: 'sqlite' }>
     | Readonly<{
         provider: 'postgresql'
-        selected: SelectedPostgresqlTaskExecutionProviderRuntime
+        selected: SelectedTaskExecutionProviderRuntime
         workspace: WorkspaceClaimFinalizationCommand
       }>
   /** Close application-owned work before the harness resets its borrowed database. */

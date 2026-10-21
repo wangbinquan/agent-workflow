@@ -138,8 +138,8 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // RFC-359 AC-1（命名债收尾 §5hj）**销账**：`postgresqlTaskRouteLaunchOperations.ts` 去掉前缀
   // 改叫 `taskRouteLaunchOperations.ts`（实现本来就 provider 中立：零 `PostgresqlDatabaseClient`、
   // 零 provider 分支，两个引擎的根绑的是同一份）。孪生键靠 `{sqlite,postgresql}<Name>` 的文件名
-  // 配对，前缀一去这一对就不再成立——SQLite 那半 `sqliteTaskRouteLaunchOperations.ts` 仍在，
-  // 但它现在配不出「成对适配器」，因为另一半已经不是 provider 命名文件了。
+  // 配对，前缀一去这一对就不再成立——SQLite 的路由包装已随 RFC-388 删除，
+  // 两个组合根都直接使用中立路由启动工厂，既有双引擎断言保留。
   // RFC-359 W8：这一对多了第二份双引擎对拍——W7 只驱动到各方法的**前置门**为止，W8 补的是
   // 门后的语义（retry 的三道前置门 / sync 的 canceled 回滚 / delete 的父链排序列重算）。
   // RFC-359 AC-1（第 13 刀）**销账**：`/api/tasks` 这一对已合一。逐个动词量过，两个绑定里

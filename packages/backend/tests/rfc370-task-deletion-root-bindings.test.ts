@@ -85,7 +85,7 @@ test('both actual provider route closures and standalone HTTP bind the same whol
     expect(calls(source, source, 'createTaskRouteOperations')).toHaveLength(0)
   }
   const source = load('cli/daemonModules/taskExecution.ts')
-  const call = oneCall(source, 'input.adapters.compose')
+  const call = oneCall(source, 'composeTaskExecutionProviderRuntime')
   const dependencies = object(call.arguments[0]!)
   expect(
     text(
@@ -93,14 +93,9 @@ test('both actual provider route closures and standalone HTTP bind the same whol
       source,
     ),
   ).toBe('selection.effects')
-  const adapters = load('cli/daemonModules/adapters.ts')
-  for (const name of [
-    'composeSqliteTaskExecutionProviderRuntime',
-    'composePostgresqlTaskExecutionProviderRuntime',
-  ]) {
-    const call = oneCall(adapters, name)
-    expect(text(call.arguments[1]!, adapters)).toContain('...input,')
-  }
+  const runtime = load('modules/task-execution/composition/providerRuntime.ts')
+  const route = oneCall(runtime, 'createTaskRouteOperations')
+  expect(text(route.arguments[0]!, runtime)).toContain('...routeDependencies,')
 })
 
 test('both real boot recovery calls retain db and default store before the whole selected record', () => {

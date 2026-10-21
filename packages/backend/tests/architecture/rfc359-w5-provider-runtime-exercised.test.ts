@@ -400,7 +400,8 @@ describe('RFC-359 W5 —— provider 组合根必须被测试真正构造过', (
       // RFC-370：resource limits 的 PG 实现与中立实现合一，保留原兼容导出别名。
       // 原函数体不再重复计数，实际命名函数分母 14 → 13；真实双 provider 构造覆盖保持。
       // RFC-382: neutral dynamic-workflow validation retires the SQLite-named root, 13 -> 12.
-      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(12)
+      // RFC-388: the two named runtime roots merge into one neutral root, 12 -> 10.
+      expect(ROOTS.length, '命名式一条都派生不出来 ⇒ 清单本身失效').toBeGreaterThanOrEqual(10)
       // 架构账本排除必须是**真的排除**：该目录确实在语料里（本文件就躺在里面），
       // 才谈得上把它从「现状」证据里摘出去。目录改名会让这条当场红。
       expect(

@@ -57,10 +57,7 @@ import {
   TaskExecutionModule,
 } from '@/modules/task-execution/composition'
 import type { driveTaskEngineApplication } from '@/modules/task-execution/composition/taskEngineApplication'
-import type {
-  PostgresqlTaskExecutionProviderRuntimeDependencies,
-  SqliteTaskExecutionProviderRuntimeDependencies,
-} from '@/modules/task-execution/composition/providerRuntime'
+import type { TaskExecutionProviderRuntimeDependencies } from '@/modules/task-execution/composition/providerRuntime'
 import type { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 
@@ -135,7 +132,7 @@ const _participantsIdentityRequired: undefined extends Parameters<
 >[0]['identityAccess']
   ? 'Runtime participants must receive the runtime during construction'
   : true = true
-const _providerIdentityRequired: undefined extends SqliteTaskExecutionProviderRuntimeDependencies['runtime']['identityAccess']
+const _providerIdentityRequired: undefined extends TaskExecutionProviderRuntimeDependencies['runtime']['identityAccess']
   ? 'The full provider factory must not admit a missing runtime'
   : true = true
 const _legacyIdentityStillOptional: undefined extends RunTaskOptions['identityAccess']
@@ -143,8 +140,8 @@ const _legacyIdentityStillOptional: undefined extends RunTaskOptions['identityAc
   : 'Legacy run options must keep their existing optional input' = true
 
 type ParticipantsInput = Parameters<typeof createTaskExecutionRuntimeParticipants>[0]
-type SqliteProviderInput = SqliteTaskExecutionProviderRuntimeDependencies['runtime']
-type PostgresqlProviderInput = PostgresqlTaskExecutionProviderRuntimeDependencies['runtime']
+type SqliteProviderInput = TaskExecutionProviderRuntimeDependencies['runtime']
+type PostgresqlProviderInput = TaskExecutionProviderRuntimeDependencies['runtime']
 type CompleteDynamicWorkflowInputs = {
   drive: DriveOptions
   participants: ParticipantsInput

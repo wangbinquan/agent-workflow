@@ -227,7 +227,6 @@ const {
   activeTaskDriverController,
   awaitTaskDriverReleasedSettled,
   awaitTaskDriverIdle,
-  clearTaskDriverLifecycleForTesting,
   createDatabaseTaskDriverLifecyclePort,
   createTaskDriveCoordinatorFactory,
   createTaskExecutionPersistence,
@@ -285,7 +284,6 @@ export async function prepareWorkflowTriggerLaunch(args: {
 const log = createLogger('task')
 
 const taskDriverRegistry = taskExecutionModule.runtimeRegistry
-const testActiveControllers = new Map<string, AbortController>()
 
 function continuationSource(
   deps: StartTaskDeps,
@@ -325,7 +323,7 @@ async function submitContinuationIntentInTx(input: {
  *  task right now? Used by resume/retry entry rejection and lifecycleRepair's
  *  scheduler-liveness preflight. */
 export function isTaskActive(taskId: string): boolean {
-  return isTaskDriverActive(taskId) || testActiveControllers.has(taskId)
+  return isTaskDriverActive(taskId)
 }
 
 /** RFC-338: point-in-time advisory input for the off-thread maintenance
@@ -334,36 +332,9 @@ export function activeTaskIdsSnapshot(): string[] {
   return [
     ...new Set([
       ...taskDriverRegistry.activeTokens().map((token) => token.taskId),
-      ...testActiveControllers.keys(),
       ...materializingSpaces.keys(),
     ]),
   ]
-}
-
-/** RFC-222 — test-only: inject/clear the in-memory active-task set so the delete
- *  front-gate ('task-active') can be exercised without a live scheduler loop. */
-export function __setActiveTaskForTesting(taskId: string | undefined): void {
-  clearTaskDriverLifecycleForTesting()
-  testActiveControllers.clear()
-  if (taskId !== undefined) testActiveControllers.set(taskId, new AbortController())
-}
-
-/** Test-only: register one specific controller without clearing sibling task
- *  drivers, so parent/child cancellation lock ordering can be exercised. */
-export function __registerActiveTaskForTesting(taskId: string, controller: AbortController): void {
-  testActiveControllers.set(taskId, controller)
-}
-
-/**
- * Test-only: abort one registered controller by task id.
- *
- * RFC-359 AC-1（第 11 刀下半）：取消合一之后，「没有停机票据时仍按历史行为中止进程内控制器」
- * 这条兜底只有**测试**需要——生产的取消一律有票据，没票据就是「没人在跑」。它原本藏在
- * `cancelTask` 薄壳的闭包里；薄壳删掉后，唯一的测试装配点（`tests/helpers/cancelEngine.ts`）
- * 要能够到同一个注册表，所以把它和上面两个 `__*ForTesting` 并列暴露出来。
- */
-export function __abortActiveTaskForTesting(taskId: string, reason: unknown): void {
-  testActiveControllers.get(taskId)?.abort(reason)
 }
 
 /**
@@ -378,8 +349,7 @@ export function __abortActiveTaskForTesting(taskId: string, reason: unknown): vo
  */
 export function abortAllActiveTasks(reason: string): string[] {
   const tickets = taskDriverRegistry.abortAll(reason)
-  for (const controller of testActiveControllers.values()) controller.abort(reason)
-  return [...tickets.map((ticket) => ticket.token.taskId), ...testActiveControllers.keys()]
+  return tickets.map((ticket) => ticket.token.taskId)
 }
 
 /**
@@ -394,7 +364,6 @@ export async function shutdownActiveTaskExecutions(
 ): Promise<readonly string[]> {
   if (reason.length === 0) throw new Error('task execution shutdown requires a reason')
   const tickets = await taskExecutionModule.dispose(reason)
-  for (const controller of testActiveControllers.values()) controller.abort(reason)
   const boundedBudget = Math.max(0, budgetMs)
   if (tickets.length > 0 && boundedBudget > 0) {
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -414,7 +383,7 @@ export async function shutdownActiveTaskExecutions(
   // complete rather than an open-ended taskId poll.
   const survivors = taskDriverRegistry.activeTokens()
   for (const token of survivors) taskDriverRegistry.requestStop(token, reason)
-  return [...survivors.map((token) => token.taskId), ...testActiveControllers.keys()]
+  return survivors.map((token) => token.taskId)
 }
 
 // RFC-359：同名的 SQLite 专属 `markTaskExecutionShutdownSurvivor` 已删除。优雅停机的幸存者处置

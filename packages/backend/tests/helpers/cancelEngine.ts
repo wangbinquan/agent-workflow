@@ -5,17 +5,16 @@
 // 谁也没跟谁比过。合成一份之后行为套件也只该有一个装配点——否则下一次分叉会从测试侧长出来
 //（同 `retry` / `resume` 两刀留下的 `retryEngine.ts` / `resumeEngine.ts`）。
 //
-// 它把共用实现包成既有套件熟悉的调用形状（`cancel(db, taskId, opts?) => Task`），并把两样
-// 「退役形态才有、共用那份不认识」的东西显式化：
+// 它把共用实现包成既有套件熟悉的调用形状（`cancel(db, taskId, opts?) => Task`），
+// 并保留唯一的测试接缝：
 //   · **CAS 注入点**（`beforeStatusCas`）——生产从不传；只有锁「CAS 被别的生命周期写者持续
 //     挤掉时必须报 starved、而不是把失败当成功」的那条回归判据传；
-//   · **无停机票据时的兜底中止**——生产的取消一律有票据（没票据就是「没人在跑」），
-//     只有进程内注册了测试控制器的用例需要它继续按历史行为中止。
+// RFC-388: live controllers use the execution module registry and its normal stop tickets.
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { taskExecutionModule } from '@/services/taskExecutionParticipants'
 import { cancelTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
-import { __abortActiveTaskForTesting, getTask } from '@/services/task'
+import { getTask } from '@/services/task'
 import { NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import type { Task } from '@agent-workflow/shared'
@@ -51,10 +50,6 @@ export async function cancelViaEngine(
       : { kind: 'user' },
     {
       ...(opts.beforeStatusCas === undefined ? {} : { beforeStatusCas: opts.beforeStatusCas }),
-      // 带 taskId：级联会把同一份 options 传给子任务，闭包捕获外层 id 会中止错的那个控制器。
-      abortWithoutStopTicket: (abortTaskId, cause) => {
-        __abortActiveTaskForTesting(abortTaskId, cause)
-      },
     },
   )
   const task = await getTask(db, taskId)

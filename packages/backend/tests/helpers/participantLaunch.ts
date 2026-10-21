@@ -1,3 +1,4 @@
+import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-359 AC-1（plan §5hn 批次二 ⑧）—— 测试侧的**启动参与者**装配，和生产同形。
 //
@@ -15,7 +16,7 @@ import type { StartAgentTask, StartWorkgroupTask, Task } from '@agent-workflow/s
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
 import { composeAgentLaunchResourceOperations } from '../../src/modules/task-execution/composition/agentLaunchResources'
 import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/task-execution/composition/workgroupLaunchResources'
-import { createSqliteTaskExecutionLaunchParticipant } from '../../src/modules/task-execution/composition/taskRouteLaunch'
+import { createTaskExecutionLaunchParticipant } from '../../src/modules/task-execution/composition/taskRouteLaunch'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { TaskExecutionLaunchParticipant } from '../../src/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type { TaskDriveCompletionMode } from '../../src/modules/task-execution/application/drive/taskDriveTypes'
@@ -110,13 +111,14 @@ export function createTestTaskExecutionLaunchParticipant(
       },
     },
   })
-  return createSqliteTaskExecutionLaunchParticipant({
+  return createTaskExecutionLaunchParticipant({
     db: input.db,
     configPath,
     gitCommitIdentity: composeIdentityAccess(input.db).getUserGitCommitIdentity,
     agent: { resources: composeAgentLaunchResourceOperations({ db: input.db }), integrity },
     workgroup: composeWorkgroupLaunchResourceOperations({ db: input.db, integrity }),
-    routeWorkspace: {
+    workspace: createTaskRouteWorkspaceParticipant({
+      db: input.db,
       sourceContexts: composeIdentityAccess(input.db).taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({
         db: input.db,
@@ -125,12 +127,7 @@ export function createTestTaskExecutionLaunchParticipant(
       }),
       appHome: input.appHome,
       ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
-    },
-    // 参与者收的是请求上带来的 `resources`，这一格只被**路由包装**读——本 helper 不装路由，
-    // 交一个会当场炸的实现比交一个静默走别的路的占位好。
-    resourceAuthorityFor: () => {
-      throw new Error('test launch participant does not compose the route wrapper')
-    },
+    }),
     coordinator: {
       submit: (request) => drive.submit({ ...request, completionMode }),
     },

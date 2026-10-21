@@ -19,7 +19,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
-import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -27,7 +26,6 @@ import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   docVersions,
@@ -42,7 +40,6 @@ import {
   workflows,
 } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations'
 import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createTaskRouteLaunchOperations } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type {
@@ -227,17 +224,9 @@ function launchOperations(harness: ProviderHarness): LaunchArms {
       configPath,
     } as never)
   }
-  // RFC-359 AC-1（plan §5hn 批次一）：两侧的 routeLaunch 依赖形状已经对齐——
-  // PG 那一支上面就用 `as never` 只取端口形状，这一支同理（本用例只比端口面，不真启动）。
-  return createSqliteTaskRouteLaunchOperations({
-    db: harness.db as unknown as DbClient,
+  return createTaskRouteLaunchOperations({
+    db: harness.db,
     configPath,
-    routeWorkspace: {
-      appHome: APP_HOME,
-      repositoryPreparation: composeRepositoryPreparation({ db: harness.db, appHome: APP_HOME }),
-      sourceContexts: () => unusedDependency('sourceContexts'),
-    },
-    executionFor: () => unusedDependency('executionFor'),
   } as never)
 }
 

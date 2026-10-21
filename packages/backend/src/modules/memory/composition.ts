@@ -114,10 +114,7 @@ export function composeMemoryInjectionQueriesFor(
 ): MemoryInjectionQueries {
   return composeMemoryInjectionQueries(new DrizzleMemoryInjectionReadStore(db))
 }
-export {
-  composeMemoryInjectionQueriesFor as composePostgresqlMemoryInjectionQueries,
-  composeMemoryInjectionQueriesFor as composeSqliteMemoryInjectionQueries,
-}
+export {}
 
 /** 目录绑定：identity-access 的命令上下文工厂 + resource-catalog 的 scope 访问 participant（两个 provider 同一份）。 */
 export interface MemoryCatalogBinding {

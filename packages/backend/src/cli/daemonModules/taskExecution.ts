@@ -49,45 +49,27 @@ import {
   composeWorktreeResumePreflight,
 } from '@/modules/task-execution/public/participants'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
-import type {
-  PostgresqlTaskExecutionProviderRuntimeDependencies,
-  SqliteTaskExecutionProviderRuntimeDependencies,
-  SelectedTaskExecutionProviderRuntime,
+import {
+  composeTaskExecutionProviderRuntime,
+  type TaskExecutionProviderRuntimeDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
+import type { TaskExecutionBinding } from '@/modules/task-execution/composition/taskExecutionBinding'
 import type { DaemonProviderCore } from './providerCore'
 import type { DaemonObservationModules } from './observation'
 import type { DaemonResourceCatalogModules } from './resourceCatalog'
 import type { DaemonRepositoryCredentials } from './repositoryCredentials'
 import type { DaemonMemoryModules } from './memory'
 
-type ProviderDependencies =
-  SqliteTaskExecutionProviderRuntimeDependencies<CollaborationRouteContext>
+type ProviderDependencies = TaskExecutionProviderRuntimeDependencies<CollaborationRouteContext>
 type PreparationInput = Parameters<typeof composeRepositoryPreparation>[0]
 type RouteInputs = ReturnType<ProviderDependencies['routes']>
 type ReviewInputs = Parameters<typeof createReviewDecisionCommand>[0]
 
-/** Neutral inputs; the adapter table owns all remaining provider mechanisms. */
-export interface DaemonTaskProviderInput extends Omit<
-  ProviderDependencies,
-  'runtime' | 'routeLaunch' | 'fusion' | 'repositoryPreparationRetry'
-> {
-  readonly persistence: ReturnType<typeof createTaskExecutionPersistence>
-  readonly workgroupTaskRoom: NonNullable<ProviderDependencies['workgroupTaskRoom']>
-  readonly runtime: ProviderDependencies['runtime'] & {
-    readonly taskDagCollaboration: ReturnType<typeof createTaskDagCollaborationOperations>
-  }
-  readonly routeLaunch: PostgresqlTaskExecutionProviderRuntimeDependencies['routeLaunch']
-  readonly routeWorkspace: PostgresqlTaskExecutionProviderRuntimeDependencies['routeWorkspace']
-  readonly fusion: ProviderDependencies['fusion'] &
-    PostgresqlTaskExecutionProviderRuntimeDependencies['fusion']
-  readonly recoverySelection?: PostgresqlTaskExecutionProviderRuntimeDependencies['recoverySelection']
-  readonly finalizeWorkspace: (taskId: string) => Promise<void>
-}
+/** The graph is neutral; adapters supply only deployment lifetime/claim and process scope. */
 export interface DaemonTaskExecutionAdapters<P extends DatabaseProvider = DatabaseProvider> {
   readonly provider: P
-  compose(
-    input: DaemonTaskProviderInput,
-  ): Extract<SelectedTaskExecutionProviderRuntime<CollaborationRouteContext>, { provider: P }>
+  execution(persistence: ProviderDependencies['persistence']): TaskExecutionBinding
+  readonly processConcurrencyScope: object
 }
 export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseProvider> {
   readonly db: ProviderNeutralDatabase
@@ -132,11 +114,11 @@ export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseP
       readonly reviewArtifacts?: ReviewInputs['reviewArtifacts']
       readonly reviewRollbackSnapshots?: ReviewInputs['rollbackSnapshots']
       readonly workspaceUploads?: ProviderDependencies['routeLaunch']['workspaceUploads']
-      readonly inputFiles?: PostgresqlTaskExecutionProviderRuntimeDependencies['routeLaunch']['inputFiles']
+      readonly inputFiles?: ProviderDependencies['routeLaunch']['inputFiles']
       readonly preparationEffects?: PreparationInput['preparationEffects']
       readonly scratchEffects?: PreparationInput['scratchEffects']
-      readonly recoverySelection?: PostgresqlTaskExecutionProviderRuntimeDependencies['recoverySelection']
-      readonly fusionWorkspaces: PostgresqlTaskExecutionProviderRuntimeDependencies['fusion']['workspaces']
+      readonly recoverySelection?: ProviderDependencies['recoverySelection']
+      readonly fusionWorkspaces: ProviderDependencies['fusion']['workspaces']
     }
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
   readonly alerts?: ProviderDependencies['lifecycleRepair']
@@ -256,14 +238,18 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     log,
   })
   const coordinator = coordinatorFactory.session
-  const provider = input.adapters.compose({
+  const provider = composeTaskExecutionProviderRuntime({
+    db,
     persistence,
+    execution: input.adapters.execution(persistence),
+    log,
     coordinatorFactory,
     schedulerDriver: input.testSeams?.schedulerDriver,
     archive: selection.archive,
     workspaceReads: selection.workspaceReads,
     recoverySelection: selection.recoverySelection,
     runtime: {
+      processConcurrencyScope: input.adapters.processConcurrencyScope,
       taskRunBinding: selection.taskRunBinding,
       workspaceExcludeProfilesFor: selection.workspaceExcludeProfilesFor,
       isolationWorkspaces: selection.isolationWorkspaces,

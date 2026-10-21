@@ -359,7 +359,7 @@ import {
   type TaskArchiveContentBinding,
   type TaskArchiveMaintenanceCommand,
 } from '@/modules/task-execution/composition/taskArchiveMaintenance'
-import type { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
+import type { createTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
 import type { RuntimeRegistryOperations } from '@/modules/runtime-management/composition/runtimeRegistry'
 import { type SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import type {
@@ -525,7 +525,7 @@ export interface AppDeps {
   /** Read projections composed with the same task-execution runtime. */
   taskExecutionReadModels?: TaskExecutionReadModels
   /** Provider-selected Agent/Workgroup launch operations shared with route mounts. */
-  taskRouteLaunch?: ReturnType<typeof createSqliteTaskRouteLaunchOperations>
+  taskRouteLaunch?: ReturnType<typeof createTaskRouteLaunchOperations>
   /**
    * RFC-321 bootstrap publication transport. Task launch/continuation topologies
    * reuse its GitHub/GitLab endpoint discovery instead of rebuilding a

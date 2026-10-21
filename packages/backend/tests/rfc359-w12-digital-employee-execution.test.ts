@@ -212,7 +212,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
             resolveActor: async () => actor,
             resourceAuthorityFor: () => launchResources,
             launch:
-              provider.provider === 'postgresql'
+              harness.applicationBinding.provider === 'postgresql'
                 ? provider.routeLaunch.workflow
                 : createTestHostTaskLaunchKernel({
                     db: harness.db,

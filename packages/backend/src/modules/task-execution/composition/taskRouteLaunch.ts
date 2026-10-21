@@ -3,11 +3,6 @@ import { createTaskAutomationWorkStartProvider as bindTaskAutomationWorkStartPro
 import { findTaskAutomationReceipt } from '../infrastructure/taskRouteLaunchOperations'
 
 export {
-  createSqliteTaskExecutionLaunchParticipant,
-  createSqliteTaskRouteLaunchOperations,
-  type SqliteTaskRouteLaunchDependencies,
-} from '../infrastructure/sqliteTaskRouteLaunchOperations'
-export {
   createRootTaskLaunchKernel,
   createTaskExecutionLaunchParticipant,
   createTaskRouteLaunchOperations,

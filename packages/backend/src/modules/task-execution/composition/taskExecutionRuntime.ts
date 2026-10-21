@@ -5,8 +5,6 @@ export {
 } from './runtimeAssembly'
 export { createTaskExecutionPersistence } from './taskExecutionPersistence'
 export {
-  composeLegacyTaskActivityParticipant,
-  composeLegacyTaskStopRegistry,
   createTaskExecutionRuntimeParticipants,
   type TaskExecutionRuntimeParticipantsInput,
 } from '../infrastructure/taskExecutionRuntimeParticipants'
@@ -53,14 +51,9 @@ export {
   type TaskWorkspacePreparation,
 } from '../infrastructure/taskRouteWorkspaceParticipant'
 export {
-  composePostgresqlTaskExecutionProviderRuntime,
-  composeSqliteTaskExecutionProviderRuntime,
-  type PostgresqlTaskExecutionProviderRuntimeDependencies,
-  type SelectedPostgresqlTaskExecutionProviderRuntime,
-  type SelectedSqliteTaskExecutionProviderRuntime,
+  composeTaskExecutionProviderRuntime,
+  type TaskExecutionProviderRuntimeDependencies,
   type SelectedTaskExecutionProviderRuntime,
-  type PostgresqlTaskExecutionRuntimeDependencies,
-  type SqliteTaskExecutionProviderRuntimeDependencies,
   type TaskExecutionBackgroundControl,
   type TaskExecutionBackgroundStartDependencies,
   type TaskExecutionProviderRouteContext,

@@ -206,7 +206,7 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     )
     expect(
       provider.match(/runConfig:|dependencies.rootResumeRuntime\(taskId\)/g)!.length,
-    ).toBeGreaterThanOrEqual(4)
+    ).toBeGreaterThanOrEqual(2)
     expect(bundle).toContain(
       'rootResumeRuntime: async () => ({ runConfig: await runConfiguration() })',
     )

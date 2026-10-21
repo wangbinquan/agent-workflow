@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { buildActor, type Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { composeLegacyTaskActivityParticipant } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
+import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { retryNodeProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { retryRepositoryPreparation, type StartTaskDeps } from '@/services/task'
 import { runTaskWithRealTestTopology } from './taskExecutionTestTopology'
@@ -24,7 +24,7 @@ import type { Task } from '@agent-workflow/shared'
 export interface RetryEngineOptions {
   readonly appHome?: string
   /**
-   * 进程内活跃度。**缺省就是生产那一份**（`composeLegacyTaskActivityParticipant`，读
+   * 进程内活跃度。**缺省就是生产那一份**（`taskExecutionModule.runtimeRegistry`，读
    * `services/task.ts` 的进程级注册表）——退役那份 `retryNode` 读的也是它，所以
    * 「调度器挂起期间重试 → 409 `task-still-running`（active scheduler）」这类判据
    * 不必额外接线就仍然成立。缺省换成「永远不活跃」会让它们**静默降级**到后面那道
@@ -141,7 +141,11 @@ export function createRetryEngine(
           persistence,
           activity:
             options.isActive === undefined
-              ? composeLegacyTaskActivityParticipant()
+              ? {
+                  isActive: (taskId: string) => taskExecutionModule.runtimeRegistry.hasTask(taskId),
+                  awaitReleasedSettled: (taskId: string) =>
+                    taskExecutionModule.runtimeRegistry.awaitReleasedSettled(taskId),
+                }
               : { isActive: options.isActive, awaitReleasedSettled: async () => {} },
           repositoryPreparationRetry: {
             retry: async (taskId: string) => {

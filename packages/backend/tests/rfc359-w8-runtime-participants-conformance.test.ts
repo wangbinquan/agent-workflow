@@ -528,20 +528,18 @@ test('第 12 刀 · 参与者已合一：仓里只剩一份实现，两个组合
     )
   }
 
-  // 两个组合根调的是**同一个**工厂。
+  // RFC-388：唯一组合根调用唯一参与者工厂。
   expect(
     provider.match(
       /createTaskExecutionRuntimeParticipants\(\s*bindProviderTaskRunParticipantsInput\(/g,
     )?.length,
-  ).toBe(2)
+  ).toBe(1)
 
   // resume / cancel 都转给共用实现，且不再经过退役的 legacy 入口。
   expect(participants).toContain('createChildTaskLifecycleParticipant({')
-  // 共用工厂体内不得直呼进程全局的活跃度——那是 `composeLegacyTaskActivityParticipant`
-  // 这个**装配点**的事，参与者自己只认注入进来的 `activity` 端口。
+  // 参与者只认注入的 activity 端口；运行时组合从执行模块注册表装配它。
   const factoryBody = codeOnly(participants).slice(
     codeOnly(participants).indexOf('export function createTaskExecutionRuntimeParticipants('),
-    codeOnly(participants).indexOf('export function composeLegacyTaskActivityParticipant('),
   )
   expect(factoryBody).not.toContain('isTaskActive')
   expect(factoryBody).not.toContain('awaitTaskDriverReleasedSettled')
@@ -602,9 +600,10 @@ test('第 12 刀 · 引擎差异只剩三个端口：认领策略 / 活跃度 / 
   expect(participants).toContain('stop: input.stop')
 
   // 两条绑定都在组合根里，且各绑各的。
-  expect(provider).toContain('dependencies.driverLifecycle ??')
-  expect(provider).toContain('createDatabaseTaskDriverLifecyclePort({')
-  expect(provider.match(/coordinatorFactory: dependencies.coordinatorFactory/g)).toHaveLength(2)
+  expect(provider).toContain('const driverLifecycle = createTaskDriverLifecyclePort({')
+  expect(provider).toContain('claim: execution.claim')
+  expect(provider).toContain('legacyConnection: execution.legacyConnection')
+  expect(provider.match(/coordinatorFactory: dependencies.coordinatorFactory/g)).toHaveLength(1)
   const bundle = readFileSync(
     resolve(import.meta.dir, '../src/cli/daemonModules/taskExecution.ts'),
     'utf8',
@@ -626,15 +625,14 @@ test('第 12 刀 · 引擎差异只剩三个端口：认领策略 / 活跃度 / 
   expect(pg).toContain(
     'finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId)',
   )
-  const adapters = readFileSync(
-    resolve(import.meta.dir, '../src/cli/daemonModules/adapters.ts'),
+  const binding = readFileSync(
+    resolve(import.meta.dir, '../src/modules/task-execution/composition/taskExecutionBinding.ts'),
     'utf8',
   )
-  expect(adapters).toContain('claim: (intentId) => taskExecutionModule.claim({ db, intentId })')
-  expect(adapters).toContain('claim: (intentId) => executionModule.claimPersisted({ intentId })')
-  expect(provider).toContain('claim: (intentId) => executionModule.claimPersisted({ intentId })')
-  expect(provider).toContain('activity: composeLegacyTaskActivityParticipant()')
-  expect(provider).toContain('stop: composeLegacyTaskStopRegistry()')
+  expect(binding).toContain('taskExecutionModule.claim({ db, intentId })')
+  expect(binding).toContain('module.claimPersisted({ intentId })')
+  expect(provider).toContain('executionModule.runtimeRegistry.hasTask(taskId)')
+  expect(provider).toContain('executionModule.runtimeRegistry.awaitReleasedSettled(taskId)')
   expect(provider).toContain('stop: executionModule.runtimeRegistry')
 })
 

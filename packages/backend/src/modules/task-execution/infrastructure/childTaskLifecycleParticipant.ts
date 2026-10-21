@@ -116,9 +116,7 @@ type ResumeTask = Readonly<{
  *
  * ⚠️ `stop` **按名字抓会抓错**：参与者工厂输入里那个 `runtimeRegistry` 是
  * `platform/runtime-registry` 的**运行时档案**注册表（`getRuntime(name)`），与这里要的
- * **任务驱动**注册表同名不同物。单进程形态交 `composeLegacyTaskStopRegistry()`
- *（即 `taskExecutionModule.runtimeRegistry`，`createDatabaseTaskDriverLifecyclePort` 用的也是它）；
- * PostgreSQL 那侧交 `executionModule.runtimeRegistry`。
+ * **任务驱动**注册表同名不同物。RFC-388 两个部署都交执行绑定的 `module.runtimeRegistry`。
  */
 export interface ChildTaskLifecycleRuntimePorts {
   readonly coordinatorFactory: TaskDriveCoordinatorFactory
@@ -169,8 +167,7 @@ export interface TaskCancelDependencies {
 }
 
 /**
- * 取消的可选面。**生产一律不传**——两样都是退役那份（`services/task.ts` 的 `cancelTask`）
- * 用 options 表达、而共用实现不该认识的东西。
+ * 取消的测试接缝。**生产一律不传**。
  */
 export interface TaskCancelOptions {
   /**
@@ -178,18 +175,6 @@ export interface TaskCancelOptions {
    * 而不是把失败当成功」的那条回归判据传。
    */
   readonly beforeStatusCas?: () => void | Promise<void>
-  /**
-   * 没拿到停机票据时的兜底中止。
-   *
-   * 生产里**已认领的 worker 永远走上面那条精确票据路**；这一格是给「没有持久化 owner 的
-   * 控制器」留的历史兼容（`services/task.ts` 的 `testActiveControllers`，
-   * 由 `__setActiveTaskForTesting` / `__registerActiveTaskForTesting` 注册）。
-   * 那张表是**测试专用**的，所以它留在 legacy 那边、由组合方交进来，而不是让共用实现认识它。
-   */
-  readonly abortWithoutStopTicket?: (
-    taskId: string,
-    cause: Parameters<typeof cancelTaskProjection>[2],
-  ) => void
 }
 
 export interface TaskResumeDependencies {
@@ -755,7 +740,7 @@ export async function cancelTaskProjection(
   let revokedRevision: number | null = null
   // RFC-359 AC-1（第 11 刀移植）—— **CAS 被别的可取消态写者挤掉时要复读，不能当失败**。
   //
-  // 这一段是从退役那份搬过来的第四样（前三样：评审变更号、CAS 注入点、无票据兜底中止）。
+  // 这一段是从退役那份搬过来的第四样（RFC-388 已删除测试专用的无票据兜底中止）。
   // 场景：另一个写者把任务从一个可取消态推到**另一个可取消态**（awaiting_review ⇄ awaiting_human）。
   // 那不是「任务已经收场」，取消仍然该成功；只有**病态的持续搅动**才该响亮地报
   // `cancel-transition-starved`，而不是把一次失败的 CAS 当成取消成功。
@@ -933,11 +918,6 @@ export async function cancelTaskProjection(
   }
   await publishCommittedEventsAfterCommit(committed.eventRefs)
 
-  if (stopToken === null) {
-    // 没有持久化 owner 的控制器仍保留历史中止行为（见 `abortWithoutStopTicket` 的注释）。
-    // **必须带 taskId**：级联会把同一份 options 传给子任务，闭包捕获的 id 会指错任务。
-    options.abortWithoutStopTicket?.(taskId, cause)
-  }
   if (stopToken !== null) {
     const ticket = dependencies.stop.requestStop(stopToken, cause)
     let timeout: ReturnType<typeof setTimeout> | undefined
@@ -1017,7 +997,7 @@ export function createChildTaskLifecycleParticipant(
           workspacePresence: dependencies.workspacePresence,
           log: dependencies.log,
           // 「进程内是不是已经有人在跑」：PostgreSQL 读注入的 `executionModule.runtimeRegistry`，
-          // 单进程形态读 `composeLegacyTaskActivityParticipant()`。
+          // RFC-388：两个部署都读执行模块的运行注册表。
           // 同一个角色、两份注册表——正是 `activity` 这个端口存在的理由。
           activity: dependencies.activity,
           coordinatorFactory: dependencies.coordinatorFactory,

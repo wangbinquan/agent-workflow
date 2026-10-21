@@ -77,22 +77,22 @@ describe('RFC-244 lifecycle alert resolution boot wiring', () => {
     expect(workerConsumer).toContain('broadcastResolved(taskId)')
     // RFC-349 moved the timer into the selected-provider TaskExecution
     // background participant. Bootstrap still injects the one broadcaster;
-    // both runtime factories pass it through the selected repair engine to the
+    // the neutral runtime factory passes it through the selected repair engine to the
     // shared automatic command, and the background loop invokes that command.
     expect(START_SOURCE).toContain('onResolved: broadcastResolved')
     expect(
       TASK_PROVIDER_RUNTIME_SOURCE.match(
         /const lifecycleRepair = createTaskLifecycleAutoRepairCommand/g,
       ),
-    ).toHaveLength(2)
-    // RFC-359 AC-1（第 8 刀）：两个 runtime 工厂现在接的是**同一个**绑定
+    ).toHaveLength(1)
+    // RFC-388：唯一 runtime 工厂接同一个修复绑定
     // （合并前 SQLite 那半走 `bindTaskLifecycleRepair`，那是修复的第二份实现）。
-    // 两处都必须把 bootstrap 注入的广播器透传进去，否则告警解决不会推给前端。
+    // 必须把 bootstrap 注入的广播器透传进去，否则告警解决不会推给前端。
     expect(
       TASK_PROVIDER_RUNTIME_SOURCE.match(
         /taskRoutes\.automaticRepair\(\{ resume, \.\.\.dependencies\.lifecycleRepair \}\)/g,
       ),
-    ).toHaveLength(2)
+    ).toHaveLength(1)
     expect(TASK_PROVIDER_BACKGROUND_SOURCE).toContain('await runtime.lifecycleRepair.run({')
   })
 })

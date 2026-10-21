@@ -22,11 +22,9 @@ import type { CodeHostConnectionsService } from '@/services/codeHost/connections
 import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
-import { isTaskActive } from '@/services/task'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
 import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
 import type {
-  ActiveTaskExecutionParticipant,
   TaskExecutionDriveParticipant,
   TaskExecutionRuntimeParticipants,
 } from '../application/ports/taskExecutionRuntimeParticipants'
@@ -37,7 +35,6 @@ import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTur
 import { composeExecutionMergeRecovery } from '../composition/executionMergeRecovery'
 import { driveTaskEngineApplication } from '../composition/taskEngineApplication'
 import { composeWrapperRuntime } from '../composition/wrapperRuntime'
-import { taskExecutionModule } from '../public/participants'
 import {
   createChildExecutionLaunchOperations,
   type ChildWorkgroupLaunchResources,
@@ -46,7 +43,6 @@ import {
   createChildTaskLifecycleParticipant,
   type ChildTaskLifecycleRuntimePorts,
 } from './childTaskLifecycleParticipant'
-import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
 
 /**
  * RFC-359 AC-1（第 12 刀）—— 运行时参与者的**唯一**实现，两个 provider 共用。
@@ -61,8 +57,7 @@ import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
  * 「这台部署里，谁在跑、怎么认领、怎么请它停」：
  *   · `coordinatorFactory`：RFC-386 会话工厂封装生命周期，SQLite 绑进程级单例的
  *     同步认领（`createDatabaseTaskDriverLifecyclePort`），PostgreSQL 绑持久化租约（`claimPersisted`）；
- *   · `activity` / `stop`：SQLite 读进程内注册表（`composeLegacyTaskActivityParticipant` /
- *     `composeLegacyTaskStopRegistry`），PostgreSQL 读注入的 `executionModule.runtimeRegistry`。
+ *   · `activity` / `stop`：RFC-388 两个部署都读注入执行模块的运行注册表。
  *
  * 按 plan §5fq 的判据，这三格命中的是**部署形态**而不是 ①②③ 里的任何一条，所以它们是
  * **端口**：一份实现、两个绑定，绑定由各自的组合根（`composition/providerRuntime.ts`）交。
@@ -198,34 +193,4 @@ export function createTaskExecutionRuntimeParticipants(
     }),
     activity: input.activity,
   })
-}
-
-/**
- * RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀）：进程内活跃度参与者的**唯一**装配点。
- *
- * 它包的就是进程内注册表（`isTaskActive` / `awaitTaskDriverReleasedSettled`），
- * 行为与直呼那两个全局一模一样；价值在**边界**：路由与 `delete` 现在读的是注入的端口，
- * 于是两个引擎上都能把 `task-active` 那道门喂出来（此前 SQLite 侧驱不动模块全局，
- * W7 的 A19 因此一直缺这一格）。`server.ts` 那条不装配完整 runtime 的路也用它，
- * 免得同一个包装在仓里出现第二份。
- */
-export function composeLegacyTaskActivityParticipant(): ActiveTaskExecutionParticipant {
-  return Object.freeze({
-    isActive: (taskId: string) => isTaskActive(taskId),
-    awaitReleasedSettled: awaitTaskDriverReleasedSettled,
-  })
-}
-
-/**
- * RFC-359 AC-1（第 12 刀）：进程级单例那套**停机票据**注册表的唯一取用点。
- *
- * 与上面那个是同一套进程内注册表的两个面（一个问「谁在跑」，一个问「请它停」）。
- * 单进程部署形态（SQLite）绑它；持久化租约部署形态（PostgreSQL）绑
- * `executionModule.runtimeRegistry`。
- *
- * ⚠️ 不能按名字抓：参与者输入里那个 `runtimeRegistry` 是 `platform/runtime-registry` 的
- * **运行时档案**注册表（`getRuntime(name)`），与这里的停机票据注册表**同名不同物**。
- */
-export function composeLegacyTaskStopRegistry(): ChildTaskLifecycleRuntimePorts['stop'] {
-  return taskExecutionModule.runtimeRegistry
 }

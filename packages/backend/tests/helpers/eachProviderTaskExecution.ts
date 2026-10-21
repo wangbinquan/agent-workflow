@@ -1,3 +1,8 @@
+import {
+  composeProcessTaskExecutionBinding,
+  composeSessionTaskExecutionBinding,
+} from '@/modules/task-execution/composition/taskExecutionBinding'
+import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
 import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
@@ -60,13 +65,10 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import type { BoundRunTaskOptions } from '@/modules/task-execution/composition/taskEngineRuntimeOptions'
 import {
-  composePostgresqlTaskExecutionProviderRuntime,
-  composeSqliteTaskExecutionProviderRuntime,
-  type SelectedPostgresqlTaskExecutionProviderRuntime,
-  type SelectedSqliteTaskExecutionProviderRuntime,
+  composeTaskExecutionProviderRuntime,
+  type SelectedTaskExecutionProviderRuntime,
 } from '@/modules/task-execution/composition/providerRuntime'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
-import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
 import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
@@ -254,72 +256,81 @@ export async function createEachProviderTaskExecution(
 
   if (harness.capabilities.isolation === 'exclusive') {
     const sqlite = db as unknown as DbClient
-    const provider: SelectedSqliteTaskExecutionProviderRuntime =
-      composeSqliteTaskExecutionProviderRuntime(sqlite, {
-        coordinatorFactory: testDriveFactory(
-          db,
-          {
-            attach: (request) => provider.driverLifecycle.attach(request),
-            releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
-          },
-          () => ({ configPath, ...runConfig }),
-        ),
-        runtime: {
-          ...runBinding,
-          workspaceExcludeProfilesFor,
-          ...(options.isolationWorkspaces === undefined
-            ? {}
-            : { isolationWorkspaces: options.isolationWorkspaces }),
-          workspacePresence,
-          identityAccess: runtimeIdentity,
-          memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
-          collaborationRuntime,
-          workgroupTurns,
-          dynamicWorkflow,
-          runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
-          observationInvocations: composeRunObservationCalls(sqlite),
-          runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
-          nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
-          repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
-          codeHostConnections: unusedCapability('code-host connection'),
+    const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime({
+      db: sqlite,
+      persistence,
+      execution: composeProcessTaskExecutionBinding(sqlite),
+      log: createLogger('task'),
+      finalizeWorkspace: async (taskId) => {
+        await finishClaimedWebhookWorkspacePrune(sqlite, taskId)
+      },
+      workgroupTaskRoom: { collaboration: workgroupClarify },
+      coordinatorFactory: testDriveFactory(
+        db,
+        {
+          attach: (request) => provider.driverLifecycle.attach(request),
+          releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
         },
-        routeLaunch: {
-          configPath,
-          // RFC-359 AC-1（plan §5hn 批次一）：单代理启动臂现在也要根内核的那套依赖。
-          // 本 harness 不经路由启动 agent（它直接用 `launch` / `launchViaKernel`），
-          // 所以这几格给到不会被调用到的最小形状——真被调用会当场炸，而不是静默走假路径。
-          gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-          agent: {
-            // RFC-359 AC-1（第 13 刀下）：`resources` 交**生产那一份**——`syncWorkflow` 合一之后
-            // 它的静态校验门就是这里的 `validateHostWorkflow`（两个引擎同一份、只收中立句柄）。
-            // 此前这一格是「一碰就炸」的桩，于是本 harness 上的 sync 一调用就撞桩。
-            resources: composeAgentLaunchResourceOperations({ db }),
-            integrity: unusedCapability('agent route launch integrity'),
-          },
-          routeWorkspace: {
-            sourceContexts: identityAccess.taskPreparationContext,
-            appHome,
-            repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
-          },
-          resourceAuthorityFor: () => launchResources,
-          coordinator: { submit: () => unavailable('agent route coordinator') },
-          workgroup: unusedCapability('workgroup route launch resources'),
+        () => ({ configPath, ...runConfig }),
+      ),
+      runtime: {
+        taskDagCollaboration: createTaskDagCollaborationOperations(db),
+        processConcurrencyScope: sqlite,
+        ...runBinding,
+        workspaceExcludeProfilesFor,
+        ...(options.isolationWorkspaces === undefined
+          ? {}
+          : { isolationWorkspaces: options.isolationWorkspaces }),
+        workspacePresence,
+        identityAccess: runtimeIdentity,
+        memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
+        collaborationRuntime,
+        workgroupTurns,
+        dynamicWorkflow,
+        runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
+        observationInvocations: composeRunObservationCalls(sqlite),
+        runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
+        nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
+        repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
+        codeHostConnections: unusedCapability('code-host connection'),
+      },
+      routeLaunch: {
+        configPath,
+        // RFC-359 AC-1（plan §5hn 批次一）：单代理启动臂现在也要根内核的那套依赖。
+        // 本 harness 不经路由启动 agent（它直接用 `launch` / `launchViaKernel`），
+        // 所以这几格给到不会被调用到的最小形状——真被调用会当场炸，而不是静默走假路径。
+        gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+        agent: {
+          // RFC-359 AC-1（第 13 刀下）：`resources` 交**生产那一份**——`syncWorkflow` 合一之后
+          // 它的静态校验门就是这里的 `validateHostWorkflow`（两个引擎同一份、只收中立句柄）。
+          // 此前这一格是「一碰就炸」的桩，于是本 harness 上的 sync 一调用就撞桩。
+          resources: composeAgentLaunchResourceOperations({ db }),
+          integrity: unusedCapability('agent route launch integrity'),
         },
-        // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
-        // 最后一个要 legacy `StartTaskDeps` 的路由动词，合一之后路由层不再持有它。
-        routes: () => ({
-          collaboration: unusedCapability('collaboration route'),
-          multipart: unusedCapability('multipart upload'),
-          resourceAuthorityFor: () => launchResources,
-          owners: composeOwnerIdentityQueries(db),
-          assertWorkflowLaunchable: async () => unavailable('workflow route validation'),
-          appHome,
-          ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
-        }),
-        lifecycleRepair: {},
-        fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
-        rootResumeRuntime,
-      })
+        resourceAuthorityFor: () => launchResources,
+        coordinator: { submit: () => unavailable('agent route coordinator') },
+        workgroup: unusedCapability('workgroup route launch resources'),
+      },
+      routeWorkspace: {
+        sourceContexts: identityAccess.taskPreparationContext,
+        appHome,
+        repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
+      },
+      // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
+      // 最后一个要 legacy `StartTaskDeps` 的路由动词，合一之后路由层不再持有它。
+      routes: () => ({
+        collaboration: unusedCapability('collaboration route'),
+        multipart: unusedCapability('multipart upload'),
+        resourceAuthorityFor: () => launchResources,
+        owners: composeOwnerIdentityQueries(db),
+        assertWorkflowLaunchable: async () => unavailable('workflow route validation'),
+        appHome,
+        ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
+      }),
+      lifecycleRepair: {},
+      fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
+      rootResumeRuntime,
+    })
     return {
       provider,
       actor,
@@ -400,82 +411,80 @@ export async function createEachProviderTaskExecution(
 
   const postgresql = db as unknown as PostgresqlDatabaseClient
   const log = createLogger('rfc359-execution-chain')
-  const provider: SelectedPostgresqlTaskExecutionProviderRuntime =
-    composePostgresqlTaskExecutionProviderRuntime(postgresql, {
-      coordinatorFactory: testDriveFactory(
-        db,
-        {
-          attach: (request) => provider.driverLifecycle.attach(request),
-          releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
-        },
-        () => ({ configPath, ...runConfig }),
-      ),
-      runtime: {
-        ...runBinding,
-        workspaceExcludeProfilesFor,
-        ...(options.isolationWorkspaces === undefined
-          ? {}
-          : { isolationWorkspaces: options.isolationWorkspaces }),
-        workspacePresence,
-        observationInvocations: composeRunObservationCalls(db),
-        runtimeRegistry: composeRuntimeRegistryOperations(db),
-        nodeRunRuntime: composeNodeRunRuntimePersistence(db),
-        persistence,
-        taskDagCollaboration: createTaskDagCollaborationOperations(db),
-        collaborationRuntime,
-        workgroupTurns,
-        dynamicWorkflow,
-        identityAccess: runtimeIdentity,
-        repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
-        codeHostConnections: unusedCapability('code-host connection'),
-        processConcurrencyScope: {},
-        daemonGeneration: `rfc359-execution-chain-${ulid()}`,
-        finalizeWorkspace: async () => {},
-        log,
+  const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime({
+    db: postgresql,
+    persistence,
+    execution: composeSessionTaskExecutionBinding({
+      daemonGeneration: `rfc359-execution-chain-${ulid()}`,
+      persistence,
+    }),
+    log,
+    finalizeWorkspace: async () => {},
+    coordinatorFactory: testDriveFactory(
+      db,
+      {
+        attach: (request) => provider.driverLifecycle.attach(request),
+        releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
       },
-      routeLaunch: {
-        configPath,
-        gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-        resourceAuthorityFor: () => launchResources,
-        coordinator: {
-          submit: (request) => coordinator.submit({ ...request, completionMode }),
-        },
-        agent: {
-          // RFC-359 AC-1（第 13 刀下）：与 SQLite 泳道**同一份**——`syncWorkflow` 的静态校验门。
-          resources: composeAgentLaunchResourceOperations({ db }),
-          integrity: unusedCapability('agent route integrity'),
-        },
-        workgroup: unusedCapability('workgroup route resources'),
+      () => ({ configPath, ...runConfig }),
+    ),
+    runtime: {
+      ...runBinding,
+      workspaceExcludeProfilesFor,
+      ...(options.isolationWorkspaces === undefined
+        ? {}
+        : { isolationWorkspaces: options.isolationWorkspaces }),
+      workspacePresence,
+      observationInvocations: composeRunObservationCalls(db),
+      runtimeRegistry: composeRuntimeRegistryOperations(db),
+      nodeRunRuntime: composeNodeRunRuntimePersistence(db),
+      runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
+      memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
+      taskDagCollaboration: createTaskDagCollaborationOperations(db),
+      collaborationRuntime,
+      workgroupTurns,
+      dynamicWorkflow,
+      identityAccess: runtimeIdentity,
+      repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
+      codeHostConnections: unusedCapability('code-host connection'),
+      processConcurrencyScope: {},
+    },
+    routeLaunch: {
+      configPath,
+      gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+      resourceAuthorityFor: () => launchResources,
+      coordinator: {
+        submit: (request) => coordinator.submit({ ...request, completionMode }),
       },
-      routeWorkspace: {
-        sourceContexts: identityAccess.taskPreparationContext,
-        appHome,
-        repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
+      agent: {
+        // RFC-359 AC-1（第 13 刀下）：与 SQLite 泳道**同一份**——`syncWorkflow` 的静态校验门。
+        resources: composeAgentLaunchResourceOperations({ db }),
+        integrity: unusedCapability('agent route integrity'),
       },
-      routes: () => ({
-        collaboration: unusedCapability('collaboration route'),
-        users: unusedCapability('task user directory'),
-        owners: unusedCapability('task owner directory'),
-        membershipEvents: unusedCapability('task member events'),
-        deletionEvents: unusedCapability('task deletion events'),
-        appHome,
-        ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
-      }),
-      lifecycleRepair: {},
-      fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
-      rootResumeRuntime,
-      workgroupTaskRoom: { collaboration: workgroupClarify },
-    })
+      workgroup: unusedCapability('workgroup route resources'),
+    },
+    routeWorkspace: {
+      sourceContexts: identityAccess.taskPreparationContext,
+      appHome,
+      repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
+    },
+    routes: () => ({
+      collaboration: unusedCapability('collaboration route'),
+      users: unusedCapability('task user directory'),
+      owners: unusedCapability('task owner directory'),
+      membershipEvents: unusedCapability('task member events'),
+      deletionEvents: unusedCapability('task deletion events'),
+      appHome,
+      ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
+    }),
+    lifecycleRepair: {},
+    fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
+    rootResumeRuntime,
+    workgroupTaskRoom: { collaboration: workgroupClarify },
+  })
   const coordinator = new DefaultTaskDriveCoordinator({
     runtime: resolveTaskDriveConfig(runConfig),
-    lifecycle: createTaskDriverLifecyclePort({
-      db: postgresql,
-      module: provider.executionModule,
-      claim: (intentId) => provider.executionModule.claimPersisted({ intentId }),
-      persistence,
-      log,
-      finalizeWorkspace: async () => {},
-    }),
+    lifecycle: provider.driverLifecycle,
     repositoryPreparation: skipRepositoryPreparation,
     engineOrchestrator: {
       async drive(context) {

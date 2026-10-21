@@ -108,7 +108,6 @@ export const SAME_FILE_PROVIDER_PAIRS: readonly string[] = [
   'modules/system-operations/composition.ts::composeSystemOperations = composePostgresqlSystemOperations + composeSystemOperations — ②：备份 / 恢复：SQLite 是 copy 一个文件，PostgreSQL 是 pg_dump / pg_restore 一台服务器',
   'modules/system-operations/composition/maintenanceDisk.ts::composeMaintenanceDiskOperations = composePostgresqlMaintenanceDiskOperations + composeSqliteMaintenanceDiskOperations — ②：SQLite 量的是一个**文件**的磁盘占用，PostgreSQL 要问**服务器**要；资源形态不同',
   'modules/system-operations/infrastructure/local/doctorDiagnostics.ts::checkSealedCredentials = checkPostgresqlSealedCredentials + checkSealedCredentials — ②：doctor 要在**守护进程没起来**时也能查：SQLite 直接 `new Database(<文件>, {readonly:true})` 打开那个文件，PostgreSQL 必须问一台**服务器**要连接池。文件 vs 服务器，判据第二条',
-  'modules/task-execution/composition/providerRuntime.ts::composeTaskExecutionProviderRuntime = composePostgresqlTaskExecutionProviderRuntime + composeSqliteTaskExecutionProviderRuntime — 漂移待合：RFC-387 已合一仓库准备重试与融合；本条仍为两个 provider 运行时的装配漂移，SQLite 路由启动包装及 provider 命名别名留待 RFC-388 收敛，不属于引擎原语差异。',
   // RFC-359 AC-1（第 14 刀）**销账**：账本原话「先合下层，这一层自然塌成一份」——下层
   //（`createTaskSourceTerminationParticipant`）合一之后，这一层的两个同义 `compose*` 也塌成一个。
   // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：`triggerExecution.ts` 那一对**已销账**。

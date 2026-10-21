@@ -190,7 +190,7 @@ import {
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import {
-  type SelectedPostgresqlTaskExecutionProviderRuntime,
+  type SelectedTaskExecutionProviderRuntime,
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
 import {
@@ -471,7 +471,7 @@ export interface PostgresqlDaemonApplication {
  */
 export interface PostgresqlDaemonApplicationRuntime {
   readonly taskExecutionModules: DaemonTaskExecutionModules<'postgresql'>
-  readonly taskExecution: SelectedPostgresqlTaskExecutionProviderRuntime
+  readonly taskExecution: SelectedTaskExecutionProviderRuntime
   /**
    * RFC-359 —— 装配好的协作命令上下文。暴露它不是为了给 daemon 用（daemon 不碰它），
    * 而是为了让**测试夹具能把应用自己建的那一份交给用例**。合一前一批用例为了拿到它，

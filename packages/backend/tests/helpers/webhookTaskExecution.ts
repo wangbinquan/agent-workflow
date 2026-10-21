@@ -1,3 +1,4 @@
+import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-359 AC-1（plan §5hn 批次二 ⑦）—— webhook 触发的 TaskExecution 参与者，**照生产装配**。
 //
@@ -11,13 +12,12 @@ import { composeRepositoryPreparation } from '@/modules/source-control/compositi
 // 现在这里逐格复刻 `server.ts` 的 `taskRouteLaunchDependencies`，终端是同一台根启动内核。
 // 形参一个字没动，三个调用点因此不必改。
 import type { SecretBox } from '../../src/auth/secretBox'
-import type { Actor } from '../../src/auth/actor'
 import type { DbClient } from '../../src/db/client'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
 import { composeAgentLaunchResourceOperations } from '../../src/modules/task-execution/composition/agentLaunchResources'
 import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/task-execution/composition/workgroupLaunchResources'
 import { composeDeferredRepositoryPreparation } from '../../src/modules/task-execution/composition/deferredRepositoryPreparation'
-import { createSqliteTaskExecutionLaunchParticipant } from '../../src/modules/task-execution/composition/taskRouteLaunch'
+import { createTaskExecutionLaunchParticipant } from '../../src/modules/task-execution/composition/taskRouteLaunch'
 import { createTaskExecutionTriggerParticipant } from '../../src/modules/task-execution/composition/triggerExecution'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
@@ -57,7 +57,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       ? {}
       : { gitBaselineSyncWindowMs: launchRuntime.gitBaselineSyncWindowMs }),
   })
-  const launches = createSqliteTaskExecutionLaunchParticipant({
+  const launches = createTaskExecutionLaunchParticipant({
     db: input.db,
     configPath: input.configPath,
     gitCommitIdentity: input.identityAccess.getUserGitCommitIdentity,
@@ -66,7 +66,8 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       integrity,
     },
     workgroup: composeWorkgroupLaunchResourceOperations({ db: input.db, integrity }),
-    routeWorkspace: {
+    workspace: createTaskRouteWorkspaceParticipant({
+      db: input.db,
       sourceContexts: input.identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({
         db: input.db,
@@ -75,14 +76,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       }),
       appHome,
       secretBox: input.secretBox,
-    },
-    // 参与者收的是请求上带来的 `resources`，这一格只被**路由包装**读——本 helper 不装路由。
-    resourceAuthorityFor: (actor: Actor) =>
-      Object.freeze({
-        actor,
-        authority: input.identityAccess.directAuthority.authorityForLegacyProjection(actor),
-        resources: input.identityAccess.taskExecutionResources,
-      }),
+    }),
     coordinator: createTestTaskDriveCoordinator({
       // 运行期配置必须与生产取自同一处：`runtimeConfigOpts(deps)` 从 `deps` 上读十七个旋钮，
       // 只给 `{db, schedulerDriver, configPath}` 时它们全是 undefined（`20d4a6ce5` 的 e2e 红就是这么来的）。

@@ -41,8 +41,8 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
 
     expect(provider).toContain('routes: (')
     expect(provider).toContain('TaskExecutionProviderRouteContext')
-    expect(provider).toContain('createPostgresqlClarifyRepairParticipant(db)')
-    expect(provider).toContain('createPostgresqlReviewRepairParticipant(db)')
+    expect(provider).toContain('createClarifyRepairParticipant(db)')
+    expect(provider).toContain('createReviewRepairParticipant(db)')
     expect(provider).toContain('composeTaskExecutionProviderBackground({')
 
     for (const loop of ['auto-repair', 'heartbeat-kill', 'orphan-reconcile', 'scheduled-task']) {

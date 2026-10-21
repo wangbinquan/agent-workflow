@@ -1,3 +1,4 @@
+import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
@@ -24,11 +25,7 @@ import type { SchedulerDriverPort } from '../../src/modules/task-execution/publi
 import type { SchedulerRuntimeTopology } from '../../src/modules/task-execution/public/participants'
 import { composeTaskExecutionRuntime } from '../../src/modules/task-execution/composition/taskExecutionRuntime'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
-import {
-  composeLegacyTaskActivityParticipant,
-  composeLegacyTaskStopRegistry,
-  createTaskExecutionRuntimeParticipants,
-} from '../../src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
+import { createTaskExecutionRuntimeParticipants } from '../../src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { driveTaskEngineApplication } from '../../src/modules/task-execution/composition/taskEngineApplication'
 import {
@@ -117,7 +114,7 @@ export function composeTestChildLaunchWorkgroup(db: ProviderNeutralDatabase) {
  * RFC-359 AC-1（第 12 刀）：单进程部署形态的那几格端口。
  *
  * 参与者合一之后，「谁在跑 / 怎么认领 / 怎么请它停」由装配方交；测试拓扑按**生产同形**取——
- * 与 `composeSqliteTaskExecutionProviderRuntime` 逐字相同的进程级单例认领 + 进程内注册表。
+ * 与 `composeTaskExecutionProviderRuntime` 逐字相同的进程级单例认领 + 进程内注册表。
  */
 export function singleProcessDeploymentPorts(db: DbClient) {
   const log = createLogger('task')
@@ -136,8 +133,12 @@ export function singleProcessDeploymentPorts(db: DbClient) {
         },
       }),
     ),
-    activity: composeLegacyTaskActivityParticipant(),
-    stop: composeLegacyTaskStopRegistry(),
+    activity: {
+      isActive: (taskId: string) => taskExecutionModule.runtimeRegistry.hasTask(taskId),
+      awaitReleasedSettled: (taskId: string) =>
+        taskExecutionModule.runtimeRegistry.awaitReleasedSettled(taskId),
+    },
+    stop: taskExecutionModule.runtimeRegistry,
   }
 }
 

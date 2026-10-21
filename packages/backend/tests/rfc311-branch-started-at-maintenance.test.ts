@@ -1,3 +1,4 @@
+import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 // RFC-311 实现门 P1-6 / P2-3 —— `tasks.branch_started_at` 的维护面。
 //
 // 该列是 task-operations catalog provider 默认视图(快路径)的排序键,语义是「子树 max(started_at)」。
@@ -20,7 +21,7 @@ import type { StartTask } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, users, workflows } from '../src/db/schema'
-import { __setActiveTaskForTesting, startTask } from '@/services/task'
+import { startTask } from '@/services/task'
 import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { deleteTask } from '../src/services/taskDelete'
@@ -168,7 +169,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
         .update(tasks)
         .set({ status: 'done', finishedAt: Date.now() })
         .where(eq(tasks.id, parentId))
-      __setActiveTaskForTesting(undefined)
+      clearTaskDriverLifecycleForTesting()
       await deleteTask(db, childId, {
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
       })
@@ -265,7 +266,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
         },
       )
       expect(await rootTaskIdOf(db, grandchild.id)).toBe(root.id)
-      __setActiveTaskForTesting(undefined)
+      clearTaskDriverLifecycleForTesting()
     } finally {
       rmSync(rootDir, { recursive: true, force: true })
     }

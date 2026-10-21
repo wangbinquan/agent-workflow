@@ -7,8 +7,6 @@ import {
   skipRepositoryPreparation,
 } from '../../src/modules/task-execution/application/drive/taskDriveCoordinator'
 import { resolveTaskDriveConfig } from '../../src/modules/task-execution/application/drive/taskDriveTypes'
-import { createTaskDriverLifecyclePort } from '../../src/modules/task-execution/infrastructure/taskDriverLifecycle'
-import { createLogger } from '../../src/util/log'
 import type { ProviderDatabaseHarness } from './eachProvider'
 import { createProviderHttpApplication } from './providerHttpApplication'
 import { runTaskWithRealTestTopology } from './taskExecutionTestTopology'
@@ -75,7 +73,6 @@ export async function createProviderTaskExecutionTestTopology(
         const { db, taskId, ...runConfig } = options
         if (db !== binding.db) throw new Error('task fixture database mismatch')
         const provider = selected.selected
-        const log = options.log ?? createLogger('provider-task-execution-test')
         const previousOwner = await provider.persistence.ownership.read(taskId)
         const intent = await provider.persistence.intents.submitContinuation({
           taskId,
@@ -89,14 +86,7 @@ export async function createProviderTaskExecutionTestTopology(
         })
         const coordinator = new DefaultTaskDriveCoordinator({
           runtime: resolveTaskDriveConfig(runConfig),
-          lifecycle: createTaskDriverLifecyclePort({
-            db: binding.db,
-            module: provider.executionModule,
-            claim: (intentId) => provider.executionModule.claimPersisted({ intentId }),
-            persistence: provider.persistence,
-            log,
-            finalizeWorkspace: (id) => selected.workspace.finalizeClaimedWorkspace(id),
-          }),
+          lifecycle: provider.driverLifecycle,
           repositoryPreparation: skipRepositoryPreparation,
           engineOrchestrator: {
             async drive(context) {

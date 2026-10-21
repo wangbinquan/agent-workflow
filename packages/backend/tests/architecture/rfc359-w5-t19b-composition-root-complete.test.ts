@@ -134,7 +134,7 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // `TaskExecutionModule.persistence?` 这个空槽与 `claimPersisted` 进门那句
   // `'task-execution persistence is not composed'` 一起拆成两个类型：基类不再持有空槽，
   // `claimPersisted` 只长在 `ProviderTaskExecutionModule` 上。要持久化认领的能力，就得先拿到
-  // 一个持有持久化的模块；这个要求沿装配链一路上浮到 `SelectedPostgresqlTaskExecutionProviderRuntime`
+  // 一个持有持久化的模块；RFC-388 后由会话执行绑定封装成 `TaskExecutionBinding.claim`
   // （SQLite 那一支用进程级单例、走同步 `claim(db)`，两支不再共用一个「可能没装配」的槽）。
   // RFC-359 W5-T19b 收敛：`taskEngineApplication.ts` marker 11 → 2 —— `driveTaskEngineApplication`
   // 的形参从 `RunTaskOptions`（九个装配依赖全可选 + 进门九句 `throw new Error('X-not-composed')`

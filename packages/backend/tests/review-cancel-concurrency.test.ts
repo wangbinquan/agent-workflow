@@ -1,3 +1,5 @@
+import { taskExecutionModule } from '@/modules/task-execution/composition'
+import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 // Review mutations and user cancellation share one task-scoped FIFO.  These
 // tests put an explicit holder in front of both operations so the winner order
 // is deterministic rather than an accident of Promise scheduling.
@@ -47,7 +49,7 @@ import {
   __hasTaskReviewMutationQueueForTesting,
   withTaskReviewMutationLock,
 } from '../src/services/reviewMutationCoordinator'
-import { __registerActiveTaskForTesting, __setActiveTaskForTesting } from '../src/services/task'
+import { attachTestTaskRuntime } from './helpers/taskRuntimeRegistry'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import {
@@ -78,7 +80,7 @@ interface Harness<Database extends ProviderNeutralDatabase = ProviderNeutralData
 let current: Harness | undefined
 
 afterEach(() => {
-  __setActiveTaskForTesting(undefined)
+  clearTaskDriverLifecycleForTesting()
   current?.cleanup()
   current = undefined
 })
@@ -935,7 +937,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
       invocationDepth: 1,
     })
     const childController = new AbortController()
-    __registerActiveTaskForTesting(childId, childController)
+    const childRuntime = attachTestTaskRuntime(taskExecutionModule, childId, childController)
     let childAborted: () => void = () => {}
     const childAbortSeen = new Promise<void>((resolveAbort) => {
       childAborted = resolveAbort
@@ -959,6 +961,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
             extra: { finishedAt: Date.now() },
             reason: 'test-scheduler-cancel',
           })
+          childRuntime.release()
         })
       },
       { once: true },

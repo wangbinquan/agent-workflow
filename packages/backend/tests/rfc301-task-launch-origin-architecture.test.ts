@@ -136,17 +136,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
   })
 
   test('direct launch adapters declare their exact JSON or multipart transport lane', () => {
-    const sqliteLaunch = readFileSync(
-      resolve(
-        BACKEND_SRC,
-        'modules',
-        'task-execution',
-        'infrastructure',
-        'sqliteTaskRouteLaunchOperations.ts',
-      ),
-      'utf8',
-    )
-    const postgresqlLaunch = readFileSync(
+    const neutralLaunch = readFileSync(
       resolve(
         BACKEND_SRC,
         'modules',
@@ -163,7 +153,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       'utf8',
     )
 
-    for (const launch of [sqliteLaunch, postgresqlLaunch]) {
+    for (const launch of [neutralLaunch]) {
       expect(launch).toContain(
         "launchKind: command.uploads === undefined ? 'direct-json' : 'direct-multipart'",
       )

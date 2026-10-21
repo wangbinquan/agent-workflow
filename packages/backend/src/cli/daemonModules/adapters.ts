@@ -16,15 +16,9 @@ import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import {
-  createProviderTaskExecutionModule,
-  taskExecutionModule,
-} from '@/modules/task-execution/composition'
-import { createTaskDriverLifecyclePort } from '@/modules/task-execution/composition/taskDriveLegacy'
-import {
-  composeSqliteTaskExecutionProviderRuntime,
-  composePostgresqlTaskExecutionProviderRuntime,
-} from '@/modules/task-execution/composition/providerRuntime'
-import { createLogger } from '@/util/log'
+  composeProcessTaskExecutionBinding,
+  composeSessionTaskExecutionBinding,
+} from '@/modules/task-execution/composition/taskExecutionBinding'
 import type { DaemonTaskExecutionAdapters } from './taskExecution'
 
 type CoreAdapterInput = {
@@ -74,61 +68,18 @@ type TaskAdapterInput = {
   }
 }
 
-/** RFC-382: the remaining execution/claim and process-scope differences live here. */
+/** RFC-388: deployment binding and the unchanged configuration hot-apply key. */
 export const DAEMON_TASK_EXECUTION_ADAPTERS = {
   sqlite: ({ db }) => ({
     provider: 'sqlite',
-    compose(input) {
-      const persistence = input.persistence
-      const driverLifecycle = createTaskDriverLifecyclePort({
-        db,
-        persistence,
-        module: taskExecutionModule,
-        legacyConnection: db,
-        claim: (intentId) => taskExecutionModule.claim({ db, intentId }),
-        log: createLogger('task'),
-        finalizeWorkspace: input.finalizeWorkspace,
-      })
-      const provider = composeSqliteTaskExecutionProviderRuntime(db, {
-        ...input,
-        driverLifecycle,
-        routeLaunch: { ...input.routeLaunch, routeWorkspace: input.routeWorkspace },
-      })
-      return provider
-    },
+    execution: () => composeProcessTaskExecutionBinding(db),
+    processConcurrencyScope: db,
   }),
-  postgresql: ({ db, runtime }) => ({
+  postgresql: ({ runtime }) => ({
     provider: 'postgresql',
-    compose(input) {
-      const persistence = input.persistence
-      const executionModule = createProviderTaskExecutionModule({
-        daemonGeneration: DAEMON_GENERATION,
-        persistence,
-      })
-      const log = createLogger('task')
-      const driverLifecycle = createTaskDriverLifecyclePort({
-        db,
-        persistence,
-        module: executionModule,
-        claim: (intentId) => executionModule.claimPersisted({ intentId }),
-        log,
-        finalizeWorkspace: input.finalizeWorkspace,
-      })
-      return composePostgresqlTaskExecutionProviderRuntime(db, {
-        ...input,
-        driverLifecycle,
-        runtime: {
-          ...input.runtime,
-          persistence,
-          executionModule,
-          processConcurrencyScope: runtime,
-          daemonGeneration: DAEMON_GENERATION,
-          finalizeWorkspace: input.finalizeWorkspace,
-          log,
-        },
-        workgroupTaskRoom: input.workgroupTaskRoom,
-      })
-    },
+    execution: (persistence) =>
+      composeSessionTaskExecutionBinding({ daemonGeneration: DAEMON_GENERATION, persistence }),
+    processConcurrencyScope: runtime,
   }),
 } satisfies {
   readonly [P in DatabaseProvider]: (input: TaskAdapterInput[P]) => DaemonTaskExecutionAdapters<P>

@@ -849,17 +849,12 @@ test('standalone HTTP chooses raw content only for absent operations and forward
 // RFC-382: the selected prompt receiver must survive the newly shared bundle boundary.
 test('the bundle forwards selected prompts to both unchanged provider route factories', () => {
   const sf = source('cli/daemonModules/taskExecution.ts')
-  const selected = onlyCall(sf, sf, 'input.adapters.compose')
+  const selected = onlyCall(sf, sf, 'composeTaskExecutionProviderRuntime')
   const routes = properties(selected.arguments[0]!, sf).get('routes')!
   expect(compact(properties(factoryResult(routes), sf).get('nodeRunPrompts')!, sf)).toBe(
     'selection.nodeRunPrompts',
   )
-  const adapters = source('cli/daemonModules/adapters.ts')
-  for (const name of [
-    'composeSqliteTaskExecutionProviderRuntime',
-    'composePostgresqlTaskExecutionProviderRuntime',
-  ]) {
-    const call = onlyCall(adapters, adapters, name)
-    expect(compact(call.arguments[1]!, adapters)).toContain('...input,')
-  }
+  const runtime = source('modules/task-execution/composition/providerRuntime.ts')
+  const route = onlyCall(runtime, runtime, 'createTaskRouteOperations')
+  expect(compact(route.arguments[0]!, runtime)).toContain('...routeDependencies,')
 })

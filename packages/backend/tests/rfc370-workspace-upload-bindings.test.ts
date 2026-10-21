@@ -417,13 +417,10 @@ test('real roots, provider reassembly, SQLite arms and PG preselection preserve 
     'workspaceUploads: selection.workspaceUploads,',
   )
   const providers = source('modules/task-execution/composition/providerRuntime.ts')
-  expect(providers).toContain(
-    'createSqliteTaskExecutionLaunchParticipant({ db, ...dependencies.routeLaunch })',
-  )
+  expect(providers).toContain('createTaskExecutionLaunchParticipant(routeLaunchDependencies)')
   expect(providers).toContain('workspace: routeWorkspace,\n    ...dependencies.routeLaunch,')
   expect(providers).toContain('createRootTaskLaunchKernel(routeLaunchDependencies)')
-  const sqlite = source('modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts')
-  expect(sqlite.match(/\.\.\.input,/g)).toHaveLength(2)
+  expect(providers).toContain('createTaskRouteLaunchOperations(routeLaunchDependencies)')
   expect(
     values(
       source('modules/task-execution/infrastructure/taskRouteLaunchOperations.ts'),

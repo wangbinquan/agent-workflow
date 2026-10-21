@@ -12,17 +12,9 @@ export { planMembersReplacement } from './infrastructure/taskCollab'
  * selections, passed through the daemon roots unopened. */
 export type { ReviewArtifactSelection } from './application/ports/reviewArtifactSelection'
 export type { WorkspaceRollbackSnapshotInspector } from './application/prepareWorkspaceRollbackPlan'
-// RFC-359 W7：RFC-057 修复的两个协作侧端口也各只剩一份实现；provider 具名导出只做绑定。
-export {
-  createClarifyRepairParticipant,
-  createClarifyRepairParticipant as createSqliteClarifyRepairParticipant,
-  createClarifyRepairParticipant as createPostgresqlClarifyRepairParticipant,
-} from './infrastructure/clarifyRepairParticipant'
-export {
-  createReviewRepairParticipant,
-  createReviewRepairParticipant as createSqliteReviewRepairParticipant,
-  createReviewRepairParticipant as createPostgresqlReviewRepairParticipant,
-} from './infrastructure/reviewRepairParticipant'
+// RFC-388：修复参与者只有中立工厂，两个部署共用。
+export { createClarifyRepairParticipant } from './infrastructure/clarifyRepairParticipant'
+export { createReviewRepairParticipant } from './infrastructure/reviewRepairParticipant'
 // RFC-359 W7：运行期机制合一后只剩一个工厂（`infrastructure/collaborationRuntimeMechanics.ts`）。
 export { createCollaborationRuntimeMechanics } from './infrastructure/collaborationRuntimeMechanics'
 // RFC-359 W9：已提交事件的 WS 投影合一后只剩一个工厂

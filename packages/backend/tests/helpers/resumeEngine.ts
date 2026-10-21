@@ -22,7 +22,7 @@ import {
   createTaskExecutionPersistence,
 } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
-import { composeLegacyTaskActivityParticipant } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
+import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
 import { getTask } from '@/services/task'
@@ -40,7 +40,7 @@ export interface ResumeEngineOptions {
   /** 退役那份的 `awaitScheduler: true` 就是这一格。 */
   readonly awaitScheduler?: boolean
   /**
-   * 进程内活跃度。**缺省就是生产那一份**（`composeLegacyTaskActivityParticipant`）——
+   * 进程内活跃度。**缺省就是生产那一份**（`taskExecutionModule.runtimeRegistry`）——
    * 退役那份读的也是它，所以「调度器挂起期间 resume → 409」这类判据不必额外接线就仍成立。
    */
   readonly isActive?: (taskId: string) => boolean
@@ -71,7 +71,11 @@ export function createResumeEngine(
           log,
           activity:
             options.isActive === undefined
-              ? composeLegacyTaskActivityParticipant()
+              ? {
+                  isActive: (taskId: string) => taskExecutionModule.runtimeRegistry.hasTask(taskId),
+                  awaitReleasedSettled: (taskId: string) =>
+                    taskExecutionModule.runtimeRegistry.awaitReleasedSettled(taskId),
+                }
               : { isActive: options.isActive, awaitReleasedSettled: async () => {} },
           coordinatorFactory: testDriveFactory(
             db,

@@ -56,7 +56,7 @@ describe('仓库准备重试 / boot 恢复必须带上 secretBox', () => {
     expect(src).toContain('secretBox,')
     expect(bundle).toMatch(/composeRepositoryPreparation\(\{[\s\S]*?secretBox,/)
     expect(bundle).toMatch(/composeDeferredRepositoryPreparation\(\{[\s\S]*?secretBox,/)
-    expect(runtime.match(/createRepositoryPreparationRetryCommand\(\{/g)).toHaveLength(2)
+    expect(runtime.match(/createRepositoryPreparationRetryCommand\(\{/g)).toHaveLength(1)
     expect(runtime).toContain('coordinator: dependencies.coordinatorFactory.session')
     expect(runtime).toContain('repositoryPreparation: repositoryPreparationRetry')
     expect(autoResume).toContain('input.repositoryPreparation.retry(taskId)')

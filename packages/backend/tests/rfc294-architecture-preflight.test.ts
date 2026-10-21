@@ -362,8 +362,6 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts -> packages/backend/src/modules/source-control/composition/agentWorkspaceGitControl.ts',
   'packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts -> packages/backend/src/modules/source-control/composition/taskAgentWorkspaceContents.ts',
   'packages/backend/src/modules/task-execution/composition/providerRuntime.ts -> packages/backend/src/modules/collaboration/composition.ts',
-  'packages/backend/src/modules/task-execution/composition/providerRuntime.ts -> packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts',
-  'packages/backend/src/modules/task-execution/composition/providerRuntime.ts -> packages/backend/src/modules/memory/composition.ts',
   'packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts -> packages/backend/src/modules/source-control/composition.ts',
   'packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts -> packages/backend/src/modules/source-control/composition/workspacePresence.ts',
   'packages/backend/src/modules/task-execution/composition/triggerExecution.ts -> packages/backend/src/modules/integration/application/ports/webhookExecution.ts',

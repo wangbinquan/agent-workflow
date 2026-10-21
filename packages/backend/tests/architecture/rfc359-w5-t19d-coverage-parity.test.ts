@@ -130,14 +130,14 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 记账教训：这条棘轮要在**所有编辑做完之后**再跑一次——批次二 ⑤ 那一提就是中途跑绿、
   // 之后又改了注释，把 11 推上了 main（见 `docs/dev-gotchas.md` 对应条目）。
   // RFC-359 AC-1（第 9 刀）：`12/3 → 13/4`。`retry` 两份实现合一之后，共用的测试装配点
-  // `tests/helpers/retryEngine.ts` 按**生产同形**取进程活跃度——`composeLegacyTaskActivityParticipant`
-  // 就住在 `taskExecutionRuntimeParticipants.ts` 里，`server.ts` 绑的也是同一个。
+  // `tests/helpers/retryEngine.ts` 按**生产同形**取进程活跃度——`taskExecutionModule.runtimeRegistry`
+  // 是 RFC-388 合并后的直接取用点；历史活动包装已经删除。
   // **这一格是记账不是倾斜**：涨的是一份两个引擎共用的 helper（它自己被四份
   // `describeEachProvider` 的双引擎套件消费），不是只喂 SQLite 的新判据；
   // 参与者这一侧的命名/落位债按 plan §5hj 单独一刀还。
   // RFC-359 AC-1（第 10 刀）：`13/4 → 14/5`。`resume` 合一之后共用的测试装配点
-  // `tests/helpers/resumeEngine.ts` 也按**生产同形**取进程活跃度（`composeLegacyTaskActivityParticipant`
-  // 就住在 `taskExecutionRuntimeParticipants.ts` 里，两个组合根绑的都是它）。
+  // `tests/helpers/resumeEngine.ts` 也按**生产同形**取进程活跃度（`taskExecutionModule.runtimeRegistry`
+  // 取自执行模块，历史活动包装已经删除）。
   // **这一格仍是记账不是倾斜**：涨的是一份被 20 个行为套件共用的 helper，不是只喂 SQLite 的新判据。
   // RFC-359 AC-1（第 12 刀）**销账**：这一对已合一成一份中立实现，配对本身不存在了。
   // RFC-359 AC-1（plan §5hh）：`postgresql 5/1 → 6/2`。新增的那次**驱动**是
@@ -181,7 +181,7 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：`3/1 → 5/3`，**倒挂收敛了两格**（差 8 → 6）。
   // 这次是真的覆盖变好，不是记账：`rfc165-scheduled-kinds` 与 `rfc287-t13-deferred-prep`
   // 的定时夹具从 `services/scheduleLaunch.ts`（已删）改成生产同一份编排，于是它们**值 import**
-  // 了 `createSqliteTaskExecutionLaunchParticipant`——drive 那一列 1 → 3 就是这个意思。
+  // 了 `createTaskExecutionLaunchParticipant`——drive 那一列 1 → 3 就是这个意思。
   // RFC-359 AC-1（plan §5hn 批次二 ④）：`11/2 → 12/2`，**这一格是记账不是判据**——
   // 涨的那一条引用来自 `rfc345-resource-acl-facade-retirement.test.ts` 的兼容债账本：
   // 启动输入契约补进 PG 那份参与者时，该文件成了 `services/workflowLaunchInputs.ts` 的
@@ -541,7 +541,7 @@ describe('RFC-359 W5-T19d —— 成对适配器的覆盖对等（高水位，�
       scan().providerNamed,
       '全树一个 provider 命名的实现文件都没扫到——前缀匹配器已经不咬人了。' +
         '账本清空后这条守卫会变成永久假绿，先修匹配器再说。',
-    ).toBeGreaterThanOrEqual(39) // RFC-387 retires two provider-named files; the remaining measured corpus is 39.
+    ).toBeGreaterThanOrEqual(38) // RFC-388 retires the SQLite route-launch wrapper; the remaining measured corpus is 38.
   }, 30_000)
 
   test('客户端机制对仍被识别（配对判据失效不能让账本静默变空）', () => {

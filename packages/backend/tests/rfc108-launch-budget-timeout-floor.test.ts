@@ -84,7 +84,7 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
       /fusion: createFusionEngineTaskOperations\(\{([\s\S]*?)\}\)/g,
     ))
       expect(fusion[1]).toContain('coordinator: dependencies.coordinatorFactory.session')
-    expect(providers.match(/fusion: createFusionEngineTaskOperations\(/g)).toHaveLength(2)
+    expect(providers.match(/fusion: createFusionEngineTaskOperations\(/g)).toHaveLength(1)
   })
 
   test('fusion delegates runtime configuration to the factory engine envelope', () => {

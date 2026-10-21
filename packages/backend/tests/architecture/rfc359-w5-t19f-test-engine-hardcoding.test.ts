@@ -272,7 +272,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc220-oauth2-provider-schema-service.test.ts: 1',
   'rfc220-presented-name-sync.test.ts: 3',
   'rfc221-auth-policy.test.ts: 10',
-  'rfc222-task-delete.test.ts: 1',
   'rfc223-pr2-refs.test.ts: 2',
   'rfc223-pr3b-dynamic-token.test.ts: 2',
   'rfc223-pr5-boot-restore-wiring.test.ts: 3',
@@ -579,8 +578,8 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
      *（它们 import 它就是为了取 `cancelTask`）。其中三份摘掉之后**确实**不再依赖那台引擎，
      * 已随本刀迁到 `describeEachProvider`；`rfc268-webhook-scratch-launch` 不然——
      * 它照生产装配跑的是 `composeTaskExecutionTestRuntime` +
-     * `createSqliteTaskExecutionLaunchParticipant`（经 `createSqliteWebhookTaskExecutionParticipant`），
-     * 那是 SQLite 的**启动参与者**，换 PG 要等启动面的 cutover。
+     * `createTaskExecutionLaunchParticipant`（经 `createSqliteWebhookTaskExecutionParticipant`），
+     * RFC-388 已中立化启动参与者；此处仍驱动 SQLite 测试拓扑，所以单引擎理由不变。
      *
      * 补的两条都是「名字里就写着 SQLite 执行面」的直接证据，不是为某个文件量身定做：
      * `composeTaskExecutionTestRuntime` 与已认的 `createTaskExecutionTestTopology`

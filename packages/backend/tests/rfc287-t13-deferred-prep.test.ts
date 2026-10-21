@@ -1,3 +1,4 @@
+import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-287 T13（G7 核心）—— 仓库准备推迟到任务行落库之后。
 //
@@ -985,8 +986,8 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     // RFC-359 AC-1（plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除
     // ——它是 `startExecution` 三分支 switch 的第三份写法。定时启动改走与路由同一份编排，
     // 本条的判据面（「失败也留任务行 + `__repo_prep__` 失败行」）一字未动。
-    const { createSqliteTaskExecutionLaunchParticipant } =
-      await import('@/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations')
+    const { createTaskExecutionLaunchParticipant } =
+      await import('@/modules/task-execution/composition/taskRouteLaunch')
     const { createBuildScheduleLaunch, createTaskExecutionTriggerParticipant } =
       await import('@/modules/task-execution/composition/triggerExecution')
     const { composeWorkgroupLaunchResourceOperations } =
@@ -1049,7 +1050,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     }).schedulerDriver
     const scheduleLaunch = createBuildScheduleLaunch(
       createTaskExecutionTriggerParticipant({
-        launches: createSqliteTaskExecutionLaunchParticipant({
+        launches: createTaskExecutionLaunchParticipant({
           db: db2,
           configPath: cfgPath,
           gitCommitIdentity: identityAccess2.getUserGitCommitIdentity,
@@ -1061,14 +1062,12 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
             db: db2,
             integrity: agentIntegrity.launch,
           }),
-          routeWorkspace: {
+          workspace: createTaskRouteWorkspaceParticipant({
+            db: db2,
             sourceContexts: identityAccess2.taskPreparationContext,
             repositoryPreparation: composeRepositoryPreparation({ db: db2, appHome: home }),
             appHome: home,
-          },
-          resourceAuthorityFor: () => {
-            throw new Error('scheduled launch uses the delegated resources from fireSchedule')
-          },
+          }),
           coordinator: createTestTaskDriveCoordinator({
             deps: { db: db2, schedulerDriver: schedulerDriver2, configPath: cfgPath },
             appHome: home,

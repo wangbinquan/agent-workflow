@@ -51,9 +51,9 @@ import type {
 } from '@/modules/collaboration/public/types'
 import { composeMemoryOperationsFor } from '@/modules/memory/composition'
 import type {
-  composeSqliteTaskExecutionProviderRuntime,
-  SelectedSqliteTaskExecutionProviderRuntime,
-  SqliteTaskExecutionProviderRuntimeDependencies,
+  composeTaskExecutionProviderRuntime,
+  SelectedTaskExecutionProviderRuntime,
+  TaskExecutionProviderRuntimeDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
 import type { TaskRouteOperationsDependencies } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
@@ -89,10 +89,10 @@ type SqliteRouteContext = Parameters<typeof composeCollaborationRouteOperations>
 type PostgresqlRouteContext = Parameters<typeof composeCollaborationRouteOperations>[0]['context']
 type AppRouteContext = AppDeps['collaborationContext']
 type ProviderRouteContext = ReturnType<
-  SqliteTaskExecutionProviderRuntimeDependencies<CollaborationRouteContext>['routes']
+  TaskExecutionProviderRuntimeDependencies<CollaborationRouteContext>['routes']
 >['collaboration']
 type SelectedRouteContext =
-  SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext>['collaboration']
+  SelectedTaskExecutionProviderRuntime<CollaborationRouteContext>['collaboration']
 
 // Checked by backend tsc, never invoked: no fabricated result or driver is needed
 // to prove that the production factories and their consumers reject missing ports.
@@ -338,11 +338,11 @@ void constructionTypeContracts
 // The provider uses only the read-model capability and returns the exact context
 // supplied by its caller. Complete roots keep their stronger explicit contract.
 function providerRuntimeTypeContracts(
-  composeProvider: typeof composeSqliteTaskExecutionProviderRuntime,
-  db: Parameters<typeof composeSqliteTaskExecutionProviderRuntime>[0],
-  dependencies: Omit<SqliteTaskExecutionProviderRuntimeDependencies, 'routes'>,
+  composeProvider: typeof composeTaskExecutionProviderRuntime,
+  db: TaskExecutionProviderRuntimeDependencies['db'],
+  dependencies: Omit<TaskExecutionProviderRuntimeDependencies, 'routes'>,
   routeDependencies: Omit<
-    ReturnType<SqliteTaskExecutionProviderRuntimeDependencies['routes']>,
+    ReturnType<TaskExecutionProviderRuntimeDependencies['routes']>,
     'collaboration'
   >,
   full: CollaborationRouteContext,
@@ -350,8 +350,9 @@ function providerRuntimeTypeContracts(
   optional: CollaborationRouteContext | undefined,
   condition: boolean,
 ) {
-  const fullRuntime = composeProvider(db, {
+  const fullRuntime = composeProvider({
     ...dependencies,
+    db,
     routes: () => ({ ...routeDependencies, collaboration: full }),
   })
   const completeConsumers: [
@@ -368,23 +369,25 @@ function providerRuntimeTypeContracts(
     fullRuntime.collaboration,
   ]
 
-  const readRuntime = composeProvider(db, {
+  const readRuntime = composeProvider({
     ...dependencies,
+    db,
     routes: () => ({ ...routeDependencies, collaboration: reads }),
   })
   const readConsumer: ReadModelsContext = readRuntime.collaboration
   // @ts-expect-error A read-only provider context cannot satisfy a complete route.
   const readFull: CollaborationRouteContext = readRuntime.collaboration
 
-  const unionRuntime = composeProvider(db, {
+  const unionRuntime = composeProvider({
     ...dependencies,
+    db,
     routes: () => ({ ...routeDependencies, collaboration: condition ? full : reads }),
   })
   const unionReadConsumer: ReadModelsContext = unionRuntime.collaboration
   // @ts-expect-error Both branches must supply every capability required by a complete route.
   const unionFull: CollaborationRouteContext = unionRuntime.collaboration
 
-  const optionalRoutes: ReturnType<SqliteTaskExecutionProviderRuntimeDependencies['routes']> = {
+  const optionalRoutes: ReturnType<TaskExecutionProviderRuntimeDependencies['routes']> = {
     ...routeDependencies,
     // @ts-expect-error An optional context does not guarantee the provider's required read models.
     collaboration: optional,
@@ -392,8 +395,9 @@ function providerRuntimeTypeContracts(
   const optionalPropertyRoutes: Omit<typeof optionalRoutes, 'collaboration'> & {
     collaboration?: CollaborationRouteContext
   } = { ...routeDependencies }
-  composeProvider(db, {
+  composeProvider({
     ...dependencies,
+    db,
     // @ts-expect-error An optional context property cannot become a required provider capability.
     routes: () => optionalPropertyRoutes,
   })

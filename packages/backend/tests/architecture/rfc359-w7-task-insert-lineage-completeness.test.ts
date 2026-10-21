@@ -85,7 +85,7 @@ const TASK_INSERT_SITES: readonly string[] = [
   // （长驻协调器不能把 17 个旋钮冻在 boot，见 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`），
   // 解析体加注释与一个局部变量，本文件变长；站点与它写的三列一格未动。
   // RFC-370 v2 P1: 2537 → 2504 with the Task host binding removed; the site and its three columns remain.
-  'services/task.ts:2457 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'services/task.ts:2426 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {

@@ -44,7 +44,6 @@ const pg = source('cli/postgresqlDaemonApplication.ts')
 const server = source('server.ts')
 const provider = source('modules/task-execution/composition/providerRuntime.ts')
 const bundle = source('cli/daemonModules/taskExecution.ts')
-const adapters = source('cli/daemonModules/adapters.ts')
 
 test('daemon selected archive binding survives provider creation and re-composition', () => {
   const root = declaration(start, 'startCommand')
@@ -65,9 +64,9 @@ test('daemon selected archive binding survives provider creation and re-composit
   expect(runtime).toHaveLength(1)
   expect(compact(runtime[0]!.arguments[0]!, start)).toContain('archive:input.taskArchive,')
   expect(compact(bundle, bundle)).toContain('archive:selection.archive,')
-  const selected = calls(adapters, adapters, 'composeSqliteTaskExecutionProviderRuntime')
+  const selected = calls(bundle, bundle, 'composeTaskExecutionProviderRuntime')
   expect(selected).toHaveLength(1)
-  expect(compact(selected[0]!.arguments[1]!, adapters)).toContain('...input,')
+  expect(compact(selected[0]!.arguments[0]!, bundle)).toContain('archive:selection.archive,')
   const http = calls(sqlite, start, 'composeSqliteAppDeps')
   expect(http).toHaveLength(1)
   expect(compact(http[0]!.arguments[0]!, start)).toContain(
@@ -77,10 +76,7 @@ test('daemon selected archive binding survives provider creation and re-composit
 })
 
 test('both provider aggregates use the selected binding with their original database client', () => {
-  for (const name of [
-    'composeSqliteTaskExecutionProviderRuntime',
-    'composePostgresqlTaskExecutionProviderRuntime',
-  ]) {
+  for (const name of ['composeTaskExecutionProviderRuntime']) {
     const root = declaration(provider, name)
     const archive = calls(root, provider, 'createDrizzleTaskArchiveMaintenanceCommand')
     expect(archive).toHaveLength(1)
@@ -101,9 +97,9 @@ test('PostgreSQL boot and HTTP retain the same selected command', () => {
   expect(runtime).toHaveLength(1)
   expect(compact(runtime[0]!.arguments[0]!, pg)).toContain('archive:input.taskArchive,')
   expect(compact(bundle, bundle)).toContain('archive:selection.archive,')
-  const selected = calls(adapters, adapters, 'composePostgresqlTaskExecutionProviderRuntime')
+  const selected = calls(bundle, bundle, 'composeTaskExecutionProviderRuntime')
   expect(selected).toHaveLength(1)
-  expect(compact(selected[0]!.arguments[1]!, adapters)).toContain('...input,')
+  expect(compact(selected[0]!.arguments[0]!, bundle)).toContain('archive:selection.archive,')
   const mounts = descendants(
     root,
     (item) => ts.isVariableDeclaration(item) && item.name.getText(pg) === 'taskExecutionRoutes',

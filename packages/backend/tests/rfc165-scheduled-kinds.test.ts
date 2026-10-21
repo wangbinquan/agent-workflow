@@ -1,3 +1,4 @@
+import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // LOCKS: RFC-165 §9b (D11) — scheduled-task three-subject support
 // (design §11.16/.17/.19).
@@ -33,7 +34,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, scheduledTasks, tasks, users } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
-import { createSqliteTaskExecutionLaunchParticipant } from '../src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations'
+import { createTaskExecutionLaunchParticipant } from '../src/modules/task-execution/composition/taskRouteLaunch'
 import {
   createBuildScheduleLaunch,
   createTaskExecutionTriggerParticipant,
@@ -86,7 +87,7 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
   })
   const identityAccess = createIdentityAccessRuntime({ db })
   const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
-  const launches = createSqliteTaskExecutionLaunchParticipant({
+  const launches = createTaskExecutionLaunchParticipant({
     db,
     configPath,
     gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
@@ -95,15 +96,12 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
       integrity: integrity.launch,
     }),
     workgroup: composeWorkgroupLaunchResourceOperations({ db, integrity: integrity.launch }),
-    routeWorkspace: {
+    workspace: createTaskRouteWorkspaceParticipant({
+      db: db,
       sourceContexts: identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({ db: db, appHome: appHome }),
       appHome,
-    },
-    // 路由面才读它；定时这条路交的是 `fireSchedule` 带来的委派 `resources`。
-    resourceAuthorityFor: () => {
-      throw new Error('scheduled launch must use the delegated resources from fireSchedule')
-    },
+    }),
     coordinator: createTestTaskDriveCoordinator({
       deps: { db, schedulerDriver, configPath },
       appHome,

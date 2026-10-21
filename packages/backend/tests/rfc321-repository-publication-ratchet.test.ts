@@ -349,12 +349,12 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       providerRuntime.match(
         /createTaskExecutionRuntimeParticipants\(\s*bindProviderTaskRunParticipantsInput\(/g,
       )?.length,
-      '两个组合根都必须调那**同一个**中立工厂：发布 transport 由装配方交，不许任一侧自己重建',
-    ).toBe(2)
+      '唯一组合根必须调用中立参与者工厂：发布 transport 由装配方交，不许自己重建',
+    ).toBe(1)
     expect(
       providerRuntime.match(/composeTaskExecutionRuntime\(\{\s*participants,\s*readModels:/g)
         ?.length,
-    ).toBe(2)
+    ).toBe(1)
     expect(participants).toContain(
       'readonly repositoryPublicationTransport: RepositoryPublicationTransport',
     )
