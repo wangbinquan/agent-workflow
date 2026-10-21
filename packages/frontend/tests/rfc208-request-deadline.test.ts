@@ -135,8 +135,8 @@ describe('RFC-208 · deadline budgets', () => {
         '..',
         'backend',
         'src',
-        'cli',
-        'start.ts',
+        'bootstrap',
+        'daemonStart.ts',
       ),
       'utf8',
     )
