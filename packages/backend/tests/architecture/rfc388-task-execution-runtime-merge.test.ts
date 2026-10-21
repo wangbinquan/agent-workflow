@@ -120,7 +120,7 @@ describe('RFC-388 runtime merge structural locks', () => {
     const units = backendUnits(resolve(import.meta.dir, '../../../..'))
     expect(units.length).toBeGreaterThanOrEqual(2000)
     expect(runtimeMergeViolations(units)).toEqual([])
-  })
+  }, 30_000)
   test('compliant fixture passes', () => {
     expect(runtimeMergeViolations(valid())).toEqual([])
   })

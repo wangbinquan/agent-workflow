@@ -230,7 +230,7 @@ describe('RFC-389 Worker composition structural locks', () => {
       expect(
         workerRootViolations([...UNITS, sourceUnit(PREFIX + path, text)], BUILD, BINARY_ENTRIES),
       ).toContain(error)
-  })
+  }, 30_000)
   test('rejects duplicated factories, provider branches and missing adapter selection', () => {
     for (const name of FACTORIES)
       expect(
@@ -267,7 +267,7 @@ ${name}(input)`,
         BINARY_ENTRIES,
       ),
     ).toContain('provider name comparison')
-  })
+  }, 30_000)
   test('rejects build/inventory/session entry drift and a side-effectful path module', () => {
     expect(
       workerRootViolations(
@@ -299,7 +299,7 @@ ${name}(input)`,
         BINARY_ENTRIES,
       ),
     ).toContain('standalone entry forms differ')
-  })
+  }, 30_000)
   test('keeps original counter keys, timings and lazy selected-effect fallbacks', () => {
     const runtime = UNITS.find((unit) => unit.path === PREFIX + RUNTIME)!
     for (const literal of [

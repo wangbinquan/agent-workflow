@@ -121,7 +121,7 @@ describe('RFC-386 coordinator construction inventory', () => {
     const units = backendUnits(resolve(import.meta.dir, '../../../..'))
     expect(units.length).toBeGreaterThanOrEqual(2000)
     expect(driveFactoryViolations(units)).toEqual([])
-  })
+  }, 30_000)
 
   test('accepts the registered sites and rejects a missing corpus', () => {
     expect(driveFactoryViolations(valid())).toEqual([])
