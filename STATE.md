@@ -4,6 +4,8 @@
 
 **S2b 完成**（RFC-380～392）。下一步 S2c（部署 profile：类型化 profile 取代 `StartOptions`、入口根瘦身、`cli/` ↔ `bootstrap/` 互依），待研究立项。
 
+**S2c 进行中**：[RFC-393](design/RFC-393-cli-bootstrap-separation/proposal.md)（`cli/` 与 `bootstrap/` 分离：26 个装配机制与入口文件迁入 `bootstrap/`，`cli/` 只剩子命令处理器，目录级双向零边硬门；In Progress，Codex 实施中；会大改 `bootstrap/**`、`cli/**`、`server.ts`、`main.ts`、`T/architecture/*` 与约 130 个测试的路径）→ 类型化部署 profile → 执行权端口去部署字面量 → 入口根瘦身（见 RFC-393 proposal §7）。四路只读研究：`StartOptions` 实测 77 槽（RFC-294 记 55 已过时），`bootstrap → cli` 36 条边、`cli → bootstrap` 1 条。
+
 ## 2026-10-21 RFC-294 后继 S2b：RFC-391 Done；S2b 只剩 RFC-392
 
 **RFC-391 Done**：`b1799e6bc`（Codex 实施、本会话审核）。`cli/start.ts` 的两个会话函数与 `cli/postgresqlDaemonApplication.ts` 合为 `packages/backend/src/bootstrap/` 下的被动应用图 `daemonApplication.ts`（`composeDaemonApplication(input, phase)`，含 unstarted 测试相位）、守护进程会话图 `daemonSession.ts`（全仓唯一一次 `composeDaemonLifecycle`）与 provider 适配表 `daemonSessionAdapters.ts`；`main.ts` 把会话组合函数注入 `startCommand(opts, composeSession)`，`cli/start.ts` / `cli/dev.ts` 不导入 `bootstrap/`。唯一行为变化：PostgreSQL 维护 Worker 的保护集补上正在物化的任务。CI：主 CI `39635428624` 除 macOS 外全绿（Linux e2e 3/3、Windows e2e 4/4、windows-platform、maintenance-soak、git-protocols-e2e、integration-opencode 均 success）；macOS 构建作业没分到 runner（0 个步骤）而在 15 分钟上限被取消、macOS e2e 连带失败，macOS 证据以后继提交的 CI 为准。**对其他会话的影响**：守护进程装配只能改 `bootstrap/daemon*.ts` 一份，provider 差异只进适配表（`rfc391-neutral-daemon-graph` 结构锁）；直接调 `startCommand` 的代码要传会话组合函数；本地 PostgreSQL 并发补跑请每组用独立的库（固定 schema 的集成用例会互删）。
