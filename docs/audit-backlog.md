@@ -5458,3 +5458,6 @@ shard 5/12 红（run `35814805097`，提交 `356bb594d` 只挪了一个与工作
 
 **没有动手**：未重跑，也未改用例超时或 soak 门槛。文件型 SQLite 用例在 Windows runner 上只有约 4 倍余量，慢 runner 上会复现；
 后继证据以两个 workflow 的夜间定时运行为准。
+
+**后继证据**：包含 `64dd81e8d` 的后继提交 `a1a37759e`（RFC-393）上，windows-platform `39681863726` 与 maintenance-soak
+`39681863659` 均 success，同一条 Windows 用例这次没有超时。余量偏薄这一点仍然成立。

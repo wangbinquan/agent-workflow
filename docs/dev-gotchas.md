@@ -8804,3 +8804,14 @@ provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行�
 `main.ts` 将 `composeDaemonSession` 注入 `startCommand`；启动序列与开发热重载位于 `bootstrap/daemonStart.ts` / `bootstrap/developmentReload.ts`；`cli/` 与 `bootstrap/` 两个方向均不得互相导入，`server.ts` 也不得导入这两个目录（RFC-393 目录级硬门）。应用图只构造被动模块，`unstarted` 相位仅做有限初始化；会话图拥有唯一 `composeDaemonLifecycle` 调用。冷恢复经适配表的 `afterCore` 在核心组之后、资源目录之前执行。受限启动步骤只读 `DAEMON_BOOT_STEPS`，不得在图里另写 provider 分支。恢复证明保留 SQLite 的进程世代与 PostgreSQL 的数据库世代，执行 owner 仍统一使用 `DAEMON_GENERATION`。
 
 维护 Worker 的任务保护集取会话驱动注册表与 `materializingSpaces.keys()` 的并集。新增源代码锁应读取真实图文件；跨层接线锁可用 `tests/helpers/daemonGraphSource.ts`，它每个文件只读取一次。不要恢复两个 provider 副本的计数或按旧 `backgroundJobs[1]` 找 SQLite。RFC-392 已将 `composeProviderAppComposition` 迁到 `bootstrap/daemonHttpComposition.ts`；它只类型依赖挂载表，`server.ts` 不导入 bootstrap。开发用途类型留在 development-automation composition，CLI 不新增 bootstrap 边。`readDaemonGraphSource()` 不包含 HTTP owner 文件，需要该源码的锁单独读取。测试绑定由 `tests/helpers/providerHttpApplication.ts` 补齐临时路径、配置、日志和写窗口，生产会话不传 `testSeams`；入口根瘦身与机制目录迁移留给 S2c。
+
+## 迁移或改名源文件：检索要覆盖全仓的路径片段与 Markdown 链接（2026-10-21，RFC-393 实撞）
+
+RFC-393 把 26 个文件从 `cli/` 迁入 `bootstrap/` 时，检索范围只有后端、脚本、e2e、workflow 与清单，漏了两类引用，推送后主 CI 才红：
+
+- `packages/frontend/tests/rfc208-request-deadline.test.ts` 用 `resolve(…, 'backend', 'src', 'cli', 'start.ts')` 这样的**路径片段**读后端源码，
+  按 `cli/start.ts` 整串搜索搜不到；
+- `design/` 下 Markdown 的**相对链接**（`](../../packages/backend/src/cli/…)`）由 CI 的 Markdown link check 逐条校验，文件一迁就红。
+
+**做法**：迁移前在全仓（含 `packages/frontend`、`packages/shared`、`design/`、`docs/`）搜文件名本身（如 `'start.ts'`、
+`daemonProviderBootstrap`），不要只搜带目录的整串。带日期的历史记录保持原路径，只改当前规则、现状描述与仍需可点的链接。

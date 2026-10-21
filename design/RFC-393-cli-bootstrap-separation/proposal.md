@@ -1,6 +1,7 @@
 # RFC-393 `cli/` 与 `bootstrap/` 分离：守护进程装配机制迁入 `bootstrap/`（RFC-294 S2c 第一步）
 
-- **状态**：In Progress（2026-10-21 落档并派发 Codex 实施、本会话审核。用户 2026-10-20「按你推荐继续推进」：
+- **状态**：Done（2026-10-21：`a1a37759e` + `d31298011`；`a1a37759e` 的 windows-platform `39681863726`、maintenance-soak `39681863659`、
+  三平台 e2e 均绿，主 CI `39681863635` 红在三处漏改的旧路径，`d31298011` 补改后后继 CI `39684782788` 全绿）。2026-10-21 落档并派发 Codex 实施、本会话审核。用户 2026-10-20「按你推荐继续推进」：
   由本会话设计、交 Codex 实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2c「消除 `cli/` ↔ `bootstrap/` 互相依赖」）；
   design §2「`bootstrap/` 承载唯一模块工厂图、provider 与部署 profile 选择、生命周期程序、各薄入口根」、§9.3「`cli/` 与 `bootstrap/`

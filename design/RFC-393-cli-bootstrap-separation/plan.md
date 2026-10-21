@@ -26,5 +26,6 @@
 
 ## 验收清单
 
-- [ ] proposal AC-1～AC-4
-- [ ] 推送后 exact SHA 的 CI 全绿（含 PostgreSQL 分片、windows-platform、maintenance-soak、三平台 e2e）
+- [x] proposal AC-1～AC-4（`a1a37759e`；本地 SQLite 全量、PostgreSQL 106 个文件、双 lane 64 个文件全绿）
+- [x] 推送后 CI：`a1a37759e` 的 windows-platform、maintenance-soak、三平台 e2e 均绿；主 CI `39681863635` 红在迁移漏改的三处旧路径
+  （RFC-294 评审文档的 Markdown 链接、前端 `rfc208-request-deadline` 按路径片段读后端源码），`d31298011` 补改后后继 CI `39684782788` 全绿
