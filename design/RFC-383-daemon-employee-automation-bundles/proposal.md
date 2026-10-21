@@ -1,7 +1,8 @@
 # RFC-383 守护进程模块组第四批：数字员工与开发自动化（RFC-294 S2b）
 
-- **状态**：In Progress（2026-10-20 落档并派发。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex 实施并审核，免设计门与
-  实现门；规则取舍由本会话按推荐决定，见 §6。RFC-382 提交（`fddf8bf74`）且主 CI 全绿后派发）
+- **状态**：Done（2026-10-21：`e9fcfc58a`，主 CI `39526517282` success。用户 2026-10-20「按你推荐继续推进」：由本会话设计、交 Codex
+  实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6。§1 的 PostgreSQL 缺陷均由「旧接线」对照用例在真实 PostgreSQL
+  上确认：迁移状态陈旧、MR 重开生出后继遗留任务、崩溃后不恢复遗留任务、缺类型包漂移策略）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2b）、design §10.2；前置
   [RFC-380](../RFC-380-daemon-module-bundles/proposal.md)、[RFC-381](../RFC-381-daemon-integration-bundles/proposal.md)、
   [RFC-382](../RFC-382-daemon-task-execution-bundle/proposal.md)

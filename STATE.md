@@ -1,3 +1,11 @@
+## 2026-10-21 RFC-294 后继 S2b：RFC-383 Done，RFC-384 In Progress
+
+**RFC-383 Done**：`e9fcfc58a`（Codex 实施、本会话审核），主 CI `39526517282` success。数字员工与开发自动化由 `packages/backend/src/cli/daemonModules/{digitalEmployee,developmentAutomation}.ts` 每会话构造一次，SQLite 统一为一个数字员工实例（推翻 RFC-359 W12 的两实例决定）。行为变化：SQLite 的数字员工 HTTP 使用启动时初始化的实例（不再首个请求时重复初始化、不再缓存初始化失败）；PostgreSQL 迁移状态随周期刷新、切换完成后 MR 重开不再生出遗留任务、崩溃后恢复遗留任务、启动记录写者状态、开发用类型包覆盖可用（均由「旧接线」对照用例在真实 PostgreSQL 上确认）；守护身份每次调用准入（删除 P 的 `let systemActor`，PostgreSQL 保留启动检查）；宿主任务环境由任务执行组输出 `hostTasks`。**对其他会话的影响**：入口根不得直接调用 `composeDigitalEmployee(` / `composeDevelopmentAutomation(` / `composeReactionExecutionProvider(` 等（结构锁）；`composeDigitalEmployeeRoutePersistence` 已迁到 `cli/daemonModules/digitalEmployee.ts`；`composeFallbackDevelopmentAutomation` 已删除；守护身份用 `providerCore.daemonActor()`。
+
+**偶发 CI（未认领，留证据）**：文档提交 `64a15d085` 的主 CI `39516837960` 红在两条既有偶发——`rfc359-w8-t28-lost-update` 的 L6 PostgreSQL 变体（两个并发删除的认领事务在 SERIALIZABLE 下 40001 序列化冲突，认领事务不重试；最近 60 轮首次出现）与 Windows e2e `rfc319-identity-handoff-and-docs` UX-35b（未保存圆点未出现，首跑与重试都失败）；同一代码的父提交 `fddf8bf74` 与后继 `e9fcfc58a` 的 CI 都绿。
+
+**RFC-384 In Progress**（[proposal](design/RFC-384-daemon-intent-bundle/proposal.md)，Codex 实施中）：意图每会话构造一次，SQLite 两套意图图合一（保留工作者 / HTTP 两个系统 Agent 运行族）；两边都在维护服务之前构造意图组，删除 SQLite 的通知收件箱与应用活动迟绑定；转储辅助默认运行时实时读取；入口根不再深入 intent 的 `application/` 与 `inbound/`。无功能变化。
+
 ## 2026-10-20 RFC-294 后继 S2b：RFC-382 Done，RFC-383 In Progress；流水线修复
 
 **流水线修复**（用户 2026-10-20「把流水线修复」）：`c95b7fc13` 把依赖审计门报的两个锁定版本升到修复版（`@modelcontextprotocol/sdk` 1.31.0 → 1.32.1，根 overrides 的 vite 6.4.3 → 6.4.4；锁文件只有这两项变化，不改检查策略与忽略名单），主 CI `39506772493` success；`45aa84adf` 把 `e2e/harness.ts` 的 daemon 就绪预算在 macOS 上放宽到 90 秒（同 Windows，Linux 维持 30 秒；根因是启动时回放 PostgreSQL 迁移历史在 3 核 macOS runner 上被拉长到 19～25 秒，见 `docs/dev-gotchas.md`），主 CI `39507770918` 全绿、三个 macOS 分片 0 次就绪超时。RFC-381 的 AC-5 由这次后继全绿补足。**对其他会话的影响**：拉取后先 `bun install` 同步这两个依赖。
