@@ -1,3 +1,4 @@
+// RFC-387: test-only legacy launch configuration fixture; production uses the daemon session bundle.
 // RFC-103 T2 + RFC-108 T4 — single source for launch-time runtime config.
 //
 // Resolves the settings that must be threaded into `StartTaskDeps` for EVERY

@@ -93,24 +93,7 @@ type FusionRow = FusionPersistenceRecord
 /** Deps createFusion needs to launch the engine task (mirrors the tasks route). */
 export interface FusionDeps {
   operations: FusionOperations
-  /** TEST-ONLY runtime-neutral command-head override; production passes configPath. */
-  binaryOverride?: readonly string[]
-  /** Daemon config path — threaded to the scheduler's single resolution point. */
-  configPath?: string
-  /** Run the scheduler inline (tests). Production leaves it to the daemon loop. */
-  awaitScheduler?: boolean
-  /**
-   * RFC-108 T4 (AR-01 / Codex impl gate P2): per-node hard-timeout floor from
-   * settings, threaded into the fusion engine's internal startTask so a fusion
-   * agent that hangs is bounded like any other node. Route resolves it via
-   * resolveLaunchRuntimeConfig; omitted → scheduler runs with no floor.
-   */
-  defaultPerNodeTimeoutMs?: number
-  /** RFC-115: global per-node retry budget, threaded into the fusion task. */
-  defaultNodeRetries?: number
-  sessionRestartBudget?: number // RFC-313
-  /** RFC-115 (Codex F3): global default runtime NAME, threaded into the fusion task. */
-  defaultRuntime?: string
+  completionMode?: 'background' | 'await-settle'
   /** Deterministic pre-launch failure injection for ownership regression tests. */
   beforeStartTaskHandoff?: (event: { phase: 'create' | 'reject' }) => void | Promise<void>
 }
@@ -304,19 +287,7 @@ export async function createFusion(
     ownerUserId: actor.user.id,
     initiator: launchInitiator,
     platformInputPaths: [MANIFEST_REL],
-    ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
-    ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-    ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
-    ...(deps.defaultPerNodeTimeoutMs !== undefined
-      ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
-      : {}),
-    ...(deps.sessionRestartBudget !== undefined
-      ? { sessionRestartBudget: deps.sessionRestartBudget }
-      : {}),
-    ...(deps.defaultNodeRetries !== undefined
-      ? { defaultNodeRetries: deps.defaultNodeRetries }
-      : {}),
-    ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
+    ...(deps.completionMode === undefined ? {} : { completionMode: deps.completionMode }),
   })
 
   // 5. Persist the fusion record with the token captured BEFORE seeding (above).
@@ -883,19 +854,7 @@ export async function rejectFusion(
       ownerUserId: actor.user.id,
       initiator: launchInitiator,
       platformInputPaths: [MANIFEST_REL],
-      ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
-      ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-      ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
-      ...(deps.defaultPerNodeTimeoutMs !== undefined
-        ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
-        : {}),
-      ...(deps.sessionRestartBudget !== undefined
-        ? { sessionRestartBudget: deps.sessionRestartBudget }
-        : {}),
-      ...(deps.defaultNodeRetries !== undefined
-        ? { defaultNodeRetries: deps.defaultNodeRetries }
-        : {}),
-      ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
+      ...(deps.completionMode === undefined ? {} : { completionMode: deps.completionMode }),
     })
 
     // RFC-170 T6 (Codex F7): attach the new task via CAS on (status='running',

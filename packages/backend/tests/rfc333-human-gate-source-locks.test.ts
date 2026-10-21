@@ -320,7 +320,8 @@ describe('RFC-333 T2 canonical continuation authority lock', () => {
       'export const submitTaskContinuationInTransaction = submitTaskContinuationInTransactionInternal',
     )
     expect(task).toContain('await submitTaskContinuationInTransaction(input.tx, input)')
-    expect(task.match(/intentKind: 'gate-continuation'/g)?.length).toBe(2)
+    // RFC-387 deletes the unused atomic-resume wrapper; dynamic resume is the sole test-only caller.
+    expect(task.match(/intentKind: 'gate-continuation'/g)?.length).toBe(1)
     expect(submit).toContain('return await persistence.submitContinuation(input)')
   })
 })

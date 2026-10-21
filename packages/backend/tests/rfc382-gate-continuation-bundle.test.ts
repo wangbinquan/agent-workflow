@@ -153,6 +153,7 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
         fixture.schedulerDriver.drive = async (request) => {
           try {
             expect(request.ensureWorkspaceProfiles).toBe(baseline ? undefined : true)
+            if (!baseline) expect(request.agentRunSettled).toBeDefined()
             const questions = await db
               .select()
               .from(taskQuestions)
@@ -164,7 +165,10 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
           }
         }
         const coordinator = baseline ? await formerSession(bundle) : bundle.coordinator
-        await createGateContinuationDriver({ isDriving: bundle.isTaskActive, coordinator })({
+        const drive = baseline
+          ? createGateContinuationDriver({ isDriving: bundle.isTaskActive, coordinator })
+          : bundle.gateContinuation
+        await drive({
           taskId,
           continuationRef: intent!.id,
         })
@@ -315,6 +319,7 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
         fixture.schedulerDriver.drive = async (request) => {
           try {
             expect(request.ensureWorkspaceProfiles).toBe(baseline ? undefined : true)
+            if (!baseline) expect(request.agentRunSettled).toBeDefined()
             expect(readFileSync(join(home, 'document.txt'), 'utf8')).toBe(
               baseline ? 'changed' : 'ask-time',
             )
@@ -331,7 +336,10 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
           }
         }
         const coordinator = baseline ? await formerSession(bundle) : bundle.coordinator
-        await createGateContinuationDriver({ isDriving: bundle.isTaskActive, coordinator })({
+        const drive = baseline
+          ? createGateContinuationDriver({ isDriving: bundle.isTaskActive, coordinator })
+          : bundle.gateContinuation
+        await drive({
           taskId,
           continuationRef: decision.continuationRef,
         })

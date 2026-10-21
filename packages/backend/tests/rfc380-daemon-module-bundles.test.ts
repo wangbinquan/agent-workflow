@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { buildStartTaskDeps } from './helpers/startTaskDeps'
 import { composeDaemonProviderCore } from '@/cli/daemonModules/providerCore'
 import {
   DAEMON_PROVIDER_CORE_ADAPTERS,

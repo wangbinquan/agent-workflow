@@ -251,7 +251,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts -> knowledge-evolution',
     'packages/backend/src/modules/task-execution/infrastructure/hostedRestoreNormalization.ts -> system-operations',
     'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts -> memory',
-    'packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts -> knowledge-evolution',
     'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts -> collaboration',
     'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts -> memory',
     'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts -> collaboration',

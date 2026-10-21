@@ -613,16 +613,12 @@ test('第 12 刀 · 引擎差异只剩三个端口：认领策略 / 活跃度 / 
   expect(bundle).toContain(
     'releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request)',
   )
-  // RFC-382 retains each provider's original release finalizer at the bundle boundary.
-  for (const [path, db] of [
-    ['cli/start.ts', 'db'],
-    ['server.ts', 'deps.db'],
-  ]) {
-    const root = readFileSync(resolve(import.meta.dir, '../src', path!), 'utf8')
-    expect(root).toContain(
-      `finalizeWorkspace: async (taskId) => {\n        await finishClaimedWebhookWorkspacePrune(${db}, taskId)\n      }`,
-    )
-  }
+  // RFC-387: production uses the common finalizer; RFC-389 owns the HTTP fixture fallback.
+  const sqlite = readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8')
+  expect(sqlite).toContain('await workspaceMaintenance.finalizeClaimedWorkspace(taskId)')
+  expect(sqlite).not.toContain('finishClaimedWebhookWorkspacePrune')
+  const http = readFileSync(resolve(import.meta.dir, '../src/server.ts'), 'utf8')
+  expect(http).toContain('await finishClaimedWebhookWorkspacePrune(deps.db, taskId)')
   const pg = readFileSync(
     resolve(import.meta.dir, '../src/cli/postgresqlDaemonApplication.ts'),
     'utf8',

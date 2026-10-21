@@ -1,3 +1,4 @@
+import { composeTestRoomContinuation } from './helpers/legacyTaskDrive'
 // RFC-370 H1/A-T7: real caller closure keeps local sync semantics and carries the
 // selected async source through short-lived drive, preparation and continuation.
 import { afterEach, expect, test } from 'bun:test'
@@ -9,12 +10,8 @@ import { ulid } from 'ulid'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { resolveTaskStartLaunchConfiguration } from '@/modules/task-execution/application/launchConfiguration'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
-import {
-  createTaskDriveCoordinator,
-  composeWorkgroupTaskRoomContinuationDriver,
-  startTask,
-  type StartTaskDeps,
-} from '@/services/task'
+import { createTestTaskDriveCoordinator } from './helpers/legacyTaskDrive'
+import { startTask, type StartTaskDeps } from '@/services/task'
 import { tasks, workflows, taskExecutionIntents } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -296,7 +293,7 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       launchConfiguration: query,
       launchConfigurationOverrides: { defaultNodeRetries: 0 },
     }
-    const coordinator = createTaskDriveCoordinator({
+    const coordinator = createTestTaskDriveCoordinator({
       deps: { db: harness.db, schedulerDriver: { async drive() {} }, configPath: path, ...deps },
       appHome: home(),
       refreshLaunchConfig: () => {
@@ -476,7 +473,7 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
     }
     const drives: TaskDriveRequest[] = []
     const file = join(home(), 'absent-continuation.json')
-    const room = composeWorkgroupTaskRoomContinuationDriver({
+    const room = composeTestRoomContinuation({
       db: harness.db,
       configPath: file,
       taskRecoveryOperations: persistence.recoveryAdministration,
@@ -512,16 +509,16 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
             .from(taskExecutionIntents)
             .where(eq(taskExecutionIntents.id, intentId))
         )[0]?.state,
-      ).toBe('pending')
+      ).toBe('claimed')
       release.resolve()
       await pending
       await awaitTaskDriverIdle(taskId)
-      expect(reads).toBe(8)
+      expect(reads).toBe(4)
       expect(drives).toHaveLength(1)
-      expect(drives[0]?.defaultRuntime).toBe('continued-5')
-      expect(drives[0]?.commitPushRuntime).toBe('commit-4')
-      expect(drives[0]?.maxActiveChildTasks).toBe(46)
-      expect(drives[0]?.subagentLiveCapture).toEqual({ pollMs: 107, consecutiveFailureLimit: 4 })
+      expect(drives[0]?.defaultRuntime).toBe('continued-1')
+      expect(drives[0]?.commitPushRuntime).toBe('commit-0')
+      expect(drives[0]?.maxActiveChildTasks).toBe(42)
+      expect(drives[0]?.subagentLiveCapture).toEqual({ pollMs: 103, consecutiveFailureLimit: 4 })
       expect(drives[0]?.defaultNodeRetries).toBe(0)
       expect(
         await harness.db

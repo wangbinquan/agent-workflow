@@ -1,4 +1,3 @@
-import { preparedArtifactLane } from '@/modules/task-execution/infrastructure/workspaceLaunchLane'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -9,12 +8,10 @@ import { join, resolve } from 'node:path'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type { TaskDriveSubmission } from '@/modules/task-execution/application/drive/taskDriveTypes'
-import type { TaskExecutionTopologyLogger } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import {
-  createPostgresqlRepositoryPreparationRetryCommand,
+  createRepositoryPreparationRetryCommand,
   createTaskWorkspaceMaterializer,
 } from '@/modules/task-execution/composition/taskExecutionRuntime'
-import type { TaskRoutePreparedWorkspace } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -199,106 +196,27 @@ function postgresqlFixture(trace: string[]) {
   return { db: createPostgresqlDatabaseClient(runtime), executions }
 }
 
-function logger(): TaskExecutionTopologyLogger {
-  const log: TaskExecutionTopologyLogger = {
-    debug() {},
-    info() {},
-    warn() {},
-    error() {},
-    child() {
-      return log
-    },
-  }
-  return log
-}
-
 afterEach(() => {
   registerAfterCommitEventPump(null)
   selectDatabaseSchemaProvider('sqlite')
 })
 
 describe('RFC-349 PostgreSQL repository preparation', () => {
-  test('commits the real workspace projection and continuation before drive', async () => {
+  test('commits pending status and continuation before background drive; preparation belongs to that drive', async () => {
     selectDatabaseSchemaProvider('postgresql')
     const trace: string[] = []
     const fixture = postgresqlFixture(trace)
     const appHome = await mkdtemp(join(tmpdir(), 'rfc349-repo-prep-pg-'))
     const submissions: TaskDriveSubmission[] = []
-    let rolledBack = false
     registerAfterCommitEventPump({
       async publishNow() {
         trace.push('event:publish')
       },
       nudge() {},
     })
-    const prepared: TaskRoutePreparedWorkspace = Object.freeze({
-      taskId: 'task-1',
-      kind: 'single',
-      spaceKind: 'remote',
-      repoPath: '/cache/repo.git',
-      repoUrl: 'https://example.test/repo.git',
-      cachedRepoId: 'cached-1',
-      repoGroupId: null,
-      repoGroupName: null,
-      worktreePath: '/worktrees/repo/task-1',
-      baseBranch: 'main',
-      branch: 'agent-workflow/task-1',
-      baseCommit: 'base-commit',
-      earlyError: null,
-      repositories: [
-        {
-          repoIndex: 0,
-          repoPath: '/cache/repo.git',
-          repoUrl: 'https://example.test/repo.git',
-          cachedRepoId: 'cached-1',
-          baseBranch: 'main',
-          branch: 'agent-workflow/task-1',
-          workingBranch: null,
-          baseCommit: 'base-commit',
-          worktreePath: '/worktrees/repo/task-1',
-          worktreeDirName: '',
-          mountPath: '',
-          subdir: '',
-          readonly: false,
-          workspaceProfileVersion: 1,
-          workspaceProfileDigest: 'profile-v1',
-          hasSubmodules: false,
-          submoduleInitOk: true,
-          submoduleInitError: null,
-        },
-      ],
-      nodePaths: [],
-      commit() {
-        trace.push('workspace:commit')
-      },
-      admit: async () => preparedArtifactLane('task-1'),
-      async rollback() {
-        rolledBack = true
-        return { taskId: 'task-1', complete: true, failures: [] }
-      },
-    })
     const ids = ['operation-1', 'intent-1', 'prep-1']
-    const command = createPostgresqlRepositoryPreparationRetryCommand({
+    const command = createRepositoryPreparationRetryCommand({
       db: fixture.db,
-      appHome,
-      workspace: {
-        async reclaimLegacyArtifacts() {
-          trace.push('workspace:reclaim')
-        },
-        async prepare(input) {
-          trace.push('workspace:prepare')
-          expect(input.task).toMatchObject({
-            workflowId: 'workflow-1',
-            cachedRepoId: 'cached-1',
-            ref: 'main',
-          })
-          expect(input.gitCommitIdentity).toEqual({
-            name: 'Owner',
-            email: 'owner@example.test',
-          })
-          return prepared
-        },
-      },
       coordinator: {
         async submit(input) {
           trace.push('coordinator')
@@ -308,7 +226,6 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
       },
       isTaskActive: () => false,
       awaitTaskSettled: async () => {},
-      log: logger(),
       id() {
         const id = ids.shift()
         if (id === undefined) throw new Error('fixture id sequence exhausted')
@@ -323,16 +240,13 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
       await rm(appHome, { recursive: true, force: true })
     }
 
-    expect(rolledBack).toBe(false)
     expect(submissions).toEqual([
       { taskId: 'task-1', intentId: 'intent-1', completionMode: 'background' },
     ])
-    expect(trace.indexOf('workspace:reclaim')).toBeLessThan(trace.indexOf('workspace:prepare'))
-    expect(trace.indexOf('db:commit')).toBeLessThan(trace.indexOf('workspace:commit'))
-    expect(trace.indexOf('workspace:commit')).toBeLessThan(trace.indexOf('event:publish'))
+    expect(trace.indexOf('db:commit')).toBeLessThan(trace.indexOf('event:publish'))
     expect(trace.indexOf('event:publish')).toBeLessThan(trace.indexOf('coordinator'))
-    expect(trace).toContain('repos:insert')
-    expect(trace).toContain('prep:insert')
+    expect(trace).not.toContain('repos:insert')
+    expect(trace).not.toContain('prep:insert')
   })
 
   test('composition exposes production workspace and retry factories without SQLite escape hatches', () => {
@@ -344,7 +258,7 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
     const retry = readFileSync(
       resolve(
         backend,
-        'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts',
+        'modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts',
       ),
       'utf8',
     )
@@ -355,12 +269,13 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
     expect(workspace).toContain('createTaskWorkspaceMaterializer')
     expect(workspace).toContain('dependencies.repositoryPreparation.legacy.prepare')
     expect(workspace).not.toContain("from '@/modules/source-control/composition'")
-    expect(retry).toContain('dependencies.workspace.reclaimLegacyArtifacts')
-    expect(retry).toContain('createPostgresqlRepositoryPreparationRetryCommand')
+    expect(retry).not.toContain('dependencies.workspace')
+    expect(retry).toContain("completionMode: 'background'")
+    expect(retry).toContain('createRepositoryPreparationRetryCommand')
     expect(retry).toContain('submitTaskContinuation')
     expect(retry).toContain('await publishCommittedEventsAfterCommit')
     expect(provider).toContain('createTaskRouteWorkspaceParticipant(workspaceDependencies)')
-    expect(provider).toContain('createPostgresqlRepositoryPreparationRetryCommand({')
+    expect(provider).toContain('createRepositoryPreparationRetryCommand({')
     expect(`${workspace}\n${retry}`).not.toContain("from '@/db/client'")
     expect(`${workspace}\n${retry}`).not.toContain('createSqlite')
     expect(`${workspace}\n${retry}`).not.toContain('as DbClient')

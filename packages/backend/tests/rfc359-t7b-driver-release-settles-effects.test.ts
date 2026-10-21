@@ -1,3 +1,4 @@
+import { createLogger } from '@/util/log'
 // RFC-359 W1-T7b（P0-10）—— 驱动释放时清算 process effect，两个引擎各跑一遍。
 //
 // dual-provider-parity-audit-2026-09-04 P0-10：PostgreSQL 的 driver lifecycle 直接
@@ -237,6 +238,7 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
       {
         registry: seeded.module.runtimeRegistry,
         persistence: seeded.persistence,
+        log: createLogger('rfc359-release'),
         stopHeartbeat: () => {},
         finalizeWorkspace: async (taskId) => {
           finalized.push(taskId)
@@ -279,6 +281,7 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
       {
         registry: seeded.module.runtimeRegistry,
         persistence: seeded.persistence,
+        log: createLogger('rfc359-release'),
         stopHeartbeat: () => {},
         finalizeWorkspace: async () => {},
       },
@@ -298,6 +301,7 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
       {
         registry: seeded.module.runtimeRegistry,
         persistence: seeded.persistence,
+        log: createLogger('rfc359-release'),
         stopHeartbeat: () => {},
         finalizeWorkspace: async () => {},
       },
@@ -340,6 +344,7 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
       {
         registry: seeded.module.runtimeRegistry,
         persistence: seeded.persistence,
+        log: createLogger('rfc359-release'),
         stopHeartbeat: () => {},
         finalizeWorkspace: async () => {},
       },
@@ -375,6 +380,7 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
       {
         registry,
         persistence: gatedPersistence,
+        log: createLogger('rfc359-release'),
         stopHeartbeat: () => {},
         finalizeWorkspace: async () => {
           finalizeStarted = true
@@ -420,6 +426,7 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
       {
         registry: seeded.module.runtimeRegistry,
         persistence: seeded.persistence,
+        log: createLogger('rfc359-release'),
         stopHeartbeat: () => {},
         finalizeWorkspace: async () => {
           finalized += 1

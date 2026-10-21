@@ -22,7 +22,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 
-import { resolveLaunchRuntimeConfig } from '../src/services/launchRuntimeConfig'
+import { resolveLaunchRuntimeConfig } from './helpers/launchRuntimeConfig'
 
 describe('RFC-108 T4 resolveLaunchRuntimeConfig — 接线 per-node timeout floor', () => {
   let tmp: string
@@ -61,43 +61,40 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
     expect(src('modules/task-execution/application/launchConfiguration.ts')).toContain(
       'cfg.defaultPerNodeTimeoutMs',
     )
-    expect(src('services/launchRuntimeConfig.ts')).toContain('resolveTaskLaunchRuntimeFromReader')
+    expect(readFileSync(join(import.meta.dir, 'helpers/launchRuntimeConfig.ts'), 'utf8')).toContain(
+      'resolveTaskLaunchRuntimeFromReader',
+    )
   })
 
-  test('continuous human-gate continuation + fusion 都透传 resolveLaunchRuntimeConfig', () => {
-    // RFC-341 removes request-owned wakeups. The daemon composes one continuous
-    // continuation driver with the same launch floor; clarify/review routes now
-    // submit collaboration commands and do not construct StartTaskDeps.
+  test('gate continuation and fusion share the session configuration floor', () => {
     const start = src('cli/start.ts')
-    expect(start).toContain('const gateContinuationDeps = {')
-    // RFC-370 keeps the local floor and passes the original live reader to
-    // the same continuation driver. Check this exact dependency object so a
-    // resolver elsewhere in the daemon cannot conceal a missing handoff here.
-    const gateStart = start.indexOf('const gateContinuationDeps = {')
-    const gateEnd = start.indexOf('\n  const humanGateContinuationRecovery', gateStart)
-    expect(gateEnd).toBeGreaterThan(gateStart)
-    const gateDependencies = start.slice(gateStart, gateEnd)
-    expect(gateDependencies).toMatch(
-      /\.\.\.\(taskLaunchConfiguration\.selectedQueries === undefined\s*\? resolveLaunchRuntimeConfig\(Paths\.config\)\s*: \{\}\)/,
-    )
-    expect(gateDependencies).toContain(
-      'launchConfiguration: taskLaunchConfiguration.continuationQueries',
-    )
-    expect(start).toContain('drive: composeHumanGateContinuationDriver(gateContinuationDeps)')
+    const bundle = src('cli/daemonModules/taskExecution.ts')
+    expect(start).toContain('drive: taskExecutionModules.gateContinuation')
+    expect(bundle).toContain('const fresh = await taskLaunchConfiguration.start()')
+    expect(bundle).toContain('...runtimeConfigOpts({')
+    expect(bundle).toContain('const gateContinuation = createGateContinuationDriver({')
     expect(src('routes/clarify.ts')).toContain(
       'requireClarifyOperations(operations).submitDecision({',
     )
     expect(src('routes/reviews.ts')).toContain(
       'requireReviewOperations(operations).submitDecision({',
     )
-    expect(src('modules/knowledge-evolution/inbound/fusionRoutes.ts')).toContain(
-      'resolveLaunchRuntimeConfig(deps.configPath)',
-    )
+    const providers = src('modules/task-execution/composition/providerRuntime.ts')
+    for (const fusion of providers.matchAll(
+      /fusion: createFusionEngineTaskOperations\(\{([\s\S]*?)\}\)/g,
+    ))
+      expect(fusion[1]).toContain('coordinator: dependencies.coordinatorFactory.session')
+    expect(providers.match(/fusion: createFusionEngineTaskOperations\(/g)).toHaveLength(2)
   })
 
-  test('fusion 引擎把 floor 透传进内部 startTask', () => {
+  test('fusion delegates runtime configuration to the factory engine envelope', () => {
+    const factory = src('modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts')
+    expect(factory).toContain('...context.runtime.runtime,')
     expect(src('modules/knowledge-evolution/application/fusionOrchestration.ts')).toContain(
-      'defaultPerNodeTimeoutMs',
+      'completionMode: deps.completionMode',
+    )
+    expect(src('modules/knowledge-evolution/inbound/fusionRoutes.ts')).not.toContain(
+      'resolveLaunchRuntimeConfig',
     )
   })
 

@@ -20,6 +20,7 @@ export type { ResolvedTaskDriveConfig } from '../application/drive/taskDriveType
 export {
   activeTaskDriverController,
   awaitTaskDriverIdle,
+  awaitTaskDriverReleasedSettled,
   clearTaskDriverLifecycleForTesting,
   createDatabaseTaskDriverLifecyclePort,
   createTaskDriverLifecyclePort,
@@ -41,3 +42,7 @@ export {
   type TaskDriveCoordinatorFactory,
   type TaskDriveProfile,
 } from '../application/drive/taskDriveCoordinatorFactory'
+
+export { createRoomContinuation } from '../application/drive/roomContinuation'
+export { createRepositoryPreparationRetryCommand } from '../infrastructure/repositoryPreparationRetryCommand'
+export { createTaskExecutionPersistence } from './taskExecutionPersistence'

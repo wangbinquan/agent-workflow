@@ -23,11 +23,12 @@ import {
   createOwnershipToken,
   createWorkerIdentity,
 } from '@/modules/task-execution/domain/ownership'
-import { resolveCommitPushConfig, resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { resolveSubagentLiveCapture, buildStartTaskDeps } from '@/services/startTaskDeps'
+import { resolveCommitPushConfig, resolveLaunchRuntimeConfig } from './helpers/launchRuntimeConfig'
+import { resolveSubagentLiveCapture, buildStartTaskDeps } from './helpers/startTaskDeps'
 import { resolveUploadLimits } from '@/services/launchMultipart'
 import { DEFAULT_UPLOAD_LIMITS } from '@/services/upload'
-import { createTaskDriveCoordinator } from '@/services/task'
+import { createTestTaskDriveCoordinator } from './helpers/legacyTaskDrive'
+
 import { describeEachProvider } from './helpers/eachProvider'
 import { createNoopSchedulerDriver } from './helpers/taskExecutionTestTopology'
 
@@ -267,7 +268,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
       reads = 0,
       localReads = 0,
       settled = false
-    const coordinator = createTaskDriveCoordinator({
+    const coordinator = createTestTaskDriveCoordinator({
       deps: { db: harness.db, schedulerDriver: { async drive() {} }, configPath },
       appHome: home,
       launchConfiguration: {
@@ -323,7 +324,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
         scriptInterpreters: {},
         subagentLiveCapture: undefined,
       }
-      const coordinator = createTaskDriveCoordinator({
+      const coordinator = createTestTaskDriveCoordinator({
         deps: {
           db: harness.db,
           schedulerDriver: { async drive() {} },

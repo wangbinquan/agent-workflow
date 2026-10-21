@@ -9,7 +9,7 @@ import { describe, expect, test, beforeEach } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import type { resolveLaunchRuntimeConfig } from './helpers/launchRuntimeConfig'
 import {
   ensureChildTaskBudget,
   setChildTaskBudgetCapacity,
@@ -125,7 +125,7 @@ describe('RFC-287 T14 — 配置漏斗的导出类型必须声明新字段', () 
       /export function resolveTaskLaunchRuntimeFromReader\([\s\S]*?\): TaskLaunchRuntimeConfiguration/,
     )
     const legacy = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'launchRuntimeConfig.ts'),
+      resolve(import.meta.dir, 'helpers', 'launchRuntimeConfig.ts'),
       'utf8',
     )
     expect(legacy).toContain('return resolveTaskLaunchRuntimeFromReader(')

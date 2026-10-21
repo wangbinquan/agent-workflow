@@ -25,8 +25,9 @@ import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/co
 import type { WebhookTaskExecutionParticipant } from '../../src/modules/integration/composition/webhookDispatch'
 import type { TaskExecutionResourceAuthority } from '../../src/services/execution/taskExecutionResources'
 import type { ExecutionInvoker } from '../../src/services/execution/types'
-import { resolveLaunchRuntimeConfig } from '../../src/services/launchRuntimeConfig'
-import { createTaskDriveCoordinator } from '../../src/services/task'
+import { resolveLaunchRuntimeConfig } from './launchRuntimeConfig'
+import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
+
 import { cancelViaEngine } from './cancelEngine'
 import type { IntegrationTriggerIdentityAccess } from '../../src/server'
 import { Paths } from '../../src/util/paths'
@@ -82,7 +83,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
         authority: input.identityAccess.directAuthority.authorityForLegacyProjection(actor),
         resources: input.identityAccess.taskExecutionResources,
       }),
-    coordinator: createTaskDriveCoordinator({
+    coordinator: createTestTaskDriveCoordinator({
       // 运行期配置必须与生产取自同一处：`runtimeConfigOpts(deps)` 从 `deps` 上读十七个旋钮，
       // 只给 `{db, schedulerDriver, configPath}` 时它们全是 undefined（`20d4a6ce5` 的 e2e 红就是这么来的）。
       deps: {

@@ -388,7 +388,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/humanGateDecisionE2eBarrier.ts': 'collaboration',
   'packages/backend/src/services/isolatedAgentRun.ts': 'platform',
   'packages/backend/src/services/launchMultipart.ts': 'task-execution',
-  'packages/backend/src/services/launchRuntimeConfig.ts': 'task-execution',
   'packages/backend/src/services/lifecycle.ts': 'task-execution',
   'packages/backend/src/services/lifecycleInvariants.ts': 'task-execution',
   'packages/backend/src/services/limits.ts': 'task-execution',
@@ -513,7 +512,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/skillBootVerify.ts': 'resource-catalog',
   'packages/backend/src/services/skillIdentityMigration.ts': 'resource-catalog',
   'packages/backend/src/services/skillIdentityPaths.ts': 'resource-catalog',
-  'packages/backend/src/services/startTaskDeps.ts': 'task-execution',
   'packages/backend/src/services/structuralDiff/assemble.ts': 'workspace-insight',
   'packages/backend/src/services/structuralDiff/baseline.ts': 'workspace-insight',
   'packages/backend/src/services/structuralDiff/bodyDelta.ts': 'workspace-insight',
@@ -2734,10 +2732,7 @@ function buildFacades(
         file: unit.path,
         ownerEntryId: ownerEntryId(unit.path, '$file'),
         targetContext: targetContextFor(unit.path),
-        targetLayer:
-          unit.path === `${BACKEND_PREFIX}services/startTaskDeps.ts`
-            ? 'composition'
-            : targetLayerFor(unit.path, '$file'),
+        targetLayer: targetLayerFor(unit.path, '$file'),
         status: thinFacade ? ('thin-facade' as const) : ('legacy-implementation' as const),
         boundaryEdgeIds,
         exportedSymbols: topLevelNamedNodes(unit)

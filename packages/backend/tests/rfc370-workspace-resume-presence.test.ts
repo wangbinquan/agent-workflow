@@ -1,3 +1,4 @@
+import { composeTestRoomContinuation } from './helpers/legacyTaskDrive'
 // RFC-370: resume and human-gate admission must await selected workspace reads.
 // Promise truthiness must never admit an absent workspace or skip a missing repo.
 import { expect, test } from 'bun:test'
@@ -12,7 +13,7 @@ import {
   assertWorktreePresentForResume,
   composeWorktreeResumePreflight,
 } from '@/modules/task-execution/public/participants'
-import { getTask, composeWorkgroupTaskRoomContinuationDriver } from '@/services/task'
+import { getTask } from '@/services/task'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createNoopSchedulerDriver } from './helpers/taskExecutionTestTopology'
@@ -193,7 +194,7 @@ describeEachProvider('RFC-370 selected workspace resume presence', (harness) => 
         return false
       },
     }
-    const continuation = composeWorkgroupTaskRoomContinuationDriver({
+    const continuation = composeTestRoomContinuation({
       db: harness.db,
       configPath: '/unused-presence-config',
       schedulerDriver: createNoopSchedulerDriver(),

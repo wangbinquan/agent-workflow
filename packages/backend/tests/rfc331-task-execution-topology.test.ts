@@ -37,7 +37,6 @@ const RFC331_LEGACY_CONSUMERS = new Set([
   // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）：`services/multipartTaskStart.ts` 整份删除——
   // multipart 路由改走与 PostgreSQL 共用的启动参与者，这个 legacy 消费者随之出账。
   'packages/backend/src/services/scheduler.ts',
-  'packages/backend/src/services/startTaskDeps.ts',
   'packages/backend/src/services/structuralDiff/callGraph/expandService.ts',
   'packages/backend/src/services/task.ts',
 ])
@@ -61,7 +60,6 @@ const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
   // `LegacyProviderNeutralDatabase`（被测的 `buildStartTaskDeps` 只把句柄原样透传），
   // 类型来源随之换到同目录的 `legacySqliteTransportMechanisms`。边还是那条边，随 legacy
   // 启动面一起消失；只是目标模块换了，本判据逐条相等所以要同步改。
-  'packages/backend/src/services/startTaskDeps.ts:@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms',
   'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/branchTraceSnapshotReader',
   // RFC-359 W8：`assertFrozenTaskTriggerPreflight` 的两份 provider 副本合一后落在 owner 的
   // infrastructure（`services/execution/triggerPreflight.ts` 那个更省边的落位被
@@ -141,7 +139,8 @@ function objectKeys(node: ts.ObjectLiteralExpression, file: ts.SourceFile): Set<
 }
 
 function driveRequestObjects(): Array<Set<string>> {
-  const path = 'packages/backend/src/services/task.ts'
+  const path =
+    'packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts'
   const text = source(path)
   const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
   const requests: Array<Set<string>> = []
@@ -150,7 +149,7 @@ function driveRequestObjects(): Array<Set<string>> {
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
       node.expression.name.text === 'drive' &&
-      /schedulerDriver$/.test(node.expression.expression.getText(file)) &&
+      node.expression.expression.getText(file) === '(profile.engine ?? options.engine())' &&
       node.arguments[0] !== undefined &&
       ts.isObjectLiteralExpression(node.arguments[0])
     ) {
@@ -312,7 +311,7 @@ describe('RFC-331 architecture cuts', () => {
         "import type { Task } from '@/services/task'\n",
       ),
       sourceUnit(
-        'packages/backend/src/services/startTaskDeps.ts',
+        'packages/backend/src/services/task.ts',
         "import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'\n",
       ),
       sourceUnit(
@@ -325,7 +324,7 @@ describe('RFC-331 architecture cuts', () => {
       ['scheduler-to-task:dynamic-import'],
       ['callgraph-to-task:static-import'],
       [
-        'legacy-deep-import:packages/backend/src/services/startTaskDeps.ts:@/modules/task-execution/infrastructure/taskExecutionReadModels',
+        'legacy-deep-import:packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/taskExecutionReadModels',
       ],
       ['production-test-topology:packages/backend/src/services/task.ts'],
     ])

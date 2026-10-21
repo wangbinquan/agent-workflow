@@ -78,17 +78,14 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // 2026-09-19：解析体里把 `input.deps` 与 refresher 合成局部 `deps` 之后，这个旋钮的
     // 唯一 spread 点改名为 `deps.subagentLiveCapture`。判据意图不变——**只能有一处**。
     expect(src.match(/subagentLiveCapture: deps\.subagentLiveCapture/g)).toHaveLength(1)
-    // 2026-09-19 改锚（意图不变）：解析点仍然只有一处，但它从「构造时解析一次」变成
-    // 「每次 drive 现读一次」——长驻协调器（daemon 的路由启动）把配置冻在 boot 那一刻，
-    // 会让设置页改完默认运行时之后的新任务照旧按老档案派发（e2e CFG-45）。判据仍钉
-    // 「唯一解析点」这一点：`resolveRuntime()` 只有一个定义，协调器只从它取值。
-    expect(src.match(/const resolveRuntime = \(/g)).toHaveLength(1)
-    expect(src.match(/return resolveTaskDriveConfig\(\{/g)).toHaveLength(1)
-    expect(src).toContain('return frozen ?? currentRuntime()')
-    expect(src).toMatch(
-      /return resolveRuntime\(\s*\{ \.\.\.fresh, subagentLiveCapture, \.\.\.input\.deps\.launchConfigurationOverrides \},\s*true,\s*\)/,
+    const factory = read(
+      'packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts',
     )
-    expect(src).toContain('fresh.then(resolveRuntime) : resolveRuntime(fresh)')
+    // RFC-387: the test-only wrapper resolves live capture; the shared factory reads it on every drive.
+    expect(src).toContain('subagentLiveCapture: await resolveTaskSubagentLiveCapture(source)')
+    expect(src).toContain('async runConfiguration()')
+    expect(factory).toContain('const live = await options.runConfiguration()')
+    expect(factory).toContain('...context.runtime.runtime,')
     // 构造时解析一次的旧形状不许回来。
     expect(src).not.toContain('const runtime = resolveTaskDriveConfig({')
   })
@@ -98,7 +95,7 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // @/services/startTaskDeps (shared with the scheduled-task scheduler). The wire
     // is unchanged — buildStartTaskDeps resolves the value and conditionally spreads
     // it into StartTaskDeps.
-    const deps = read('packages/backend/src/services/startTaskDeps.ts')
+    const deps = read('packages/backend/tests/helpers/startTaskDeps.ts')
     expect(deps).toContain('function resolveSubagentLiveCapture(')
     expect(deps).toContain('...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {})')
     // RFC-382: each session gets capture from the bundle's live configuration.
@@ -113,7 +110,7 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     //（`services/multipartTaskStart.ts`，已整份删除）。它现在与 PostgreSQL 共用启动参与者，
     // 这个旋钮随协调器的依赖束走（`buildStartTaskDeps` / `resolveLaunchRuntimeConfig`），
     // 装配方解析一次交给协调器——路由仍然一个字都不自解析（下面那条负锁不变）。
-    const startTaskDeps = read('packages/backend/src/services/startTaskDeps.ts')
+    const startTaskDeps = read('packages/backend/tests/helpers/startTaskDeps.ts')
     expect(startTaskDeps).toContain('resolveSubagentLiveCapture(configPath)')
     const route = read('packages/backend/src/routes/tasks.ts')
     expect(route).not.toContain('DbClient')

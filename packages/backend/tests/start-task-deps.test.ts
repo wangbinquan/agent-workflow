@@ -12,7 +12,7 @@ import { join } from 'node:path'
 
 import { loadConfig } from '../src/config'
 import { describeEachProvider } from './helpers/eachProvider'
-import { buildStartTaskDeps } from '../src/services/startTaskDeps'
+import { buildStartTaskDeps } from './helpers/startTaskDeps'
 import { createNoopSchedulerDriver } from './helpers/taskExecutionTestTopology'
 
 function configWith(cfgPath: string, subagentLiveCapture: unknown): void {

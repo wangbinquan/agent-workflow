@@ -326,7 +326,8 @@ describe('RFC-317 T47 —— CAS 站点的 allowedFrom 必须能从转移表推�
     // `TASK_WRITERS` 之后，20 个此前整批在语料之外的站点回到预言里——它们里只有 1 条越界，
     // 其余 19 条本来就守着转移表，只是没人看得见。
     // RFC-386: the session, child-launch and resume reporters share one factory CAS (40 -> 38).
-    expect(sites.length).toBeGreaterThanOrEqual(38)
+    // RFC-387 removes three duplicate legacy/fusion CAS sites; off-table entries remain exact.
+    expect(sites.length).toBeGreaterThanOrEqual(35)
     expect(
       sites.filter(
         (site) =>
@@ -349,7 +350,7 @@ describe('RFC-317 T47 —— CAS 站点的 allowedFrom 必须能从转移表推�
     // RFC-382: six root failure reporters collapse into one bundle reporter; measured 37 -> 32.
     // The exact off-table ledger below remains unchanged.
     // RFC-386: the three table-conforming reporters now have one shared implementation (32 -> 30).
-    expect(onTable.length).toBeGreaterThanOrEqual(30)
+    expect(onTable.length).toBeGreaterThanOrEqual(27)
   })
 
   test('越界站点与偏离账本**逐条相等**（新增一条 ⇒ 红；改对一条不销账 ⇒ 也红）', () => {

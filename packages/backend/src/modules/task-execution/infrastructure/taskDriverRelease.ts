@@ -17,6 +17,7 @@
 //
 // 全部持久化动作走 `TaskExecutionPersistence` 的命名端口，provider 只在 bootstrap 选。
 
+import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import { sha256Hex } from '../domain/digest'
 import { canonicalJson } from '../domain/executionIntent'
@@ -29,6 +30,7 @@ import {
 import type { InMemoryTaskRuntimeRegistry, RuntimeStopResult } from './inMemoryTaskRuntimeRegistry'
 
 export interface TaskDriverReleaseDependencies {
+  readonly log: TaskExecutionTopologyLogger
   readonly registry: InMemoryTaskRuntimeRegistry
   readonly persistence: Pick<TaskExecutionPersistence, 'ownership' | 'effects'>
   /** 释放 token 对应的心跳定时器；两个 lifecycle 各自持有定时器表。 */
@@ -63,7 +65,15 @@ export async function releaseTaskDriverAndFinalize(
   } finally {
     registry.settle(token)
   }
-  await deps.finalizeWorkspace(input.taskId)
+  // RFC-387: owner settlement succeeds even when workspace cleanup needs recovery.
+  try {
+    await deps.finalizeWorkspace(input.taskId)
+  } catch (error) {
+    deps.log.warn('task driver workspace finalization failed; retained for recovery', {
+      taskId: input.taskId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
 
 /** 库里的 owner 行转移：清算本 epoch 的 effect，再按停机结果释放或标记待恢复。 */

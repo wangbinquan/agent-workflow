@@ -993,7 +993,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
       await import('@/modules/task-execution/composition/workgroupLaunchResources')
     const { composeDeferredRepositoryPreparation } =
       await import('@/modules/task-execution/composition/deferredRepositoryPreparation')
-    const { createTaskDriveCoordinator } = await import('@/services/task')
+    const { createTestTaskDriveCoordinator } = await import('./helpers/legacyTaskDrive')
     const { buildActor } = await import('../src/auth/actor')
 
     const db2 = createInMemoryDb(MIGRATIONS)
@@ -1069,7 +1069,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
           resourceAuthorityFor: () => {
             throw new Error('scheduled launch uses the delegated resources from fireSchedule')
           },
-          coordinator: createTaskDriveCoordinator({
+          coordinator: createTestTaskDriveCoordinator({
             deps: { db: db2, schedulerDriver: schedulerDriver2, configPath: cfgPath },
             appHome: home,
             repositoryPreparation: composeDeferredRepositoryPreparation({

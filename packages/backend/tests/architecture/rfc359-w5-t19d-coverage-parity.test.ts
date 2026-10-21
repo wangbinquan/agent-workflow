@@ -541,7 +541,7 @@ describe('RFC-359 W5-T19d —— 成对适配器的覆盖对等（高水位，�
       scan().providerNamed,
       '全树一个 provider 命名的实现文件都没扫到——前缀匹配器已经不咬人了。' +
         '账本清空后这条守卫会变成永久假绿，先修匹配器再说。',
-    ).toBeGreaterThanOrEqual(40)
+    ).toBeGreaterThanOrEqual(39) // RFC-387 retires two provider-named files; the remaining measured corpus is 39.
   }, 30_000)
 
   test('客户端机制对仍被识别（配对判据失效不能让账本静默变空）', () => {

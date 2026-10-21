@@ -1,3 +1,4 @@
+// RFC-387: test-only legacy launch configuration fixture; production uses the daemon session bundle.
 // RFC-159 — assemble StartTaskDeps from LIVE config, per-call.
 //
 // Extracted from routes/tasks.ts so the scheduled-task scheduler builds deps the
@@ -9,7 +10,7 @@ import { createFileTaskLaunchConfigurationQueries } from '@/modules/task-executi
 import { resolveTaskSubagentLiveCaptureFromReader } from '@/modules/task-execution/public/queries'
 import type { SecretBox } from '@/auth/secretBox'
 import type { LegacyProviderNeutralDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
-import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import { resolveLaunchRuntimeConfig } from './launchRuntimeConfig'
 import type { StartTaskDeps } from '@/services/task'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'

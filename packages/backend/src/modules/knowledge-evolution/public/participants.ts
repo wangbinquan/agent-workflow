@@ -80,13 +80,7 @@ export interface FusionEngineTaskLaunch {
   readonly ownerUserId: string
   readonly initiator: 'manual' | 'api'
   readonly platformInputPaths: readonly string[]
-  readonly binaryOverride?: readonly string[]
-  readonly configPath?: string
-  readonly awaitScheduler?: boolean
-  readonly defaultPerNodeTimeoutMs?: number
-  readonly defaultNodeRetries?: number
-  readonly sessionRestartBudget?: number
-  readonly defaultRuntime?: string
+  readonly completionMode?: 'background' | 'await-settle'
 }
 
 export interface FusionEngineTaskOperations {

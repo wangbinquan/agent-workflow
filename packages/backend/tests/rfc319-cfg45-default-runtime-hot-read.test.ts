@@ -1,13 +1,11 @@
+import { taskBundleInput } from './helpers/daemonTaskExecutionBundle'
+import { composeDaemonTaskExecutionModules } from '@/cli/daemonModules/taskExecution'
 import { execFileSync } from 'node:child_process'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { workflows, users } from '@/db/schema'
 import { composeDaemonFusionModules, type DaemonFusionModules } from '@/cli/daemonModules/fusion'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
-import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
-import { createPostgresqlFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations'
-import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { composeMemoryCatalogOperations } from '@/modules/memory/composition'
 import type {
@@ -15,7 +13,6 @@ import type {
   SchedulerDriverPort,
 } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
-import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
 // RFC-319 CFG-45 —— 设置页把默认运行时改到另一行之后，**新任务**必须按新那一行派发。
@@ -44,8 +41,8 @@ import { join, resolve } from 'node:path'
 
 import type { DbClient } from '@/db/client'
 import type { ResolvedTaskDriveConfig } from '@/modules/task-execution/composition/taskDriveLegacy'
-import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { createTaskDriveCoordinator } from '@/services/task'
+import { resolveLaunchRuntimeConfig } from './helpers/launchRuntimeConfig'
+import { createTestTaskDriveCoordinator } from './helpers/legacyTaskDrive'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -63,7 +60,7 @@ function coordinatorFor(input: {
   readonly configPath: string
   readonly refresh: boolean
 }) {
-  return createTaskDriveCoordinator({
+  return createTestTaskDriveCoordinator({
     deps: {
       db: {} as unknown as DbClient,
       schedulerDriver: {
@@ -73,7 +70,7 @@ function coordinatorFor(input: {
       },
       configPath: input.configPath,
       ...resolveLaunchRuntimeConfig(input.configPath),
-    } as unknown as Parameters<typeof createTaskDriveCoordinator>[0]['deps'],
+    } as unknown as Parameters<typeof createTestTaskDriveCoordinator>[0]['deps'],
     appHome: input.appHome,
     engineFailureMessage: 'test drive failed',
     failureReporter: { report() {} },
@@ -84,35 +81,35 @@ function coordinatorFor(input: {
 }
 
 describe('RFC-319 CFG-45 —— 默认运行时的热读', () => {
-  test('长驻协调器：改完 config.defaultRuntime，下一次 drive 拿到的就是新值', () => {
+  test('长驻协调器：改完 config.defaultRuntime，下一次 drive 拿到的就是新值', async () => {
     const home = mkdtempSync(join(tmpdir(), 'aw-cfg45-hot-'))
     try {
       const configPath = join(home, 'config.json')
       writeConfig(configPath, 'runtime-before')
       const coordinator = coordinatorFor({ appHome: home, configPath, refresh: true })
-      expect(runtimeOf(coordinator).runtime.defaultRuntime).toBe('runtime-before')
+      expect((await runtimeOf(coordinator)).runtime.defaultRuntime).toBe('runtime-before')
       // 用户在设置页点「设为默认」——落库的就是这个文件。
       writeConfig(configPath, 'runtime-after')
       expect(
-        runtimeOf(coordinator).runtime.defaultRuntime,
+        (await runtimeOf(coordinator)).runtime.defaultRuntime,
         '改完默认运行时之后新任务仍然按老那一行派发 ⇒ 「设为默认」只改了界面',
       ).toBe('runtime-after')
       // appHome / ensureWorkspaceProfiles 这类构造期事实不受影响。
-      expect(runtimeOf(coordinator).appHome).toBe(home)
-      expect(runtimeOf(coordinator).ensureWorkspaceProfiles).toBe(false)
+      expect((await runtimeOf(coordinator)).appHome).toBe(home)
+      expect((await runtimeOf(coordinator)).ensureWorkspaceProfiles).toBe(false)
     } finally {
       rmSync(home, { recursive: true, force: true })
     }
   })
 
-  test('短命形态（不传 refresher）保持冻结语义：构造时那一份贯穿始终', () => {
+  test('短命形态（不传 refresher）保持冻结语义：构造时那一份贯穿始终', async () => {
     const home = mkdtempSync(join(tmpdir(), 'aw-cfg45-frozen-'))
     try {
       const configPath = join(home, 'config.json')
       writeConfig(configPath, 'runtime-before')
       const coordinator = coordinatorFor({ appHome: home, configPath, refresh: false })
       writeConfig(configPath, 'runtime-after')
-      expect(runtimeOf(coordinator).runtime.defaultRuntime).toBe('runtime-before')
+      expect((await runtimeOf(coordinator)).runtime.defaultRuntime).toBe('runtime-before')
     } finally {
       rmSync(home, { recursive: true, force: true })
     }
@@ -201,8 +198,6 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
           resumeChild: async () => {},
           isTaskActive: () => false,
         }
-        const persistence = createTaskExecutionPersistence(harness.db)
-        const binding = harness.applicationBinding
         const workspaces: FusionWorkspaceEffects = {
           prepare: async () => ({ worktreePath: appHome, baseCommit: git('rev-parse', 'HEAD') }),
           collect: async () => {
@@ -210,32 +205,14 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
           },
           release: async () => {},
         }
-        const tasks =
-          binding.provider === 'sqlite'
-            ? createSqliteFusionEngineTaskOperations({
-                db: binding.db,
-                appHome,
-                schedulerDriver,
-                workspaces,
-                startDeps: {
-                  configPath,
-                  launchConfiguration: taskLaunchConfiguration.continuationQueries,
-                },
-              })
-            : createPostgresqlFusionEngineTaskOperations({
-                db: binding.db,
-                appHome,
-                schedulerDriver,
-                workspaces,
-                persistence,
-                executionModule: createProviderTaskExecutionModule({
-                  daemonGeneration: 'rfc381-fusion',
-                  persistence,
-                }),
-                finalizeWorkspace: async () => {},
-                log: createLogger('rfc381-fusion'),
-                runConfiguration: () => fusionModules.runConfiguration(),
-              })
+        const fixture = taskBundleInput(harness, appHome)
+        const bundle = composeDaemonTaskExecutionModules({
+          ...fixture.input,
+          taskLaunchConfiguration,
+          selection: { ...fixture.input.selection, fusionWorkspaces: workspaces },
+          testSeams: { schedulerDriver },
+        })
+        const tasks = bundle.fusion
         const fusionModules: DaemonFusionModules = composeDaemonFusionModules({
           db: harness.db,
           appHome,
@@ -277,7 +254,7 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
             iteration: index,
             seed: { base: [], overlay: null },
             platformInputPaths: [],
-            awaitScheduler: true,
+            completionMode: 'await-settle',
           })
           expect(driven).toHaveLength(index)
           expect(driven[index - 1]).toMatchObject({
@@ -308,16 +285,24 @@ test('RFC-381 roots connect fusion adapters and routes to the same live session 
       '',
     )
   const bundle = source('cli/daemonModules/taskExecution.ts')
-  expect(bundle).toContain('launchConfiguration: taskLaunchConfiguration.continuationQueries')
+  expect(bundle).toContain('const coordinatorFactory = createTaskDriveCoordinatorFactory({')
+  expect(bundle).toContain('    runConfiguration,')
   expect(bundle).not.toContain('resolveLaunchRuntimeConfig')
   const pg = source('cli/postgresqlDaemonApplication.ts')
-  expect(pg).toContain('fusionRunConfiguration: () => fusionModules.runConfiguration()')
-  expect(bundle).toContain('runConfiguration: input.fusionRunConfiguration')
+  expect(pg).not.toContain('fusionRunConfiguration')
+  expect(bundle).not.toContain('fusionRunConfiguration')
+  const providers = source('modules/task-execution/composition/providerRuntime.ts')
+  expect(providers.match(/fusion: createFusionEngineTaskOperations\(\{/g)).toHaveLength(2)
+  for (const fusion of providers.matchAll(
+    /fusion: createFusionEngineTaskOperations\(\{([\s\S]*?)\}\)/g,
+  )) {
+    expect(fusion[1]).toContain('coordinator: dependencies.coordinatorFactory.session')
+    expect(fusion[1]).toContain('cancellation')
+  }
   expect(pg).toContain('launchConfiguration: fusionModules.launchConfiguration')
   const http = source('server.ts')
   expect(http).toContain('tasks: taskExecutionModules.fusion')
   expect(http).toContain('launchConfiguration: fusionLaunchConfiguration')
-  expect(source('cli/daemonModules/fusion.ts')).toContain(
-    'await input.taskLaunchConfiguration.start()',
-  )
+  expect(bundle).toContain('const fresh = await taskLaunchConfiguration.start()')
+  expect(source('cli/daemonModules/fusion.ts')).not.toContain('runConfiguration')
 })

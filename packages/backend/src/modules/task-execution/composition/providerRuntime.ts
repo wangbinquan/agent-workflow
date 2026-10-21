@@ -78,8 +78,7 @@ import type { AutomaticTaskRepairOptions } from '../infrastructure/taskRouteRepa
 import { createTaskLifecycleAutoRepairCommand } from './taskLifecycleRepair'
 import { createDatabaseTaskLifecycleWsProjector } from '../infrastructure/taskLifecycleWsProjection'
 import { createTaskOverviewQuery } from './taskOverview'
-import { createPostgresqlFusionEngineTaskOperations } from '../infrastructure/postgresqlFusionEngineTaskOperations'
-import { createSqliteFusionEngineTaskOperations } from '../infrastructure/fusionEngineTaskOperations'
+import { createFusionEngineTaskOperations } from '../infrastructure/fusionEngineTaskOperations'
 import {
   createRootTaskLaunchKernel,
   createTaskExecutionLaunchParticipant,
@@ -89,10 +88,9 @@ import {
 } from '../infrastructure/taskRouteLaunchOperations'
 import {
   createTaskRouteWorkspaceParticipant,
-  createTaskWorkspaceMaterializer,
   type TaskRouteWorkspaceDependencies,
 } from '../infrastructure/taskRouteWorkspaceParticipant'
-import { createPostgresqlRepositoryPreparationRetryCommand } from '../infrastructure/postgresqlRepositoryPreparationRetryCommand'
+import { createRepositoryPreparationRetryCommand } from '../infrastructure/repositoryPreparationRetryCommand'
 import {
   createSqliteTaskExecutionLaunchParticipant,
   createSqliteTaskRouteLaunchOperations,
@@ -282,14 +280,13 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
   }
   readonly lifecycleRepair: Omit<AutomaticTaskRepairOptions, 'resume'>
   readonly fusion: Omit<
-    Parameters<typeof createSqliteFusionEngineTaskOperations>[0],
-    'db' | 'schedulerDriver'
+    Parameters<typeof createFusionEngineTaskOperations>[0],
+    'db' | 'coordinator' | 'cancellation'
   >
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime | Promise<ChildResumeRuntime>
   readonly workgroupTaskRoom?: Readonly<{
     collaboration: WorkgroupTaskRoomClarifyParticipantFactory
   }>
-  readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
 }
 
 /** Complete SQLite binding retained for direct tests and legacy bootstrap. */
@@ -369,6 +366,12 @@ export function composeSqliteTaskExecutionProviderRuntime<
   // 各自单独一刀。
   const launches = createSqliteTaskExecutionLaunchParticipant({ db, ...dependencies.routeLaunch })
   // RFC-359 AC-1（第 13 刀收尾）：`/api/tasks` 只剩一个工厂，两支各自交自己的装配产物。
+  const repositoryPreparationRetry = createRepositoryPreparationRetryCommand({
+    db,
+    coordinator: dependencies.coordinatorFactory.session,
+    isTaskActive: participants.activity.isActive,
+    awaitTaskSettled: participants.activity.awaitReleasedSettled,
+  })
   const taskRoutes = createTaskRouteOperations({
     db,
     launches,
@@ -386,7 +389,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
       ...(await dependencies.rootResumeRuntime(taskId)),
       actorUserId: actor.user.id,
     }),
-    repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
+    repositoryPreparationRetry,
     repair: {
       collaborationRuntime: dependencies.runtime.collaborationRuntime,
       clarify: createPostgresqlClarifyRepairParticipant(db),
@@ -411,7 +414,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
   const autoResume = composeTaskAutoResumeCommand({
     recovery: persistence.recoveryAdministration,
     resume,
-    repositoryPreparation: dependencies.repositoryPreparationRetry,
+    repositoryPreparation: repositoryPreparationRetry,
   })
   // RFC-359 AC-1（第 8 刀）：自动修复循环与 PostgreSQL 共用**同一个**绑定。
   const lifecycleRepair = createTaskLifecycleAutoRepairCommand({
@@ -444,13 +447,14 @@ export function composeSqliteTaskExecutionProviderRuntime<
     shutdown: persistence.shutdown,
     archive: createDrizzleTaskArchiveMaintenanceCommand(db, dependencies.archive),
     autoResume,
-    repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
+    repositoryPreparationRetry,
     lifecycleRepair,
     lifecycleProjector: createDatabaseTaskLifecycleWsProjector(db),
     overview: createTaskOverviewQuery(db),
-    fusion: createSqliteFusionEngineTaskOperations({
+    fusion: createFusionEngineTaskOperations({
       db,
-      schedulerDriver: runtime.schedulerDriver,
+      coordinator: dependencies.coordinatorFactory.session,
+      cancellation,
       ...dependencies.fusion,
     }),
     cancellation,
@@ -538,13 +542,10 @@ export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
     context: TaskExecutionProviderRouteContext,
   ) => Omit<TaskRouteOperationsDependencies, ProviderRouteOperationsAssembled>
   readonly lifecycleRepair: Omit<AutomaticTaskRepairOptions, 'resume'>
-  readonly fusion: Readonly<{
-    appHome: string
-    workspaces: Parameters<typeof createPostgresqlFusionEngineTaskOperations>[0]['workspaces']
-    runConfiguration?: Parameters<
-      typeof createPostgresqlFusionEngineTaskOperations
-    >[0]['runConfiguration']
-  }>
+  readonly fusion: Omit<
+    Parameters<typeof createFusionEngineTaskOperations>[0],
+    'db' | 'coordinator' | 'cancellation'
+  >
   readonly workgroupTaskRoom: Readonly<{
     readonly collaboration: WorkgroupTaskRoomClarifyParticipantFactory
   }>
@@ -644,14 +645,11 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   const routeLaunch = createTaskRouteLaunchOperations(routeLaunchDependencies)
   // RFC-359 AC-1（plan §5hn 批次二 ⑥）：装配一次，路由（JSON / multipart）与触发器三处共用。
   const launches = createTaskExecutionLaunchParticipant(routeLaunchDependencies)
-  const repositoryPreparationRetry = createPostgresqlRepositoryPreparationRetryCommand({
+  const repositoryPreparationRetry = createRepositoryPreparationRetryCommand({
     db,
-    appHome: dependencies.routeWorkspace.appHome,
-    workspace: createTaskWorkspaceMaterializer(workspaceDependencies),
-    coordinator: dependencies.routeLaunch.coordinator,
+    coordinator: dependencies.coordinatorFactory.session,
     isTaskActive: participants.activity.isActive,
     awaitTaskSettled: participants.activity.awaitReleasedSettled,
-    log: dependencies.runtime.log,
   })
   const routeDependencies = dependencies.routes({
     readModels: persistence.reads,
@@ -743,18 +741,11 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     lifecycleRepair,
     lifecycleProjector: createDatabaseTaskLifecycleWsProjector(db),
     overview: createTaskOverviewQuery(db),
-    fusion: createPostgresqlFusionEngineTaskOperations({
+    fusion: createFusionEngineTaskOperations({
       db,
-      appHome: dependencies.fusion.appHome,
-      workspaces: dependencies.fusion.workspaces,
-      ...(dependencies.fusion.runConfiguration === undefined
-        ? {}
-        : { runConfiguration: dependencies.fusion.runConfiguration }),
-      schedulerDriver: runtime.schedulerDriver,
-      persistence,
-      executionModule,
-      finalizeWorkspace: dependencies.runtime.finalizeWorkspace,
-      log: dependencies.runtime.log,
+      ...dependencies.fusion,
+      coordinator: dependencies.coordinatorFactory.session,
+      cancellation,
     }),
     cancellation,
     trigger: Object.freeze({

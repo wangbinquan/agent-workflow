@@ -193,7 +193,6 @@ import {
   type SelectedPostgresqlTaskExecutionProviderRuntime,
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
-import { createGateContinuationDriver } from '@/modules/task-execution/public/participants'
 import {
   selectRepositoryWorkspaceReadQueries,
   type RepositoryWorkspaceReadQueries,
@@ -856,7 +855,6 @@ export async function composePostgresqlApplication(
           })
         },
       },
-      fusionRunConfiguration: () => fusionModules.runConfiguration(),
       finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
     })
   const taskExecutionProvider = taskExecutionModules
@@ -864,7 +862,6 @@ export async function composePostgresqlApplication(
   const taskExecutionPersistence = taskExecutionModules.persistence
   const boundCollaborationContext = taskExecutionModules.collaboration
   const validationContext = taskExecutionModules.validationContext
-  const taskDriveCoordinator = taskExecutionModules.coordinator
   const workspaceMaintenance = composeWorkspaceMaintenanceCommand({
     filesystem: input.workspaceMaintenanceFilesystem,
     db: input.db,
@@ -950,8 +947,6 @@ export async function composePostgresqlApplication(
     memories: memoryCatalog,
     tasks: taskExecutionProvider.fusion,
     taskLaunchConfiguration,
-    configPath: input.configPath,
-    daemonGeneration: DAEMON_GENERATION,
   })
   const { fusionOperations } = fusionModules
   // RFC-223 PR-4 / RFC-359 W3-T15：融合 provenance 修复必须在任何融合恢复 / 播种 / HTTP 观察到历史
@@ -1697,11 +1692,8 @@ export async function composePostgresqlApplication(
     // RFC-370 hosted acceptance: claiming while this process's parked driver
     // still drained its admitted work was an owner conflict that the worker
     // retried (and warned about) every second for as long as that work ran.
-    // SQLite defers behind `awaitTaskDriverIdle` the same way.
-    driveHumanGateContinuation: createGateContinuationDriver({
-      isDriving: (taskId) => taskExecutionProvider.executionModule.runtimeRegistry.hasTask(taskId),
-      coordinator: taskDriveCoordinator,
-    }),
+    // RFC-387: both providers skip an active driver; the worker retries the durable intent.
+    driveHumanGateContinuation: taskExecutionModules.gateContinuation,
   })
   return Object.freeze({ core, app, webSocket, runtime, lifecycleSteps })
 }

@@ -204,13 +204,22 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // and no clarify/parent/iteration fork, so causal order is the contract.
     // The scoped regex proves both occurrences are tied to __repo_prep__ and
     // the exact inventory makes any third occurrence flip red.
-    const prepCausalReads = TASK_SRC.match(
+    const prepCausalReads = (
+      TASK_SRC +
+      readFileSync(
+        join(
+          SRC_ROOT,
+          'modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts',
+        ),
+        'utf8',
+      )
+    ).match(
       /eq\(nodeRuns\.nodeId, REPO_PREP_NODE_ID\)\)\)\s*\.orderBy\(\s*desc\(nodeRuns\.retryIndex\),\s*engineOf\([\w.]+\)\.descNullsLast\(nodeRuns\.seq\),\s*desc\(nodeRuns\.id\),?\s*\)/g,
     )
     expect(prepCausalReads).toHaveLength(2)
     expect(srcInventory(FORK_MARKER)).toEqual({
-      'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts': 1,
-      'services/task.ts': 2,
+      'modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts': 1,
+      'services/task.ts': 1,
     })
   })
 

@@ -83,10 +83,10 @@ export interface TaskDriveRuntimeKnobs {
 
 export interface TaskDriveRuntimeOptions extends TaskDriveRuntimeKnobs {
   readonly appHome: string
-  readonly ensureWorkspaceProfiles?: boolean
 }
 
 export interface TaskDriveRequest extends TaskDriveRuntimeOptions {
+  readonly ensureWorkspaceProfiles?: boolean
   readonly taskId: string
   readonly executionContext: TaskExecutionContextRef
   readonly signal: AbortSignal

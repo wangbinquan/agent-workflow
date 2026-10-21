@@ -42,9 +42,9 @@ export {
   type TaskExecutionTriggerParticipant,
 } from './triggerExecution'
 export {
-  createPostgresqlRepositoryPreparationRetryCommand,
-  type PostgresqlRepositoryPreparationRetryDependencies,
-} from '../infrastructure/postgresqlRepositoryPreparationRetryCommand'
+  createRepositoryPreparationRetryCommand,
+  type RepositoryPreparationRetryDependencies,
+} from '../infrastructure/repositoryPreparationRetryCommand'
 export {
   createTaskRouteWorkspaceParticipant,
   createTaskWorkspaceMaterializer,

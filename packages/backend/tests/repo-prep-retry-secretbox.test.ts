@@ -51,16 +51,14 @@ describe('仓库准备重试 / boot 恢复必须带上 secretBox', () => {
     const src = read('cli/start.ts')
     const runtime = read('modules/task-execution/composition/providerRuntime.ts')
     const autoResume = read('modules/task-execution/composition/taskAutoResume.ts')
-    const adapter = read('cli/daemonModules/adapters.ts')
+    const bundle = read('cli/daemonModules/taskExecution.ts')
     expect(src).toContain('composeDaemonTaskExecutionModules({')
     expect(src).toContain('secretBox,')
-    expect(adapter).toMatch(
-      /buildStartTaskDeps\([\s\S]*?authorization\?\.actorUserId \?\? SYSTEM_USER_ID,\s*input\.routeWorkspace\.secretBox,/,
-    )
-    expect(adapter).toContain('repositoryPreparationRetry: Object.freeze({')
-    expect(adapter).toContain('secretBox: input.routeWorkspace.secretBox,')
-    // The same closed retry command keeps the selected secret box and caller identity.
-    expect(runtime).toContain('repositoryPreparation: dependencies.repositoryPreparationRetry')
+    expect(bundle).toMatch(/composeRepositoryPreparation\(\{[\s\S]*?secretBox,/)
+    expect(bundle).toMatch(/composeDeferredRepositoryPreparation\(\{[\s\S]*?secretBox,/)
+    expect(runtime.match(/createRepositoryPreparationRetryCommand\(\{/g)).toHaveLength(2)
+    expect(runtime).toContain('coordinator: dependencies.coordinatorFactory.session')
+    expect(runtime).toContain('repositoryPreparation: repositoryPreparationRetry')
     expect(autoResume).toContain('input.repositoryPreparation.retry(taskId)')
   })
 })

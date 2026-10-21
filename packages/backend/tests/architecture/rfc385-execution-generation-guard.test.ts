@@ -22,7 +22,7 @@ test('execution module, provider runtime, fusion, run configuration and standalo
   for (const [path, sites] of [
     ['cli/daemonModules/adapters.ts', 2],
     ['cli/daemonModules/taskExecution.ts', 1],
-    ['cli/postgresqlDaemonApplication.ts', 2],
+    ['cli/postgresqlDaemonApplication.ts', 1],
   ] as const) {
     const source = read(path)
     expect(source).toContain("from '@/services/daemonGeneration'")

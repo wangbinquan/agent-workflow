@@ -104,11 +104,7 @@ function thrownBy(fn: () => unknown) {
 
 for (const [label, relative, localName] of [
   ['task', '../src/services/task.ts', 'diagnosticTextOf'],
-  [
-    'repository retry',
-    '../src/modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts',
-    'diagnosticText',
-  ],
+  ['repository retry', '../src/services/task.ts', 'diagnosticTextOf'],
 ]) {
   const diagnostic = actual(relative!, localName!)
   describe(`RFC-359 repository diagnostic ${label}`, () => {

@@ -15,6 +15,7 @@ import {
   type TaskStatus,
 } from '@agent-workflow/shared'
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
+import { shouldRebuildWorkspaceProfiles } from '../domain/executionIntent'
 import { ulid } from 'ulid'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 
@@ -1150,14 +1151,23 @@ export async function drivePreparedTaskResume(
         : {
             ...topology.schedulerDriver,
             async drive(request) {
-              const { taskId, executionContext, signal, ...runConfig } = request
+              const {
+                taskId,
+                executionContext,
+                signal,
+                ensureWorkspaceProfiles: _workspaceProfiles,
+                ...runConfig
+              } = request
               const readiness = await continuation.ready({
                 taskId,
                 // readResumeIntent above accepts only a durable resume intent.
                 intentKind: 'resume',
                 execution: executionContext,
                 signal,
-                runtime: resolveTaskDriveConfig(runConfig),
+                runtime: {
+                  ...resolveTaskDriveConfig(runConfig),
+                  ensureWorkspaceProfiles: shouldRebuildWorkspaceProfiles('resume'),
+                },
               })
               if (readiness.kind !== 'ready' || request.signal.aborted) return
               await topology.schedulerDriver.drive(request)

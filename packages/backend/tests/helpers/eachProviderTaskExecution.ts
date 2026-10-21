@@ -317,11 +317,8 @@ export async function createEachProviderTaskExecution(
           ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
         }),
         lifecycleRepair: {},
-        fusion: { appHome, workspaces: createFileFusionWorkspaceEffects({ appHome }) },
+        fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
         rootResumeRuntime,
-        repositoryPreparationRetry: {
-          retry: async () => unavailable('repository preparation retry'),
-        },
       })
     return {
       provider,
@@ -465,7 +462,7 @@ export async function createEachProviderTaskExecution(
         ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
       }),
       lifecycleRepair: {},
-      fusion: { appHome, workspaces: createFileFusionWorkspaceEffects({ appHome }) },
+      fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
       rootResumeRuntime,
       workgroupTaskRoom: { collaboration: workgroupClarify },
     })

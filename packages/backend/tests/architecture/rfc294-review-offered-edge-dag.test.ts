@@ -689,12 +689,7 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
-    to: 'knowledge-evolution',
-    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
-    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
-  },
+
   {
     from: 'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
     to: 'collaboration',

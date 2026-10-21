@@ -160,7 +160,7 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     expect(routesSrc).not.toContain('resolveUploadLimits(')
     // T25 后路由侧不再持有 launchRuntime spread（三处全随编排体走）。
     expect(routesSrc.includes('...launchRuntime')).toBe(false)
-    const depsSrc = readFileSync(join(import.meta.dir, '../src/services/startTaskDeps.ts'), 'utf8')
+    const depsSrc = readFileSync(join(import.meta.dir, 'helpers/startTaskDeps.ts'), 'utf8')
     expect(depsSrc).toContain('resolveLaunchRuntimeConfig(configPath)')
     // RFC-359 AC-1（第 13 刀）改锚：`/api/tasks` 的两个 provider 绑定合成一个中立工厂。
     const routeOperations = readFileSync(
@@ -246,8 +246,8 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // 它那台 coordinator 随之出账——重试的驱动改由紧随其后的 `resumeTask` 那一台负责，
     // 配置单源不变（仍只有一处 `...runtimeConfigOpts(`）。
     expect(spreads).toHaveLength(1)
-    expect(taskSrc.match(/createTaskDriveCoordinator\(\{/g) ?? []).toHaveLength(4)
-    // RFC-386: C11/C12 now share the application factory; RFC-387 legacy sites stay locked.
+    expect(taskSrc.match(/composeTestTaskDriveFactory\(\{/g) ?? []).toHaveLength(4)
+    // RFC-387: only the four test-only admissions retain a factory wrapper; production uses the session.
     const factory = readFileSync(
       join(
         import.meta.dir,
@@ -262,7 +262,7 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     const wakeEnd = taskSrc.indexOf('\nexport ', wakeStart + 1)
     const wakeBlock = taskSrc.slice(wakeStart, wakeEnd)
     expect(wakeStart).toBeGreaterThan(-1)
-    expect(wakeBlock.match(/createTaskDriveCoordinator\(\{/g) ?? []).toHaveLength(1)
+    expect(wakeBlock.match(/composeTestTaskDriveFactory\(\{/g) ?? []).toHaveLength(1)
   })
 
   // RFC-266: RFC-243 子任务的 deps 装配（buildChildDeps）必须原样带上三个并发键。

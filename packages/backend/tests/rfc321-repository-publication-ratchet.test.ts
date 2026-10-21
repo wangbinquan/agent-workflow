@@ -318,7 +318,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     // transport after StartTaskDeps. That transport had no GitHub/GitLab metadata
     // participant, so SSH publication skipped provider API discovery and went
     // straight to mapping/SaaS URL rules even though RFC-321 requires API first.
-    const startTaskDeps = read('packages/backend/src/services/startTaskDeps.ts')
+    const startTaskDeps = read('packages/backend/tests/helpers/startTaskDeps.ts')
     const cli = read('packages/backend/src/cli/start.ts')
     const taskRoutes = read('packages/backend/src/routes/tasks.ts')
     const providerRuntime = read(

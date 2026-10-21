@@ -37,8 +37,10 @@ import { SYSTEM_USER_ID } from '@/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
-// RFC-382 moves both SQLite roots' unchanged retry command into the provider adapter.
-const RETRY_WIRING_ROOTS = ['packages/backend/src/cli/daemonModules/adapters.ts'] as const
+// RFC-387 moves the retry command into the neutral session implementation.
+const RETRY_WIRING_ROOTS = [
+  'packages/backend/src/modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts',
+] as const
 
 describe('RFC-319 TASK-27 —— 演员发起的仓库准备重试必须带着发起人', () => {
   test('前提：这条 kind 本来就在演员重放命令集里，只差 source / actor', () => {
@@ -72,13 +74,14 @@ describe('RFC-319 TASK-27 —— 演员发起的仓库准备重试必须带着�
       const source = readFileSync(resolve(ROOT, relative), 'utf-8')
       // 端口签名收下授权。
       expect(`${relative}: retry signature`).toBe(
-        source.includes('authorization?: { readonly actorUserId: string }')
+        source.includes('authorization?: RepositoryPreparationRetryAuthorization')
           ? `${relative}: retry signature`
           : `${relative}: MISSING retry authorization parameter`,
       )
-      // 并且真的用它——缺席时才回落 SYSTEM（boot 自动恢复那条路）。
+      // The same rest/actor branch is retained; boot recovery still uses auto with no actor.
       expect(`${relative}: forwards actor`).toBe(
-        source.includes('authorization?.actorUserId ?? SYSTEM_USER_ID')
+        source.includes("{ source: 'rest' as const, actorUserId: authorization.actorUserId }") &&
+          source.includes("{ source: 'auto' as const, actorUserId: null }")
           ? `${relative}: forwards actor`
           : `${relative}: MISSING actor forwarding`,
       )

@@ -8760,3 +8760,7 @@ provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行�
 ## RFC-386：按驱动画像复用会话协调器工厂
 
 任务的每次调用驱动应经会话的 `coordinatorFactory.coordinatorFor(profile)`；子任务启动与续跑的配置是实时会话配置叠加父任务的 `INHERITABLE_RUN_CONFIG_KEYS`（父值优先），内建提交 / 合并 Agent 设置和记忆提炼观察者由会话提供，不加入父配置继承表，也不改变工作流是否提交或推送。根续跑不叠加父配置；工作区排除配置是否重建由认领意图类型决定。失败统一按 `claimedOwnerEpoch` 终结意图。人工门唤醒、房间续跑、仓库准备重试及融合的旧接线仍留给 RFC-387。
+
+## RFC-387：续跑、仓库准备重试与融合复用会话驱动
+
+门控唤醒、房间续跑、仓库准备重试与融合一律经会话的 `coordinatorFactory.session`；房间提交后尽力唤醒，worker 保留持久兜底，仓库克隆在后台准备步骤执行。`createTaskDriveCoordinator` 已删除，`DefaultTaskDriveCoordinator` 只能在 RFC-386 工厂内构造；旧的 start / wake / dynamic resume / retry 导出仅供测试，W4 删除。排除配置重建只看认领意图类型；新融合工作区由引擎的 missing-digest 路径补齐配置。驱动释放边界捕获 `finalizeClaimedWorkspace` 错误并保留认领，命令本身继续抛错，维护负责恢复。

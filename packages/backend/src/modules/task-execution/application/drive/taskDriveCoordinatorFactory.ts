@@ -26,7 +26,7 @@ export interface TaskDriveProfile {
   readonly runConfig?: { readonly kind: 'inherit-parent'; readonly parent: InheritableRunConfig }
   readonly admittedContinuation?: AdmittedContinuationStep
   readonly failure?: TaskDriveFailureProfile
-  readonly engine?: SchedulerDriverPort
+  readonly engine?: Pick<SchedulerDriverPort, 'drive'>
 }
 export interface TaskDriveCoordinatorFactory {
   readonly session: TaskDriveCoordinator
@@ -37,7 +37,7 @@ export interface TaskDriveCoordinatorFactoryOptions {
   readonly lifecycle: TaskDriverLifecyclePort
   readonly gateContinuationPreDrive: GateContinuationPreDriveStep
   readonly repositoryPreparation: RepositoryPreparationStep
-  readonly engine: () => SchedulerDriverPort
+  readonly engine: () => Pick<SchedulerDriverPort, 'drive'>
   readonly failures: Pick<TaskExecutionPersistence, 'runtimeLifecycle' | 'intentTerminalization'>
   readonly log: TaskExecutionTopologyLogger
 }

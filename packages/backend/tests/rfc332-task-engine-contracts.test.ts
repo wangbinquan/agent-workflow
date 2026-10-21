@@ -82,13 +82,12 @@ describe('RFC-332 T3-T4 — additive drive and engine contracts', () => {
       appHome: '/tmp/rfc332',
       binaryOverride: ['bun', 'run'],
       maxConcurrentNodes: 7,
-      ensureWorkspaceProfiles: true,
     }
     const resolved = resolveTaskDriveConfig(sourceOptions)
     expect(resolved).toEqual({
       appHome: '/tmp/rfc332',
       runtime: { binaryOverride: ['bun', 'run'], maxConcurrentNodes: 7 },
-      ensureWorkspaceProfiles: true,
+      ensureWorkspaceProfiles: false,
     })
     expect(Object.isFrozen(resolved)).toBe(true)
     expect(Object.isFrozen(resolved.runtime)).toBe(true)
@@ -169,14 +168,14 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
   test('four admissions and the exact human-gate wake converge on one TaskEngine adapter', () => {
     const task = source('packages/backend/src/services/task.ts')
     expect(taskDriveRequests('kick')).toHaveLength(0)
-    expect(taskDriveRequests('drive')).toHaveLength(1)
+    expect(taskDriveRequests('drive')).toHaveLength(0)
     // Four command admissions plus RFC-333's post-commit wake use the same
     // coordinator factory. The wake is not a fifth admission: the decision
     // transaction already inserted its exact durable intent.
     // RFC-359 AC-1（第 9 刀）：5 → 4。`retryNode` 整份删除（`retry` 两份实现合一），
     // 它那台 coordinator 随之出账；重试的驱动改由紧随其后的 `resumeTask` 那一台负责。
-    expect(task.match(/createTaskDriveCoordinator\(\{/g)).toHaveLength(4)
-    // RFC-386: C11/C12 now share the application factory; RFC-387 legacy sites stay locked.
+    expect(task.match(/composeTestTaskDriveFactory\(\{/g)).toHaveLength(4)
+    // RFC-387: only the four test-only admissions retain a factory wrapper; production uses the session.
     const factory = source(
       'packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts',
     )
@@ -187,7 +186,7 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
     const wakeEnd = task.indexOf('\nexport ', wakeStart + 1)
     const wakeBlock = task.slice(wakeStart, wakeEnd)
     expect(wakeStart).toBeGreaterThan(-1)
-    expect(wakeBlock.match(/createTaskDriveCoordinator\(\{/g)).toHaveLength(1)
+    expect(wakeBlock.match(/composeTestTaskDriveFactory\(\{/g)).toHaveLength(1)
   })
 
   test('boot recovery delegates repository preparation without querying prep rows', () => {

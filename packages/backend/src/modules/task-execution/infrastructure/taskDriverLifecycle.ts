@@ -153,7 +153,10 @@ function startOwnerHeartbeat(
 
 /** RFC-359 T7b：释放序列是一份实现（taskDriverRelease.ts）；这里只提供 SQLite 的依赖装配。 */
 function releaseDependencies(
-  deps: Pick<TaskDriverLifecycleDependencies, 'module' | 'persistence' | 'finalizeWorkspace'>,
+  deps: Pick<
+    TaskDriverLifecycleDependencies,
+    'module' | 'persistence' | 'finalizeWorkspace' | 'log'
+  >,
 ): TaskDriverReleaseDependencies {
   return {
     registry: deps.module.runtimeRegistry,
@@ -164,6 +167,7 @@ function releaseDependencies(
       ownerHeartbeatTimers.delete(tokenKey)
     },
     finalizeWorkspace: deps.finalizeWorkspace,
+    log: deps.log,
   }
 }
 

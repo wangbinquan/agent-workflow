@@ -40,7 +40,8 @@ import {
 } from '../src/modules/task-execution/composition/triggerExecution'
 import { composeWorkgroupLaunchResourceOperations } from '../src/modules/task-execution/composition/workgroupLaunchResources'
 import { composeDeferredRepositoryPreparation } from '../src/modules/task-execution/composition/deferredRepositoryPreparation'
-import { createTaskDriveCoordinator } from '../src/services/task'
+import { createTestTaskDriveCoordinator } from './helpers/legacyTaskDrive'
+
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { fireSchedule, getScheduledTaskRow } from './helpers/integrationTriggerResourceBinding'
 import {
@@ -103,7 +104,7 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
     resourceAuthorityFor: () => {
       throw new Error('scheduled launch must use the delegated resources from fireSchedule')
     },
-    coordinator: createTaskDriveCoordinator({
+    coordinator: createTestTaskDriveCoordinator({
       deps: { db, schedulerDriver, configPath },
       appHome,
       repositoryPreparation: composeDeferredRepositoryPreparation({

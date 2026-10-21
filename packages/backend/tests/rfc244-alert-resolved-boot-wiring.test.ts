@@ -53,7 +53,10 @@ function assemblySlice(startMarker: string, endMarker: string): string {
 
 describe('RFC-244 lifecycle alert resolution boot wiring', () => {
   test('defines one tasks-list resolved broadcaster with the strict additive frame', () => {
-    const helper = assemblySlice('const broadcastResolved =', 'const gateContinuationDeps =')
+    const helper = assemblySlice(
+      'const broadcastResolved =',
+      'const humanGateContinuationRecovery =',
+    )
     expect(helper).toContain('tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL')
     expect(helper).toContain("type: 'lifecycle.alert.resolved'")
     expect(helper).toContain('taskId,')

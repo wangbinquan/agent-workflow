@@ -28,7 +28,7 @@ import {
   buildRepairPrompt,
   COMMIT_PUSH_OUTPUT_LANG_DIRECTIVE,
 } from '../src/services/commitPush'
-import { resolveLaunchRuntimeConfig } from '../src/services/launchRuntimeConfig'
+import { resolveLaunchRuntimeConfig } from './helpers/launchRuntimeConfig'
 
 const MSG_OPTS = {
   repoName: 'demo',

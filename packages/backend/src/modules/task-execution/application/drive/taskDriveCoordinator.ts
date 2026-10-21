@@ -226,9 +226,7 @@ export class DefaultTaskDriveCoordinator implements TaskDriveCoordinator {
     attachment: TaskDriveAttachment,
   ): Promise<TaskDriveContext> {
     const runtime = await this.options.runtime
-    // Keep explicit legacy flags until RFC-387 retires those callers.
-    const ensureWorkspaceProfiles =
-      runtime.ensureWorkspaceProfiles || shouldRebuildWorkspaceProfiles(attachment.intentKind)
+    const ensureWorkspaceProfiles = shouldRebuildWorkspaceProfiles(attachment.intentKind)
     return Object.freeze({
       taskId,
       intentKind: attachment.intentKind,

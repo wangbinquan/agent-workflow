@@ -36,11 +36,7 @@ import {
   listVisibleFusionSummaries,
   type FusionViewer,
 } from '../application/fusionViews'
-import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import {
-  resolveTaskLaunchRuntimeConfiguration,
-  type TaskLaunchConfigurationQueries,
-} from '@/modules/task-execution/public/queries'
+import { type TaskLaunchConfigurationQueries } from '@/modules/task-execution/public/queries'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -64,21 +60,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
   }
 
   async function fusionDeps(): Promise<FusionDeps> {
-    // RFC-108 T4 (Codex impl gate P2): thread the per-node timeout floor so a
-    // hung fusion agent is bounded like any other node. RFC-115: also thread
-    // the global retry budget + default runtime (Codex F3) into the fusion task.
-    const { defaultPerNodeTimeoutMs, defaultNodeRetries, sessionRestartBudget, defaultRuntime } =
-      deps.launchConfiguration === undefined
-        ? resolveLaunchRuntimeConfig(deps.configPath)
-        : await resolveTaskLaunchRuntimeConfiguration(deps.launchConfiguration)
-    return {
-      operations: deps.operations,
-      configPath: deps.configPath,
-      ...(defaultPerNodeTimeoutMs !== undefined ? { defaultPerNodeTimeoutMs } : {}),
-      ...(defaultNodeRetries !== undefined ? { defaultNodeRetries } : {}),
-      ...(sessionRestartBudget !== undefined ? { sessionRestartBudget } : {}),
-      ...(defaultRuntime !== undefined ? { defaultRuntime } : {}),
-    }
+    return { operations: deps.operations }
   }
 
   registerRoute(

@@ -266,40 +266,24 @@ describeEachProviderHttpApplication(
       }
     }, 30_000)
 
-    test('the real Fusion route waits for the same selected reader without constructing a Task or reading its file', async () => {
+    test('Fusion listing neither starts a Task nor reads execution configuration', async () => {
       const f = await setup(),
         gate = held()
       f.storage.gate = gate
-      let settled = false
-      const pending = f.request('/api/fusions', undefined, 'GET').then((response) => {
-        settled = true
-        return response
-      })
       try {
-        await Promise.race([
-          gate.entered.promise,
-          pending.then(() => {
-            throw new Error('Fusion returned before selected configuration ACK')
-          }),
-        ])
-        expect(settled).toBe(false)
-        expect(f.drives).toEqual([])
-        gate.release.resolve()
-        const response = await pending
+        const response = await f.request('/api/fusions', undefined, 'GET')
         expect(response.status, await response.clone().text()).toBe(200)
         expect(await response.json()).toEqual([])
-        expect(f.storage.receivers).toHaveLength(3)
-        expect(f.storage.receivers.every((receiver) => receiver === f.storage)).toBe(true)
+        expect(f.storage.receivers).toHaveLength(0)
+        expect(f.drives).toEqual([])
         expect(readFileSync(f.file, 'utf8')).toBe(f.fileBefore)
-        f.storage.gate = undefined
         f.storage.current = { ...f.storage.current, defaultRuntime: 'opencode' }
         expect((await f.request('/api/fusions', undefined, 'GET')).status).toBe(200)
-        expect(f.storage.receivers).toHaveLength(6)
+        expect(f.storage.receivers).toHaveLength(0)
         expect(f.drives).toEqual([])
         expect(readFileSync(f.file, 'utf8')).toBe(f.fileBefore)
       } finally {
         gate.release.resolve()
-        await pending
       }
     }, 30_000)
 
@@ -382,7 +366,10 @@ describeEachProviderHttpApplication(
         ])
         expect(settled).toBe(false)
         expect(f.drives).toEqual([])
-        expect(await scope.harness.db.select().from(tasks)).toEqual([])
+        // RFC-387 freezes and commits the task before the session reads live drive settings.
+        expect(await scope.harness.db.select().from(tasks)).toMatchObject([
+          { status: 'pending', spaceKind: 'internal' },
+        ])
         expect(await scope.harness.db.select().from(fusions)).toEqual([])
         gate.release.resolve()
         const response = await pending
@@ -469,20 +456,12 @@ describeEachProviderHttpApplication(
       expect(prep?.status).toBe('failed')
       expect(f.storage.receivers.length).toBeGreaterThanOrEqual(6)
       expect(readFileSync(f.file, 'utf8')).toBe(f.fileBefore)
-      // SQLite acknowledges background preparation; the original PostgreSQL retry
-      // records the failed attempt before returning its synchronous clone failure.
+      // RFC-387: both providers admit the retry atomically and acknowledge it; the
+      // clone runs in the background and its failure is recorded on the task.
       const retry = await f.request(`/api/tasks/${task.id}/nodes/${prep?.id}/retry`)
-      expect(retry.status, await retry.clone().text()).toBe(
-        f.opened.taskExecution.provider === 'postgresql' ? 400 : 200,
-      )
-      if (f.opened.taskExecution.provider === 'postgresql') {
-        expect(await retry.json()).toMatchObject({
-          ok: false,
-          code: 'repo-clone-failed',
-          details: { url: 'http://127.0.0.1:1/configuration-closure.git' },
-        })
-      }
-      await f.waitTask(task.id, 'failed')
+      expect(retry.status, await retry.clone().text()).toBe(200)
+      const refailed = await f.waitTask(task.id, 'failed')
+      expect(refailed.errorMessage).not.toBeNull()
       const attempts = await scope.harness.db
         .select()
         .from(nodeRuns)

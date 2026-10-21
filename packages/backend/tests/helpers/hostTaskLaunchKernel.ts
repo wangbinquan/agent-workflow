@@ -16,7 +16,8 @@ import {
 } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type { RootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
-import { createTaskDriveCoordinator, type TaskDriveCoordinatorDependencies } from '@/services/task'
+import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
+import { type TaskDriveCoordinatorDependencies } from '@/services/task'
 
 export function createTestHostTaskLaunchKernel(input: {
   readonly db: ProviderNeutralDatabase
@@ -26,7 +27,7 @@ export function createTestHostTaskLaunchKernel(input: {
   readonly persistence: Pick<TaskExecutionPersistence, 'runtimeLifecycle'>
   readonly completionMode: TaskDriveCompletionMode
 }): RootTaskLaunchKernel {
-  const drive = createTaskDriveCoordinator({
+  const drive = createTestTaskDriveCoordinator({
     deps: input.coordinatorDeps,
     appHome: input.appHome,
     engineFailureMessage: 'host task drive threw',

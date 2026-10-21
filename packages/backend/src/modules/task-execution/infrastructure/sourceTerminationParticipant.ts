@@ -11,9 +11,8 @@
 //     真正会久等的 `awaitStopped` 两侧本来就在锁外。
 //   ②**运行时注册表**。PostgreSQL 收一个参数、SQLite 读模块全局——与第 12 刀同一条处方：
 //     它是部署形态，做成参数，两个组合根各绑各的。
-//   ③**无 driver 时的工作区收尾**。两侧的收尾器**不是同一个函数**（PostgreSQL 走 source-control
-//     的 `finalizeClaimedWorkspace`，SQLite 走 `finishClaimedWebhookWorkspacePrune`），所以它
-//     必须是注入的端口；但「要不要收尾」两侧应当一致——两条 boot 都装了同一条 durable 消费者
+//   ③**无 driver 时的工作区收尾**。两个 provider 的生产装配都通过注入端口调用 source-control
+//     的 `finalizeClaimedWorkspace`；「要不要收尾」由本参与者决定。两条 boot 都装了同一条 durable 消费者
 //     （`nudgeWorkspacePrune`）作为兜底，同步收尾让回执（`no-active-owner`）在返回时就是真的。
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
@@ -36,8 +35,8 @@ export interface TaskSourceTerminationParticipantInput {
   /** 停机票据注册表。缺省是进程级单例（单进程部署形态）。 */
   readonly runtimeRegistry?: InMemoryTaskRuntimeRegistry
   /**
-   * 没有本地 driver 时的工作区收尾。**两条 boot 各交自己那一份**——PostgreSQL 交
-   * source-control 的 `finalizeClaimedWorkspace`，SQLite 交 `finishClaimedWebhookWorkspacePrune`。
+   * 没有本地 driver 时的工作区收尾。两个 provider 的生产装配都交 source-control 的
+   * `finalizeClaimedWorkspace`；具体收尾行为由注入端口提供。
    * 不交就只剩 durable 消费者兜底（回执仍是 `no-active-owner`，只是收尾异步发生）。
    */
   readonly finalizeWithoutDriver?: (taskId: string) => Promise<void>

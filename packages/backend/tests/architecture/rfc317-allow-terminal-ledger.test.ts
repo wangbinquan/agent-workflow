@@ -74,8 +74,9 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
     // 它那条终态→pending 的准入 CAS 随之出账。债是还掉的，不是挪走的——合并后的那份
     // 用的是 `interrupted` 中转态 + 生产的 resume，不再自己越过终态保护推 `pending`。
     file: 'packages/backend/src/services/task.ts',
-    count: 2,
-    rewrites: 'resumeTask / syncTaskWorkflow 两条——正是头注释点名的持有者中的两个，终态→pending。',
+    count: 1,
+    rewrites:
+      'RFC-387: only the test-only dynamic-workflow resume admission remains; repository retry moved to the neutral atomic command.',
   },
   {
     file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts',
@@ -148,14 +149,14 @@ describe('RFC-317 T49 —— allowTerminal 站点账本（只减不增）', () =
     ).toEqual(expected)
   })
 
-  test('总数就是 22，且每条都写清了改写什么', () => {
+  test('总数就是 21，且每条都写清了改写什么', () => {
     // 总数单独锁一条：逐文件相等已经能抓住增减，但这个数仍是 lifecycle.ts
     // 头注释里那句「五个具名持有者」的反证，值得让它在测试里显式出现一次。
     //
     // RFC-359 AC-1（第 8 刀）：31 → 22。少掉的 9 处全部来自修复的**第二份实现**
     //（`platform/persistence/sqlite/taskLifecycleRepair/options-*.ts` 的 7 个文件），
     // 它随两份合一退役——同一批终态改写在留下的那一份里本来就已经记着（那条 count=11）。
-    expect(ALLOW_TERMINAL_LEDGER.reduce((sum, entry) => sum + entry.count, 0)).toBe(22)
+    expect(ALLOW_TERMINAL_LEDGER.reduce((sum, entry) => sum + entry.count, 0)).toBe(21)
     for (const entry of ALLOW_TERMINAL_LEDGER) {
       expect(entry.rewrites.length, `${entry.file}.rewrites`).toBeGreaterThan(15)
     }

@@ -1,3 +1,5 @@
+import { taskBundleInput } from './helpers/daemonTaskExecutionBundle'
+import { composeDaemonTaskExecutionModules } from '@/cli/daemonModules/taskExecution'
 import { afterEach, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -5,13 +7,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { workflows, users } from '@/db/schema'
-import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
-import { createPostgresqlFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations'
-import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 import { admitTransferredWorkspace } from '@/modules/task-execution/infrastructure/transferredWorkspaceAdmission'
-import type { TaskExecutionTopologyLogger } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -19,18 +16,6 @@ const roots: string[] = []
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
-function logger(): TaskExecutionTopologyLogger {
-  const log: TaskExecutionTopologyLogger = {
-    debug() {},
-    info() {},
-    warn() {},
-    error() {},
-    child() {
-      return log
-    },
-  }
-  return log
-}
 describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
   for (const kind of ['borrowed', 'call', 'fusion'] as const) {
     test(`${kind} hand-off rolls back with Task admission and never removes caller files`, async () => {
@@ -98,7 +83,6 @@ describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
       name: workflowId,
       definition: JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] }),
     })
-    const binding = harness.applicationBinding
     const driven: string[] = []
     const schedulerDriver = {
       async drive(input: { taskId: string }) {
@@ -110,7 +94,6 @@ describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
         return false
       },
     }
-    const persistence = createTaskExecutionPersistence(harness.db)
     const baseCommit = git('rev-parse', 'HEAD')
     // RFC-370 §10 V20: the workspace arrives through the selected effects; this
     // fixture hands the existing prepared repository over unchanged.
@@ -121,27 +104,12 @@ describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
       },
       release: async () => {},
     }
-    const operations =
-      binding.provider === 'sqlite'
-        ? createSqliteFusionEngineTaskOperations({
-            db: binding.db,
-            appHome: root,
-            schedulerDriver,
-            workspaces,
-          })
-        : createPostgresqlFusionEngineTaskOperations({
-            db: binding.db,
-            appHome: root,
-            schedulerDriver,
-            workspaces,
-            persistence,
-            executionModule: createProviderTaskExecutionModule({
-              daemonGeneration: 'rfc363-fusion',
-              persistence,
-            }),
-            finalizeWorkspace: async () => {},
-            log: logger(),
-          })
+    const fixture = taskBundleInput(harness, root)
+    const operations = composeDaemonTaskExecutionModules({
+      ...fixture.input,
+      selection: { ...fixture.input.selection, fusionWorkspaces: workspaces },
+      testSeams: { schedulerDriver },
+    }).fusion
     await operations.launch({
       taskId,
       workflowId,
@@ -153,7 +121,7 @@ describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
       iteration: 1,
       seed: { base: [], overlay: null },
       platformInputPaths: [],
-      awaitScheduler: true,
+      completionMode: 'await-settle',
     })
     expect(await operations.load(taskId)).not.toBeNull()
     const plan = await createWorkspacePreparationJournal(harness.db).forTask(taskId)

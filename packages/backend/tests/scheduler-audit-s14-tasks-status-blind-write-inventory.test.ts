@@ -43,9 +43,8 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
   'modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts': 1,
   'modules/task-execution/infrastructure/taskRouteOperations.ts': 2,
-  'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts': 3,
+  'modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts': 1,
   'modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts': 1,
-  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts': 1,
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 1,
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts': 1,
   // RFC-359 W1-T1：human-gate 任务跃迁的一份中立实现（SQLite/PG 共用），CAS on lifecycleEventRevision。

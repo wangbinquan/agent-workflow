@@ -110,7 +110,6 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑦）：`services/execution/executor.ts` 这一行
       // **删除**——那个「统一执行门面」整份退役（它的 `startExecution` 是启动编排的第二份写法，
       // 生产消费者已归零）。又少一个 `startTask` 调用点。
-      'modules/task-execution/infrastructure/fusionEngineTaskOperations.ts': 1,
       'services/task.ts': 1,
       // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑤）2 → 1：`startWorkgroupTaskFromFrozen`
       // （RFC-243 §6.3 的冻结启动面）整份删除——子任务启动两个引擎合一之后它的唯一生产

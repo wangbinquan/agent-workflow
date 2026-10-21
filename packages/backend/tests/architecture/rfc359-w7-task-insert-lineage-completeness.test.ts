@@ -66,7 +66,7 @@ const TASK_INSERT_SITES: readonly string[] = [
   // RFC-370 v2 P1: the host write selection is gone; the site keeps all three columns.
   // RFC-370 §10 V20: 121 → 129 — the workspace lane's imports, dependency and the
   // prepared-workspace parameter sit above it; the site and its three columns are unchanged.
-  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts:129 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'modules/task-execution/infrastructure/fusionEngineTaskOperations.ts:102 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 788 → 813——延后仓库准备的判据与注释加在
   // `workspace.prepare` 之前，站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：行号 813 → 826——`resourceAuthorityFor` 从两条臂的
@@ -85,7 +85,7 @@ const TASK_INSERT_SITES: readonly string[] = [
   // （长驻协调器不能把 17 个旋钮冻在 boot，见 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`），
   // 解析体加注释与一个局部变量，本文件变长；站点与它写的三列一格未动。
   // RFC-370 v2 P1: 2537 → 2504 with the Task host binding removed; the site and its three columns remain.
-  'services/task.ts:2514 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'services/task.ts:2457 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {

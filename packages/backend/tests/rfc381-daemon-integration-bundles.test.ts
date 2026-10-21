@@ -130,7 +130,6 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
         expect(Object.keys(session.fusionModules).sort()).toEqual([
           'fusionOperations',
           'launchConfiguration',
-          'runConfiguration',
         ])
         expect(Object.keys(session.integrationModules).sort()).toEqual(
           [

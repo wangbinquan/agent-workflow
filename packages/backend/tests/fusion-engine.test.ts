@@ -64,7 +64,7 @@ import { getSkillVersionContent } from '../src/modules/resource-catalog/infrastr
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
 import { composeFusionOperationsFor } from '../src/modules/knowledge-evolution/composition/fusion'
-import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
+import { composeTestFusionTasks } from './helpers/fusionTaskBundle'
 import { createFileFusionWorkspaceEffects } from '../src/modules/source-control/composition'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
@@ -215,19 +215,19 @@ async function build(): Promise<H> {
       db,
       appHome,
       memories: memoryCatalog,
-      tasks: createSqliteFusionEngineTaskOperations({
+      tasks: composeTestFusionTasks({
         db,
         appHome,
         schedulerDriver,
+        binaryOverride: binaryOverride,
+        defaultRuntime: VALID_OPENCODE_RUNTIME,
         workspaces: createFileFusionWorkspaceEffects({
           appHome,
           ...(git === undefined ? {} : { git }),
         }),
       }),
     }),
-    binaryOverride,
-    awaitScheduler: true,
-    defaultRuntime: VALID_OPENCODE_RUNTIME,
+    completionMode: 'await-settle',
   })
   return {
     db,

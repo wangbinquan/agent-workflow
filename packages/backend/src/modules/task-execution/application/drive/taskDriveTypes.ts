@@ -27,11 +27,11 @@ export interface ResolvedTaskDriveConfig {
 
 export function resolveTaskDriveConfig(options: TaskDriveRuntimeOptions): ResolvedTaskDriveConfig {
   if (options.appHome.length === 0) throw new Error('task drive config requires appHome')
-  const { appHome, ensureWorkspaceProfiles, ...runtime } = options
+  const { appHome, ...runtime } = options
   return Object.freeze({
     appHome,
     runtime: Object.freeze({ ...runtime }),
-    ensureWorkspaceProfiles: ensureWorkspaceProfiles === true,
+    ensureWorkspaceProfiles: false,
   })
 }
 

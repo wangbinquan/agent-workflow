@@ -1,6 +1,6 @@
 import { directOperationAuthority } from '@/routes/operationAuthority'
 // RFC-382: one passive task-execution graph and one live configuration source per session.
-import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
@@ -36,11 +36,18 @@ import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/c
 import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
-import { createTaskDriveCoordinatorFactory } from '@/modules/task-execution/composition/taskDriveLegacy'
+import {
+  createTaskDriveCoordinatorFactory,
+  createRoomContinuation,
+} from '@/modules/task-execution/composition/taskDriveLegacy'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
 import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
 import type { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import type { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
+import {
+  createGateContinuationDriver,
+  composeWorktreeResumePreflight,
+} from '@/modules/task-execution/public/participants'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import type {
   PostgresqlTaskExecutionProviderRuntimeDependencies,
@@ -75,28 +82,12 @@ export interface DaemonTaskProviderInput extends Omit<
     PostgresqlTaskExecutionProviderRuntimeDependencies['fusion']
   readonly recoverySelection?: PostgresqlTaskExecutionProviderRuntimeDependencies['recoverySelection']
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
-  readonly legacyLaunch: {
-    readonly configuration: ReturnType<typeof composeTaskLaunchConfiguration>
-    readonly identityAccess: DaemonProviderCore['identityAccess']
-    readonly repositoryWorkspace: DaemonProviderCore['repositoryWorkspaceStore']
-    readonly preparationEffects: Pick<PreparationInput, 'preparationEffects' | 'scratchEffects'>
-    readonly agentLaunchResources: ProviderDependencies['routeLaunch']['agent']
-  }
 }
 export interface DaemonTaskExecutionAdapters<P extends DatabaseProvider = DatabaseProvider> {
   readonly provider: P
   compose(
     input: DaemonTaskProviderInput,
   ): Extract<SelectedTaskExecutionProviderRuntime<CollaborationRouteContext>, { provider: P }>
-  roomContinuation(input: {
-    readonly provider: SelectedTaskExecutionProviderRuntime<CollaborationRouteContext>
-    readonly configPath: string
-    readonly configuration: ReturnType<typeof composeTaskLaunchConfiguration>
-    readonly workspacePresence: DaemonObservationModules['workspacePresence']
-  }): Readonly<{
-    assertResumable(taskId: string, verb: string): Promise<void>
-    driveAfterCommit(continuation: Readonly<{ taskId: string; intentId: string }>): Promise<void>
-  }>
 }
 export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseProvider> {
   readonly db: ProviderNeutralDatabase
@@ -149,7 +140,6 @@ export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseP
     }
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
   readonly alerts?: ProviderDependencies['lifecycleRepair']
-  readonly fusionRunConfiguration?: PostgresqlTaskExecutionProviderRuntimeDependencies['fusion']['runConfiguration']
   /** Direct HTTP fixtures only. Production never substitutes its session scheduler. */
   readonly testSeams?: {
     readonly schedulerDriver?: SchedulerDriverPort
@@ -331,32 +321,9 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       appHome,
     }),
     lifecycleRepair: input.alerts ?? {},
-    fusion: {
-      appHome,
-      workspaces: selection.fusionWorkspaces,
-      runConfiguration: input.fusionRunConfiguration,
-      startDeps: {
-        launchConfiguration: taskLaunchConfiguration.continuationQueries,
-        actorUserId: SYSTEM_USER_ID,
-        secretBox,
-        identityAccess: core.identityAccess,
-        repositoryWorkspace: core.repositoryWorkspaceStore,
-        runtimeSessionLeases: observation.runtimeSessionLeases,
-        configPath,
-      },
-    },
+    fusion: { workspaces: selection.fusionWorkspaces },
     workgroupTaskRoom: { collaboration: workgroupClarify },
     finalizeWorkspace: input.finalizeWorkspace,
-    legacyLaunch: {
-      preparationEffects: {
-        preparationEffects: selection.preparationEffects,
-        scratchEffects: selection.scratchEffects,
-      },
-      configuration: taskLaunchConfiguration,
-      identityAccess: core.identityAccess,
-      repositoryWorkspace: core.repositoryWorkspaceStore,
-      agentLaunchResources,
-    },
   })
   const hostTasks = Object.freeze({
     db,
@@ -389,6 +356,19 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       },
     }),
   })
+  const gateContinuation = createGateContinuationDriver({
+    isDriving: (taskId) => provider.executionModule.runtimeRegistry.hasTask(taskId),
+    coordinator,
+  })
+  const roomContinuation = createRoomContinuation({
+    assertResumable: composeWorktreeResumePreflight({
+      getTask: provider.routes.tasks.get,
+      taskRecoveryOperations: provider.recovery,
+      worktreeExists: (reference) => observation.workspacePresence.exists(reference),
+    }),
+    gateContinuation,
+    log,
+  })
   return Object.freeze({
     ...provider,
     hostTasks,
@@ -400,12 +380,8 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     runConfiguration,
     validationContext,
     catalogSources: composeTaskExecutionCatalogSources(db, input.resources.owners),
-    roomContinuation: input.adapters.roomContinuation({
-      provider,
-      configPath,
-      configuration: taskLaunchConfiguration,
-      workspacePresence: observation.workspacePresence,
-    }),
+    gateContinuation,
+    roomContinuation,
     activeTaskIds: () =>
       provider.executionModule.runtimeRegistry.activeTokens().map((token) => token.taskId),
     isTaskActive: (taskId: string) => provider.executionModule.runtimeRegistry.hasTask(taskId),

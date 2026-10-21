@@ -48,7 +48,7 @@ function unused<T>(name: string): T {
   ) as T
 }
 export function taskBundleInput(
-  harness: ProviderDatabaseHarness,
+  harness: Pick<ProviderDatabaseHarness, 'db' | 'applicationBinding'>,
   appHome: string,
   mode: 'local-sync' | 'selected' = 'local-sync',
 ) {

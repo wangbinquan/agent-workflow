@@ -358,7 +358,7 @@ export function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /sqliteTaskExecutionIntent|taskContinuationAdmission|submitTaskContinuation|submitContinuationIntentTx|services\/task\.ts#startTaskImpl/.test(
+    /sqliteTaskExecutionIntent|taskContinuationAdmission|submitTaskContinuation|submitContinuationIntentTx|services\/task\.ts#startTaskImpl|modules\/task-execution\/infrastructure\/repositoryPreparationRetryCommand\.ts#admitRetry/.test(
       value,
     )
   ) {
@@ -541,7 +541,7 @@ export function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence|workgroupTaskRoomTaskParticipant|sourceTerminationTarget|taskRouteLaunchOperations|childExecutionLaunchOperations|childTaskLifecycleParticipant|taskRouteWorkspaceParticipant|taskRouteRepairOperations|taskRouteOperations)/.test(
+    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|fusionEngineTaskOperations|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence|workgroupTaskRoomTaskParticipant|sourceTerminationTarget|taskRouteLaunchOperations|childExecutionLaunchOperations|childTaskLifecycleParticipant|taskRouteWorkspaceParticipant|taskRouteRepairOperations|taskRouteOperations)/.test(
       value,
     )
   ) {

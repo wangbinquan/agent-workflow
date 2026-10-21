@@ -1,4 +1,4 @@
-// RFC-386: keep coordinator construction in the application factory, with exactly two RFC-387 exemptions.
+// RFC-386 / RFC-387: the application factory is the only coordinator constructor; legacy entry points are test-only.
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import ts from 'typescript'
@@ -7,13 +7,18 @@ import { backendUnits, sourceUnit, type SourceUnit } from './census'
 const PREFIX = 'packages/backend/src/'
 const FACTORY = 'modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts'
 const BUNDLE = 'cli/daemonModules/taskExecution.ts'
-// Both the file and the containing functions are registered. A second constructor
-// elsewhere in either legacy file is not covered by this temporary exemption.
-const CONSTRUCTION_SITES = [
-  `${FACTORY}#createTaskDriveCoordinatorFactory/coordinatorFor`,
-  'services/task.ts#createTaskDriveCoordinator',
-  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts#createPostgresqlFusionEngineTaskOperations/launchPrepared',
-] as const
+const CONSTRUCTION_SITES = [`${FACTORY}#createTaskDriveCoordinatorFactory/coordinatorFor`] as const
+const ASSEMBLY_SITES = [
+  `${BUNDLE}#composeDaemonTaskExecutionModules`,
+  'services/task.ts#composeTestTaskDriveFactory',
+]
+const TEST_ONLY = [
+  'startTask',
+  'wakeHumanGateContinuation',
+  'resumeDynamicWorkflowExecution',
+  'retryRepositoryPreparation',
+  'composeTestTaskDriveFactory',
+]
 const CONSUMERS = [
   'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts',
   'modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts',
@@ -54,15 +59,23 @@ export function driveFactoryViolations(units: readonly SourceUnit[]): string[] {
         node.expression.text === 'DefaultTaskDriveCoordinator'
       )
         constructions.push(`${path}#${functionPath(node)}`)
+      if (ts.isIdentifier(node) && node.text === 'createTaskDriveCoordinator')
+        errors.push(`${path}: retired coordinator entry`)
+      if (path !== 'services/task.ts' && TEST_ONLY.some((name) => called(node, name)))
+        errors.push(`${path}: production caller of a test-only entry`)
+      if (
+        path === 'cli/daemonModules/adapters.ts' &&
+        ts.isIdentifier(node) &&
+        node.text === 'roomContinuation'
+      )
+        errors.push(`${path}: room continuation belongs to the session bundle`)
       if (called(node, 'createTaskDriveCoordinatorFactory'))
         assemblies.push(`${path}#${functionPath(node)}`)
     })
   }
   if (JSON.stringify(constructions.sort()) !== JSON.stringify([...CONSTRUCTION_SITES].sort()))
     errors.push(`coordinator constructors differ: ${constructions.join(', ')}`)
-  if (
-    JSON.stringify(assemblies) !== JSON.stringify([`${BUNDLE}#composeDaemonTaskExecutionModules`])
-  )
+  if (JSON.stringify(assemblies.sort()) !== JSON.stringify([...ASSEMBLY_SITES].sort()))
     errors.push(`session factory assemblies differ: ${assemblies.join(', ')}`)
   for (const path of CONSUMERS) {
     const unit = units.find((candidate) => candidate.path === PREFIX + path)
@@ -90,12 +103,9 @@ function valid(): SourceUnit[] {
     ),
     unit(
       'services/task.ts',
-      'function createTaskDriveCoordinator() { return new DefaultTaskDriveCoordinator({}); }',
+      'function composeTestTaskDriveFactory() { return createTaskDriveCoordinatorFactory({}); }',
     ),
-    unit(
-      'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
-      'function createPostgresqlFusionEngineTaskOperations() { function launchPrepared() { return new DefaultTaskDriveCoordinator({}); } }',
-    ),
+    unit('cli/daemonModules/adapters.ts', 'const adapters = {};'),
     unit(
       BUNDLE,
       'function composeDaemonTaskExecutionModules() { const factory = createTaskDriveCoordinatorFactory({}); }',
@@ -107,7 +117,7 @@ function valid(): SourceUnit[] {
 }
 
 describe('RFC-386 coordinator construction inventory', () => {
-  test('complete backend corpus has one application factory and precisely the two RFC-387 sites', () => {
+  test('complete backend corpus has exactly one constructor and no legacy entry callers', () => {
     const units = backendUnits(resolve(import.meta.dir, '../../../..'))
     expect(units.length).toBeGreaterThanOrEqual(2000)
     expect(driveFactoryViolations(units)).toEqual([])
@@ -129,7 +139,7 @@ describe('RFC-386 coordinator construction inventory', () => {
         fixtures[0]!.text.replace('return new', 'new DefaultTaskDriveCoordinator({}); return new'),
       ],
       [1, fixtures[1]!.text + 'function another() { return new DefaultTaskDriveCoordinator({}); }'],
-      [2, fixtures[2]!.text.replace('launchPrepared()', 'another()')],
+      [2, 'function launchPrepared() { return new DefaultTaskDriveCoordinator({}); }'],
       [4, 'function drive() { return new DefaultTaskDriveCoordinator({}); }'],
       [5, 'function drive() { return new DefaultTaskDriveCoordinator({}); }'],
     ] as const) {
@@ -156,6 +166,18 @@ describe('RFC-386 coordinator construction inventory', () => {
       expect(driveFactoryViolations(fixtures)).toEqual([
         expect.stringContaining('session factory assemblies differ'),
       ])
+    }
+  })
+
+  test('rejects retired entry points, production test-wrapper callers and provider room adapters', () => {
+    for (const text of [
+      'createTaskDriveCoordinator({})',
+      ...TEST_ONLY.map((name) => `${name}({})`),
+      'const adapters = { roomContinuation() {} }',
+    ]) {
+      expect(
+        driveFactoryViolations([...valid(), unit('cli/daemonModules/adapters.ts', text)]),
+      ).not.toEqual([])
     }
   })
 

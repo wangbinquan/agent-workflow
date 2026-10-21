@@ -13,6 +13,7 @@ import {
   type PlannedSpaceLayout,
   materializeSpaceWithProvider,
   createFileWorkspacePresenceQueries,
+  composeWorkspaceMaintenanceCommand,
 } from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 // Task service — start / list / get.
@@ -20,7 +21,6 @@ import type { WorkspacePresenceQueries } from '@/modules/source-control/public/q
 
 import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/public/participants'
-import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import {
   resolveTaskLaunchRuntimeConfiguration,
   resolveTaskStartLaunchConfiguration,
@@ -114,7 +114,7 @@ import { getWorkflow } from '@/services/workflow'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
-import { finishClaimedWebhookWorkspacePrune, materializingSpaces } from '@/services/gc'
+import { materializingSpaces } from '@/services/gc'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
 import type { RollbackOutcome } from '@/services/nodeRollback'
@@ -222,17 +222,17 @@ type WorkspacePreparationRepositoryProjection = Parameters<
 type RepositoryPreparationStep = taskDriveComposition.RepositoryPreparationStep
 type RepositoryPreparationDescriptorReader =
   taskDriveComposition.RepositoryPreparationDescriptorReader
-type TaskDriveFailureReporter = taskDriveComposition.TaskDriveFailureReporter
 
 const {
   activeTaskDriverController,
+  awaitTaskDriverReleasedSettled,
   awaitTaskDriverIdle,
   clearTaskDriverLifecycleForTesting,
   createDatabaseTaskDriverLifecyclePort,
-  DefaultTaskDriveCoordinator,
+  createTaskDriveCoordinatorFactory,
+  createTaskExecutionPersistence,
   isTaskDriverActive,
   PersistedRepositoryPreparationStep,
-  resolveTaskDriveConfig,
   skipRepositoryPreparation,
 } = taskDriveComposition
 
@@ -421,16 +421,6 @@ export async function shutdownActiveTaskExecutions(
 // 早在 W4-B1 批 2h 合成了两个引擎共用的一份
 // （`DrizzleTaskExecutionShutdownOperations.interruptSurvivor` / `.markRecoveryRequired`，
 // 由 `services/shutdown.ts` 经 `dependencies.operations` 调用），这一份自那以后生产侧零调用方。
-
-/** RFC-303: a terminal effect may cancel a task that has no process-local
- * scheduler owner (pending/waiting or recovered row). In that case there is no
- * driver `finally` to complete RFC-300's already-claimed workspace prune. */
-export async function finalizeCanceledTaskWithoutDriver(
-  db: LegacyProviderNeutralDatabase,
-  taskId: string,
-): Promise<void> {
-  await finishClaimedWebhookWorkspacePrune(db, taskId)
-}
 
 export interface StartTaskDeps {
   /** The selected live configuration follows short-lived drive and continuation paths. */
@@ -1238,125 +1228,77 @@ export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOp
     readonly db: LegacyProviderNeutralDatabase
   }
 
-export function createTaskDriveCoordinator(input: {
+/** RFC-387: test-only assembly for the legacy entry points; removed in W4. */
+export function composeTestTaskDriveFactory(input: {
   readonly deps: TaskDriveCoordinatorDependencies
-  readonly persistence?: Parameters<
-    typeof taskDriveComposition.createDatabaseTaskDriverLifecyclePort
-  >[0]['persistence']
   readonly appHome: string
-  readonly ensureWorkspaceProfiles?: boolean
-  readonly admittedContinuation?: RepositoryPreparationStep
-  readonly gateContinuationPreDrive?: taskDriveComposition.GateContinuationPreDriveStep
+  readonly persistence?: ReturnType<typeof createTaskExecutionPersistence>
   readonly repositoryPreparation?: RepositoryPreparationStep
-  readonly engineFailureMessage: string
-  readonly failureReporter: TaskDriveFailureReporter
-  /**
-   * **长驻**协调器必须给这一格（2026-09-19）。
-   *
-   * RFC-332 之后这里只解析一次运行期配置，作为 start / resume / retry 的唯一交接面——那一点没变。
-   * 变的是「一次」在哪个时刻：一台在 daemon boot 时建好、之后一直服务每一次
-   * `POST /api/tasks` 的协调器，如果在构造时就把 `deps` 里那 17 个旋钮解析成不可变快照，
-   * 用户在设置页改完**默认运行时**之后启的新任务照旧按老档案派发——「设为默认」只改了界面。
-   * e2e CFG-45（`rfc319-intent-task-and-settings.spec.ts`）断言的就是这条。
-   *
-   * 给了这一格，运行期配置在**每次 submit** 现读一次（`runtime` 以 getter 交给协调器，
-   * `DefaultTaskDriveCoordinator.contextFor` 每次 drive 读一次）。
-   * 每次请求现建一台的短命协调器不需要它——那种形态的「构造时」就是「请求时」。
-   */
+  readonly gateContinuationPreDrive?: taskDriveComposition.GateContinuationPreDriveStep
   readonly refreshLaunchConfig?: () =>
     | Partial<TaskDriveCoordinatorDependencies>
     | Promise<Partial<TaskDriveCoordinatorDependencies>>
-  /** A selected source wins over the legacy file refresher on every submit. */
   readonly launchConfiguration?: TaskLaunchConfigurationQueries
-}): taskDriveComposition.DefaultTaskDriveCoordinator {
-  const resolveRuntime = (
-    fresh?: Partial<TaskDriveCoordinatorDependencies>,
-    selectedLaunchConfiguration = false,
-  ): taskDriveComposition.ResolvedTaskDriveConfig => {
-    const deps: TaskDriveCoordinatorDependencies = { ...input.deps, ...fresh }
-    return resolveTaskDriveConfig({
-      appHome: input.appHome,
-      ...(deps.binaryOverride !== undefined ? { binaryOverride: deps.binaryOverride } : {}),
-      ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-      ...(deps.subagentLiveCapture !== undefined
-        ? { subagentLiveCapture: deps.subagentLiveCapture }
-        : {}),
-      ...runtimeConfigOpts(
-        selectedLaunchConfiguration
-          ? { ...fresh, memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer }
-          : deps,
-      ),
-      log,
-      ...(input.ensureWorkspaceProfiles === true ? { ensureWorkspaceProfiles: true } : {}),
+}): taskDriveComposition.TaskDriveCoordinatorFactory {
+  const persistence =
+    input.persistence ??
+    createTaskExecutionPersistence(input.deps.db, {
+      workspacePresence: input.deps.workspacePresence,
     })
-  }
-  // 没给 refresher 的调用方保持原语义：解析一次、之后每次 drive 都是同一份。
-  const currentRuntime = ():
-    | taskDriveComposition.ResolvedTaskDriveConfig
-    | Promise<taskDriveComposition.ResolvedTaskDriveConfig> => {
-    const source = input.launchConfiguration ?? input.deps.launchConfiguration
-    if (source !== undefined) {
-      return (async () => {
-        const fresh = await resolveTaskLaunchRuntimeConfiguration(source)
-        const subagentLiveCapture = await resolveTaskSubagentLiveCapture(source)
-        return resolveRuntime(
-          { ...fresh, subagentLiveCapture, ...input.deps.launchConfigurationOverrides },
-          true,
-        )
-      })()
-    }
-    const fresh = input.refreshLaunchConfig?.()
-    return fresh instanceof Promise ? fresh.then(resolveRuntime) : resolveRuntime(fresh)
-  }
-  const frozen =
-    input.refreshLaunchConfig === undefined &&
-    input.launchConfiguration === undefined &&
-    input.deps.launchConfiguration === undefined
-      ? resolveRuntime()
-      : null
-  return new DefaultTaskDriveCoordinator({
-    get runtime() {
-      return frozen ?? currentRuntime()
+  const maintenance = composeWorkspaceMaintenanceCommand({
+    db: input.deps.db,
+    appHome: input.appHome,
+    terminalMaintenance: persistence.terminalMaintenance,
+    isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
+    invalidateWorkspacePath: () => {},
+  })
+  return createTaskDriveCoordinatorFactory({
+    async runConfiguration() {
+      const source = input.launchConfiguration ?? input.deps.launchConfiguration
+      const fresh =
+        source === undefined
+          ? await input.refreshLaunchConfig?.()
+          : {
+              ...(await resolveTaskLaunchRuntimeConfiguration(source)),
+              subagentLiveCapture: await resolveTaskSubagentLiveCapture(source),
+              ...input.deps.launchConfigurationOverrides,
+            }
+      const deps = { ...input.deps, ...fresh }
+      return {
+        appHome: input.appHome,
+        ...(deps.binaryOverride === undefined ? {} : { binaryOverride: deps.binaryOverride }),
+        ...(deps.configPath === undefined ? {} : { configPath: deps.configPath }),
+        ...(deps.subagentLiveCapture === undefined
+          ? {}
+          : { subagentLiveCapture: deps.subagentLiveCapture }),
+        ...runtimeConfigOpts(
+          source === undefined
+            ? deps
+            : {
+                ...fresh,
+                memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer,
+              },
+        ),
+      }
     },
     lifecycle: createDatabaseTaskDriverLifecyclePort({
       db: input.deps.db,
-      persistence: input.persistence,
+      persistence,
       workspacePresence: input.deps.workspacePresence,
       log,
-      finalizeWorkspace: async (taskId) => {
-        await finishClaimedWebhookWorkspacePrune(input.deps.db, taskId)
-      },
+      finalizeWorkspace: (taskId) => maintenance.finalizeClaimedWorkspace(taskId),
     }),
-    ...(input.admittedContinuation === undefined
-      ? {}
-      : { admittedContinuation: input.admittedContinuation }),
     gateContinuationPreDrive:
       input.gateContinuationPreDrive ??
       composeGateContinuationPreDrive({
         db: input.deps.db,
+        persistence,
         memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer ?? missingMemoryDistillEnqueuer,
       }),
     repositoryPreparation: input.repositoryPreparation ?? skipRepositoryPreparation,
-    engineOrchestrator: {
-      async drive(context) {
-        try {
-          await input.deps.schedulerDriver.drive({
-            taskId: context.taskId,
-            appHome: context.runtime.appHome,
-            ...context.runtime.runtime,
-            ...(context.runtime.ensureWorkspaceProfiles ? { ensureWorkspaceProfiles: true } : {}),
-            signal: context.signal,
-            executionContext: context.execution,
-          })
-        } catch (error) {
-          log.error(input.engineFailureMessage, {
-            taskId: context.taskId,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        }
-      },
-    },
-    failureReporter: input.failureReporter,
+    engine: () => input.deps.schedulerDriver,
+    failures: persistence,
+    log,
   })
 }
 
@@ -1745,6 +1687,7 @@ function cleanupFromPreCreated(pre: PreCreatedWorktree): MaterializedSpaceCleanu
 }
 
 /**
+ * RFC-387: test-only legacy admission over the factory; removed in W4.
  * Own the cleanup handoff before any workflow/version/validation read. This is
  * essential for multipart and fusion callers: those callers materialize first,
  * so even an initial exact-version mismatch must release their workspace.
@@ -2834,39 +2777,7 @@ async function startTaskImpl(
           appHome,
         })
 
-  const coordinator = createTaskDriveCoordinator({
-    deps,
-    appHome,
-    repositoryPreparation,
-    engineFailureMessage: 'runTask threw',
-    failureReporter: {
-      async report({ error, execution }) {
-        const message = error instanceof Error ? error.message : String(error)
-        log.error('deferred task drive threw', { taskId, error: message })
-        if (deferredTaskId === null) return
-        try {
-          await setTaskStatus({
-            db: deps.db,
-            taskId,
-            to: 'failed',
-            allowedFrom: ['pending'],
-            reason: 'repo-prep-crashed',
-            extra: {
-              finishedAt: Date.now(),
-              errorSummary: `repository preparation crashed: ${message}`,
-              errorMessage: message,
-            },
-            executionContext: execution,
-          })
-        } catch (inner) {
-          log.warn('could not record prep crash (task left the prep window)', {
-            taskId,
-            error: inner instanceof Error ? inner.message : String(inner),
-          })
-        }
-      },
-    },
-  })
+  const coordinator = composeTestTaskDriveFactory({ deps, appHome, repositoryPreparation }).session
   if (launchIntentId === null) return task
   const receipt = await coordinator.submit({
     taskId,
@@ -3121,184 +3032,23 @@ async function reapHeldRuntimeSessionOwnersForTask(
 //（awaiting_review / awaiting_human 可取消）跟着实现搬到了共用那份的
 // `CANCELABLE_TASK_STATUSES`。
 
-const pendingHumanGateContinuationHandoffs = new Map<string, Promise<void>>()
-
-/**
- * RFC-333: wake an intent that was already admitted atomically by a human-gate
- * decision.  Unlike `resumeTask`, this performs no second lifecycle transition
- * and submits no second intent; it claims the exact durable continuation ref.
- */
+/** RFC-387: test-only exact-intent wake over the factory; removed in W4. */
 export async function wakeHumanGateContinuation(
   taskId: string,
   continuationRef: string,
   deps: StartTaskDeps,
 ): Promise<void> {
-  const coordinator = createTaskDriveCoordinator({
-    deps,
-    appHome: deps.appHome ?? Paths.root,
-    ensureWorkspaceProfiles: true,
-    engineFailureMessage: 'runTask threw on human-gate continuation',
-    failureReporter: {
-      report({ error, stage }) {
-        log.warn('human-gate continuation could not enter task drive', {
-          taskId,
-          continuationRef,
-          stage,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      },
-    },
-  })
-  const completionMode = deps.awaitScheduler === true ? 'await-settle' : 'background'
-  const submitExact = () =>
-    coordinator.submit({ taskId, intentId: continuationRef, completionMode })
-  const submitAfterCurrentOwner = async (): Promise<void> => {
-    await awaitTaskDriverIdle(taskId)
-    await submitExact()
-  }
-  const deferBehindCurrentOwner = (): void => {
-    const handoffKey = `${taskId}\u0000${continuationRef}`
-    if (pendingHumanGateContinuationHandoffs.has(handoffKey)) return
-    const handoff = submitAfterCurrentOwner()
-      .catch((error) => {
-        log.warn('human-gate continuation handoff wake failed', {
-          taskId,
-          continuationRef,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      })
-      .finally(() => {
-        if (pendingHumanGateContinuationHandoffs.get(handoffKey) === handoff) {
-          pendingHumanGateContinuationHandoffs.delete(handoffKey)
-        }
-      })
-    pendingHumanGateContinuationHandoffs.set(handoffKey, handoff)
-  }
-
-  if (isTaskDriverActive(taskId)) {
-    if (deps.awaitScheduler === true) await submitAfterCurrentOwner()
-    else deferBehindCurrentOwner()
-    return
-  }
-  try {
-    const outcome = await submitExact()
-    if (outcome.kind === 'not-attached' && isTaskDriverActive(taskId)) {
-      if (deps.awaitScheduler === true) await submitAfterCurrentOwner()
-      else deferBehindCurrentOwner()
-    }
-  } catch (error) {
-    if (!isTaskDriverActive(taskId)) throw error
-    if (deps.awaitScheduler === true) await submitAfterCurrentOwner()
-    else deferBehindCurrentOwner()
-  }
-}
-
-/**
- * RFC-359 W4-D19b —— 单进程部署下工作组任务房的「继续执行」适配器（预检 + 驱动）。
- *
- * 房间自己既不认识工作树也不认识调度器：它只负责在一笔事务里把决策与继续执行的意图一起落库。
- * 两件按**部署形态**（不是按数据库）分的事由这个适配器补上：
- *
- * - `assertResumable`：写任何一行之前先撞一次 `assertWorktreePresentForResume`——工作树被 GC
- *   回收的任务当场 410，闸门与消息随事务回滚、决策保持可重试（判据与合一前
- *   `resumeTaskWithAtomicSideEffects` 的 `worktreePreflight` 完全一致）。
- * - `driveAfterCommit`：提交后就地认领那条意图并驱动，等于合一前 resumeKick 在准入 CAS 之后
- *   接着做的那半。
- *
- * 多进程 daemon 部署两件都做不了（受理请求的进程未必看得到工作树、也未必该驱动这个任务），
- * 注入的是空操作，由 daemon 的 `human-gate-continuation` worker 轮询认领。
- */
-export function composeWorkgroupTaskRoomContinuationDriver(input: {
-  readonly db: LegacyProviderNeutralDatabase
-  readonly configPath: string
-  readonly schedulerDriver: StartTaskDeps['schedulerDriver']
-  readonly taskRecoveryOperations: TaskRecoveryOperations
-  readonly workspacePresence?: WorkspacePresenceQueries
-  readonly launchConfiguration?: TaskLaunchConfigurationQueries
-}): Readonly<{
-  assertResumable: (taskId: string, verb: string) => Promise<void>
-  driveAfterCommit: (continuation: Readonly<{ taskId: string; intentId: string }>) => Promise<void>
-}> {
-  const workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
-  const resumeDeps = (): StartTaskDeps => ({
-    db: input.db,
-    schedulerDriver: input.schedulerDriver,
-    taskRecoveryOperations: input.taskRecoveryOperations,
-    workspacePresence,
-    appHome: Paths.root,
-    configPath: input.configPath,
-    ...resolveLaunchRuntimeConfig(input.configPath),
-  })
-  return Object.freeze({
-    async assertResumable(taskId, verb) {
-      const task = await getTask(input.db, taskId)
-      // 任务不存在不归这里管：房间的可见性判据已经先跑过，会给出 404/403。
-      if (task === null) return
-      await assertWorktreePresentForResume(input.taskRecoveryOperations, task, verb, (reference) =>
-        workspacePresence.exists(reference),
-      )
-    },
-    async driveAfterCommit(continuation) {
-      // 与合一前同一条路：意图已在房间事务里准入，这里只认领并驱动它，不做第二次生命周期转移、
-      // 不落第二条意图（`wakeHumanGateContinuation` 的契约）。等它是有意的——合一前 confirm 也是
-      // 等 `resumeTaskWithAtomicSideEffects` 整个跑完才应答，`awaitScheduler` 的确定性依赖这一点。
-      const deps =
-        input.launchConfiguration === undefined
-          ? resumeDeps()
-          : {
-              db: input.db,
-              schedulerDriver: input.schedulerDriver,
-              taskRecoveryOperations: input.taskRecoveryOperations,
-              workspacePresence,
-              appHome: Paths.root,
-              configPath: input.configPath,
-              launchConfiguration: input.launchConfiguration,
-              ...(await resolveTaskStartLaunchConfiguration(input.launchConfiguration)),
-            }
-      await wakeHumanGateContinuation(continuation.taskId, continuation.intentId, deps)
-    },
-  })
-}
-
-/** Bootstrap-owned adapter used by collaboration's continuous continuation
- * worker. Keeping this beside the legacy drive implementation avoids a
- * task-execution composition -> task service initialization cycle. */
-export function composeHumanGateContinuationDriver(
-  deps: StartTaskDeps,
-): (continuation: Readonly<{ taskId: string; continuationRef: string }>) => Promise<void> {
-  return async (continuation) => {
-    await wakeHumanGateContinuation(continuation.taskId, continuation.continuationRef, deps)
-  }
-}
-
-/**
- * Resume while committing synchronous companion rows inside the same task
- * continuation-admission CAS transaction. Gate decisions use this instead of "write gate,
- * then fire-and-forget resume": if preflight/CAS/companion writes fail, every
- * row remains unchanged and the user can retry the decision.
- */
-export async function resumeTaskWithAtomicSideEffects(
-  db: LegacySqliteTaskDatabase,
-  id: string,
-  deps: StartTaskDeps,
-  onClaimTx: (
-    tx: DatabaseTransaction,
-    transition: { from: TaskStatus; to: TaskStatus },
-  ) => void | Promise<void>,
-): Promise<Task> {
-  return resumeKick(db, id, deps, {
-    intentKind: 'gate-continuation',
-    event: { kind: 'resume' },
-    selectRollback: (runs) => selectResumeRollbackTargets(runs),
-    reason: 'resumeTask',
-    conflictCode: 'task-not-resumable',
-    verb: 'resume',
-    worktreePreflight: true,
-    onClaimTx,
+  if (deps.awaitScheduler === true) await awaitTaskDriverIdle(taskId)
+  else if (isTaskDriverActive(taskId)) return
+  await composeTestTaskDriveFactory({ deps, appHome: deps.appHome ?? Paths.root }).session.submit({
+    taskId,
+    intentId: continuationRef,
+    completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
   })
 }
 
 /**
+ * RFC-387: test-only dynamic-workflow admission over the factory; removed in W4.
  * RFC-167 — the dynamic-workflow confirm gate's resume core: write the
  * decision's durable state ATOMICALLY within the resume admission CAS, then
  * re-kick the scheduler. approve passes BOTH columns (swap the confirmed DAG
@@ -3343,6 +3093,7 @@ export async function resumeDynamicWorkflowExecution(
  * swaps `workflow_snapshot` + `workflow_version` here), and the rollback-target
  * selector.
  *
+ * RFC-387: test-only admission and factory drive; removed in W4.
  * The pending lifecycle CAS (RFC-097 audit S-8) is the command-admission winner
  * and moves BEFORE any git rollback. The same transaction writes the canonical
  * intent; only its durable owner claim authorizes subsequent execution effects.
@@ -3571,22 +3322,10 @@ async function resumeKick(
       return { kind: 'ready' }
     },
   }
-  const coordinator = createTaskDriveCoordinator({
+  const coordinator = composeTestTaskDriveFactory({
     deps,
     appHome: deps.appHome ?? Paths.root,
-    ensureWorkspaceProfiles: true,
-    admittedContinuation,
-    engineFailureMessage: `runTask threw on ${opts.verb}`,
-    failureReporter: {
-      report({ error }) {
-        activeTaskDriverController(id)?.abort('task-continuation-preparation-failed')
-        log.error(`${opts.reason}: continuation preparation threw`, {
-          taskId: id,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      },
-    },
-  })
+  }).coordinatorFor({ admittedContinuation })
   const receipt = await coordinator.submit({
     taskId: id,
     intentId,
@@ -3973,143 +3712,41 @@ async function reclaimStalePrepArtifacts(
   }
 }
 
-/**
- * RFC-287 G7 / AC-11 —— 重试「准备仓库」这一步。
- *
- * 「重试作用于任务当前所处阶段」：任务卡在准备阶段，重试就该重跑准备，而不是去重跑
- * 一个还不存在的工作流节点。做法是把任务 CAS 回 `pending`、清掉上一轮的失败痕迹，
- * 然后**照原样重走 startTask 的延后准备路径**——复用同一份实现，而不是抄第二套。
- *
- * 来源从任务行重建：
- *   · `repoGroupId` —— 组布局本就按 id 现查（启动时也是这么做的）；
- *   · `cachedRepoId` —— 由 `ensureCachedRepoIdentity` 在占位**之前**落定，正是为了
- *     此刻能找回来（`tasks.repo_url` 是脱敏存的，按设计不能驱动重跑）。
- * 两者都没有 = 这行任务的来源确实无从重建，响亮拒绝，让用户去重新启动。
- */
-async function retryRepoPreparation(
-  db: LegacySqliteTaskDatabase,
-  task: Task,
-  deps: StartTaskDeps,
-): Promise<Task> {
-  const hasGroup = typeof task.repoGroupId === 'string' && task.repoGroupId.length > 0
-  const hasCached = typeof task.cachedRepoId === 'string' && task.cachedRepoId.length > 0
-  if (!hasGroup && !hasCached) {
-    throw new ConflictError(
-      'repo-prep-source-unavailable',
-      `task '${task.id}' has no re-resolvable repository source (repo_url is stored redacted by ` +
-        'design and cannot drive a relaunch); launch a new task instead',
-    )
-  }
-  // 复活闸门与其它重试路径共用 setTaskStatus 这一个写点（RFC-097 CAS + RFC-165
-  // 工作区复活判据）。准备失败的行**没有**墓碑（AC-15 刻意保证），所以这里 CAS 得回。
-  const intentId = ulid()
-  const intentNow = Date.now()
-  await setTaskStatus({
-    db,
-    taskId: task.id,
-    to: 'pending',
-    allowedFrom: ['failed', 'canceled', 'interrupted'],
-    // 与普通节点重试同款：`failed` 是终态，复活必须显式开闸。RFC-165 的工作区复活
-    // 判据仍在 setTaskStatus 内部生效——准备失败的行**没有**墓碑（AC-15 刻意保证的），
-    // 所以这里 CAS 得回；若哪天墓碑逻辑变了把它打上，这里会 410，而不是静默失效。
-    allowTerminal: true,
-    reason: 'repo-prep-retry',
-    extra: {
-      finishedAt: null,
-      errorSummary: null,
-      errorMessage: null,
-      failedNodeId: null,
-    },
-    onTransitionTx: async (tx) =>
-      await submitContinuationIntentInTx({
-        tx,
-        taskId: task.id,
-        intentId,
-        kind: 'retry-repository-preparation',
-        source: continuationSource(deps, 'retry-repository-preparation'),
-        actorUserId: deps.actorUserId ?? null,
-        payload: { v: 1, phase: 'repository-preparation' },
-        now: intentNow,
-        advanceOperationGeneration: true,
-      }),
-  })
-  const appHome = deps.appHome ?? Paths.root
-  const repositoryPreparation = createPersistedRepositoryPreparationStep({
-    deps: {
-      ...deps,
-      db,
-      repositoryWorkspace: repositoryWorkspaceFor({ ...deps, db }),
-      loadFrozenSpaceLayout: async (sourceTaskId) => loadFrozenSpaceLayout(db, sourceTaskId),
-    },
-    appHome,
-  })
-  const coordinator = createTaskDriveCoordinator({
-    deps: { ...deps, db },
-    appHome,
-    repositoryPreparation,
-    engineFailureMessage: 'runTask threw after repo-prep retry',
-    failureReporter: {
-      report({ error }) {
-        log.error('repo-prep retry threw', {
-          taskId: task.id,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      },
-    },
-  })
-  const receipt = await coordinator.submit({
-    taskId: task.id,
-    intentId,
-    completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
-  })
-  if (receipt.kind === 'not-attached') {
-    throw new ConflictError(
-      'task-still-running',
-      `task '${task.id}' was picked up by another driver; retry once it settles`,
-    )
-  }
-  if (deps.awaitScheduler === true) {
-    return (await getTask(db, task.id)) as Task
-  }
-  return (await getTask(db, task.id)) as Task
-}
-
-/**
- * Boot/application recovery adapter for the persisted phase-0 descriptor.
- *
- * 这是 `RepositoryPreparationRetryCommand` 端口的 SQLite 实现——两个装配根
- * （`server.ts` / `cli/start.ts`）都把它绑在那个端口上，也就是说它永远是**下游**：
- * 三道准入门（`repo-prep-not-retryable` / `repo-prep-superseded` /
- * `repo-prep-already-complete`）由共用的 `retryNodeProjection` 在调用它之前跑完。
- *
- * RFC-359 AC-1（第 9 刀）之前它是绕回 `retryNode` 借那三道门的——两份 `retry` 合并之后
- * 那条路等于「端口实现回头再走一遍路由」，直接落到真正干活的 `retryRepoPreparation`。
- * 这里仍然自己认最新那一行：端口只收 `taskId`，而上游的门已经证明「不存在更新的尝试」，
- * 所以最新行就是被点的那一行。
- */
+/** RFC-387: test-only repository retry over the factory; removed in W4. */
 export async function retryRepositoryPreparation(
   db: LegacySqliteTaskDatabase,
   taskId: string,
   deps: StartTaskDeps,
 ): Promise<Task> {
-  const latest = db
-    .select({ id: nodeRuns.id })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
-    .orderBy(desc(nodeRuns.retryIndex), engineOf(db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
-    .limit(1)
-    .all()[0]
-  if (latest === undefined) {
-    throw new ConflictError(
-      'repo-prep-run-missing',
-      `task '${taskId}' has no repository-preparation attempt to retry`,
-    )
-  }
-  const task = await getTask(db, taskId)
-  if (task === null) {
-    throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  }
-  return await retryRepoPreparation(db, task, deps)
+  const appHome = deps.appHome ?? Paths.root
+  const factory = composeTestTaskDriveFactory({
+    deps: { ...deps, db },
+    appHome,
+    repositoryPreparation: createPersistedRepositoryPreparationStep({
+      deps: {
+        ...deps,
+        db,
+        repositoryWorkspace: repositoryWorkspaceFor({ ...deps, db }),
+        loadFrozenSpaceLayout: (sourceTaskId) => loadFrozenSpaceLayout(db, sourceTaskId),
+      },
+      appHome,
+    }),
+  })
+  await taskDriveComposition
+    .createRepositoryPreparationRetryCommand({
+      db,
+      coordinator: {
+        submit: (request) =>
+          factory.session.submit({
+            ...request,
+            completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
+          }),
+      },
+      isTaskActive: isTaskDriverActive,
+      awaitTaskSettled: awaitTaskDriverReleasedSettled,
+    })
+    .retry(taskId, deps.actorUserId === undefined ? undefined : { actorUserId: deps.actorUserId })
+  return (await getTask(db, taskId)) as Task
 }
 
 /**

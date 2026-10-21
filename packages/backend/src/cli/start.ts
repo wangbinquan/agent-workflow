@@ -148,12 +148,7 @@ import {
 import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
-import {
-  composeHumanGateContinuationDriver,
-  activeTaskIdsSnapshot,
-  isTaskActive,
-} from '@/services/task'
-import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import { activeTaskIdsSnapshot } from '@/services/task'
 import {
   composeTaskIdleTimeoutOperations,
   createSqliteTaskIdleTimeoutPersistence,
@@ -161,7 +156,7 @@ import {
 } from '@/modules/task-execution/composition/taskIdleTimeout'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import { startConfiguredSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
-import { finishClaimedWebhookWorkspacePrune, materializingSpaces } from '@/services/gc'
+import { materializingSpaces } from '@/services/gc'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
@@ -2224,7 +2219,7 @@ async function composeSqliteProviderSession(
       },
       alerts: { onAlert: broadcastAlert, onResolved: broadcastResolved },
       finalizeWorkspace: async (taskId) => {
-        await finishClaimedWebhookWorkspacePrune(db, taskId)
+        await workspaceMaintenance.finalizeClaimedWorkspace(taskId)
       },
     })
   const taskExecutionProvider = taskExecutionModules
@@ -2364,25 +2359,11 @@ async function composeSqliteProviderSession(
   const developmentAutomation = developmentAutomationModules.automation
   const developmentAdmissionLookup = developmentAutomationModules.admissionLookup
 
-  const gateContinuationDeps = {
-    launchConfiguration: taskLaunchConfiguration.continuationQueries,
-    db,
-    schedulerDriver: taskExecutionRuntime.schedulerDriver,
-    appHome: Paths.root,
-    configPath: Paths.config,
-    ...(secretBox !== undefined ? { secretBox } : {}),
-    ...(config.subagentLiveCapture !== undefined
-      ? { subagentLiveCapture: config.subagentLiveCapture }
-      : {}),
-    ...(taskLaunchConfiguration.selectedQueries === undefined
-      ? resolveLaunchRuntimeConfig(Paths.config)
-      : {}),
-  }
   const humanGateContinuationRecovery = createSqliteHumanGateContinuationRecoveryQueries(db)
 
   const humanGateContinuationWorkerDefinition = createHumanGateContinuationWorkerDefinition({
     listPending: () => humanGateContinuationRecovery.listPending(),
-    drive: composeHumanGateContinuationDriver(gateContinuationDeps),
+    drive: taskExecutionModules.gateContinuation,
     onError: (continuation) => {
       log.warn('pending human-gate continuation drive failed', {
         taskId: continuation.taskId,
@@ -2423,8 +2404,8 @@ async function composeSqliteProviderSession(
           notifyTaskTerminal(taskId, status)
         },
         async nudgeWorkspacePrune(taskId) {
-          if (isTaskActive(taskId)) return
-          await finishClaimedWebhookWorkspacePrune(db, taskId)
+          if (taskExecutionModules.isTaskActive(taskId)) return
+          await workspaceMaintenance.finalizeClaimedWorkspace(taskId)
         },
         async enqueueTaskRunDistill(taskId) {
           await memoryOperations.distillCommands.enqueue({

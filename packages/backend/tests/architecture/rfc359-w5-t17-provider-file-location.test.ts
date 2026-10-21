@@ -143,8 +143,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // `taskRouteLaunchOperations` / `taskRouteWorkspaceParticipant` 四份文件的实现早就是
   // provider 中立的（零 `PostgresqlDatabaseClient`、零 provider 分支，两个引擎的根都绑同一份），
   // 只是名字还留着 `postgresql` 前缀。去掉前缀之后它们不再是「provider 命名文件」。
-  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
-  'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts',
   // RFC-359 AC-1（第 14 刀）**两条一起销账**：源终止参与者两个引擎合成一份中立实现
   //（`sourceTerminationParticipant.ts`），两份 provider 命名文件退役。
   // RFC-359 AC-1（plan §5hm）：**删除**——驱动生命周期端口两个引擎合成一份

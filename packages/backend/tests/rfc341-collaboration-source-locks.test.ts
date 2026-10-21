@@ -166,7 +166,7 @@ describe('RFC-341 collaboration owner source locks', () => {
     const catalog = source('platform/background/maintenanceCatalog.ts')
     const service = source('platform/background/maintenanceService.ts')
     expect(start).toContain('createHumanGateContinuationWorkerDefinition')
-    expect(start).toContain('composeHumanGateContinuationDriver')
+    expect(start).toContain('drive: taskExecutionModules.gateContinuation')
     expect(start).not.toContain('wakeHumanGateContinuation')
     expect(start).not.toContain('onHumanGateContinuations')
     expect(catalog).not.toContain("key: 'humanGateRecovery'")
@@ -195,7 +195,10 @@ describe('RFC-341 collaboration owner source locks', () => {
   test('continuation drive composition does not create a task service initialization cycle', () => {
     const taskService = source('services/task.ts')
     const taskExecutionComposition = source('modules/task-execution/composition/humanGate.ts')
-    expect(taskService).toContain('export function composeHumanGateContinuationDriver')
+    expect(taskService).not.toContain('export function composeHumanGateContinuationDriver')
+    expect(source('cli/daemonModules/taskExecution.ts')).toContain(
+      'const gateContinuation = createGateContinuationDriver({',
+    )
     expect(taskExecutionComposition).not.toContain("from '@/services/task'")
     expect(taskExecutionComposition).not.toContain('wakeHumanGateContinuation')
   })

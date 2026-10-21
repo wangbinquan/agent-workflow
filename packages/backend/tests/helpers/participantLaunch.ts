@@ -26,7 +26,8 @@ import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-
 import type { TaskExecutionResourceAuthority } from '../../src/services/execution/taskExecutionResources'
 import { createTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
-import { createTaskDriveCoordinator, type StartTaskDeps } from '../../src/services/task'
+import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
+import { type StartTaskDeps } from '../../src/services/task'
 
 /**
  * 给一个**普通构造的 actor**（`buildActor({...})`）配一份任务执行鉴权句柄。
@@ -81,7 +82,7 @@ export function createTestTaskExecutionLaunchParticipant(
   }).launch
   const persistence = createTaskExecutionPersistence(input.db)
   const completionMode = input.completionMode ?? 'await-settle'
-  const drive = createTaskDriveCoordinator({
+  const drive = createTestTaskDriveCoordinator({
     deps: {
       db: input.db,
       schedulerDriver: input.schedulerDriver,

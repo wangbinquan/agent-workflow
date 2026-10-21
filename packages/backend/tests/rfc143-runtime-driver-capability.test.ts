@@ -423,16 +423,20 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
       /resolveStructuralDeepConfig\(\s*configuration: ApplicationConfigurationQueries,/,
     )
     expect(fusionsRoute).not.toContain('resolveOpencodeCmd')
-    expect(fusionsRoute).toContain('configPath: deps.configPath')
+    expect(fusionsRoute).not.toContain('configPath: deps.configPath')
+    expect(SRC('cli/daemonModules/taskExecution.ts')).toContain(
+      'const fresh = await taskLaunchConfiguration.start()',
+    )
+    expect(
+      SRC('modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts'),
+    ).toContain('...context.runtime.runtime,')
     for (const f of ['clarify', 'taskQuestions', 'reviews']) {
       const src = SRC(`routes/${f}.ts`)
       expect(src).not.toContain('resolveOpencodeCmd')
       expect(src).not.toContain('configPath: deps.configPath')
     }
     expect(SRC('cli/start.ts')).toContain('configPath: Paths.config')
-    expect(SRC('cli/start.ts')).toContain(
-      'drive: composeHumanGateContinuationDriver(gateContinuationDeps)',
-    )
+    expect(SRC('cli/start.ts')).toContain('drive: taskExecutionModules.gateContinuation')
     expect(SRC('services/runtime/opencode/util.ts')).not.toContain(
       'export function resolveOpencodeCmd',
     )
