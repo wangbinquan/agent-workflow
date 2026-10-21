@@ -54,6 +54,7 @@ function applicationFixture(input?: {
       return {
         kind: 'attached',
         attachment: {
+          intentKind: 'launch',
           execution: createTaskExecutionContext({
             intentId: request.intentId,
             token,

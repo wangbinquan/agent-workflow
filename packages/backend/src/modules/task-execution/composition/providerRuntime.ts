@@ -1,3 +1,4 @@
+import type { TaskDriveCoordinatorFactory } from '../application/drive/taskDriveCoordinatorFactory'
 import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoordinator'
 import type { TaskRecoveryProviderSelection } from './taskRecoverySelection'
 import {
@@ -256,6 +257,7 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
 > {
   readonly persistence?: TaskExecutionPersistence
+  readonly coordinatorFactory: TaskDriveCoordinatorFactory
   readonly driverLifecycle?: TaskDriverLifecyclePort
   readonly schedulerDriver?: SchedulerDriverPort
   readonly archive?: TaskArchiveContentBinding
@@ -330,7 +332,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
         log,
         // RFC-359 AC-1（第 12 刀）：这一支的部署形态——进程级单例的同步认领
         //（执行上下文带 `legacyConnection`）+ 进程内注册表的活跃度 / 停机票据。
-        lifecycle: driverLifecycle,
+        coordinatorFactory: dependencies.coordinatorFactory,
         activity: composeLegacyTaskActivityParticipant(),
         stop: composeLegacyTaskStopRegistry(),
       },
@@ -521,6 +523,7 @@ type ProviderRuntimeWithoutChildLaunch<Runtime> = Runtime extends unknown
 
 export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
   readonly persistence?: TaskExecutionPersistence
+  readonly coordinatorFactory: TaskDriveCoordinatorFactory
   readonly driverLifecycle?: TaskDriverLifecyclePort
   readonly schedulerDriver?: SchedulerDriverPort
   readonly archive?: TaskArchiveContentBinding
@@ -602,7 +605,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
           dependencies.runtime.memoryInjectionQueries ??
           composePostgresqlMemoryInjectionQueries(db),
         childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
-        lifecycle: driverLifecycle,
+        coordinatorFactory: dependencies.coordinatorFactory,
         activity,
         stop: executionModule.runtimeRegistry,
       },

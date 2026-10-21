@@ -1,3 +1,4 @@
+import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
 import { join } from 'node:path'
@@ -35,6 +36,7 @@ import {
   composeTaskWorkspaceExcludeProfilesFor,
 } from '../../src/modules/task-execution/composition/localTaskRunSelection'
 import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
+import { pickInheritableRunConfig } from '../../src/modules/task-execution/application/ports/taskExecutionTopology'
 import { createIdentityAccessRuntime } from '../../src/modules/identity-access/composition'
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
 import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
@@ -124,13 +126,16 @@ export function singleProcessDeploymentPorts(db: DbClient) {
     taskDagCollaboration: createTaskDagCollaborationOperations(db),
     processConcurrencyScope: db,
     log,
-    lifecycle: createDatabaseTaskDriverLifecyclePort({
+    coordinatorFactory: testDriveFactory(
       db,
-      log,
-      finalizeWorkspace: async (taskId: string) => {
-        await finishClaimedWebhookWorkspacePrune(db, taskId)
-      },
-    }),
+      createDatabaseTaskDriverLifecyclePort({
+        db,
+        log,
+        finalizeWorkspace: async (taskId: string) => {
+          await finishClaimedWebhookWorkspacePrune(db, taskId)
+        },
+      }),
+    ),
     activity: composeLegacyTaskActivityParticipant(),
     stop: composeLegacyTaskStopRegistry(),
   }
@@ -387,13 +392,27 @@ export function runTaskWithRealTestTopology(
         createChildExecutionLaunchOperations({
           db: options.db,
           persistence: createChildPersistence(options.db),
-          lifecycle: createDatabaseTaskDriverLifecyclePort({
-            db: options.db,
-            log: createLogger('task'),
-            finalizeWorkspace: async (taskId) => {
-              await finishClaimedWebhookWorkspacePrune(options.db, taskId)
-            },
-          }),
+          coordinatorFactory: testDriveFactory(
+            options.db,
+            createDatabaseTaskDriverLifecyclePort({
+              db: options.db,
+              log: createLogger('task'),
+              finalizeWorkspace: async (taskId) => {
+                await finishClaimedWebhookWorkspacePrune(options.db, taskId)
+              },
+            }),
+            () => ({
+              ...pickInheritableRunConfig(options),
+              commitPushModel: options.commitPushModel,
+              commitPushRuntime: options.commitPushRuntime,
+              mergeAgentModel: options.mergeAgentModel,
+              mergeAgentRuntime: options.mergeAgentRuntime,
+              commitPushMaxRepairRetries: options.commitPushMaxRepairRetries,
+              commitPushDiffMaxBytes: options.commitPushDiffMaxBytes,
+              commitPushLang: options.commitPushLang,
+              agentRunSettled: options.agentRunSettled,
+            }),
+          ),
           workgroup: composeTestChildLaunchWorkgroup(options.db),
         }),
       dynamicWorkflow,

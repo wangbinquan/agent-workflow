@@ -168,7 +168,7 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
           now,
           advanceOperationGeneration: false,
         })
-        const token = await execution.persistence.ownership.claimPendingIntent({
+        const { token } = await execution.persistence.ownership.claimPendingIntent({
           intentId,
           identity: createWorkerIdentity({ ownerId: ulid(), daemonGeneration: 'family-' + ulid() }),
           now,

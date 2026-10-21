@@ -176,6 +176,13 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
     // RFC-359 AC-1（第 9 刀）：5 → 4。`retryNode` 整份删除（`retry` 两份实现合一），
     // 它那台 coordinator 随之出账；重试的驱动改由紧随其后的 `resumeTask` 那一台负责。
     expect(task.match(/createTaskDriveCoordinator\(\{/g)).toHaveLength(4)
+    // RFC-386: C11/C12 now share the application factory; RFC-387 legacy sites stay locked.
+    const factory = source(
+      'packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts',
+    )
+    expect(factory.match(/new DefaultTaskDriveCoordinator\(/g)).toHaveLength(1)
+    expect(factory).toContain('...context.runtime.runtime,')
+
     const wakeStart = task.indexOf('export async function wakeHumanGateContinuation(')
     const wakeEnd = task.indexOf('\nexport ', wakeStart + 1)
     const wakeBlock = task.slice(wakeStart, wakeEnd)

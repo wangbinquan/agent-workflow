@@ -905,6 +905,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
     })
     const context = {
       taskId,
+      intentKind: claimed.intentKind,
       execution,
       signal: new AbortController().signal,
       runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc333-pre-drive' }),
@@ -968,6 +969,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
     )
     const context = {
       taskId,
+      intentKind: claimed.intentKind,
       execution: createTaskExecutionContext({
         intentId: submitted.intentId,
         token: claimed.token,

@@ -404,7 +404,7 @@ describeEachProvider(
               now,
               advanceOperationGeneration: false,
             })
-            const token = await execution.persistence.ownership.claimPendingIntent({
+            const { token } = await execution.persistence.ownership.claimPendingIntent({
               intentId,
               identity: createWorkerIdentity({
                 ownerId: ulid(),

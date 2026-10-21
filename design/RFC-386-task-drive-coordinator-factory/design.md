@@ -53,7 +53,8 @@ createTaskDriveCoordinatorFactory({
 - 不给 `runConfig` 即实时会话配置；`inherit-parent` = 实时会话配置之上叠加父任务的可继承键（父值覆盖会话值）。
 - 失败上报只有一个，按画像取摘要 / 失败码 / 原因名，**总是**带 `claimedOwnerEpoch` 终结；缺省画像即会话现行的
   `task drive failed` / `task-drive-failed` / `task-drive`。
-- 工厂是后端唯一的 `new DefaultTaskDriveCoordinator(`（RFC-387 删除的 `createTaskDriveCoordinator` 除外）。
+- 工厂是后端唯一的 `new DefaultTaskDriveCoordinator(`；RFC-387 删除的 `createTaskDriveCoordinator` 与 PostgreSQL 融合适配器
+  （`TE/infrastructure/postgresqlFusionEngineTaskOperations.ts`，C13）是两处精确登记的豁免。
 
 ### 2.2 子任务启动与续跑（取舍 2）
 
@@ -92,8 +93,8 @@ RFC-387）。
 2. 子任务配置（双引擎，含「旧接线」对照）：调用节点产生的子任务读取设置页的提交推送 / 合并 Agent 设置并挂上提炼观察者；对照显示
    旧接线为缺省值、无观察者。
 3. 门控续跑重建（双引擎，含对照）：评审打回 / 澄清回答之后的续跑重建排除配置；对照显示旧 PostgreSQL 接线不重建。
-4. 失败上报（双引擎）：子任务启动与续跑失败只终结认领世代的意图，原因名中立。
-5. 结构锁：工厂外无 `new DefaultTaskDriveCoordinator(`（`createTaskDriveCoordinator` 豁免到 RFC-387）；子任务启动与生命周期参与者不再自建协调器。
+4. 失败上报（双引擎）：子任务启动与续跑失败只终结认领世代的意图，原因名中立。（HEAD 已按世代终结，这条是回归锁，无「旧接线」对照。）
+5. 结构锁：工厂外无 `new DefaultTaskDriveCoordinator(`（`createTaskDriveCoordinator` 与 PostgreSQL 融合适配器两处精确豁免到 RFC-387）；子任务启动与生命周期参与者不再自建协调器。
 6. 旧锁（改指，不放宽）：`T/rfc332-task-engine-contracts.test.ts:85-95`、`:168-184`；`T/rfc103-launch-config-passthrough.test.ts:240-255`；
    `T/scheduler-subagent-live-capture-passthrough.test.ts:54-80`；`T/rfc319-cfg45-default-runtime-hot-read.test.ts`；
    `T/rfc359-w5hn-drive-coordinator-runtime-config.test.ts:17-20`；`T/architecture/rfc380-daemon-module-bundles.test.ts`；

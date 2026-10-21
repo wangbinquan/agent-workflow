@@ -287,6 +287,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     module.claimGate.leave(claimed.permit)
     const context = {
       taskId,
+      intentKind: claimed.intentKind,
       execution: createTaskExecutionContext({ intentId: intent.id, token: claimed.token, db }),
       signal: new AbortController().signal,
       runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc341-clarify-convergence' }),
@@ -357,6 +358,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     await expect(
       step.run({
         taskId,
+        intentKind: claimed.intentKind,
         execution: createTaskExecutionContext({ intentId: intent.id, token: claimed.token, db }),
         signal: new AbortController().signal,
         runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc341-clarify-convergence-fault' }),

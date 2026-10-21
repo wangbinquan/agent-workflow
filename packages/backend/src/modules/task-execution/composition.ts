@@ -1,3 +1,4 @@
+import type { TaskExecutionIntentKind } from './domain/executionIntent'
 import type { TaskExecutionShutdownController } from './application/ports/taskExecutionShutdownOperations'
 import { createTaskWorkspaceQueries } from './application/workspaceRead'
 export { createFileTaskOperationConfiguration } from './infrastructure/local/fileTaskOperationConfiguration'
@@ -30,6 +31,7 @@ export const DEFAULT_OWNERSHIP_LEASE_MS = 60_000
 export const DEFAULT_OWNERSHIP_HEARTBEAT_MS = 15_000
 
 export interface ClaimedTaskExecution {
+  readonly intentKind: TaskExecutionIntentKind
   readonly intentId: string
   readonly token: OwnershipToken
   readonly permit: ClaimAttachPermit
@@ -77,7 +79,7 @@ export class TaskExecutionModule {
   }): Promise<ClaimedTaskExecution> {
     const permit = this.claimGate.enter()
     try {
-      const token = await this.ownershipFor(input.db).claimPendingIntent({
+      const { token, intentKind } = await this.ownershipFor(input.db).claimPendingIntent({
         intentId: input.intentId,
         identity: createWorkerIdentity({
           ownerId: ulid(),
@@ -87,7 +89,7 @@ export class TaskExecutionModule {
         leaseMs: input.leaseMs ?? DEFAULT_OWNERSHIP_LEASE_MS,
       })
       this.claimGate.bind(permit, token)
-      return { intentId: input.intentId, token, permit }
+      return { intentId: input.intentId, intentKind, token, permit }
     } catch (error) {
       this.claimGate.leave(permit)
       throw error
@@ -159,7 +161,7 @@ export class ProviderTaskExecutionModule extends TaskExecutionModule {
   }): Promise<ClaimedTaskExecution> {
     const permit = this.claimGate.enter()
     try {
-      const token = await this.persistence.ownership.claimPendingIntent({
+      const { token, intentKind } = await this.persistence.ownership.claimPendingIntent({
         intentId: input.intentId,
         identity: createWorkerIdentity({
           ownerId: ulid(),
@@ -169,7 +171,7 @@ export class ProviderTaskExecutionModule extends TaskExecutionModule {
         leaseMs: input.leaseMs ?? DEFAULT_OWNERSHIP_LEASE_MS,
       })
       this.claimGate.bind(permit, token)
-      return { intentId: input.intentId, token, permit }
+      return { intentId: input.intentId, intentKind, token, permit }
     } catch (error) {
       this.claimGate.leave(permit)
       throw error

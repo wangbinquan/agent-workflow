@@ -163,7 +163,7 @@ describe('RFC-349 task-execution provider adapters', () => {
     })
     expect(submitted).toMatchObject({ intentId: 'intent-1', state: 'pending' })
 
-    const token = await persistence.ownership.claimPendingIntent({
+    const { token } = await persistence.ownership.claimPendingIntent({
       intentId: submitted.intentId,
       identity: createWorkerIdentity({ ownerId: 'worker-1', daemonGeneration: 'daemon-1' }),
       now: 11,

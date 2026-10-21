@@ -105,6 +105,7 @@ export async function attachTaskDriver(
     return {
       kind: 'attached',
       attachment: {
+        intentKind: claimed.intentKind,
         execution: createTaskExecutionContext({
           intentId: input.intentId,
           token: claimed.token,

@@ -129,10 +129,18 @@ describe('RFC-319 CFG-45 —— 默认运行时的热读', () => {
       resolve(ROOT, 'packages/backend/src/cli/daemonModules/taskExecution.ts'),
       'utf8',
     )
-    expect(bundle.match(/new DefaultTaskDriveCoordinator\(/g)).toHaveLength(1)
-    expect(bundle).toMatch(
-      /get runtime\(\)\s*\{\s*return runConfiguration\(\).then\(resolveTaskDriveConfig\)/,
+    expect(bundle.match(/createTaskDriveCoordinatorFactory\(/g)).toHaveLength(1)
+    expect(bundle).toContain('const coordinator = coordinatorFactory.session')
+    const factory = readFileSync(
+      resolve(
+        ROOT,
+        'packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts',
+      ),
+      'utf8',
     )
+    expect(factory.match(/new DefaultTaskDriveCoordinator\(/g)).toHaveLength(1)
+    expect(factory).toContain('get runtime()')
+    expect(factory).toContain('const live = await options.runConfiguration()')
     expect(bundle).toContain('await taskLaunchConfiguration.start()')
   })
 })

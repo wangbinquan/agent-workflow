@@ -8756,3 +8756,7 @@ provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行�
 ## RFC-385：执行世代与数据库世代不能混用
 
 执行 owner、运行配置（含融合与子任务继承）及单机锁证明使用每进程一个的 `DAEMON_GENERATION`；数据库的 `runtime.generationId` 跨重启不变，只用于数据库代际与写围栏，不能充当执行世代。启动恢复按世代差异处理旧 owner：崩溃留下的 `claimed` 先撤销再释放，正常关停幸存者的 `recovery-required` 直接进入最终释放。相同世代会分别导致孤儿任务写入抛出 `task-execution-stale-owner`，或恢复完成却仍不能续跑。托管的启动租约与 `lease.instanceId` 恢复证明保持原语义。
+
+## RFC-386：按驱动画像复用会话协调器工厂
+
+任务的每次调用驱动应经会话的 `coordinatorFactory.coordinatorFor(profile)`；子任务启动与续跑的配置是实时会话配置叠加父任务的 `INHERITABLE_RUN_CONFIG_KEYS`（父值优先），内建提交 / 合并 Agent 设置和记忆提炼观察者由会话提供，不加入父配置继承表，也不改变工作流是否提交或推送。根续跑不叠加父配置；工作区排除配置是否重建由认领意图类型决定。失败统一按 `claimedOwnerEpoch` 终结意图。人工门唤醒、房间续跑、仓库准备重试及融合的旧接线仍留给 RFC-387。

@@ -1,3 +1,4 @@
+import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 // RFC-359 W8-A —— `ChildExecutionLaunchOperations` 的**双引擎对拍**。
 //
@@ -392,13 +393,16 @@ function operationsFor(harness: ProviderHarness): LaunchTarget {
         db,
         persistence,
         // SQLite 组合根那一条（`taskExecutionRuntimeParticipants.ts` 逐字同形）。
-        lifecycle: createDatabaseTaskDriverLifecyclePort({
+        coordinatorFactory: testDriveFactory(
           db,
-          log: logger(),
-          async finalizeWorkspace() {
-            finalized = true
-          },
-        }),
+          createDatabaseTaskDriverLifecyclePort({
+            db,
+            log: logger(),
+            async finalizeWorkspace() {
+              finalized = true
+            },
+          }),
+        ),
         workgroup: unusedWorkgroupResources(),
       }),
       async settle() {
@@ -418,16 +422,19 @@ function operationsFor(harness: ProviderHarness): LaunchTarget {
     // RFC-359 AC-1（plan §5hn 批次二 ⑤）：铸造机改收**端口**。PG 这一侧绑实例的
     // `claimPersisted({ intentId })`；SQLite 组合根绑进程级单例的 `claim({ db, intentId })`
     // 并带 `legacyConnection`——两条拼法本来就并存于 `taskDriverLifecycle.ts`。
-    lifecycle: createTaskDriverLifecyclePort({
+    coordinatorFactory: testDriveFactory(
       db,
-      module: executionModule,
-      claim: (intentId) => executionModule.claimPersisted({ intentId }),
-      persistence,
-      log: logger(),
-      async finalizeWorkspace() {
-        finalized = true
-      },
-    }),
+      createTaskDriverLifecyclePort({
+        db,
+        module: executionModule,
+        claim: (intentId) => executionModule.claimPersisted({ intentId }),
+        persistence,
+        log: logger(),
+        async finalizeWorkspace() {
+          finalized = true
+        },
+      }),
+    ),
     workgroup: unusedWorkgroupResources(),
   })
   return {

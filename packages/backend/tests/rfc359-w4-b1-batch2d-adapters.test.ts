@@ -224,6 +224,7 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 人工门 continuation pre-dri
     })
     const context = {
       taskId,
+      intentKind: 'gate-continuation' as const,
       execution: createTaskExecutionContext({
         intentId,
         token,

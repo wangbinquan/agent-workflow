@@ -84,7 +84,7 @@ describeEachProvider('RFC-359 W4-D28a —— 任务归属端口在两个引擎�
     const ownership = ownershipFor(harness.db)
     const { taskId, intentId } = await seed(harness.db)
 
-    const token = await ownership.claimPendingIntent({
+    const { token } = await ownership.claimPendingIntent({
       intentId,
       identity: identity(),
       now: 1_000,
@@ -146,7 +146,7 @@ describeEachProvider('RFC-359 W4-D28a —— 任务归属端口在两个引擎�
   test('④ 心跳续租：token 推进，revision 单调增', async () => {
     const ownership = ownershipFor(harness.db)
     const { taskId, intentId } = await seed(harness.db)
-    const token = await ownership.claimPendingIntent({
+    const { token } = await ownership.claimPendingIntent({
       intentId,
       identity: identity(),
       now: 1_000,
@@ -166,7 +166,7 @@ describeEachProvider('RFC-359 W4-D28a —— 任务归属端口在两个引擎�
   test('⑤ 撤销要对上 revision：陈旧 revision 撤不动，正确的能撤', async () => {
     const ownership = ownershipFor(harness.db)
     const { taskId, intentId } = await seed(harness.db)
-    const token = await ownership.claimPendingIntent({
+    const { token } = await ownership.claimPendingIntent({
       intentId,
       identity: identity(),
       now: 1_000,
@@ -196,7 +196,7 @@ describeEachProvider('RFC-359 W4-D28a —— 任务归属端口在两个引擎�
   test('⑥ 撤销之后心跳必须被围栏挡住 —— 死掉的 owner 不能复活', async () => {
     const ownership = ownershipFor(harness.db)
     const { taskId, intentId } = await seed(harness.db)
-    const token = await ownership.claimPendingIntent({
+    const { token } = await ownership.claimPendingIntent({
       intentId,
       identity: identity(),
       now: 1_000,
@@ -219,7 +219,7 @@ describeEachProvider('RFC-359 W4-D28a —— 任务归属端口在两个引擎�
   test('⑦ 标记需要恢复：状态转 recovery-required 并留下判据码', async () => {
     const ownership = ownershipFor(harness.db)
     const { taskId, intentId } = await seed(harness.db)
-    const token = await ownership.claimPendingIntent({
+    const { token } = await ownership.claimPendingIntent({
       intentId,
       identity: identity(),
       now: 1_000,
@@ -241,7 +241,7 @@ describeEachProvider('RFC-359 W4-D28a —— 任务归属端口在两个引擎�
   test('⑧ 旧世代 daemon 的 owner 可被持锁者撤销（重启接管路径）', async () => {
     const ownership = ownershipFor(harness.db)
     const { taskId, intentId } = await seed(harness.db)
-    const token = await ownership.claimPendingIntent({
+    const { token } = await ownership.claimPendingIntent({
       intentId,
       identity: identity(),
       now: 1_000,

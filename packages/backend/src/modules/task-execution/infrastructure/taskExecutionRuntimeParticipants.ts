@@ -59,8 +59,8 @@ import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
  *
  * 逐格量完，两侧真正剩下的差异只有**三个端口**，而且三个说的是同一件事——
  * 「这台部署里，谁在跑、怎么认领、怎么请它停」：
- *   · `lifecycle`：SQLite 绑进程级单例的同步认领（`createDatabaseTaskDriverLifecyclePort`），
- *     PostgreSQL 绑持久化租约（`claimPersisted`）；
+ *   · `coordinatorFactory`：RFC-386 会话工厂封装生命周期，SQLite 绑进程级单例的
+ *     同步认领（`createDatabaseTaskDriverLifecyclePort`），PostgreSQL 绑持久化租约（`claimPersisted`）；
  *   · `activity` / `stop`：SQLite 读进程内注册表（`composeLegacyTaskActivityParticipant` /
  *     `composeLegacyTaskStopRegistry`），PostgreSQL 读注入的 `executionModule.runtimeRegistry`。
  *
@@ -129,8 +129,8 @@ export function createTaskExecutionRuntimeParticipants(
   const childLaunch = createChildExecutionLaunchOperations({
     db: input.db,
     persistence: input.persistence,
-    // 认领走哪条路由组合根决定；铸造机自己不再有引擎判断。
-    lifecycle: input.lifecycle,
+    // 会话工厂持有认领端口与实时配置；铸造机只选择子任务画像。
+    coordinatorFactory: input.coordinatorFactory,
     workgroup: input.childLaunchWorkgroup,
   })
 
@@ -192,7 +192,7 @@ export function createTaskExecutionRuntimeParticipants(
       runtimeSessionLeases: input.runtimeSessionLeases,
       workspacePresence: input.workspacePresence,
       log: input.log,
-      lifecycle: input.lifecycle,
+      coordinatorFactory: input.coordinatorFactory,
       activity: input.activity,
       stop: input.stop,
     }),

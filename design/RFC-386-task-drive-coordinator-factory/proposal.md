@@ -51,7 +51,9 @@ RFC-382 让每个会话只有一个任务驱动协调器与一个实时运行配
 1. **子任务遵守设置**：调用节点 / 动态工作流产生的子任务，其内建提交与合并 Agent 使用设置页的模型、运行时、语言、修复重试与 diff 上限
    （此前用缺省值）；子任务的 Agent 运行按现行提炼策略做执行结束的记忆提炼（策略关闭则无变化）。子任务是否提交、推送仍由工作流
    决定，本 RFC 不改。
-2. **子任务启动 / 续跑失败只终结自己的意图**：按认领世代终结，不波及同一任务的其他意图。
+2. **子任务启动 / 续跑失败的原因名去掉 provider 字样**：生命周期记录里的 `postgresql-child-launch` → `child-launch`、
+   `postgresql-task-resume` → `task-resume`；失败摘要、失败码不变。（实施时核实：HEAD 的这两处上报本就按认领世代终结意图，
+   所以「只终结自己的意图」不是行为变化，只由回归用例锁定。）
 
 PostgreSQL：
 
@@ -59,7 +61,8 @@ PostgreSQL：
 
 ## 5. 验收标准
 
-- **AC-1 工厂唯一**：除 RFC-387 将删除的 `createTaskDriveCoordinator` 外，后端只有工厂内一处 `new DefaultTaskDriveCoordinator(`（结构锁）；
+- **AC-1 工厂唯一**：除 RFC-387 将删除的 `createTaskDriveCoordinator` 与 PostgreSQL 融合适配器（`postgresqlFusionEngineTaskOperations.ts`）两处外，
+  后端只有工厂内一处 `new DefaultTaskDriveCoordinator(`（结构锁，两处豁免精确登记）；
   会话组合只构造一次工厂。
 - **AC-2 行为**：§4 每一条都有双引擎回归与「旧接线」对照用例（design §5）。
 - **AC-3 旧锁与账本**：受影响的旧锁改指新位置，不放宽断言意图；RFC-284 T20 的处置表与说明随实现更新；`architecture/counts.json` 不升。

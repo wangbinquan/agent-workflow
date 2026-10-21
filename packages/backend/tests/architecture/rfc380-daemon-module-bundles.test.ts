@@ -61,6 +61,7 @@ const FACTORIES = new Set([
 
   'createTaskDriveCoordinator',
   'DefaultTaskDriveCoordinator',
+  'createTaskDriveCoordinatorFactory',
   'composeSqliteTaskExecutionProviderRuntime',
   'composePostgresqlTaskExecutionProviderRuntime',
   'createTaskRouteOperations',

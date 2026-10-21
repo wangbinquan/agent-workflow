@@ -1,3 +1,7 @@
+import {
+  shouldRebuildWorkspaceProfiles,
+  type TaskExecutionIntentKind,
+} from '../../domain/executionIntent'
 import { runWithTaskExecutionContext } from '../taskExecutionContext'
 import type { TaskExecutionContextRef } from '../ports/taskExecutionTopology'
 import type {
@@ -7,6 +11,7 @@ import type {
 } from './taskDriveTypes'
 
 export interface TaskDriveAttachment {
+  readonly intentKind: TaskExecutionIntentKind
   readonly execution: TaskExecutionContextRef
 }
 
@@ -27,6 +32,7 @@ export interface TaskDriverLifecyclePort {
 }
 
 export interface TaskDriveContext {
+  readonly intentKind: TaskExecutionIntentKind
   readonly taskId: string
   readonly execution: TaskExecutionContextRef
   readonly signal: AbortSignal
@@ -219,11 +225,19 @@ export class DefaultTaskDriveCoordinator implements TaskDriveCoordinator {
     controller: AbortController,
     attachment: TaskDriveAttachment,
   ): Promise<TaskDriveContext> {
+    const runtime = await this.options.runtime
+    // Keep explicit legacy flags until RFC-387 retires those callers.
+    const ensureWorkspaceProfiles =
+      runtime.ensureWorkspaceProfiles || shouldRebuildWorkspaceProfiles(attachment.intentKind)
     return Object.freeze({
       taskId,
+      intentKind: attachment.intentKind,
       execution: attachment.execution,
       signal: controller.signal,
-      runtime: await this.options.runtime,
+      runtime:
+        ensureWorkspaceProfiles === runtime.ensureWorkspaceProfiles
+          ? runtime
+          : Object.freeze({ ...runtime, ensureWorkspaceProfiles }),
     })
   }
 

@@ -1,3 +1,4 @@
+import type { TaskExecutionIntentKind } from '../../domain/executionIntent'
 import type {
   ExclusiveDaemonLockProof,
   OwnerSnapshot,
@@ -16,7 +17,7 @@ export interface TaskOwnershipPersistence {
     readonly identity: WorkerIdentity
     readonly now: number
     readonly leaseMs: number
-  }): Promise<OwnershipToken>
+  }): Promise<Readonly<{ token: OwnershipToken; intentKind: TaskExecutionIntentKind }>>
   heartbeat(input: {
     readonly token: OwnershipToken
     readonly now: number

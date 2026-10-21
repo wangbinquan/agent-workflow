@@ -58,8 +58,13 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     ]
       .map(read)
       .join('\n')
-    expect(childLaunchAdapters).toMatch(/\.\.\.(?:input|request)\.runtime\.runConfig/)
-    expect(childLaunchAdapters).toContain('resolveTaskDriveConfig(request.runtime.runConfig)')
+    expect(childLaunchAdapters).toContain('parent: request.runtime.runConfig')
+    expect(childLaunchAdapters).toContain('parent: input.runtime.runConfig')
+    const factory = read(
+      'packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts',
+    )
+    expect(factory).toContain('pickInheritableRunConfig(profile.runConfig.parent)')
+    expect(factory).toContain('...context.runtime.runtime,')
   })
 
   test('StartTaskDeps declares the field and the coordinator freezes it once for every drive path', () => {

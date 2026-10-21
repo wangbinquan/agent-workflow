@@ -1,3 +1,4 @@
+import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
 import {
@@ -194,14 +195,17 @@ function postgresqlParticipants(db: ProviderNeutralDatabase): TaskExecutionRunti
     persistence: input.persistence,
   })
   const ports: ChildTaskLifecycleRuntimePorts = {
-    lifecycle: createTaskDriverLifecyclePort({
-      db: client,
-      module: executionModule,
-      claim: (intentId) => executionModule.claimPersisted({ intentId }),
-      persistence: input.persistence,
-      log: passthrough('log'),
-      finalizeWorkspace: async () => {},
-    }),
+    coordinatorFactory: testDriveFactory(
+      db,
+      createTaskDriverLifecyclePort({
+        db: client,
+        module: executionModule,
+        claim: (intentId) => executionModule.claimPersisted({ intentId }),
+        persistence: input.persistence,
+        log: passthrough('log'),
+        finalizeWorkspace: async () => {},
+      }),
+    ),
     activity: Object.freeze({
       isActive: (taskId: string) => executionModule.runtimeRegistry.hasTask(taskId),
       awaitReleasedSettled: (taskId: string) =>
@@ -412,7 +416,7 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
         now,
         advanceOperationGeneration: false,
       })
-      const token = await execution.persistence.ownership.claimPendingIntent({
+      const { token } = await execution.persistence.ownership.claimPendingIntent({
         intentId,
         identity: createWorkerIdentity({
           ownerId: ulid(),
@@ -592,14 +596,23 @@ test('第 12 刀 · 引擎差异只剩三个端口：认领策略 / 活跃度 / 
   // 共用实现自己不许拼认领策略，也不许读任何进程全局注册表——三格全是收进来的。
   expect(participants).not.toContain('createTaskDriverLifecyclePort(')
   expect(participants).not.toContain('claimPersisted')
-  expect(participants).toContain('lifecycle: input.lifecycle')
+  // RFC-386: the session factory now owns the same provider-selected lifecycle.
+  expect(participants).toContain('coordinatorFactory: input.coordinatorFactory')
   expect(participants).toContain('activity: input.activity')
   expect(participants).toContain('stop: input.stop')
 
   // 两条绑定都在组合根里，且各绑各的。
   expect(provider).toContain('dependencies.driverLifecycle ??')
   expect(provider).toContain('createDatabaseTaskDriverLifecyclePort({')
-  expect(provider).toContain('lifecycle: driverLifecycle,')
+  expect(provider.match(/coordinatorFactory: dependencies.coordinatorFactory/g)).toHaveLength(2)
+  const bundle = readFileSync(
+    resolve(import.meta.dir, '../src/cli/daemonModules/taskExecution.ts'),
+    'utf8',
+  )
+  expect(bundle).toContain('attach: (request) => provider.driverLifecycle.attach(request)')
+  expect(bundle).toContain(
+    'releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request)',
+  )
   // RFC-382 retains each provider's original release finalizer at the bundle boundary.
   for (const [path, db] of [
     ['cli/start.ts', 'db'],

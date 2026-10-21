@@ -36,18 +36,12 @@ import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/c
 import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import { composeDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
-import {
-  DefaultTaskDriveCoordinator,
-  resolveTaskDriveConfig,
-} from '@/modules/task-execution/composition/taskDriveLegacy'
+import { createTaskDriveCoordinatorFactory } from '@/modules/task-execution/composition/taskDriveLegacy'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
 import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
 import type { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import type { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
-import type {
-  SchedulerDriverPort,
-  TaskDriveCoordinator,
-} from '@/modules/task-execution/public/commands'
+import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import type {
   PostgresqlTaskExecutionProviderRuntimeDependencies,
   SqliteTaskExecutionProviderRuntimeDependencies,
@@ -243,12 +237,38 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       },
     },
   })
-  const coordinator: TaskDriveCoordinator = Object.freeze({
-    submit: (request: Parameters<TaskDriveCoordinator['submit']>[0]) =>
-      sessionCoordinator.submit(request),
+  const coordinatorFactory = createTaskDriveCoordinatorFactory({
+    runConfiguration,
+    lifecycle: {
+      attach: (request) => provider.driverLifecycle.attach(request),
+      releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
+    },
+    gateContinuationPreDrive: composeGateContinuationPreDrive({
+      db,
+      memoryDistillEnqueuer: memory.memoryOperations.distillCommands,
+      persistence,
+    }),
+    repositoryPreparation: {
+      async run(context) {
+        const fresh = await runConfiguration()
+        return composeDeferredRepositoryPreparation({
+          db,
+          appHome,
+          secretBox,
+          repositoryPreparation,
+          cloneTimeoutMs: fresh.cloneTimeoutMs,
+          gitBaselineSyncWindowMs: fresh.gitBaselineSyncWindowMs,
+        }).run(context)
+      },
+    },
+    engine: () => provider.runtime.schedulerDriver,
+    failures: persistence,
+    log,
   })
+  const coordinator = coordinatorFactory.session
   const provider = input.adapters.compose({
     persistence,
+    coordinatorFactory,
     schedulerDriver: input.testSeams?.schedulerDriver,
     archive: selection.archive,
     workspaceReads: selection.workspaceReads,
@@ -338,71 +358,6 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       agentLaunchResources,
     },
   })
-  const sessionCoordinator = new DefaultTaskDriveCoordinator({
-    get runtime() {
-      return runConfiguration().then(resolveTaskDriveConfig)
-    },
-    lifecycle: provider.driverLifecycle,
-    gateContinuationPreDrive: composeGateContinuationPreDrive({
-      db,
-      memoryDistillEnqueuer: memory.memoryOperations.distillCommands,
-      persistence,
-    }),
-    repositoryPreparation: {
-      async run(context) {
-        const fresh = await runConfiguration()
-        return composeDeferredRepositoryPreparation({
-          db,
-          appHome,
-          secretBox,
-          repositoryPreparation,
-          cloneTimeoutMs: fresh.cloneTimeoutMs,
-          gitBaselineSyncWindowMs: fresh.gitBaselineSyncWindowMs,
-        }).run(context)
-      },
-    },
-    engineOrchestrator: {
-      async drive(context) {
-        await provider.runtime.schedulerDriver.drive({
-          taskId: context.taskId,
-          appHome: context.runtime.appHome,
-          ...context.runtime.runtime,
-          ...(context.runtime.ensureWorkspaceProfiles ? { ensureWorkspaceProfiles: true } : {}),
-          signal: context.signal,
-          executionContext: context.execution,
-        })
-      },
-    },
-    failureReporter: {
-      async report({ taskId, error, execution }) {
-        const now = Date.now()
-        log.error('task drive failed', {
-          taskId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        await persistence.runtimeLifecycle.trySet({
-          taskId,
-          to: 'failed',
-          allowedFrom: ['pending', 'running'],
-          extra: {
-            finishedAt: now,
-            errorSummary: 'task drive failed',
-            errorMessage: error instanceof Error ? error.message : String(error),
-          },
-          executionContext: execution,
-          now,
-          reason: 'task-drive',
-        })
-        await persistence.intentTerminalization.terminalize({
-          taskId,
-          state: 'failed',
-          failureCode: 'task-drive-failed',
-          now,
-          claimedOwnerEpoch: execution.token.epoch,
-        })
-      },
-    },
-  })
   const hostTasks = Object.freeze({
     db,
     launch: provider.routeLaunch.workflow,
@@ -440,7 +395,8 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     collaboration,
     resourceSnapshots,
     resources,
-    coordinator: sessionCoordinator,
+    coordinator,
+    coordinatorFactory,
     runConfiguration,
     validationContext,
     catalogSources: composeTaskExecutionCatalogSources(db, input.resources.owners),

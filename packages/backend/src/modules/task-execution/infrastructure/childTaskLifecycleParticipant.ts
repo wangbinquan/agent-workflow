@@ -36,9 +36,9 @@ import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/ut
 import { createLogger } from '@/util/log'
 import { killStaleRunProcessTree, type StaleRunKillOutcome } from '@/util/process'
 import {
-  DefaultTaskDriveCoordinator,
-  skipRepositoryPreparation,
-} from '../application/drive/taskDriveCoordinator'
+  TASK_RESUME_FAILURE,
+  type TaskDriveCoordinatorFactory,
+} from '../application/drive/taskDriveCoordinatorFactory'
 import {
   resolveTaskDriveConfig,
   type TaskDriveCompletionMode,
@@ -62,7 +62,6 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import type {
   TaskDriveContext,
-  TaskDriverLifecyclePort,
   RepositoryPreparationStepOutcome,
 } from '../application/drive/taskDriveCoordinator'
 
@@ -104,8 +103,8 @@ type ResumeTask = Readonly<{
  * RFC-359 AC-1（第 12 刀）—— 两个 provider 在子任务生命周期上**唯一**的差异面。
  *
  * 三格说的是同一件事：「这台部署里，谁在跑、怎么认领、怎么请它停」。
- *   · `lifecycle`：SQLite 绑进程级单例的同步认领（`createDatabaseTaskDriverLifecyclePort`），
- *     PostgreSQL 绑持久化租约（`claimPersisted`）；
+ *   · `coordinatorFactory`：RFC-386 会话工厂持有生命周期，SQLite 绑进程级单例的
+ *     同步认领（`createDatabaseTaskDriverLifecyclePort`），PostgreSQL 绑持久化租约（`claimPersisted`）；
  *   · `activity`：准入门读的「进程内是不是已经有人在跑」；
  *   · `stop`：取消要用的停机票据面（取票 / 请求停 / 等停）。
  *
@@ -121,7 +120,7 @@ type ResumeTask = Readonly<{
  * PostgreSQL 那侧交 `executionModule.runtimeRegistry`。
  */
 export interface ChildTaskLifecycleRuntimePorts {
-  readonly lifecycle: TaskDriverLifecyclePort
+  readonly coordinatorFactory: TaskDriveCoordinatorFactory
   readonly activity: ActiveTaskExecutionParticipant
   readonly stop: ProviderTaskExecutionModule['runtimeRegistry']
 }
@@ -140,10 +139,10 @@ export interface ChildTaskLifecycleDependencies extends ChildTaskLifecycleRuntim
  * 比上面那份参与者依赖窄两样，而且窄得有道理：
  *   · `executionModule` 只被两处用到——准入门里的「进程内是不是已经有人在跑」，
  *     以及生命周期端口的认领。前者收成 `activity` 端口（第 5 刀立的那个，
- *     两个引擎各自注入自己的注册表）；后者整个收进 `lifecycle`。
- *   · `finalizeWorkspace` 同理，只被 `lifecycle` 用到。
+ *     两个引擎各自注入自己的注册表）；后者由 `coordinatorFactory` 持有的生命周期承担。
+ *   · `finalizeWorkspace` 同理，由会话工厂持有的生命周期使用。
  *
- * `lifecycle` 正是**两个引擎唯一真差异**的容身处：SQLite 走进程级单例的同步认领
+ * 工厂持有的 `lifecycle` 正是**两个引擎唯一真差异**的容身处：SQLite 走进程级单例的同步认领
  * （`createDatabaseTaskDriverLifecyclePort`），PostgreSQL 走持久化租约认领
  * （`claimPersisted`）。那是两种部署形态的真实差别、不是欠账，所以它该是端口而不是分支。
  * 收窄之后 `server.ts` 那条**不装配完整 runtime** 的路也接得上同一份实现
@@ -199,7 +198,7 @@ export interface TaskResumeDependencies {
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly log: TaskExecutionTopologyLogger
   readonly activity: ActiveTaskExecutionParticipant
-  readonly lifecycle: TaskDriverLifecyclePort
+  readonly coordinatorFactory: TaskDriveCoordinatorFactory
 }
 
 /** Internal command identity supplied by a durable business owner. The guard
@@ -985,7 +984,7 @@ export async function cancelTaskProjection(
 }
 
 /**
- * Fully native PostgreSQL child lifecycle participant.  It is also safe for
+ * Provider-neutral child lifecycle participant using session drive profiles.  It is also safe for
  * daemon auto-resume of a root task: the child-only parent-row guard is simply
  * skipped when the task has no parent.
  */
@@ -1020,7 +1019,7 @@ export function createChildTaskLifecycleParticipant(
           // 单进程形态读 `composeLegacyTaskActivityParticipant()`。
           // 同一个角色、两份注册表——正是 `activity` 这个端口存在的理由。
           activity: dependencies.activity,
-          lifecycle: dependencies.lifecycle,
+          coordinatorFactory: dependencies.coordinatorFactory,
         },
         input,
         topology,
@@ -1126,14 +1125,13 @@ export async function drivePreparedTaskResume(
   // A duplicate notification must not wait on the very driver whose platform
   // receipt the recovery consumer is about to publish.
   if (dependencies.activity.isActive(input.taskId)) return
-  const lifecycle = dependencies.lifecycle
-  const runtime = resolveTaskDriveConfig({
-    ...input.runtime.runConfig,
-    ensureWorkspaceProfiles: true,
-  })
-  const coordinator = new DefaultTaskDriveCoordinator({
-    runtime,
-    lifecycle,
+  const task = await loadResumeTask(dependencies.db, input.taskId)
+  const continuation = options.continuation
+  const coordinator = dependencies.coordinatorFactory.coordinatorFor({
+    ...(task.parentTaskId === null
+      ? {}
+      : { runConfig: { kind: 'inherit-parent' as const, parent: input.runtime.runConfig } }),
+    failure: TASK_RESUME_FAILURE,
     admittedContinuation: {
       async run(context) {
         const rollback = () =>
@@ -1141,53 +1139,30 @@ export async function drivePreparedTaskResume(
             taskId: input.taskId,
             executionContext: context.execution,
           })
-        if (options.continuation) return options.continuation.prepare(context, rollback)
+        if (continuation) return continuation.prepare(context, rollback)
         await rollback()
         return { kind: 'ready' as const }
       },
     },
-    repositoryPreparation: skipRepositoryPreparation,
-    engineOrchestrator: {
-      async drive(context) {
-        if (options.continuation) {
-          const readiness = await options.continuation.ready(context)
-          if (readiness.kind !== 'ready' || context.signal.aborted) return
-        }
-        await topology.schedulerDriver.drive({
-          taskId: context.taskId,
-          appHome: context.runtime.appHome,
-          ...context.runtime.runtime,
-          ...(context.runtime.ensureWorkspaceProfiles ? { ensureWorkspaceProfiles: true } : {}),
-          signal: context.signal,
-          executionContext: context.execution,
-        })
-      },
-    },
-    failureReporter: {
-      async report({ taskId, execution, error }) {
-        const now = Date.now()
-        await dependencies.persistence.runtimeLifecycle.trySet({
-          taskId,
-          to: 'failed',
-          allowedFrom: ['pending', 'running'],
-          extra: {
-            finishedAt: now,
-            errorSummary: 'task resume failed',
-            errorMessage: error instanceof Error ? error.message : String(error),
+    engine:
+      continuation === undefined
+        ? topology.schedulerDriver
+        : {
+            ...topology.schedulerDriver,
+            async drive(request) {
+              const { taskId, executionContext, signal, ...runConfig } = request
+              const readiness = await continuation.ready({
+                taskId,
+                // readResumeIntent above accepts only a durable resume intent.
+                intentKind: 'resume',
+                execution: executionContext,
+                signal,
+                runtime: resolveTaskDriveConfig(runConfig),
+              })
+              if (readiness.kind !== 'ready' || request.signal.aborted) return
+              await topology.schedulerDriver.drive(request)
+            },
           },
-          executionContext: execution,
-          now,
-          reason: 'postgresql-task-resume',
-        })
-        await dependencies.persistence.intentTerminalization.terminalize({
-          taskId,
-          state: 'failed',
-          failureCode: 'task-resume-failed',
-          now,
-          claimedOwnerEpoch: execution.token.epoch,
-        })
-      },
-    },
   })
   await coordinator.submit({
     taskId: input.taskId,

@@ -150,8 +150,9 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
         expect(before.some((q) => q.dispatchedAt === null)).toBe(true)
         let checks = 0
         const scheduled = Promise.withResolvers<void>()
-        fixture.schedulerDriver.drive = async () => {
+        fixture.schedulerDriver.drive = async (request) => {
           try {
+            expect(request.ensureWorkspaceProfiles).toBe(baseline ? undefined : true)
             const questions = await db
               .select()
               .from(taskQuestions)
@@ -311,8 +312,9 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
         })
         let checks = 0
         const scheduled = Promise.withResolvers<void>()
-        fixture.schedulerDriver.drive = async () => {
+        fixture.schedulerDriver.drive = async (request) => {
           try {
+            expect(request.ensureWorkspaceProfiles).toBe(baseline ? undefined : true)
             expect(readFileSync(join(home, 'document.txt'), 'utf8')).toBe(
               baseline ? 'changed' : 'ask-time',
             )

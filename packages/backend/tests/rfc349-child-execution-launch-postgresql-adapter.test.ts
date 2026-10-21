@@ -3,6 +3,7 @@
 // SERIALIZABLE transaction) and the commit-before-drive boundary without
 // routing the provider client through the legacy SQLite launcher.
 
+import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { afterEach, expect, test } from 'bun:test'
 import { WorkflowDefinitionSchema, type StartTask } from '@agent-workflow/shared'
 
@@ -195,16 +196,19 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
       persistence,
       // RFC-359 AC-1（plan §5hn 批次二 ⑤）：铸造机改收**端口**——`executionModule` /
       // `log` / `finalizeWorkspace` 三格只用于拼这一个端口，现在由装配方拼好交进来。
-      lifecycle: createTaskDriverLifecyclePort({
-        db: fixture.db,
-        module: executionModule,
-        claim: (intentId) => executionModule.claimPersisted({ intentId }),
-        persistence,
-        log: logger(),
-        async finalizeWorkspace() {
-          trace.push('workspace:finalize')
-        },
-      }),
+      coordinatorFactory: testDriveFactory(
+        fixture.db,
+        createTaskDriverLifecyclePort({
+          db: fixture.db,
+          module: executionModule,
+          claim: (intentId) => executionModule.claimPersisted({ intentId }),
+          persistence,
+          log: logger(),
+          async finalizeWorkspace() {
+            trace.push('workspace:finalize')
+          },
+        }),
+      ),
       workgroup: {
         async loadExistingAgentIds() {
           throw new Error('workgroup resources are not used by workflow launch')

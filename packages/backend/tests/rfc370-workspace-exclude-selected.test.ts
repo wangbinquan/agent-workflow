@@ -118,7 +118,7 @@ async function fixture(
       now,
       advanceOperationGeneration: false,
     })
-    const token = await execution.persistence.ownership.claimPendingIntent({
+    const { token } = await execution.persistence.ownership.claimPendingIntent({
       intentId,
       identity: createWorkerIdentity({ ownerId: ulid(), daemonGeneration: 'root-' + ulid() }),
       now,
@@ -168,7 +168,7 @@ async function fixture(
           now: childNow,
           advanceOperationGeneration: false,
         })
-        const childToken = await execution!.persistence.ownership.claimPendingIntent({
+        const { token: childToken } = await execution!.persistence.ownership.claimPendingIntent({
           intentId: childIntent,
           identity: createWorkerIdentity({ ownerId: ulid(), daemonGeneration: 'child-' + ulid() }),
           now: childNow,
@@ -225,7 +225,7 @@ describeEachProvider('RFC-370 selected workspace profiles in real Task drives', 
         expect(receiver.db).toBe(harness.db)
         expect(receiver.persistence).toBe(h.provider.persistence)
         expect(receiver.activity).toBe(h.provider.participants.activity)
-        expect(receiver.lifecycle).toBeDefined()
+        expect(receiver.coordinatorFactory).toBeDefined()
         expect(receiver.stop).toBeDefined()
         expect(receiver.runtimeSessionLeases).toBeDefined()
         expect(receiver.memoryInjectionQueries).toBeDefined()

@@ -13,6 +13,21 @@ export const TASK_EXECUTION_INTENT_KINDS = [
 ] as const
 export type TaskExecutionIntentKind = (typeof TASK_EXECUTION_INTENT_KINDS)[number]
 
+/** RFC-386: continuation drives reuse a workspace whose exclusion profiles may have changed. */
+export function shouldRebuildWorkspaceProfiles(kind: TaskExecutionIntentKind): boolean {
+  switch (kind) {
+    case 'resume':
+    case 'retry-node':
+    case 'sync-workflow':
+    case 'gate-continuation':
+    case 'recovery':
+      return true
+    case 'launch':
+    case 'retry-repository-preparation':
+      return false
+  }
+}
+
 export const TASK_EXECUTION_INTENT_STATES = [
   'pending',
   'claimed',

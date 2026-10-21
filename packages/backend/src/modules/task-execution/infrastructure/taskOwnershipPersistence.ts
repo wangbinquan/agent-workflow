@@ -295,6 +295,7 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
             id: taskExecutionIntents.id,
             taskId: taskExecutionIntents.taskId,
             state: taskExecutionIntents.state,
+            kind: taskExecutionIntents.kind,
           })
           .from(taskExecutionIntents)
           .where(eq(taskExecutionIntents.id, input.intentId))
@@ -400,15 +401,18 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
         )
         .returning({ id: taskExecutionIntents.id })
       if (intentClaim[0] === undefined) throw stale(`intent '${input.intentId}' claim lost`)
-      return { taskId: intent.taskId, epoch, leaseUntil, revision }
+      return { taskId: intent.taskId, intentKind: intent.kind, epoch, leaseUntil, revision }
     })
-    return createOwnershipToken({
-      taskId: claimed.taskId,
-      identity: input.identity,
-      epoch: claimed.epoch,
-      leaseUntil: claimed.leaseUntil,
-      ownerRevision: claimed.revision,
-    })
+    return {
+      intentKind: claimed.intentKind,
+      token: createOwnershipToken({
+        taskId: claimed.taskId,
+        identity: input.identity,
+        epoch: claimed.epoch,
+        leaseUntil: claimed.leaseUntil,
+        ownerRevision: claimed.revision,
+      }),
+    }
   }
 
   async heartbeat(input: Parameters<TaskOwnershipPersistence['heartbeat']>[0]) {

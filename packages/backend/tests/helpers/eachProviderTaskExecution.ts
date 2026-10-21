@@ -1,3 +1,4 @@
+import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
 import type { LegacyTaskRunComposition } from '@/modules/task-execution/composition/localTaskRunSelection'
@@ -255,6 +256,14 @@ export async function createEachProviderTaskExecution(
     const sqlite = db as unknown as DbClient
     const provider: SelectedSqliteTaskExecutionProviderRuntime =
       composeSqliteTaskExecutionProviderRuntime(sqlite, {
+        coordinatorFactory: testDriveFactory(
+          db,
+          {
+            attach: (request) => provider.driverLifecycle.attach(request),
+            releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
+          },
+          () => ({ configPath, ...runConfig }),
+        ),
         runtime: {
           ...runBinding,
           workspaceExcludeProfilesFor,
@@ -396,6 +405,14 @@ export async function createEachProviderTaskExecution(
   const log = createLogger('rfc359-execution-chain')
   const provider: SelectedPostgresqlTaskExecutionProviderRuntime =
     composePostgresqlTaskExecutionProviderRuntime(postgresql, {
+      coordinatorFactory: testDriveFactory(
+        db,
+        {
+          attach: (request) => provider.driverLifecycle.attach(request),
+          releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
+        },
+        () => ({ configPath, ...runConfig }),
+      ),
       runtime: {
         ...runBinding,
         workspaceExcludeProfilesFor,

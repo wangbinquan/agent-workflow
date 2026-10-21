@@ -325,7 +325,20 @@ describe('RFC-317 T47 —— CAS 站点的 allowedFrom 必须能从转移表推�
     // RFC-359 AC-1（第 9 刀）：25 → 40。`trySet`（任务状态 CAS 的中立端口写法）补进
     // `TASK_WRITERS` 之后，20 个此前整批在语料之外的站点回到预言里——它们里只有 1 条越界，
     // 其余 19 条本来就守着转移表，只是没人看得见。
-    expect(sites.length).toBeGreaterThanOrEqual(40)
+    // RFC-386: the session, child-launch and resume reporters share one factory CAS (40 -> 38).
+    expect(sites.length).toBeGreaterThanOrEqual(38)
+    expect(
+      sites.filter(
+        (site) =>
+          site.file === 'modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts',
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        writer: 'trySet',
+        to: 'failed',
+        allowedFrom: ['pending', 'running'],
+      }),
+    ])
   })
 
   test('表内站点确实占多数（判据不是恒真）', () => {
@@ -335,7 +348,8 @@ describe('RFC-317 T47 —— CAS 站点的 allowedFrom 必须能从转移表推�
     const onTable = sites.filter((site) => offTableSources(site).length === 0)
     // RFC-382: six root failure reporters collapse into one bundle reporter; measured 37 -> 32.
     // The exact off-table ledger below remains unchanged.
-    expect(onTable.length).toBeGreaterThanOrEqual(32)
+    // RFC-386: the three table-conforming reporters now have one shared implementation (32 -> 30).
+    expect(onTable.length).toBeGreaterThanOrEqual(30)
   })
 
   test('越界站点与偏离账本**逐条相等**（新增一条 ⇒ 红；改对一条不销账 ⇒ 也红）', () => {

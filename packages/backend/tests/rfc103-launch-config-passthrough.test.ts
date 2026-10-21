@@ -247,6 +247,17 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // 配置单源不变（仍只有一处 `...runtimeConfigOpts(`）。
     expect(spreads).toHaveLength(1)
     expect(taskSrc.match(/createTaskDriveCoordinator\(\{/g) ?? []).toHaveLength(4)
+    // RFC-386: C11/C12 now share the application factory; RFC-387 legacy sites stay locked.
+    const factory = readFileSync(
+      join(
+        import.meta.dir,
+        '../src/modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts',
+      ),
+      'utf8',
+    )
+    expect(factory.match(/new DefaultTaskDriveCoordinator\(/g)).toHaveLength(1)
+    expect(factory).toContain('...context.runtime.runtime,')
+
     const wakeStart = taskSrc.indexOf('export async function wakeHumanGateContinuation(')
     const wakeEnd = taskSrc.indexOf('\nexport ', wakeStart + 1)
     const wakeBlock = taskSrc.slice(wakeStart, wakeEnd)

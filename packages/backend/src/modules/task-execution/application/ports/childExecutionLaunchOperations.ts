@@ -11,7 +11,7 @@ interface ChildLaunchContext {
   readonly invocationDepth: number
   readonly materializedSpace: MaterializedSpace
   readonly runtime: ChildResumeRuntime
-  readonly schedulerDriver: Pick<SchedulerDriverPort, 'drive'>
+  readonly schedulerDriver: SchedulerDriverPort
 }
 
 export interface ChildWorkflowLaunchRequest extends ChildLaunchContext {

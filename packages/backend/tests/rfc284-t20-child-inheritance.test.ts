@@ -16,13 +16,11 @@
 //     判读）**——scheduler 在消费点自带 keyfile 自解析兜底
 //     （`opts.codeHostConnections ?? resolveCodeHostConnectionsFromKeyFile`，
 //     scheduler.ts）；opts 注入是纯测试缝，子任务与根任务同样走自解析，无断线。
-//   - fanoutMaxShardTotal：事实等效——默认常量同值（256），子任务回落默认与
-//     显式下传同判；显式贯穿留给配置线统一（RFC-287 装配线收敛的自然席位）。
-//   - commitPushModel / commitPushRuntime / commitPushMaxRepairRetries /
-//     commitPushDiffMaxBytes / commitPushLang / mergeAgentModel /
-//     mergeAgentRuntime：刻意不继承（现状如实）——内建 commit/merge agent 的
-//     运行时配置由各任务 launch 时从设置重解析，子任务 launch 路径亦然；
-//     经 buildChildDeps 下传反而会让「设置改了但在跑链未变」的窗口拉长。
+//   - fanoutMaxShardTotal：仍回落引擎默认常量（256），会话配置投影不提供此键。
+//   - RFC-386: 内建 commit/merge Agent 设置与提炼观察者
+//     由工厂每次读会话实时配置（session-live），不经父快照继承；以前实际上回落
+//     默认设置且无观察者，原注释所称「子任务 launch 亦重解析」直到本 RFC 才成立。
+//     commitPushExcludePatterns 仍按登记继承，父值覆盖会话；不改变是否提交 / 推送。
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -32,7 +30,7 @@ import {
   type RunTaskOptions,
 } from '../src/services/scheduler'
 
-type Disposition = 'per-task' | 'inherit' | 'dropped-registered'
+type Disposition = 'per-task' | 'inherit' | 'session-live' | 'intent-kind' | 'dropped-registered'
 
 const DISPOSITION = {
   taskId: 'per-task',
@@ -100,21 +98,17 @@ const DISPOSITION = {
   // in the same one. Giving a child a different generation would make it treat
   // its own parent's live leases as void and take an MR out from under it.
   daemonGeneration: 'inherit',
-  commitPushModel: 'dropped-registered',
-  commitPushRuntime: 'dropped-registered',
-  commitPushMaxRepairRetries: 'dropped-registered',
-  commitPushDiffMaxBytes: 'dropped-registered',
+  commitPushModel: 'session-live',
+  commitPushRuntime: 'session-live',
+  commitPushMaxRepairRetries: 'session-live',
+  commitPushDiffMaxBytes: 'session-live',
   commitPushExcludePatterns: 'inherit',
-  commitPushLang: 'dropped-registered',
-  ensureWorkspaceProfiles: 'dropped-registered',
-  mergeAgentModel: 'dropped-registered',
-  mergeAgentRuntime: 'dropped-registered',
-  // RFC-366: a live participant the daemon composes per launch from the memory
-  // module's enqueuer — same family as `persistence` / `collaborationRuntime`
-  // above, and for the same reason: a child must not carry a parent's service
-  // instance through the run-config bag. The child launch path builds its own
-  // from the same bootstrap deps, so child agent runs still distill.
-  agentRunSettled: 'dropped-registered',
+  commitPushLang: 'session-live',
+  ensureWorkspaceProfiles: 'intent-kind',
+  mergeAgentModel: 'session-live',
+  mergeAgentRuntime: 'session-live',
+  // RFC-386: the factory supplies the session observer after reading live configuration.
+  agentRunSettled: 'session-live',
 } as const satisfies Record<keyof RunTaskOptions, Disposition>
 
 const keysWith = (d: Disposition): string[] =>
@@ -128,7 +122,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
     expect(keysWith('inherit')).toEqual([...INHERITABLE_RUN_CONFIG_KEYS].sort())
   })
 
-  test('dropped 集合不变快照（改标签必须动这里，评审可见）', () => {
+  test('dropped 集合明确登记快照（改标签必须动这里，评审可见）', () => {
     expect(keysWith('dropped-registered')).toEqual(
       [
         'fanoutMaxShardTotal',
@@ -156,19 +150,22 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'codeHostConnections',
         'codeHostFetch',
         'repositoryPublicationTransport',
-        'commitPushModel',
-        'commitPushRuntime',
-        'commitPushMaxRepairRetries',
-        'commitPushDiffMaxBytes',
-        'commitPushLang',
-        'ensureWorkspaceProfiles',
-        'mergeAgentModel',
-        'mergeAgentRuntime',
-        // RFC-366：agent 运行结束的观察者。daemon 每次 launch 从 memory 的入队器
-        // 现组一个，不随子任务的 run-config 包下传——与上面那批服务实例同族。
-        'agentRunSettled',
       ].sort(),
     )
+  })
+
+  test('RFC-386: live session settings and intent-kind policy are explicit', () => {
+    expect(keysWith('session-live')).toEqual([
+      'agentRunSettled',
+      'commitPushDiffMaxBytes',
+      'commitPushLang',
+      'commitPushMaxRepairRetries',
+      'commitPushModel',
+      'commitPushRuntime',
+      'mergeAgentModel',
+      'mergeAgentRuntime',
+    ])
+    expect(keysWith('intent-kind')).toEqual(['ensureWorkspaceProfiles'])
   })
 
   test('picker 与登记面同构：全值透传含 RFC-308 policy，undefined 不落键', () => {

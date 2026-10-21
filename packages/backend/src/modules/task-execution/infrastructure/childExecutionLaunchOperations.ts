@@ -39,10 +39,9 @@ import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAge
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
-  DefaultTaskDriveCoordinator,
-  skipRepositoryPreparation,
-} from '../application/drive/taskDriveCoordinator'
-import { resolveTaskDriveConfig } from '../application/drive/taskDriveTypes'
+  CHILD_LAUNCH_FAILURE,
+  type TaskDriveCoordinatorFactory,
+} from '../application/drive/taskDriveCoordinatorFactory'
 import type {
   ChildExecutionLaunchOperations,
   ChildWorkflowLaunchRequest,
@@ -51,7 +50,6 @@ import type {
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import { childLaunchAdmissionIssue } from '../domain/childLaunchAdmission'
 import { sha256Hex } from '../domain/digest'
-import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoordinator'
 import {
   type TaskExecutionTransaction,
   withSerializableTaskExecution,
@@ -80,19 +78,8 @@ export interface ChildExecutionLaunchDependencies {
    */
   readonly db: ProviderNeutralDatabase
   readonly persistence: TaskExecutionPersistence
-  /**
-   * RFC-359 AC-1（plan §5hn 批次二 ⑤）：**装配方交进来的驱动生命周期端口**。
-   *
-   * 此前这里收的是 `executionModule` + `log` + `finalizeWorkspace` 三格，由本文件自己
-   * `createTaskDriverLifecyclePort(...)` 拼——而那一拼把「认领走哪条路」的引擎判断锁死在了
-   * PG 那一侧（`claimPersisted({ intentId })` + 不带 legacy 连接）。SQLite 的那一条是
-   * 进程级单例的 `claim({ db, intentId })` **且**执行上下文要带 `legacyConnection`，
-   * 拼法不同，于是这台铸造机当年只能服务一个引擎。
-   *
-   * 端口化之后这一格由组合根决定（两条拼法本来就并存于 `taskDriverLifecycle.ts`），
-   * 铸造机本身不再有任何引擎判断。这三格全都只用于拼这一个端口，没有别的用途。
-   */
-  readonly lifecycle: TaskDriverLifecyclePort
+  /** RFC-386: the session factory owns the provider lifecycle and live configuration. */
+  readonly coordinatorFactory: TaskDriveCoordinatorFactory
   readonly workgroup: ChildWorkgroupLaunchResources
   readonly id?: () => string
   readonly now?: () => number
@@ -375,53 +362,6 @@ function assertParentAdmission(
     launchActorUserId: request.actor.user.id,
   })
   if (issue !== null) throw new ConflictError(issue.code, issue.message)
-}
-
-function createCoordinator(
-  dependencies: ChildExecutionLaunchDependencies,
-  request: ChildLaunchRequest,
-) {
-  return new DefaultTaskDriveCoordinator({
-    runtime: resolveTaskDriveConfig(request.runtime.runConfig),
-    lifecycle: dependencies.lifecycle,
-    repositoryPreparation: skipRepositoryPreparation,
-    engineOrchestrator: {
-      async drive(context) {
-        await request.schedulerDriver.drive({
-          taskId: context.taskId,
-          appHome: context.runtime.appHome,
-          ...context.runtime.runtime,
-          signal: context.signal,
-          executionContext: context.execution,
-        })
-      },
-    },
-    failureReporter: {
-      async report({ taskId, execution, error }) {
-        const occurredAt = (dependencies.now ?? Date.now)()
-        await dependencies.persistence.runtimeLifecycle.trySet({
-          taskId,
-          to: 'failed',
-          allowedFrom: ['pending', 'running'],
-          extra: {
-            finishedAt: occurredAt,
-            errorSummary: 'child task launch failed',
-            errorMessage: error instanceof Error ? error.message : String(error),
-          },
-          executionContext: execution,
-          now: occurredAt,
-          reason: 'postgresql-child-launch',
-        })
-        await dependencies.persistence.intentTerminalization.terminalize({
-          taskId,
-          state: 'failed',
-          failureCode: 'child-task-launch-failed',
-          now: occurredAt,
-          claimedOwnerEpoch: execution.token.epoch,
-        })
-      },
-    },
-  })
 }
 
 async function launchPreparedChild(
@@ -743,14 +683,20 @@ async function launchPreparedChild(
 
   space.cleanup.state = 'committed'
   await publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])
-  await createCoordinator(dependencies, request).submit({
-    taskId,
-    intentId,
-    completionMode: 'background',
-  })
+  await dependencies.coordinatorFactory
+    .coordinatorFor({
+      runConfig: { kind: 'inherit-parent', parent: request.runtime.runConfig },
+      failure: CHILD_LAUNCH_FAILURE,
+      engine: request.schedulerDriver,
+    })
+    .submit({
+      taskId,
+      intentId,
+      completionMode: 'background',
+    })
 }
 
-/** PostgreSQL-native child task mint and drive boundary. */
+/** Provider-neutral child task mint and drive boundary. */
 export function createChildExecutionLaunchOperations(
   dependencies: ChildExecutionLaunchDependencies,
 ): ChildExecutionLaunchOperations {

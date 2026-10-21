@@ -9,6 +9,7 @@
 // 「退役那份用 `StartTaskDeps` 表达、共用那份不认识」的东西显式化：
 //   · **收尾模式**：`awaitScheduler: true` → `completionMode: 'await-settle'`；
 //   · **活跃度**：缺省就是生产那一份（进程级注册表），要造「已经有人在跑」的判据自己传。
+import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { mkdtempSync } from 'node:fs'
@@ -72,16 +73,20 @@ export function createResumeEngine(
             options.isActive === undefined
               ? composeLegacyTaskActivityParticipant()
               : { isActive: options.isActive, awaitReleasedSettled: async () => {} },
-          lifecycle: createDatabaseTaskDriverLifecyclePort({
+          coordinatorFactory: testDriveFactory(
             db,
-            log,
-            finalizeWorkspace: async (id: string) => {
-              await finishClaimedWebhookWorkspacePrune(
-                db as unknown as Parameters<typeof finishClaimedWebhookWorkspacePrune>[0],
-                id,
-              )
-            },
-          }),
+            createDatabaseTaskDriverLifecyclePort({
+              db,
+              log,
+              finalizeWorkspace: async (id: string) => {
+                await finishClaimedWebhookWorkspacePrune(
+                  db as unknown as Parameters<typeof finishClaimedWebhookWorkspacePrune>[0],
+                  id,
+                )
+              },
+            }),
+            () => ({ appHome, ...options.runConfig }),
+          ),
         },
         {
           taskId,

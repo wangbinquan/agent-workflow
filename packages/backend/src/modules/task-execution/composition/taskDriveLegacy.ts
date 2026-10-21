@@ -35,3 +35,9 @@ export {
 export { hasDurableRepositoryPreparation } from '../infrastructure/durableRepositoryPreparation'
 
 export { admitTransferredWorkspace } from '../infrastructure/transferredWorkspaceAdmission'
+
+export {
+  createTaskDriveCoordinatorFactory,
+  type TaskDriveCoordinatorFactory,
+  type TaskDriveProfile,
+} from '../application/drive/taskDriveCoordinatorFactory'

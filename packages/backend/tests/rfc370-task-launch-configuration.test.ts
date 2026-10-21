@@ -405,6 +405,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
             return {
               kind: 'attached',
               attachment: {
+                intentKind: 'launch',
                 execution: createTaskExecutionContext({
                   db: harness.db,
                   intentId: request.intentId,
@@ -507,6 +508,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
           return {
             kind: 'attached',
             attachment: {
+              intentKind: 'launch',
               execution: createTaskExecutionContext({
                 db: harness.db,
                 intentId: request.intentId,

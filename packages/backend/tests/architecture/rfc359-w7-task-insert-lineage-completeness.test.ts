@@ -61,7 +61,8 @@ const REQUIRED_COLUMNS = ['executionLineageId', 'lineageSlotPathJson', 'launchOr
 const TASK_INSERT_SITES: readonly string[] = [
   // RFC-359 W11：行号从 579 挪到 580——同文件里祖先链的分支时间戳回填改调能力矩阵的
   // `greatest()`，多了一行 import。站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
-  'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts:561 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  // RFC-386: 561 → 501; coordinator construction moved to the session factory. All three columns remain.
+  'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts:501 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-370 v2 P1: the host write selection is gone; the site keeps all three columns.
   // RFC-370 §10 V20: 121 → 129 — the workspace lane's imports, dependency and the
   // prepared-workspace parameter sit above it; the site and its three columns are unchanged.
