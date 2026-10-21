@@ -551,6 +551,7 @@ describeEachProvider('RFC-293 Intent working state', (harness) => {
         configSnapshot: DEFAULT_CONFIG,
         runtimeResolver: composeIntentTurnRuntimeResolver(persistence),
         dumpAuxiliary: composeIntentDumpAuxiliaryQueries({
+          configuration: { read: () => ({}) },
           persistence,
           platformInventory: Object.freeze({
             async listRows() {

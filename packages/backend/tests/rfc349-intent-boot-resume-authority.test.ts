@@ -250,6 +250,7 @@ describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
       configSnapshot: DEFAULT_CONFIG,
       runtimeResolver: composeIntentTurnRuntimeResolver(persistence),
       dumpAuxiliary: composeIntentDumpAuxiliaryQueries({
+        configuration: { read: () => ({}) },
         persistence,
         platformInventory: Object.freeze({
           async listRows() {
@@ -296,6 +297,7 @@ describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
       configSnapshot: DEFAULT_CONFIG,
       runtimeResolver: composeIntentTurnRuntimeResolver(persistence),
       dumpAuxiliary: composeIntentDumpAuxiliaryQueries({
+        configuration: { read: () => ({}) },
         persistence,
         platformInventory: Object.freeze({
           async listRows() {
@@ -320,10 +322,13 @@ describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
   })
 
   test('the SQLite daemon composes the authorized intent persistence, like the app and the PostgreSQL daemon', () => {
-    const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+    const source = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'cli', 'daemonModules', 'intent.ts'),
+      'utf8',
+    )
     // 只把那一段截出来断言：整份 start.ts 进断言消息会把失败输出淹掉。
-    const at = source.indexOf('const intentPersistence =')
-    expect(at, 'start.ts 里找不到 intentPersistence 的组装（结构变了？）').toBeGreaterThan(-1)
+    const at = source.indexOf('const persistence =')
+    expect(at, 'intent.ts 里找不到 persistence 的组装（结构变了？）').toBeGreaterThan(-1)
     const composition = source.slice(at, at + 300)
     expect(
       composition,

@@ -1,3 +1,4 @@
+import { composeDaemonIntentModules } from './daemonModules/intent'
 import { composeDaemonDigitalEmployeeModules } from './daemonModules/digitalEmployee'
 import { composeDaemonDevelopmentAutomationModules } from './daemonModules/developmentAutomation'
 import {
@@ -130,12 +131,6 @@ import {
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
 
-import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
-import {
-  composeIntentQueuedNotifications,
-  composeIntentQueuedResumption,
-} from '@/modules/intent/composition/queuedResumption'
-
 import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
 
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
@@ -144,11 +139,6 @@ import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { composeSqliteAppDeps, createComposedApp, type SqliteAppComposition } from '@/server'
 import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/operations'
 import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
-import {
-  resumeQueuedIntentWorkingSets,
-  type IntentDispatchDeps,
-} from '@/modules/intent/application/dispatcher'
-import { createIntentSessionWsPublisher } from '@/modules/intent/composition/apply'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import {
   createDaemonRecoveryAuthorityProof,
@@ -271,16 +261,6 @@ import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/
 import { batchOwnerUserId } from '@/services/repoBatchImport'
 import { redactEventPayload } from '@/services/tokenRedaction'
 import { triggerRevalidation } from '@/ws/revalidationHook'
-import { directOperationAuthority, directRequestAuthority } from '@/routes/operationAuthority'
-import type { Actor } from '@/auth/actor'
-import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
-import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
-import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
-import {
-  composeIntentDumpAuxiliaryQueries,
-  composeIntentTurnRuntimeResolver,
-} from '@/modules/intent/composition/auxiliaryQueries'
-import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
 import {
@@ -334,8 +314,6 @@ import {
   composeFileRuntimeLegacyConfiguration,
   type RuntimeLegacyConfigurationPort,
 } from '@/modules/runtime-management/composition/runtimeRegistry'
-
-import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
 import type { MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
@@ -713,15 +691,8 @@ async function composePostgresqlProviderSession(
     maintenanceStatus: () => maintenanceService.status(),
   })
   const runtime = application.runtime
-  const intentQueuedResumption = composeIntentQueuedResumption({
-    configuration: input.configuration,
-    resume: (sessionIds, config) => runtime.resumeIntentSessions(sessionIds, config),
-    onError(error) {
-      input.log.warn('queued PostgreSQL intent working-set admission failed', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-    },
-  })
+  const intentModules = runtime.intentModules
+  const intentQueuedResumption = intentModules.queuedResumption
 
   const maintenanceConfiguration = await input.configuration.read()
   const maintenanceService: ReturnType<typeof createMaintenanceService> = createMaintenanceService({
@@ -748,9 +719,9 @@ async function composePostgresqlProviderSession(
     loadConfig: () => maintenanceConfiguration,
     payloadSources: Object.freeze({
       activeTaskIds: runtime.taskExecutionModules.activeTaskIds,
-      activeIntentApplyJournalIds: runtime.intentMaintenance.activeApplyJournalIds,
+      activeIntentApplyJournalIds: intentModules.maintenance.activeApplyJournalIds,
       activeResourceBundleApplyIds: runtime.resourcePackageActivity.activeApplyIds,
-      bootIntentTurnIds: runtime.intentMaintenance.bootTurnIds,
+      bootIntentTurnIds: intentModules.maintenance.bootTurnIds,
     }),
     onLifecycleDelta(delta) {
       for (const alert of delta.alerts) {
@@ -2153,7 +2124,6 @@ async function composeSqliteProviderSession(
   const {
     observationCalls,
     memorySystemAgentBinding,
-    intentSystemAgentBinding,
     workspacePresence,
     runtimeSessionLeases,
     mcpRuntimeTests,
@@ -2175,13 +2145,6 @@ async function composeSqliteProviderSession(
     skillCatalogBoot,
     digitalEmployeeAgentTemplates,
     mcpCatalog,
-    agentCatalog,
-    skillCatalog,
-    pluginCatalog,
-    workflowCatalog,
-    workgroupCatalog,
-    capabilityTemplateOperations,
-    developmentConfigOperations,
   } = resourceCatalogModules
   const repositoryCredentials = composeDaemonRepositoryCredentials({
     db,
@@ -2382,6 +2345,16 @@ async function composeSqliteProviderSession(
     missionInputBlobs: input.missionInputBlobs,
     evidenceArtifacts: input.evidenceArtifacts,
   })
+  const intentModules = composeDaemonIntentModules({
+    db,
+    appHome: Paths.root,
+    configuration,
+    log,
+    core: identityAccess,
+    resources: resourceCatalogModules,
+    observation: observationModules,
+    digitalEmployee: digitalEmployeeModules,
+  })
   const employeeEventCenter = employeeHttpEventCenter
   const employeeOs = digitalEmployeeModules.module
   const employeeWriterCutover = digitalEmployeeModules.writerCutover
@@ -2546,18 +2519,9 @@ async function composeSqliteProviderSession(
       return worker
     },
   })
-  const intentQueuedNotifications = composeIntentQueuedNotifications()
-
-  // RFC-338 — every periodic DB/FS-heavy maintenance body runs on a dedicated
-  // Worker connection. Main only admits durable slots and consumes typed
-  // notification/admission deltas; Worker failure never falls back to running
-  // the old body on this HTTP event loop.
-  // RFC-359 —— 「本进程正在跑哪些 intent apply」同样来自 apply 引擎自己（与 PostgreSQL 同一条）。
-  // 引擎在下面的 `composeSqliteAppDeps` 里装出来，而维护服务先起——这里晚绑定。
-  const intentMaintenanceSnapshots = composeIntentMaintenanceSnapshotQueriesFor({
-    db,
-    activity: { activeJournalIds: () => appComposition.intentApplyActivity.activeJournalIds() },
-  })
+  // RFC-384: maintenance and HTTP observe the same session-owned apply engine.
+  const intentMaintenanceSnapshots = intentModules.maintenance
+  const intentQueuedResumption = intentModules.queuedResumption
   // RFC-359 —— 「本进程正在跑哪些 apply」的来源是 apply 引擎自己（与 PostgreSQL 同一条），
   // 不再是 legacy `services/bundle/apply` 的模块级集合。引擎在下面的 `composeSqliteAppDeps`
   // 里装出来，而维护服务先起——这里晚绑定：payload 每个 tick 才求值，那时装配早已完成。
@@ -2613,7 +2577,7 @@ async function composeSqliteProviderSession(
         broadcastResolved(taskId)
       }
     },
-    onIntentQueued: intentQueuedNotifications.enqueue,
+    onIntentQueued: intentQueuedResumption.enqueue,
   })
   const maintenanceRuntimeBindings = createLazyPausableDaemonRuntimeServiceBindings({
     start: () => maintenanceService.start(),
@@ -2639,6 +2603,7 @@ async function composeSqliteProviderSession(
 
   // 7. HTTP receives the completed session bundles.
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
+    intentModules,
     digitalEmployeeModules,
     developmentAutomationModules,
     repositoryCredentials,
@@ -2949,101 +2914,6 @@ async function composeSqliteProviderSession(
   })
   // Upload/input/retention sweeps remain RFC-338 Worker adapters.
 
-  const intentAuthorityFor = (actor: Actor) =>
-    directOperationAuthority(identityAccess.directAuthority, actor)
-  const intentCatalogActors = new WeakMap<object, Actor>()
-  const intentResourceCatalogFor = composeIntentResourceCatalogFor({
-    query: resourceCatalog.createQuery({
-      resolveActor(context) {
-        const actor = intentCatalogActors.get(context)
-        if (actor === undefined) throw new Error('intent-resource-catalog-context-not-bound')
-        return actor
-      },
-    }),
-    contextFor(actor) {
-      const context = identityAccess.contexts.queryFromAuthority(
-        directRequestAuthority(identityAccess.directAuthority, actor),
-        'http',
-      )
-      intentCatalogActors.set(context, actor)
-      return context
-    },
-    authorityFor: intentAuthorityFor,
-    catalogs: {
-      agents: agentCatalog.queries,
-      skills: skillCatalog.queries,
-      skillFiles: skillCatalog.fileQueries,
-      mcps: mcpCatalog.queries,
-      plugins: pluginCatalog.queries,
-      workflows: workflowCatalog.queries,
-      workgroups: workgroupCatalog.queries,
-    },
-  })
-  // Context mutations authorize each added resource INSIDE their transaction, so
-  // the daemon needs the authorized runner — the same one `createComposedApp` and
-  // the PostgreSQL daemon compose. With the plain runner every activation that
-  // adds a resource dies on `intent-context-authorization-not-composed`, which is
-  // how boot recovery silently failed every queued working-context successor.
-  const intentPersistence = composeIntentPersistence({
-    db,
-    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
-  })
-  const intentPlatformInventory = composeIntentPlatformInventoryParticipant({
-    authorityFor: intentAuthorityFor,
-    capabilityTemplates: capabilityTemplateOperations,
-    developmentConfig: developmentConfigOperations,
-    digitalEmployee: digitalEmployeeModules.platformInventory,
-  })
-  const intentDumpAuxiliaryBase = composeIntentDumpAuxiliaryQueries({
-    persistence: intentPersistence,
-    platformInventory: intentPlatformInventory,
-  })
-  const intentDumpAuxiliary = Object.freeze({
-    ...intentDumpAuxiliaryBase,
-    runtimeInventory: Object.freeze({
-      ...intentDumpAuxiliaryBase.runtimeInventory,
-      async resolveDefault() {
-        const runtime = await intentPersistence.resolveIntentRuntime(
-          (await configuration.read()).defaultRuntime ?? 'opencode',
-        )
-        return { name: runtime.name, protocol: runtime.protocol }
-      },
-    }),
-  })
-  const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
-    persistence: intentPersistence,
-    events: createIntentSessionWsPublisher(),
-    identityAccess: Object.freeze({ directAuthority: identityAccess.directAuthority }),
-    appHome: Paths.root,
-    runtimeResolver: composeIntentTurnRuntimeResolver(
-      intentPersistence,
-      intentSystemAgentBinding.bindRuntime,
-    ),
-    systemAgents: intentSystemAgentBinding.family,
-    dumpAuxiliary: intentDumpAuxiliary,
-    // RFC-358: boot 恢复起的轮次与 HTTP 轮次走同一条图校验。
-    graphValidation: composeIntentWorkflowGraphValidation({
-      validationQueries: workflowCatalog.validationQueries,
-      workflowQueries: workflowCatalog.queries,
-      authorityFor: intentAuthorityFor,
-    }),
-    resourceCatalogFor: intentResourceCatalogFor,
-  })
-  const intentQueuedResumption = composeIntentQueuedResumption({
-    configuration,
-    notifications: intentQueuedNotifications,
-    async resume(sessionIds, config) {
-      await resumeQueuedIntentWorkingSets(
-        { ...intentDispatchDeps, configSnapshot: config },
-        sessionIds,
-      )
-    },
-    onError(err) {
-      log.warn('queued intent working-set admission failed', {
-        err: err instanceof Error ? err.message : String(err),
-      })
-    },
-  })
   const employeeOsRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'digital-employee-os',
     intervalMs: DAEMON_CADENCE.digitalEmployeeOs,

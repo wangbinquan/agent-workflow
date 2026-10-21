@@ -96,12 +96,10 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // 目录铸出来的 context，与「依赖没装配」无关，只是错误码里恰好带 `not-bound` 才被本守卫计入
   // （同 `taskEngineApplication.ts` 留下那 2 处的理由）。
   // 行为判据见 `tests/rfc359-w11-composition-root-lexical-binding.test.ts`。
-  'cli/postgresqlDaemonApplication.ts: marker=1, prose=0, holder=0',
   // W12：迁移 admission 在初始 session 前完整构造；只有一次 const controller，
   // bootstrap 仅在 session/controller/router 全部完成后返回，取消 deferred admission/bind。
   // 初始化阶段门明确拒绝过早迁移动作；sourceWriteWindow 始终读取实际 admission。
   // 剩余 marker 是每请求的 intent context 身份检查，并非晚绑定依赖。
-  'cli/start.ts: marker=1, prose=0, holder=0',
   // RFC-359 W5-T19b 销账：`commandContext.ts` prose 6 → 5，且
   // `reviewNodeReviewerDependencies.ts: prose=1` 整行消失 —— `CollaborationCommandDependencies.reviewTaskAccess`
   // 从 `?:` 改成必填。这个槽从来没有第二个来源：两个工厂都是 `createReviewTaskAccessPort(input.db)`
@@ -148,6 +146,8 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // 仍保留 `dynamic-workflow-operations-not-composed`，它是
   // **条件依赖**的 fail-closed（只有选了 dynamic-workflow 生成引擎的任务才需要它），
   // 不是「装配未完成」，只是错误码里恰好带 `not-composed` 才被本守卫计入。
+  // RFC-384: the three root WeakMaps are one Intent composition binding.
+  'modules/intent/composition/resourceCatalog.ts: marker=1, prose=0, holder=0',
   'modules/task-execution/composition/taskEngineApplication.ts: marker=1, prose=0, holder=0',
   // RFC-359 W11 销账：`server.ts` marker 6 → 1、holder 2 → 0。五处里三处是与 PG 根同一形状的
   // 词法环（`composeFallbackDevelopmentAutomation` 的 `automationRef`、`agentCatalogRef`、
@@ -163,7 +163,6 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // **顺带记一条守卫盲点**：`server.ts:2525` 有一处与 PG 根 `digitalEmployee.runtime === null`
   // 逐字同构的兜底，只因文案写成 `'task catalog requires the digital employee runtime'`
   // 而不带 `not-bound|not-composed`，marker 与 prose 两条判据都咬不到它。改名逃逸不是假想。
-  'server.ts: marker=1, prose=0, holder=0',
 ]
 
 const MARKER = /not-bound|not-composed/

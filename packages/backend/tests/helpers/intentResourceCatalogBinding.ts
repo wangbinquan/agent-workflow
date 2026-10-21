@@ -112,6 +112,7 @@ export function intentDumpAuxiliaryForTest(
   platformInventory: IntentPlatformInventoryParticipant = EMPTY_PLATFORM_INVENTORY,
 ): IntentDumpAuxiliaryQueries {
   return composeIntentDumpAuxiliaryQueries({
+    configuration: { read: () => ({}) },
     persistence: intentPersistenceForTest(db),
     platformInventory,
   })
@@ -249,6 +250,7 @@ export function runIntentTurnForTest(
       dumpAuxiliary:
         deps.dumpAuxiliary ??
         composeIntentDumpAuxiliaryQueries({
+          configuration: { read: () => ({}) },
           persistence,
           platformInventory: deps.platformInventory ?? EMPTY_PLATFORM_INVENTORY,
         }),

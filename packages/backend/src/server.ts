@@ -1,3 +1,4 @@
+import { composeDaemonIntentModules, type DaemonIntentModules } from './cli/daemonModules/intent'
 import {
   composeDaemonDigitalEmployeeModules,
   type DaemonDigitalEmployeeModules,
@@ -297,21 +298,7 @@ import { mountSkillProvenanceRoutes } from '@/modules/knowledge-evolution/inboun
 import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
-} from '@/modules/intent/inbound/intentSessionRoutes'
-import type { IntentApplyActivitySource } from '@/modules/intent/composition/maintenance'
-import {
-  composeIntentApplyOperations,
-  createIntentSessionWsPublisher,
-} from '@/modules/intent/composition/apply'
-import {
-  composeIntentDumpAuxiliaryQueries,
-  composeIntentTurnRuntimeResolver,
-} from '@/modules/intent/composition/auxiliaryQueries'
-import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
-import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
-import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
-import type { IntentApplyOperations } from '@/modules/intent/public/operations'
-import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
+} from '@/modules/intent/composition/routes'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { mountReviewRoutes } from '@/routes/reviews'
 import { mountMaintenanceDiskRoutes } from '@/routes/maintenanceDisk'
@@ -431,7 +418,6 @@ import {
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 
 import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
-import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
 export type {
   DaemonProviderCore,
@@ -463,6 +449,7 @@ export interface AppDeps {
   resourceCatalogModules?: DaemonResourceCatalogModules
   observationModules?: DaemonObservationModules
   memoryModules?: DaemonMemoryModules
+  intentModules?: DaemonIntentModules
   digitalEmployeeModules?: DaemonDigitalEmployeeModules
   developmentAutomationModules?: DaemonDevelopmentAutomationModules
   taskExecutionModules?: DaemonTaskExecutionModules<'sqlite'>
@@ -745,6 +732,7 @@ export interface AppDeps {
 type SqliteAppDeps = AppDeps & { readonly db: DbClient }
 
 type RuntimeComposedAppDeps = SqliteAppDeps & {
+  readonly intentModules: DaemonIntentModules
   readonly digitalEmployeeModules: DaemonDigitalEmployeeModules
   readonly developmentAutomationModules: DaemonDevelopmentAutomationModules
   readonly taskExecutionModules: DaemonTaskExecutionModules<'sqlite'>
@@ -923,6 +911,7 @@ export interface ComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProv
 export interface SqliteAppComposition<
   TCore extends AppHttpProviderCore = AppHttpProviderCore,
 > extends ComposedAppDeps<TCore> {
+  readonly intentModules: DaemonIntentModules
   readonly digitalEmployeeModules: DaemonDigitalEmployeeModules
   readonly developmentAutomationModules: DaemonDevelopmentAutomationModules
   readonly taskExecutionModules: DaemonTaskExecutionModules<'sqlite'>
@@ -943,12 +932,6 @@ export interface SqliteAppComposition<
    * `services/bundle/apply` 的模块级集合；现在与 PostgreSQL 一样，读的是 apply 引擎自己的。
    */
   readonly resourcePackageApplyActivity: ResourcePackageApplyActivityQuery
-  /**
-   * RFC-359 —— 同上，Intent apply 那一侧。合一前 SQLite 读的是引擎的**模块级**集合
-   * （`activeIntentApplyJournalIds()`），PostgreSQL 读的是注入进来的那台引擎；两台引擎
-   * 合一后只剩后者——在飞集合是进程内的围栏，从 journal 行反推不出来。
-   */
-  readonly intentApplyActivity: IntentApplyActivitySource
 }
 
 export type ProviderComposedAppDeps<
@@ -1380,6 +1363,9 @@ export function composeSqliteApplicationDeps(
   deps: AppDeps,
   unstarted?: UnstartedApplicationScope,
 ): SqliteAppComposition {
+  if (deps.intentModules !== undefined && deps.intentTestDependencies !== undefined) {
+    throw new Error('intent-modules-and-test-dependencies-conflict')
+  }
   const appHome = deps.appHome ?? Paths.root
   const workspaceUploads = selectWorkspaceUploadContentFactory(deps.workspaceUploads)
   const isolationWorkspaces = selectIsolationWorkspaceFactory(deps.isolationWorkspaces)
@@ -1718,8 +1704,25 @@ export function composeSqliteApplicationDeps(
         admissionLookup: deps.developmentAdmissionLookup,
       },
     })
+  const intentModules =
+    deps.intentModules ??
+    composeDaemonIntentModules({
+      db: deps.db,
+      appHome,
+      configuration,
+      log: createLogger('intent'),
+      core: identityAccess,
+      resources: resourceCatalogModules,
+      observation: observationModules,
+      digitalEmployee: digitalEmployeeModules,
+      adapters: {
+        intentArtifacts: deps.intentArtifacts,
+        httpTurnFixture: deps.intentTestDependencies?.runFn,
+      },
+    })
   const runtimeDeps: RuntimeComposedAppDeps = {
     ...deps,
+    intentModules,
     digitalEmployeeModules,
     developmentAutomationModules,
     taskExecutionModules,
@@ -1827,22 +1830,6 @@ export function composeSqliteApplicationDeps(
       },
     })
   })()
-  // RFC-359 —— Intent apply 两个 provider 共用**同一台**引擎与同一份装配。此处此前是
-  // SQLite 专属的那条线（legacy 资源会话 + SQLite 工件生命周期），与 PostgreSQL 根的
-  // `createIntentApplyEngine` 并行存在；判据长期只喂其中一侧。
-  const intentApply = composeIntentApplyOperations({
-    db: effectiveDeps.db,
-    appHome,
-    ...effectiveDeps.intentArtifacts,
-    aclIdentities: providerResourceCatalog.persistence.identities,
-    // RFC-358 §7（AC-6）—— 提交期的图校验。draft 期那道门挡的是模型；这道挡的是
-    // draft 与 apply 之间的漂移（别人改了被引用 agent 的端口、上线前的存量草稿）。
-    graphValidation: composeIntentWorkflowGraphValidation({
-      validationQueries: workflowCatalog.validationQueries,
-      workflowQueries: workflowCatalog.queries,
-      authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-    }),
-  })
   const identityUserOperations = composeIdentityUserOperations({
     identityAccess,
     auth: effectiveDeps.authRuntime,
@@ -1865,7 +1852,6 @@ export function composeSqliteApplicationDeps(
     providerResourceCatalog,
     memoryCatalog,
     agentResourceIntegrity,
-    intentApply,
     taskExecutionPersistence,
     applicationConfiguration,
     configuration,
@@ -1903,6 +1889,7 @@ export function composeSqliteApplicationDeps(
   })
   return Object.freeze({
     ...application,
+    intentModules,
     digitalEmployeeModules,
     developmentAutomationModules,
     taskExecutionModules,
@@ -1912,9 +1899,6 @@ export function composeSqliteApplicationDeps(
     collaborationContext: effectiveDeps.collaborationContext,
     resourcePackageApplyActivity:
       resourcePackageBinding?.applyActivity ?? NO_RESOURCE_PACKAGE_APPLY_ACTIVITY,
-    intentApplyActivity: Object.freeze({
-      activeJournalIds: () => intentApply.activeJournalIds(),
-    }),
   })
 }
 
@@ -1957,7 +1941,6 @@ function composeSqliteApiRouteMounts(
   providerResourceCatalog: ReturnType<typeof composeResourceCatalogFor>,
   composedMemoryCatalog: ReturnType<typeof composeMemoryCatalogOperations>,
   agentResourceIntegrity: AgentResourceIntegrityComposition,
-  intentApply: IntentApplyOperations,
   taskExecutionPersistence: ReturnType<typeof createTaskExecutionPersistence>,
   applicationConfiguration: ApplicationConfigurationBinding,
   configuration: ApplicationConfigurationQueries,
@@ -2103,99 +2086,7 @@ function composeSqliteApiRouteMounts(
     capabilityTemplates: deps.resourceCatalogModules.capabilityTemplateOperations,
     capabilityTemplateAcl: deps.resourceCatalogModules.capabilityTemplateAcl,
   } satisfies CapabilityTemplateRouteDeps)
-  const intentAuthorityFor = (actor: Actor) =>
-    directOperationAuthority(identityAccess.directAuthority, actor)
-  const intentCatalogActors = new WeakMap<object, Actor>()
-  const intentResourceCatalogFor = composeIntentResourceCatalogFor({
-    query: providerResourceCatalog.createQuery({
-      resolveActor(context) {
-        const actor = intentCatalogActors.get(context)
-        if (actor === undefined) throw new Error('intent-resource-catalog-context-not-bound')
-        return actor
-      },
-    }),
-    contextFor(actor) {
-      const context = identityAccess.contexts.queryFromAuthority(
-        directRequestAuthority(identityAccess.directAuthority, actor),
-        'http',
-      )
-      intentCatalogActors.set(context, actor)
-      return context
-    },
-    authorityFor: intentAuthorityFor,
-    catalogs: {
-      agents: agentCatalog.queries,
-      skills: skillCatalog.queries,
-      skillFiles: skillCatalog.fileQueries,
-      mcps: mcpCatalog.queries,
-      plugins: pluginCatalog.queries,
-      workflows: workflowCatalog.queries,
-      workgroups: workgroupCatalog.queries,
-    },
-  })
-  const intentPersistence = composeIntentPersistence({
-    db: deps.db,
-    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
-  })
-  const intentPlatformInventory = composeIntentPlatformInventoryParticipant({
-    authorityFor: intentAuthorityFor,
-    capabilityTemplates: capabilityTemplateRouteDeps.capabilityTemplates,
-    developmentConfig: developmentConfigOperations,
-    digitalEmployee: deps.digitalEmployeeModules.platformInventory,
-  })
-  const intentDumpAuxiliaryBase = composeIntentDumpAuxiliaryQueries({
-    persistence: intentPersistence,
-    platformInventory: intentPlatformInventory,
-  })
-  const intentDumpAuxiliary = Object.freeze({
-    ...intentDumpAuxiliaryBase,
-    runtimeInventory: Object.freeze({
-      ...intentDumpAuxiliaryBase.runtimeInventory,
-      async resolveDefault() {
-        const runtime = await intentPersistence.resolveIntentRuntime(
-          (await configuration.read()).defaultRuntime ?? 'opencode',
-        )
-        return { name: runtime.name, protocol: runtime.protocol }
-      },
-    }),
-  })
-  const intentSystemAgentBinding = deps.observationModules.intentHttpSystemAgentBinding
-  const intentSessionRouteInputs: IntentSessionRouteDependencies = {
-    appHome,
-    configuration,
-    events: createIntentSessionWsPublisher(),
-    identityAccess,
-    directAuthority: identityAccess.directAuthority,
-    intentApply,
-    intentPersistence,
-    intentTurnRuntime: Object.freeze({
-      runtimeResolver: composeIntentTurnRuntimeResolver(
-        intentPersistence,
-        intentSystemAgentBinding.bindRuntime,
-      ),
-      systemAgents: intentSystemAgentBinding.family,
-      dumpAuxiliary: intentDumpAuxiliary,
-      // RFC-358: 图校验由 resource-catalog 提供，经它的 exact public 合同注入意图链路。
-      graphValidation: composeIntentWorkflowGraphValidation({
-        validationQueries: workflowCatalog.validationQueries,
-        workflowQueries: workflowCatalog.queries,
-        authorityFor: intentAuthorityFor,
-      }),
-    }),
-    resourceCatalogFor: intentResourceCatalogFor,
-  }
-  const intentSessionRoutes = Object.freeze({
-    ...intentSessionRouteInputs,
-    ...(deps.intentTestDependencies?.runFn === undefined
-      ? {}
-      : {
-          intentTurnRuntime: Object.freeze({
-            ...intentSessionRouteInputs.intentTurnRuntime,
-            systemAgents: intentSystemAgentBinding.withFixture(deps.intentTestDependencies.runFn)
-              .family,
-          }),
-        }),
-  } satisfies IntentSessionRouteDependencies)
+  const intentSessionRoutes = deps.intentModules.routes
   const digitalEmployeePersistence = deps.digitalEmployeeModules.routePersistence
   const missionInputUploads = deps.developmentAutomationModules.missionInputUploads
   const collaborationRouteOperations = composeCollaborationRouteOperations({

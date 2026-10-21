@@ -8748,3 +8748,7 @@ provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行�
 ## RFC-383：数字员工与开发自动化按会话装配，两个引擎共用写者门控
 
 数字员工与开发自动化只在 `cli/daemonModules/digitalEmployee.ts`、`developmentAutomation.ts` 构造；SQLite 的 HTTP、工作启动、启动初始化与 OS 作业共用一个数字员工实例（取代 RFC-359 W12 的两实例决定），`server.ts` 仅保留同构测试回退。写者切换每会话一份，迁移状态、任务准入、启动与周期共用；两个引擎的唤醒先刷新状态，遗留恢复读当前状态，门控在 development-automation 应用层。宿主任务共用任务执行组的 `hostTasks` 与会话取消成员，守护身份经 provider 核心每次准入。新增接线不要把构造挪出 `??` 回退而让生产创建无人使用的实例。
+
+## RFC-384：意图按会话装配，维护直接读取同一应用引擎
+
+意图图只由 `cli/daemonModules/intent.ts` 的 `composeDaemonIntentModules` 构造，每个 provider 会话一次，并在维护服务之前完成。工作者运行族服务排队 / 启动续跑，HTTP 运行族服务路由轮次；两者的 runtime binding 与夹具必须保持分离。维护直接读 `intentModules.maintenance`，它引用路由使用的同一应用引擎；排队通知直接交给 `queuedResumption.enqueue`，启动前由续跑器缓冲。转储默认运行时通过实时配置读取口兜底，不得在构造时读取配置。

@@ -84,6 +84,7 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/cli/daemonModules/taskExecution.ts',
   'packages/backend/src/cli/daemonModules/digitalEmployee.ts',
   'packages/backend/src/cli/daemonModules/developmentAutomation.ts',
+  'packages/backend/src/cli/daemonModules/intent.ts',
 
   'packages/backend/src/main.ts',
   // RFC-370 v2 §3.1: the single deployment selection point composes the hosted adapters.

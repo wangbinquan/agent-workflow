@@ -1,3 +1,4 @@
+import type { Config } from '@agent-workflow/shared'
 import type { IntentPersistence } from '../application/ports/intentPersistence'
 import type {
   IntentDumpAuxiliaryQueries,
@@ -41,7 +42,9 @@ export function composeIntentTurnRuntimeResolver<Runtime = IntentTurnResolvedRun
 
 export function composeIntentDumpAuxiliaryQueries(input: {
   readonly persistence: IntentPersistence
-  readonly defaultRuntime?: string
+  readonly configuration: {
+    read(): Pick<Config, 'defaultRuntime'> | Promise<Pick<Config, 'defaultRuntime'>>
+  }
   readonly platformInventory: IntentPlatformInventoryParticipant
 }): IntentDumpAuxiliaryQueries {
   const queries: IntentDumpAuxiliaryQueries = {
@@ -49,7 +52,7 @@ export function composeIntentDumpAuxiliaryQueries(input: {
       list: () => input.persistence.listIntentRuntimeInventory(),
       async resolveDefault() {
         const runtime = await input.persistence.resolveIntentRuntime(
-          input.defaultRuntime ?? 'opencode',
+          (await input.configuration.read()).defaultRuntime ?? 'opencode',
         )
         return { name: runtime.name, protocol: runtime.protocol }
       },

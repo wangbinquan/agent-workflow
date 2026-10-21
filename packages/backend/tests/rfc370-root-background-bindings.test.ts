@@ -130,13 +130,21 @@ for (const [name, query, notificationKey] of [
   })
 }
 
-test('PostgreSQL queued Intent resume consumes the admission-time selected snapshot', () => {
+test('the shared Intent queued resume consumes the admission-time selected snapshot', () => {
+  const intent = ts.createSourceFile(
+    'intent.ts',
+    readFileSync(resolve(import.meta.dir, '../src/cli/daemonModules/intent.ts'), 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  )
   const found = descendants(
-    declaration(pg, 'composePostgresqlApplication'),
-    (item) => ts.isMethodDeclaration(item) && item.name.getText(pg) === 'resumeIntentSessions',
+    declaration(intent, 'composeDaemonIntentModules'),
+    (item) => ts.isMethodDeclaration(item) && item.name.getText(intent) === 'resume',
   ).filter(ts.isMethodDeclaration)
   expect(found).toHaveLength(1)
-  expect(compact(found[0]!, pg)).toContain('configSnapshot:config')
-  expect(compact(found[0]!, pg)).not.toContain('configuration.read(')
-  expect(compact(found[0]!, pg)).not.toContain('loadConfig(')
+  expect(compact(found[0]!, intent)).toContain('configSnapshot:config')
+  expect(compact(found[0]!, intent)).not.toContain('configuration.read(')
+  expect(compact(found[0]!, intent)).not.toContain('loadConfig(')
+  expect(pg.text).toContain('intentModules,')
+  expect(pg.text).not.toContain('resumeIntentSessions')
 })

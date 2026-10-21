@@ -1,4 +1,4 @@
-// RFC-380 / RFC-381 / RFC-382 / RFC-383 / RFC-376 hard gate: bundles are session-scoped, and HTTP only composes fallbacks.
+// RFC-380 / RFC-381 / RFC-382 / RFC-383 / RFC-384 / RFC-376 hard gate: bundles are session-scoped, and HTTP only composes fallbacks.
 import { describe, expect, test } from 'bun:test'
 import ts from 'typescript'
 import { resolve } from 'node:path'
@@ -17,6 +17,7 @@ const BUNDLES = [
   'composeDaemonTaskExecutionModules',
   'composeDaemonDigitalEmployeeModules',
   'composeDaemonDevelopmentAutomationModules',
+  'composeDaemonIntentModules',
 ] as const
 const ROOTS = [
   ['cli/start.ts', 'composeSqliteProviderSession'],
@@ -24,6 +25,20 @@ const ROOTS = [
   ['server.ts', 'composeSqliteApplicationDeps'],
 ] as const
 const FACTORIES = new Set([
+  'composeIntentResourceCatalogFor',
+  'composeIntentResourceCatalogBinding',
+  'composeIntentPersistence',
+  'composeIntentContextResourceAuthorizationFactory',
+  'composeIntentWorkflowGraphValidation',
+  'composeIntentApplyArtifactLifecycle',
+  'composeIntentApplyOperations',
+  'composeIntentPlatformInventoryParticipant',
+  'composeIntentDumpAuxiliaryQueries',
+  'composeIntentTurnRuntimeResolver',
+  'createIntentSessionWsPublisher',
+  'composeIntentMaintenanceSnapshotQueriesFor',
+  'composeIntentQueuedResumption',
+  'resumeQueuedIntentWorkingSets',
   'composeDigitalEmployee',
   'composeDevelopmentAutomation',
   'composeReactionExecutionProvider',
@@ -155,6 +170,8 @@ const FACTORIES = new Set([
   'composeSkillVersionCommitParticipantFactory',
 ])
 const RETIRED = [
+  'composeIntentQueuedNotifications',
+  'createQueuedIntentNotifications',
   'composeFallbackDevelopmentAutomation',
   'composeSqliteDaemonProviderCore',
   'composePostgresqlDaemonProviderCore',
@@ -268,23 +285,23 @@ function valid() {
   )
 }
 describe('RFC-380 daemon module bundles', () => {
-  test('complete source corpus keeps the eleven session bundles and the HTTP fallbacks', () => {
+  test('complete source corpus keeps the twelve session bundles and the HTTP fallbacks', () => {
     const units = backendUnits(resolve(import.meta.dir, '../../../..'))
     expect(units.length).toBeGreaterThanOrEqual(2000)
-    expect(units.filter((u) => u.path.startsWith(PREFIX + 'cli/daemonModules/'))).toHaveLength(12)
+    expect(units.filter((u) => u.path.startsWith(PREFIX + 'cli/daemonModules/'))).toHaveLength(13)
     expect(daemonBundleViolations(units)).toEqual([])
   })
   test('accepts one bundle per session and nullish HTTP fallbacks', () => {
     expect(daemonBundleViolations(valid())).toEqual([])
   })
   test('rejects missing and duplicated session calls', () => {
-    expect(daemonBundleViolations([])).toHaveLength(33)
+    expect(daemonBundleViolations([])).toHaveLength(36)
     const units = valid()
     units[0] = unit(
       ROOTS[0][0],
       `function composeSqliteProviderSession() { ${BUNDLES.map((b) => `${b}({}); ${b}({});`).join(' ')} }`,
     )
-    expect(daemonBundleViolations(units).filter((e) => e.includes('got 2'))).toHaveLength(11)
+    expect(daemonBundleViolations(units).filter((e) => e.includes('got 2'))).toHaveLength(12)
   })
   test('rejects process-level construction and unconditional HTTP construction', () => {
     const units = valid()
@@ -367,4 +384,65 @@ test('both providers register legacy recovery; provider restrictions are rejecte
       ),
     ),
   ).toBe(1)
+})
+
+// RFC-384: construction precedes maintenance in both session roots, including PG's runtime read.
+function intentMaintenanceOrderViolations(source: SourceUnit): string[] {
+  const errors: string[] = []
+  for (const name of ['composeSqliteProviderSession', 'composePostgresqlProviderSession']) {
+    const root = source.source.statements.find(
+      (node) => ts.isFunctionDeclaration(node) && node.name?.text === name,
+    )
+    let intent: ts.VariableDeclaration | undefined
+    const maintenance: ts.CallExpression[] = []
+    if (root)
+      walk(root, (node) => {
+        if (ts.isVariableDeclaration(node) && node.name.getText(source.source) === 'intentModules')
+          intent = node
+        if (ts.isCallExpression(node) && callNames(node).includes('createMaintenanceService'))
+          maintenance.push(node)
+      })
+    if (!intent || maintenance.length !== 1 || intent.pos >= maintenance[0]!.pos)
+      errors.push(`${name}: intent bundle must precede maintenance`)
+    const expected =
+      name === 'composeSqliteProviderSession'
+        ? 'composeDaemonIntentModules({'
+        : 'runtime.intentModules'
+    if (!intent?.initializer?.getText(source.source).replace(/\s/g, '').includes(expected))
+      errors.push(`${name}: maintenance must use the session intent bundle`)
+  }
+  return errors
+}
+test('intent bundles exist before both maintenance services; inversions and missing reads fail', () => {
+  const start = backendUnits(resolve(import.meta.dir, '../../../..')).find(
+    (u) => u.path === PREFIX + 'cli/start.ts',
+  )!
+  expect(intentMaintenanceOrderViolations(start)).toEqual([])
+  const roots = (reverse: boolean) =>
+    unit(
+      'cli/start.ts',
+      [
+        ['composeSqliteProviderSession', 'composeDaemonIntentModules({})'],
+        ['composePostgresqlProviderSession', 'runtime.intentModules'],
+      ]
+        .map(
+          ([name, value]) =>
+            `function ${name}() { ${reverse ? 'createMaintenanceService({});' : ''} const intentModules = ${value}; ${reverse ? '' : 'createMaintenanceService({});'} }`,
+        )
+        .join('\n'),
+    )
+  expect(intentMaintenanceOrderViolations(roots(false))).toEqual([])
+  expect(intentMaintenanceOrderViolations(roots(true))).toHaveLength(2)
+  expect(intentMaintenanceOrderViolations(unit('cli/start.ts', ''))).toHaveLength(4)
+})
+test('HTTP intent fallback cannot move to route mounting', () => {
+  const units = valid()
+  units[2] = unit(
+    'server.ts',
+    units[2]!.text.replace('deps.x ?? composeDaemonIntentModules({});', 'null;') +
+      'function composeSqliteApiRouteMounts() { const x = deps.intentModules ?? composeDaemonIntentModules({}); }',
+  )
+  expect(daemonBundleViolations(units)).toContain(
+    'server.ts: bundle outside provider session composeDaemonIntentModules',
+  )
 })

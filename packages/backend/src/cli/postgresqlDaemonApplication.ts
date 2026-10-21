@@ -1,3 +1,4 @@
+import { composeDaemonIntentModules, type DaemonIntentModules } from './daemonModules/intent'
 import {
   composeDaemonDigitalEmployeeModules,
   type DaemonDigitalEmployeeModules,
@@ -219,21 +220,6 @@ import type {
 } from '@/modules/development-automation/composition'
 import { type MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
-import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
-import {
-  composeIntentDumpAuxiliaryQueries,
-  composeIntentTurnRuntimeResolver,
-} from '@/modules/intent/composition/auxiliaryQueries'
-import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
-import {
-  composeIntentApplyArtifactLifecycle,
-  composeIntentApplyOperations,
-  createIntentSessionWsPublisher,
-} from '@/modules/intent/composition/apply'
-import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
-import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
-
-import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
 
 import type { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 
@@ -287,12 +273,6 @@ import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
 import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
-
-import {
-  resumeQueuedIntentWorkingSets,
-  type IntentDispatchDeps,
-} from '@/modules/intent/application/dispatcher'
-import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { type SkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
@@ -516,12 +496,11 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly mcpRuntimeTests: ReturnType<typeof composeLocalMcpDiagnostics>
   readonly webhookTerminalControl: ReturnType<typeof composeMrTerminalControl>
   readonly workspaceMaintenance: ReturnType<typeof composeWorkspaceMaintenanceCommand>
-  readonly intentMaintenance: ReturnType<typeof composeIntentMaintenanceSnapshotQueriesFor>
+  readonly intentModules: DaemonIntentModules
   readonly resourcePackageActivity: Pick<
     ReturnType<typeof createPostgresqlResourcePackageAtomicApplyOperations>,
     'activeApplyIds'
   >
-  readonly resumeIntentSessions: (sessionIds: readonly string[], config: Config) => Promise<void>
   readonly driveHumanGateContinuation: (input: {
     readonly taskId: string
     readonly continuationRef: string
@@ -675,9 +654,7 @@ export async function composePostgresqlApplication(
   const {
     observationCalls,
     memorySystemAgentBinding,
-    intentSystemAgentBinding,
     narrativeSystemAgentBinding,
-    intentHttpSystemAgentBinding,
     runtimeSessionLeases,
     mcpRuntimeTests,
     runtimeManagement,
@@ -1156,132 +1133,21 @@ export async function composePostgresqlApplication(
       missionInputUploads: developmentAutomationModules.missionInputUploads,
     })
 
-  const intentAuthorityFor = (actor: Actor) => authorityFor(actor)
-  const intentCatalogActors = new WeakMap<object, Actor>()
-  const intentResourceCatalogFor = composeIntentResourceCatalogFor({
-    query: resourceCatalog.createQuery({
-      resolveActor(context) {
-        const actor = intentCatalogActors.get(context)
-        if (actor === undefined) throw new Error('intent-resource-catalog-context-not-bound')
-        return actor
-      },
-    }),
-    contextFor(actor) {
-      const context = identityAccess.contexts.queryFromAuthority(
-        directRequestAuthority(identityAccess.directAuthority, actor),
-        'http',
-      )
-      intentCatalogActors.set(context, actor)
-      return context
-    },
-    authorityFor: intentAuthorityFor,
-    catalogs: {
-      agents: classicCatalogs.agent.queries,
-      skills: classicCatalogs.skill.queries,
-      skillFiles: classicCatalogs.skill.fileQueries,
-      mcps: mcpCatalog.queries,
-      plugins: pluginCatalog.queries,
-      workflows: classicCatalogs.workflow.queries,
-      workgroups: workgroupCatalog.queries,
-    },
-  })
-  const intentPersistence = composeIntentPersistence({
+  const intentModules = composeDaemonIntentModules({
     db: input.db,
-    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
-  })
-  const intentArtifactRecovery = composeIntentApplyArtifactLifecycle({
-    db: input.db,
-    appHome: input.appHome,
-    content: input.intentArtifacts?.artifactContent,
-  })
-  // RFC-359 —— 与 SQLite 根**逐字同一份**装配（`composeIntentApplyOperations`）。
-  const intentApplyOperations = composeIntentApplyOperations({
-    db: input.db,
-    appHome: input.appHome,
-    ...input.intentArtifacts,
-    aclIdentities: resourceCatalog.persistence.identities,
-    artifacts: intentArtifactRecovery,
-    // RFC-358 §7（AC-6）—— 与 SQLite provider 同一道门、同一份判据。
-    graphValidation: composeIntentWorkflowGraphValidation({
-      validationQueries: classicCatalogs.workflow.validationQueries,
-      workflowQueries: classicCatalogs.workflow.queries,
-      authorityFor,
-    }),
-  })
-  const intentApply = intentApplyOperations
-  const intentPlatformInventory = composeIntentPlatformInventoryParticipant({
-    authorityFor: intentAuthorityFor,
-    capabilityTemplates: capabilityTemplateOperations,
-    developmentConfig,
-    digitalEmployee: digitalEmployeeModules.platformInventory,
-  })
-  const intentDumpAuxiliary = composeIntentDumpAuxiliaryQueries({
-    persistence: intentPersistence,
-    defaultRuntime: (await configuration.read()).defaultRuntime ?? 'opencode',
-    platformInventory: intentPlatformInventory,
-  })
-  const intentSessionEvents = createIntentSessionWsPublisher()
-  const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
-    persistence: intentPersistence,
-    events: intentSessionEvents,
-    identityAccess: Object.freeze({ directAuthority: identityAccess.directAuthority }),
-    appHome: input.appHome,
-    runtimeResolver: composeIntentTurnRuntimeResolver(
-      intentPersistence,
-      intentSystemAgentBinding.bindRuntime,
-    ),
-    systemAgents: intentSystemAgentBinding.family,
-    dumpAuxiliary: intentDumpAuxiliary,
-    // RFC-358: 两个 provider 的意图链路跑同一份图校验合同。
-    graphValidation: composeIntentWorkflowGraphValidation({
-      validationQueries: classicCatalogs.workflow.validationQueries,
-      workflowQueries: classicCatalogs.workflow.queries,
-      authorityFor,
-    }),
-    resourceCatalogFor: intentResourceCatalogFor,
-  })
-  const intentMaintenance = composeIntentMaintenanceSnapshotQueriesFor({
-    db: input.db,
-    activity: intentApplyOperations,
-  })
-  const intentRouteInputs: PostgresqlAppCompositionInput['intent'] = {
     appHome: input.appHome,
     configuration,
-    events: intentSessionEvents,
-    identityAccess,
-    directAuthority: identityAccess.directAuthority,
-    intentApply,
-    intentPersistence,
-    intentTurnRuntime: Object.freeze({
-      runtimeResolver: composeIntentTurnRuntimeResolver(
-        intentPersistence,
-        intentHttpSystemAgentBinding.bindRuntime,
-      ),
-      systemAgents: intentHttpSystemAgentBinding.family,
-      dumpAuxiliary: intentDumpAuxiliary,
-      graphValidation: composeIntentWorkflowGraphValidation({
-        validationQueries: classicCatalogs.workflow.validationQueries,
-        workflowQueries: classicCatalogs.workflow.queries,
-        authorityFor,
-      }),
-    }),
-    resourceCatalogFor: intentResourceCatalogFor,
-  }
-  const intentRoutes: PostgresqlAppCompositionInput['intent'] = Object.freeze({
-    ...intentRouteInputs,
-    // The explicit HTTP fixture replaces the whole family; queued recovery
-    // keeps the independently selected production family above.
-    ...(input.intentTestDependencies?.runFn === undefined
-      ? {}
-      : {
-          intentTurnRuntime: Object.freeze({
-            ...intentRouteInputs.intentTurnRuntime,
-            systemAgents: intentHttpSystemAgentBinding.withFixture(
-              input.intentTestDependencies.runFn,
-            ).family,
-          }),
-        }),
+    log,
+    core: identityAccess,
+    resources: resourceCatalogModules,
+    observation: observationModules,
+    digitalEmployee: digitalEmployeeModules,
+    adapters: {
+      intentArtifacts: input.intentArtifacts,
+      httpTurnFixture: input.intentTestDependencies?.runFn,
+    },
   })
+  const intentRoutes = intentModules.routes
   const taskCatalog = composeTaskCatalog({
     sources: [...taskExecutionCatalogSources, digitalEmployeeModules.taskCatalogSource],
   })
@@ -1825,15 +1691,8 @@ export async function composePostgresqlApplication(
     mcpRuntimeTests,
     webhookTerminalControl,
     workspaceMaintenance,
-    intentMaintenance,
+    intentModules,
     resourcePackageActivity: resourcePackageAtomicApply,
-    async resumeIntentSessions(sessionIds: readonly string[], config: Config) {
-      if (sessionIds.length === 0) return
-      await resumeQueuedIntentWorkingSets(
-        { ...intentDispatchDeps, configSnapshot: config },
-        sessionIds,
-      )
-    },
     // RFC-370 hosted acceptance: claiming while this process's parked driver
     // still drained its admitted work was an owner conflict that the worker
     // retried (and warned about) every second for as long as that work ran.
