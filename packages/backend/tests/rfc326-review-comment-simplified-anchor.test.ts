@@ -21,6 +21,7 @@
 //     streams are still cut at the limit (413 `review-body-too-large`).
 //   - Every refusal leaves review_comments untouched.
 
+import type { Hono } from 'hono'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -40,7 +41,6 @@ import {
   resolveReviewAnchor,
 } from '@/modules/collaboration/domain/reviewAnchor'
 import { REVIEW_WRITE_BODY_MAX_BYTES } from '../src/routes/reviews'
-import type { createApp } from '../src/server'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createProviderHttpApplication } from './helpers/providerHttpApplication'
@@ -76,7 +76,7 @@ interface Fixture<
   CleanupResult extends void | Promise<void> = void,
 > {
   db: Database
-  app: ReturnType<typeof createApp>
+  app: Hono
   taskId: string
   reviewRunId: string
   /** Pending members of the review run, in item order. */

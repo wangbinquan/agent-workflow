@@ -744,7 +744,6 @@ describe('RFC-370 verification command composition contract', () => {
   })
   test('RFC-383 each root forwards verification selection into the shared bundle', () => {
     for (const [path, root, receiver] of [
-      ['server.ts', 'composeSqliteApplicationDeps', 'deps'],
       ['bootstrap/daemonApplication.ts', 'composeDaemonApplication', 'input'],
       ['cli/start.ts', 'composeDaemonApplication', 'input'],
     ] as const) {

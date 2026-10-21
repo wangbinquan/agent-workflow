@@ -158,12 +158,12 @@ describe('RFC-247 T4 — reverse: a point no route references fails the boot', (
 describe('RFC-247 T4 — the real app satisfies both directions', () => {
   test('every ROUTE_BACKED point is referenced by at least one production route', async () => {
     resetRouteMetaRegistry()
-    // Importing server.ts registers nothing on its own; createApp does the
+    // Importing server.ts registers nothing on its own; createComposedApp does the
     // mounting, and it runs assertRouteMetaCoverage itself. If the production
     // app violated either direction, every backend test that builds an app
     // would already be failing — this test states the guarantee explicitly so
     // the reason those suites fail is legible.
-    const { createApp } = await import('@/server')
-    expect(typeof createApp).toBe('function')
+    const { createComposedApp } = await import('@/server')
+    expect(typeof createComposedApp).toBe('function')
   })
 })

@@ -68,7 +68,6 @@ function arrowObject(node: ts.Node): ts.ObjectLiteralExpression {
 test('both actual provider route closures and standalone HTTP bind the same whole record', () => {
   for (const [path, fn, selected] of [
     ['bootstrap/daemonApplication.ts', 'composeDaemonApplication', 'input.taskDeletionEffects'],
-    ['server.ts', 'composeSqliteApplicationDeps', 'deps.taskDeletionEffects'],
   ]) {
     const source = load(path!),
       call = oneCall(source, 'composeDaemonTaskExecutionModules')
@@ -163,7 +162,6 @@ test('root choice uses exact TE public type and SC offers its own independent na
   for (const [path, names] of [
     ['cli/start.ts', ['StartOptions', 'DaemonProviderSessionComposeInput']],
     ['bootstrap/daemonApplication.ts', ['DaemonApplicationInput']],
-    ['server.ts', ['AppDeps']],
   ] as const) {
     const source = load(path)
     const imports = source.statements.filter(

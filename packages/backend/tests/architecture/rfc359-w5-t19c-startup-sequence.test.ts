@@ -101,6 +101,7 @@ const STARTUP_SEQUENCE_ENTRYPOINTS: readonly string[] = [
  */
 const STARTUP_SEQUENCE_CALL_SITES: readonly string[] = [
   'composeDaemonApplication @ packages/backend/src/bootstrap/daemonSession.ts: 1',
+  // RFC-392: both engines and direct binding fixtures share this sole call site.
   'composeDaemonApplication @ packages/backend/tests/helpers/providerHttpApplication.ts: 1',
   'composeDaemonApplication @ packages/backend/tests/rfc391-neutral-daemon-graph.test.ts: 1',
   'serveDaemon @ packages/backend/src/cli/start.ts: 1',

@@ -207,7 +207,10 @@ describe('RFC-359 SQLite 守护进程读模型接线', () => {
     expect(start).toContain('composeDaemonTaskExecutionModules({')
     expect(start).toContain('DAEMON_TASK_EXECUTION_ADAPTERS.sqlite({ db: input.db })')
     expect(start).toContain('taskExecution: taskExecutionModules,')
-    const http = readFileSync(resolve(import.meta.dir, '../src/server.ts'), 'utf8')
+    const http = readFileSync(
+      resolve(import.meta.dir, '../src/bootstrap/daemonHttpComposition.ts'),
+      'utf8',
+    )
     expect(http).toContain('taskExecutionReadModels: taskExecutionProvider.readModels')
     expect(start).not.toContain('composeTaskExecutionRuntime({\n          readModels: undefined')
   })

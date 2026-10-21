@@ -90,6 +90,15 @@ import type { EvidenceArtifactPort } from './application/ports/evidenceArtifacts
 export type { EvidenceArtifactPort }
 import type { AttemptContextStorePort } from './application/ports/attemptContextStore'
 export type { AttemptContextStorePort }
+import type {
+  RequirementAdapterBinding,
+  PipelineAdapterBinding,
+  ApprovalAdapterBinding,
+  SelectedPipelineEvidenceExecution,
+} from '@/modules/integration/public/participants'
+// RFC-392: the purpose boundary also owns the existing selected pipeline contract import.
+export type { SelectedPipelineEvidenceExecution }
+import type { PipelineStagingFactories } from './public/types'
 import {
   createActionBaselineResolver,
   createRepositoryLocationRead,
@@ -510,3 +519,25 @@ export function composeDevelopmentAutomation(
 }
 
 export type { RepositoryBaselineEffectsFactory } from './application/ports/repositoryBaselineEffects'
+
+export interface RequirementPurposeSelection extends RequirementAdapterBinding {
+  readonly staging: EvidenceStagingFactory
+  readonly documentCommands: EvidenceDocumentCommands
+}
+
+export interface PipelinePurposeSelection extends PipelineAdapterBinding {
+  readonly staging: PipelineStagingFactories
+}
+
+export interface DevelopmentPurposeSelection {
+  readonly requirement?: RequirementPurposeSelection
+  readonly pipeline?: PipelinePurposeSelection
+  readonly approval?: ApprovalAdapterBinding
+}
+
+export interface SelectedDevelopmentPurposeRoot {
+  readonly requirement: RequirementPurposeSelection
+  readonly pipeline: PipelinePurposeSelection
+  readonly approval: ApprovalAdapterBinding
+  readonly evidenceArtifacts: EvidenceArtifactPort
+}

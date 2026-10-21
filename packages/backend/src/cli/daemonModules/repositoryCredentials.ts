@@ -6,7 +6,6 @@ import { composeSelectedPipelineEvidenceRunnerFor } from '@/modules/integration/
 import {
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
-  type RepositoryTransportCredentialModule,
   type RepositoryTransportCredentialRepository,
   type RepositoryWorkspaceOperations,
   type RepositoryWorkspaceStore,
@@ -28,14 +27,12 @@ export function composeDaemonRepositoryCredentials(input: {
   readonly developmentWorkspaceRepositoryPreparation?: ReturnType<
     typeof createDevelopmentWorkspaceRepositoryPreparation
   >
-  readonly repositoryTransport?: RepositoryTransportCredentialModule
   readonly codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
 }) {
   const repositoryWorkspaceStore = input.repositoryWorkspaceStore
   const repositoryWorkspaceOperations = input.repositoryWorkspaceOperations
   const repository = input.repositoryTransportCredentialRepository
-  const repositoryTransport =
-    input.repositoryTransport ?? composeRepositoryTransportCredentials(repository, input.secretBox)
+  const repositoryTransport = composeRepositoryTransportCredentials(repository, input.secretBox)
   const codeHostConnections = createCodeHostConnectionsService({
     secretBox: input.secretBox,
     repositoryTransport: repositoryTransport.adminConnections,

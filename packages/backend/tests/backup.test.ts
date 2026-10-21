@@ -1,5 +1,6 @@
 // P-5-02: backup service + CLI.
 
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { Database } from 'bun:sqlite'
@@ -14,7 +15,6 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
 import {
   digestDatabaseArtifact,
   writeDatabaseGenerationAtomic,
@@ -26,6 +26,8 @@ import { readManifest } from '../src/services/backupManifest'
 import { createWorkflow } from '../src/services/workflow'
 import { tarBin } from '../src/util/archive'
 import { removeTempDirSync } from './fixtures/tempDir'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -308,14 +310,19 @@ describe('POST /api/backup', () => {
     const prev = process.env.AGENT_WORKFLOW_HOME
     process.env.AGENT_WORKFLOW_HOME = h.appHome
     try {
-      const app = createApp({
-        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-        token: 'tok',
-        configPath: join(h.appHome, 'config.json'),
-        opencodeVersion: '1.14.25',
-        dbVersion: 1,
-        db: h.db,
-      })
+      const app = (
+        await openTestApplication(
+          { provider: 'sqlite', db: h.db },
+          {
+            secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+            token: 'tok',
+            configPath: join(h.appHome, 'config.json'),
+            opencodeVersion: '1.14.25',
+            dbVersion: 1,
+            appHome: h.appHome,
+          },
+        )
+      ).app
       const res = await app.fetch(
         new Request('http://localhost/api/backup', {
           method: 'POST',

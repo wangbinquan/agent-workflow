@@ -47,7 +47,9 @@ describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
     expect(composition).toContain('export function composeWorkgroupTaskRoom(')
     expect(composition).not.toContain('composeSqliteWorkgroupTaskRoom')
     expect(composition).not.toContain('composePostgresqlWorkgroupTaskRoom')
-    expect(read('server.ts').match(/composeWorkgroupTaskRoom\(\{/g)).toHaveLength(1)
+    expect(
+      read('bootstrap/daemonHttpComposition.ts').match(/composeWorkgroupTaskRoom\(\{/g),
+    ).toHaveLength(1)
     for (const bootstrap of ['bootstrap/daemonApplication.ts', 'bootstrap/daemonApplication.ts']) {
       expect(read(bootstrap)).toContain('composeProviderAppComposition({')
       expect(read(bootstrap)).not.toContain('composeWorkgroupTaskRoom({')

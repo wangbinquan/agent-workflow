@@ -1,4 +1,4 @@
-import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/public/participants'
+import type { SelectedPipelineEvidenceExecution } from '../composition'
 import type { PipelineEvidencePort } from '../application/ports/reconcilerPorts'
 import type { PipelineStagingFactories } from '../application/ports/evidenceStaging'
 import {

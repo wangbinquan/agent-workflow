@@ -1,3 +1,5 @@
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
+import type { Hono } from 'hono'
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // LOCKS: RFC-165 §9b (D11) — scheduled-task three-subject support
@@ -32,7 +34,6 @@ import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, scheduledTasks, tasks, users } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { createTaskExecutionLaunchParticipant } from '../src/modules/task-execution/composition/taskRouteLaunch'
 import {
@@ -58,6 +59,8 @@ import { createIdentityAccessRuntime } from '../src/modules/identity-access/comp
 import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -618,7 +621,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
 
 describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
   let db: DbClient
-  let app: ReturnType<typeof createApp>
+  let app: Hono
   let appHome: string
   let narrowPat: string
   let launchPat: string
@@ -629,14 +632,18 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
     db = createInMemoryDb(MIGRATIONS)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-kinds-http-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
-    app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: 'a'.repeat(64),
-      configPath: join(appHome, 'config.json'),
-      opencodeVersion: '1.14.25',
-      dbVersion: 1,
-      db,
-    })
+    app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: db },
+        {
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: 'a'.repeat(64),
+          configPath: join(appHome, 'config.json'),
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+        },
+      )
+    ).app
     const admin = await createUser(db, {
       username: 'alice',
       displayName: 'alice',

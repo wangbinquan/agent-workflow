@@ -378,11 +378,12 @@ describe('RFC-339 WrapperRuntime cutover', () => {
 
   test('bootstrap is the only runtime composer and every continuation caller receives a public driver', () => {
     const server = read('packages/backend/src/server.ts')
+    const http = read('packages/backend/src/bootstrap/daemonHttpComposition.ts')
     const cli = read('packages/backend/src/cli/start.ts')
     const runtime = read(
       'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
     )
-    expect(server.match(/composeDaemonTaskExecutionModules\(/g)).toHaveLength(1)
+    expect(cli.match(/composeDaemonTaskExecutionModules\(/g)).toHaveLength(1)
     expect(server).not.toContain('composeTaskExecutionRuntime(')
     expect(cli).toContain('const taskExecutionProvider = taskExecutionModules')
     expect(cli).not.toContain('composeTaskExecutionRuntime(')
@@ -392,7 +393,7 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(
       existsSync(resolve(ROOT, 'packages/backend/src/modules/task-execution/public/topology.ts')),
     ).toBe(false)
-    expect(server).toContain('@/cli/daemonModules/taskExecution')
+    expect(http).toContain('@/cli/daemonModules/taskExecution')
     expect(cli).not.toContain('@/modules/task-execution/public/topology')
 
     const callers = [
@@ -416,16 +417,16 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       )
       expect(source, path).not.toContain('createLegacyTaskExecutionTopology')
     }
-    expect(server).toContain('export interface ProviderAppOwnerInput<P extends DatabaseProvider>')
-    expect(server).toContain('taskExecution: DaemonTaskExecutionModules<P>')
+    expect(http).toContain('export interface ProviderAppOwnerInput<P extends DatabaseProvider>')
+    expect(http).toContain('taskExecution: DaemonTaskExecutionModules<P>')
     expect(server).toContain('export interface ComposedAppDeps<')
-    expect(server).toContain('const http = composeProviderAppComposition({')
+    expect(cli).toContain('const http = composeProviderAppComposition({')
     expect(server).toContain('export function mountApiRoutes(')
     expect(server).toContain('deps: ComposedAppDeps')
-    expect(server).toContain('const identityAccess = core.identityAccess')
-    expect(server).toContain('taskLaunch: taskExecutionProvider.routeLaunch.agent')
-    expect(server).toContain('taskLaunch: taskExecutionProvider.routeLaunch.workgroup')
-    expect(server).toContain('taskExecutionReadModels: taskExecutionProvider.readModels')
+    expect(http).toContain('const identityAccess = core.identityAccess')
+    expect(http).toContain('taskLaunch: taskExecutionProvider.routeLaunch.agent')
+    expect(http).toContain('taskLaunch: taskExecutionProvider.routeLaunch.workgroup')
+    expect(http).toContain('taskExecutionReadModels: taskExecutionProvider.readModels')
     const bundle = read('packages/backend/src/cli/daemonModules/taskExecution.ts')
     expect(bundle).toContain('schedulerDriver: input.testSeams?.schedulerDriver,')
     expect(cli).toContain('taskExecution: taskExecutionModules')

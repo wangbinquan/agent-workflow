@@ -44,7 +44,6 @@ const compact = (node: ts.Node, file: ts.SourceFile): string =>
 
 const start = source('cli/start.ts')
 const pg = source('bootstrap/daemonApplication.ts')
-const server = source('server.ts')
 
 function selected(node: ts.Node, file: ts.SourceFile, name: string, property: string): void {
   const found = calls(node, file, name)
@@ -122,42 +121,6 @@ test('both daemon owners consume the same program and evidence read selection', 
       `selection:${receiver}.developmentPurposes,`,
     )
   }
-})
-
-test('standalone HTTP consumers preserve the selected receiver through fallback composition', () => {
-  selected(
-    declaration(server, 'composeSqliteApplicationDeps'),
-    server,
-    'composeDaemonDigitalEmployeeModules',
-    'employeePrograms:deps.employeePrograms,',
-  )
-  selected(
-    declaration(server, 'composeSqliteApplicationDeps'),
-    server,
-    'composeDaemonDevelopmentAutomationModules',
-    'evidenceRead:deps.evidenceRead,',
-  )
-  selected(
-    declaration(
-      source('cli/daemonModules/developmentAutomation.ts'),
-      'composeDaemonDevelopmentAutomationModules',
-    ),
-    source('cli/daemonModules/developmentAutomation.ts'),
-    'composeDevelopmentAutomation',
-    'evidenceDocumentCommands:developmentPurposeRoot.requirement.documentCommands,',
-  )
-  selected(
-    declaration(server, 'composeSqliteApplicationDeps'),
-    server,
-    'composeDevelopmentPurposeRoot',
-    'evidenceDocumentCommands:deps.evidenceDocumentCommands,',
-  )
-  selected(
-    declaration(server, 'composeSqliteApplicationDeps'),
-    server,
-    'composeDevelopmentPurposeRoot',
-    'selection:deps.developmentPurposes,',
-  )
 })
 
 test('RFC-383 selects one program source for module authoring, reaction and contract fixtures', () => {

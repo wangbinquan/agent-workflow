@@ -15,6 +15,8 @@ const ROOTS = new Set(
   [
     'cli/start.ts',
     'bootstrap/daemonApplication.ts',
+    'bootstrap/daemonHttpComposition.ts',
+    'bootstrap/developmentPurposeRoot.ts',
     'bootstrap/daemonSession.ts',
     'bootstrap/daemonSessionAdapters.ts',
     'server.ts',

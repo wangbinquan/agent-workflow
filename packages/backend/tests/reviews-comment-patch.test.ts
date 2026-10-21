@@ -17,11 +17,11 @@
 // 每次 `seed` 用一组新 id：同一个用例里连着种两份夹具（作者矩阵那两条）在共库上会撞主键，
 // 而合一前每次 `createInMemoryDb` 都是一个新库，天然不会。
 
+import type { ProviderHttpApplicationInput } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { eq } from 'drizzle-orm'
 import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
-import type { AppDeps } from '../src/server'
 import {
   deleteReviewComment,
   updateReviewCommentText,
@@ -280,7 +280,7 @@ describeEachProvider('RFC-009-T1 PATCH /api/reviews/:nodeRunId/comments/:id rout
     let previousHome: string | undefined
     let homeAssigned = false
     async function composeProviderApp(
-      input: Omit<AppDeps, 'db'> & { db: ProviderNeutralDatabase },
+      input: ProviderHttpApplicationInput & { db: ProviderNeutralDatabase },
     ) {
       ownedHome = createFixtureDirectory(
         joinFixturePath(fixtureTmpDirectory(), 'rfc359-w49-review-'),

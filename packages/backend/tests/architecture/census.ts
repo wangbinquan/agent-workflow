@@ -103,6 +103,8 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/cli/dev.ts',
   'packages/backend/src/cli/daemonProviderMigrationAdmission.ts',
   'packages/backend/src/bootstrap/daemonApplication.ts',
+  'packages/backend/src/bootstrap/daemonHttpComposition.ts',
+  'packages/backend/src/bootstrap/developmentPurposeRoot.ts',
   'packages/backend/src/bootstrap/daemonSession.ts',
   'packages/backend/src/bootstrap/daemonSessionAdapters.ts',
   'packages/backend/src/cli/start.ts',

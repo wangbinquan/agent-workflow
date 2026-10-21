@@ -103,7 +103,10 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     what: '/api/overview 的系统总览查询装配',
     fn: 'composeSystemOverviewQuery',
     definedIn: `${B}modules/system-operations/application/overview.ts`,
-    consumers: [`${B}modules/system-operations/composition/overview.ts`, `${B}server.ts`],
+    consumers: [
+      `${B}modules/system-operations/composition/overview.ts`,
+      `${B}bootstrap/daemonHttpComposition.ts`,
+    ],
     forkedFrom: [
       `${B}modules/system-operations/application/overview.ts`,
       `${B}platform/persistence/sqlite/systemOverviewReadModel.ts`,
@@ -113,7 +116,7 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     what: '/api/overview 的资源目录计数装配',
     fn: 'composeResourceCatalogOverviewQuery',
     definedIn: `${B}modules/resource-catalog/composition/resourceCatalogOverview.ts`,
-    consumers: [`${B}server.ts`],
+    consumers: [`${B}bootstrap/daemonHttpComposition.ts`],
     forkedFrom: [
       `${B}modules/resource-catalog/composition/resourceCatalogOverview.ts`,
       `${B}services/overview.ts`,

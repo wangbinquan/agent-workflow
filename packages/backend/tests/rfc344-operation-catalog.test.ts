@@ -792,14 +792,15 @@ describe('RFC-344 single inbound root source locks', () => {
     expect(server).toContain(
       'directMcpOperationAuthority(deps.core.identityAccess.directAuthority, actor)',
     )
-    expect(server).toContain('const appHome = deps.appHome ?? Paths.root')
-    expect(server).not.toContain('dirname(runtimeDeps.configPath)')
+    const http = readFileSync(join(ROOT, 'src/bootstrap/daemonHttpComposition.ts'), 'utf8')
+    expect(http).toContain('appHome: input.appHome')
+    expect(http).not.toContain('dirname(runtimeDeps.configPath)')
 
     const start = readDaemonGraphSource()
     expect(start.match(/composeDaemonDevelopmentAutomationModules\s*\(/g)).toHaveLength(1)
     expect(start).toContain('developmentAutomation: developmentAutomationModules,')
 
-    expect(server).toContain('const developmentMissions = developmentAutomation.missionOperations')
+    expect(http).toContain('const developmentMissions = developmentAutomation.missionOperations')
     const bundle = readFileSync(
       join(ROOT, 'src/cli/daemonModules/developmentAutomation.ts'),
       'utf8',

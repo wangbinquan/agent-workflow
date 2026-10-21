@@ -140,7 +140,8 @@
    - void-promise 账本（`server.ts: 2` → 1）、适配器生产消费者下限（实测下调并注明）；
    - commons-debt（R1 一条、TP-08、两个 baseline）与 RFC-317 findings.md；
    - converged-twins、rfc305 / rfc347 / rfc310 精确清单、`BOOTSTRAP_FILES`；
-   - windows-platform 路径过滤。
+   - windows-platform 路径过滤；
+   - RFC-376 `deployment-mode-branch-sites`：`server.ts` 的 `deploymentMode`、`executionAuthority` 改为必填后删去两条，`counts.json` 8 → 6。
 5. 文档：`docs/dev-gotchas.md` 中描述 `server.ts` 测试回退与三个组合根的段落、`docs/audit-backlog.md` 中的相关引用，按新结构改写。
 
 ## 4. 与 RFC-294 目标架构的对齐

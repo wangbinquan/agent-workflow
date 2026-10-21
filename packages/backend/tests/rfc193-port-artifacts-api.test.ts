@@ -6,6 +6,7 @@
 // 多用户不可见→404 同形行为（RFC-285 B1，旧 403）由 worktree-files-acl.test.ts
 // 对同一原语覆盖，含 byte-oracle）。
 
+import type { Hono } from 'hono'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -14,7 +15,6 @@ import { ulid } from 'ulid'
 import { type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { archivePortArtifacts } from '@/modules/task-execution/public/commands'
-import type { createApp } from '../src/server'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -30,7 +30,7 @@ interface Harness<Database extends ProviderNeutralDatabase = DbClient> {
   worktree: string
   taskId: string
   runId: string
-  app: ReturnType<typeof createApp>
+  app: Hono
   cleanup: () => void
 }
 
@@ -354,7 +354,7 @@ describe('RFC-193 route source lock', () => {
 // RFC-359 W49: borrow the selected database while retaining the native seed core.
 interface ProviderHarnessContext {
   db: ProviderNeutralDatabase
-  createApp(appHome: string): Promise<ReturnType<typeof createApp>>
+  createApp(appHome: string): Promise<Hono>
   retainCleanup(cleanup: () => void): void
 }
 function providerTaskLineage(id: string) {

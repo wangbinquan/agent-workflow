@@ -122,10 +122,9 @@ export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseP
     }
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
   readonly alerts?: ProviderDependencies['lifecycleRepair']
-  /** Direct HTTP fixtures only. Production never substitutes its session scheduler. */
+  /** Module-level scheduler fixtures only. Production never substitutes its session scheduler. */
   readonly testSeams?: {
     readonly schedulerDriver?: SchedulerDriverPort
-    readonly collaboration?: CollaborationRouteContext
   }
 }
 
@@ -149,22 +148,20 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: observation.workspacePresence,
   })
-  const collaboration: CollaborationRouteContext =
-    input.testSeams?.collaboration ??
-    createCollaborationCommandContext({
+  const collaboration: CollaborationRouteContext = createCollaborationCommandContext({
+    db,
+    appHome,
+    taskExecutionReadModels: persistence.reads,
+    reviewArtifacts: selection.reviewArtifacts,
+    reviewDecisions: createReviewDecisionCommand({
       db,
       appHome,
-      taskExecutionReadModels: persistence.reads,
       reviewArtifacts: selection.reviewArtifacts,
-      reviewDecisions: createReviewDecisionCommand({
-        db,
-        appHome,
-        reviewArtifacts: selection.reviewArtifacts,
-        rollbackSnapshots: selection.reviewRollbackSnapshots,
-      }),
-      questionDispatches: createQuestionDispatchCommand(db),
-      clarifyDecisions: createClarifyDecisionCommand(db, memory.memoryOperations.distillCommands),
-    })
+      rollbackSnapshots: selection.reviewRollbackSnapshots,
+    }),
+    questionDispatches: createQuestionDispatchCommand(db),
+    clarifyDecisions: createClarifyDecisionCommand(db, memory.memoryOperations.distillCommands),
+  })
   const validationContext = composeDynamicWorkflowValidationContext(db)
   const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
   const agentLaunchResources = Object.freeze({

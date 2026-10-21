@@ -3,6 +3,7 @@
 // and composing or shutting down identity presence must not close the outer
 // provider runtime.
 
+import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -156,6 +157,7 @@ describe('RFC-349 daemon provider core', () => {
     roots.push(appHome)
     const db = createInMemoryDb(MIGRATIONS)
     const core = composeDaemonProviderCore({
+      sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
       daemonToken: 'fixture-daemon',
       db,
       appHome,
@@ -195,6 +197,7 @@ describe('RFC-349 daemon provider core', () => {
       idleTimeoutMs: 30_000,
     } satisfies Extract<DatabaseConfig, { provider: 'postgresql' }>
     const core = composeDaemonProviderCore({
+      sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
       daemonToken: 'fixture-daemon',
       db: fake.db,
       adapters: DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
@@ -270,7 +273,7 @@ describe('RFC-349 daemon provider core', () => {
     const source = readFileSync(resolve(import.meta.dir, '../src/server.ts'), 'utf8')
     const inputStart = source.indexOf('export interface ProviderAppCompositionInput<')
     const composeStart = source.indexOf('export function composeProviderAppDeps<', inputStart)
-    const namedEntries = source.indexOf('/** Named production entry points', composeStart)
+    const namedEntries = source.indexOf('export function mountApiRoutes(', composeStart)
 
     expect(inputStart).toBeGreaterThan(-1)
     expect(composeStart).toBeGreaterThan(inputStart)

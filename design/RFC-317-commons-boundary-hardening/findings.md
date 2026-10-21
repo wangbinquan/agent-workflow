@@ -850,16 +850,14 @@
 - **拟建守卫**：Add a grep/AST ratchet over src/routes/*.ts: no `deps.db.` / `.db.select(` / `.db.insert(` / `.db.update(` / `.db.delete(` / `.db.all(` / `.db.run(` call sites outside a shrink-only allowlist keyed by file:line, mirroring the shape of packages/backend/tests/routes-no-cast.test.ts:50-60. That asserts the invariant the dep rule intends (routes do not talk to persistence) instead of the proxy for it (routes do not import the schema module).
 - **证伪方式**：In any route file with no @/db import, add `const rows = await deps.db.all(sql\`SELECT 1\`)` and run `bun run depcheck` + `bun run test:backend`: both green.
 
-### TP-08 · P3 · boundary-blur · ADJUSTED
+### TP-08 · P3 · boundary-blur · RESOLVED
 
-**AppDeps is a god-object with 6 declared test-only fields and 6 single-consumer fields, and nothing ratchets either**
+**AppDeps test-only god-object retired by RFC-392 T1/T3/T5**
 
-- **锚点**：`packages/backend/src/server.ts:139-152` · `packages/backend/src/server.ts:154-243` · `packages/backend/src/server.ts:209` · `packages/backend/src/server.ts:215` · `packages/backend/src/server.ts:222` · `packages/backend/src/server.ts:230-242` · `packages/backend/src/server.ts:574-584` · `packages/backend/tests/rfc294-architecture-preflight.test.ts:23-39` · `packages/backend/tests/rfc284-env-flags-registry.test.ts:31-44`
-- **证据**：AppDeps declares six fields whose own docstrings say production never supplies them: runtimeDiagnosticTestDependencies (:226-230, itself containing beforeRuntimeProbeCache :141-145 and probeTimeoutMsForTest :146-151), intentTestDependencies (:231-234), mcpRuntimeTestDependencies (:235-241), workflowExactOperationHook (:216-225), codeHostFetch (:204-209, 'Production omits it'), buildScheduleLaunch (:210-215, 'Production omits it'). Reference counts across routes/ + server.ts + mcp/: codeHostFetch 1, buildScheduleLaunch 1, workflowExactOperationHook 1, daemonInfoPath 1, opencodeVersion 1, dbVersion 1. 72 route-mount signatures declare `deps: AppDeps`, against 4 mounts that take an exact module contract (server.ts:574,582,583,584). The RFC-294 preflight already treats AppDeps as poison for module public surfaces (FORBIDDEN_TYPE_NAME, preflight test :23-39) — but only inside packages/backend/src/modules/.
-- **架构影响**：Every route module receives the full DbClient, SecretBox, dispatcher, and every in-process test seam whether or not it needs them, which is precisely the dependency shape RFC-294 replaces with exact public contracts. The test seams are contractualised (no env switch can select them, which is genuinely better than the env-flag seams the 2026-08-12 audit flagged as N29 violations) — but the count can only grow, and each new one enlarges the production type that 72 call sites depend on.
-- **现有守卫**：none for this file. The analogous problem for environment-variable seams IS ratcheted (docs/env-flags.md + packages/backend/tests/rfc284-env-flags-registry.test.ts:31-45 fail on any unregistered AGENT_WORKFLOW_*/AW_* token); the in-process seams on AppDeps have no registry and no counter.
-- **拟建守卫**：Mirror the env-flag ratchet: an AST test that reads the AppDeps declaration, extracts every optional property whose JSDoc contains a test-seam marker, and asserts the exact set equals a frozen list (shrink-only) — plus a second assertion freezing the count of `deps: AppDeps` route-mount signatures at 72 with `toBeLessThanOrEqual`, so the migration to exact contracts can only move one way.
-- **证伪方式**：Add `fooTestHook?: () => void` to AppDeps and a new `mountFooRoutes(app, deps: AppDeps)`; run `bun run gate:local` — green.
+- **原问题**：旧 HTTP 装配接口混合 provider 数据库、测试覆盖与路由依赖，测试专用字段和 SQLite 回退没有统一边界。
+- **销账**：RFC-392 删除 `AppDeps`、SQLite HTTP 测试装配与旧 `createApp` 分派；所有 HTTP 测试经 `tests/helpers/providerHttpApplication.ts` 的唯一应用图调用点。十个测试输入集中于 `bootstrap/daemonApplication.ts` 的 `testSeams`；生产会话从不传入。
+- **守卫**：`packages/backend/tests/architecture/rfc392-unified-test-entry.test.ts` 扫描完整生产语料，锁住删除符号、单一测试入口、接缝精确集合、必填绑定及 HTTP owner 落位。
+- **证伪方式**：恢复旧符号、增加第二次测试入口调用、在生产会话传 `testSeams` 或将 HTTP 组合迁回 `server.ts`，均由相同 AST 判据的负例与真实语料断言拒绝。
 
 ### TP-09 · P3 · stale-assertion · ADJUSTED
 

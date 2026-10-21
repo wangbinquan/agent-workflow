@@ -66,7 +66,15 @@ export function neutralDaemonViolations(units: readonly SourceUnit[]): string[] 
           errors.push('adapter table location')
         else tables.push(value)
       }
-      if ([APPLICATION, SESSION, ADAPTERS].includes(unit.path)) {
+      if (
+        [
+          APPLICATION,
+          SESSION,
+          ADAPTERS,
+          PREFIX + 'bootstrap/daemonHttpComposition.ts',
+          PREFIX + 'bootstrap/developmentPurposeRoot.ts',
+        ].includes(unit.path)
+      ) {
         if (
           ts.isBinaryExpression(node) &&
           [

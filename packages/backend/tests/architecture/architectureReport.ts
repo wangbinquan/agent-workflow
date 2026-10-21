@@ -222,6 +222,8 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/cli/migrationReport.ts': 'bootstrap',
   'packages/backend/src/cli/package.ts': 'resource-catalog',
   'packages/backend/src/bootstrap/daemonApplication.ts': 'bootstrap',
+  'packages/backend/src/bootstrap/daemonHttpComposition.ts': 'bootstrap',
+  'packages/backend/src/bootstrap/developmentPurposeRoot.ts': 'bootstrap',
   'packages/backend/src/bootstrap/daemonSession.ts': 'bootstrap',
   'packages/backend/src/bootstrap/daemonSessionAdapters.ts': 'bootstrap',
   'packages/backend/src/cli/restore.ts': 'system-operations',

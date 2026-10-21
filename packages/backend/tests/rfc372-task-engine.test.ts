@@ -34,7 +34,7 @@ setDefaultTimeout(60_000)
 // A provider-neutral store alone is insufficient: both real HTTP bootstrap
 // roots must supply the generator, or PostgreSQL responds "unavailable".
 test('both daemon bootstraps bind follow-up generation into the original clarify routes', async () => {
-  for (const path of ['../src/server.ts']) {
+  for (const path of ['../src/bootstrap/daemonHttpComposition.ts']) {
     const source = await Bun.file(new URL(path, import.meta.url)).text()
     expect(source).toMatch(
       /const collaborationRouteOperations = composeCollaborationRouteOperations\(\{\s*followupGenerator: composeClarifyFollowupGenerator\(\{[\s\S]*?registry: (?:deps|core)\.runtimeRegistry,[\s\S]*?binding: narrativeSystemAgentBinding,/,

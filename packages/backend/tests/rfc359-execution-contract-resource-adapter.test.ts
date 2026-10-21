@@ -1,3 +1,4 @@
+import { createProviderHttpApplication } from './helpers/providerHttpApplication'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 // RFC-359 AC-1 —— 执行合同资源读取**只有一份实现**，两个引擎跑同一组判据。
 //
@@ -17,20 +18,15 @@ import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-exe
 // `createExecutionContractResourceAdapter(db: ProviderNeutralDatabase)` 一个入口，
 // 旧的 `createPostgresqlExecutionContractResourceAdapter` 已删除。
 
-import { describe, expect, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { createInMemoryDb } from '@/db/client'
 import { agents, workflows } from '@/db/schema'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
-import { composeSqliteAppDeps, createApp } from '@/server'
-import { resolve } from 'node:path'
 import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 const CONTRACT_WORKFLOW_DEFINITION = {
@@ -195,42 +191,27 @@ describeEachProvider('RFC-359 执行合同资源读取（双引擎，单一实�
   })
 })
 
-// RFC-359 AC-6：本块被测的就是 **SQLite 那个组合根**（`AppDeps` 收 `DbClient`，
-// `createApp` 的单参重载内部正是 `composeSqliteAppDeps`），PostgreSQL 侧的同一件事由
-// `rfc359-w7-*-composition-roots` 各自那批覆盖。下面把那一步**显式写出来**而不是靠重载隐含，
-// 这样「被测物是某一侧的装配面」在源码上说得出口，也才落得进 `provider-composition-root`
-// 那一类机械理由（见 `rfc359-w5-t19f-test-engine-hardcoding`）。
-describe('RFC-359 执行合同装配（SQLite 组合根）', () => {
-  test('HTTP bootstrap 保留注入进来的 provider-中立组合根', async () => {
-    const executionContracts = composeExecutionContract({
-      registrations: [],
-      resources: {
-        async inspect() {
-          return null
-        },
-      },
-      programFixtures: createExecutionContractProgramFixtureAdapter({
-        appHome: '/not-used-by-this-query',
-      }),
+// RFC-392: the HTTP list comes from the graph's own execution-contract participant.
+describeEachProvider('RFC-359 execution-contract application graph', (h) => {
+  test('HTTP lists the graph-owned execution-contract participant on both providers', async () => {
+    const application = await createProviderHttpApplication(h, {
+      token: DAEMON_TOKEN,
+      dbVersion: 1,
+      opencodeVersion: null,
     })
-    const app = createApp(
-      composeSqliteAppDeps({
-        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-        token: DAEMON_TOKEN,
-        configPath: '',
-        opencodeVersion: null,
-        dbVersion: 1,
-        db: createInMemoryDb(MIGRATIONS),
-        executionContracts,
-      }),
-    )
-
-    const response = await app.request('/api/execution-contracts', {
-      headers: { Authorization: `Bearer ${DAEMON_TOKEN}` },
-    })
-
-    expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ items: [] })
+    try {
+      const participant = application.modules.digitalEmployee.executionContracts
+      expect(participant).toBe(application.runtime.digitalEmployeeModules.executionContracts)
+      const response = await application.app.request('/api/execution-contracts', {
+        headers: { Authorization: `Bearer ${DAEMON_TOKEN}` },
+      })
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({
+        items: participant.list().map(({ guideJson: _guideJson, ...summary }) => summary),
+      })
+    } finally {
+      await application.dispose()
+    }
   })
 
   test('装配接受 provider-中立的资源端口，不需要 SQLite 客户端', () => {

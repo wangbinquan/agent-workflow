@@ -423,7 +423,7 @@ test('源锁：中立回合驱动用真协议块与唯一判定点，PG 适配�
   const bundle = readFileSync(resolve(root, 'cli/daemonModules/taskExecution.ts'), 'utf8')
   expect(bundle).toContain('createWorkgroupClarifyAskGate(db)')
   // RFC-359 W4-D19c-tail：转发这一份的 legacy 回合执行已随工作组引擎岛退役，判定只剩这一处。
-  const server = readFileSync(resolve(root, 'server.ts'), 'utf8')
+  const server = readFileSync(resolve(root, 'bootstrap/daemonApplication.ts'), 'utf8')
   expect(server).toContain('composeDaemonTaskExecutionModules({')
   expect(server).not.toContain('createWorkgroupClarifyAskGate(')
 })

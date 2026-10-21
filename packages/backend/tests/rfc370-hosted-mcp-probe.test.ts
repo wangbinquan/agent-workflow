@@ -164,7 +164,9 @@ describe('hosted probe selection wiring', () => {
     for (const root of ['bootstrap/daemonApplication.ts']) {
       expect(await read(root)).toContain('observation: observationModules,')
     }
-    expect(await read('server.ts')).toContain('probeRunner: mcpRuntimeTests.probeRunner,')
+    expect(await read('bootstrap/daemonHttpComposition.ts')).toContain(
+      'probeRunner: mcpRuntimeTests.probeRunner,',
+    )
     expect(await read('modules/resource-catalog/composition/mcpDiagnostics.ts')).toContain(
       'probeRunner: undefined as McpProbeRunner | undefined,',
     )

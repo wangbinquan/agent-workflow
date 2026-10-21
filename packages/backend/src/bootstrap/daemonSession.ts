@@ -263,7 +263,6 @@ export async function composeDaemonSession(
       runtimeLegacyConfiguration: input.runtimeLegacyConfiguration,
       log: input.log,
       dbPath: Paths.db,
-      configuration: input.configuration,
       applicationConfiguration: input.applicationConfiguration,
       taskLaunchConfiguration: input.taskLaunchConfiguration,
       taskArchive: input.taskArchive,

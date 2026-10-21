@@ -16,7 +16,7 @@ export function inverseRfc372ClarifyService(source: ts.SourceFile): ts.SourceFil
 // including concurrent observation hooks, remains visible to older source oracles.
 export function inverseRfc372ClarifyRootBinding(source: ts.SourceFile): ts.SourceFile {
   const path = '/' + source.fileName.replaceAll('\\', '/')
-  const receiver = path.endsWith('/server.ts')
+  const receiver = path.endsWith('/bootstrap/daemonHttpComposition.ts')
     ? { db: 'input.db', registry: 'core.runtimeRegistry' }
     : undefined
   if (!receiver) return source

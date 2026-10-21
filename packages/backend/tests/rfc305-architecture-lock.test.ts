@@ -1,6 +1,7 @@
 // RFC-305 architecture lock: additions must flow through the shared catalog,
 // the identity-access public surface, and the sole transactional writer.
 
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
@@ -17,7 +18,8 @@ import { createInMemoryDb } from '../src/db/client'
 import { ALL_TOOLS } from '../src/mcp/tools'
 import { allRouteMeta, resetRouteMetaRegistry } from '../src/routes/registry'
 import { composeDatabaseMigrationModule } from '../src/modules/system-operations/composition/databaseMigration'
-import { createApp } from '../src/server'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const BACKEND_SRC = resolve(REPO_ROOT, 'packages', 'backend', 'src')
@@ -320,6 +322,9 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition',
       'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition/ownerIdentityQueries',
+      'packages/backend/src/bootstrap/daemonHttpComposition.ts -> @/modules/identity-access/composition/providerOperations',
+      'packages/backend/src/bootstrap/daemonHttpComposition.ts -> @/modules/identity-access/composition/userOperations',
+      'packages/backend/src/bootstrap/daemonHttpComposition.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/daemonModules/providerCore.ts -> @/modules/identity-access/composition',
       'packages/backend/src/cli/daemonModules/providerCore.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/cli/daemonModules/providerCore.ts -> @/modules/identity-access/public/participants',
@@ -424,9 +429,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/routes/webhookTriggers.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition/authentication',
-      'packages/backend/src/server.ts -> @/modules/identity-access/composition/providerOperations',
-      'packages/backend/src/server.ts -> @/modules/identity-access/composition/userOperations',
-      'packages/backend/src/server.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/server.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/services/oidcProviders.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/services/ownerScopedName.ts -> @/modules/identity-access/composition/providerOperations',
@@ -528,7 +530,7 @@ describe('RFC-305 permission catalog architecture', () => {
   beforeEach(() => resetRouteMetaRegistry())
   afterEach(() => resetRouteMetaRegistry())
 
-  test('route and MCP authorization expose a single permission axis', () => {
+  test('route and MCP authorization expose a single permission axis', async () => {
     // `databaseMigration` 不是可选装饰：不给它，`mountApiRoutes` 里
     // `routes.databaseMigration?.(app)` 整组跳过，量到的就是**比生产小一圈**的面
     // （RFC-329 的守卫当年正是这么读成 440 条而不是 470 条的）。
@@ -538,26 +540,29 @@ describe('RFC-305 permission catalog architecture', () => {
     // 当场抛「declared operation has no mounted binding」——两个文件单独跑都绿、
     // 排到同一个分片里才红（plan §5gk 实撞）。补上这一组两件事一起解决。
     const home = mkdtempSync(join(tmpdir(), 'aw-rfc305-lock-'))
-    createApp({
-      token: 'd'.repeat(64),
-      configPath: '',
-      opencodeVersion: 'test',
-      dbVersion: 162,
-      db: createInMemoryDb(MIGRATIONS),
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 30)),
-      databaseMigration: composeDatabaseMigrationModule({
-        sqlitePath: join(home, 'db.sqlite'),
-        operationsRoot: join(home, 'database-migrations'),
-        generationPointerPath: join(home, 'database-generation.json'),
+    await openTestApplication(
+      { provider: 'sqlite', db: createInMemoryDb(MIGRATIONS) },
+      {
+        token: 'd'.repeat(64),
+        appHome: home,
         configPath: join(home, 'config.json'),
-        admission: {
-          async freezeAndDrain() {},
-          async reopenSqlite() {},
-          async activatePostgresql() {},
-          async openPostgresqlAdmission() {},
-        },
-      }),
-    })
+        opencodeVersion: 'test',
+        dbVersion: 162,
+        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 30)),
+        databaseMigration: composeDatabaseMigrationModule({
+          sqlitePath: join(home, 'db.sqlite'),
+          operationsRoot: join(home, 'database-migrations'),
+          generationPointerPath: join(home, 'database-generation.json'),
+          configPath: join(home, 'config.json'),
+          admission: {
+            async freezeAndDrain() {},
+            async reopenSqlite() {},
+            async activatePostgresql() {},
+            async openPostgresqlAdmission() {},
+          },
+        }),
+      },
+    )
 
     for (const route of allRouteMeta()) expect(route).not.toHaveProperty('identity')
     for (const tool of ALL_TOOLS) expect(tool).not.toHaveProperty('identity')

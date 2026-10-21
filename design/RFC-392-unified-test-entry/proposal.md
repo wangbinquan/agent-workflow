@@ -87,4 +87,7 @@ RFC-294 要求「测试经工厂图注入实例 port」，并移除这类回退�
    改为必填，生产本就总是传入。
 6. **应用图不交出 `ComposedAppDeps`**：用到它的两处断言改写为对挂载后路由与核心组的断言。
 7. **一个 RFC、两组顺序任务**（先统一入口并删测试路径，再迁 HTTP 组合）、一次集中验证：两组有 16 个测试文件重叠，并共用 RFC-380 / 390 守卫。
-8. **偏离项**：无。
+8. **部署形态默认改为必填**（审核补正）：`server.ts` 里两处 `?? 'standalone'`（请求管线的 `deploymentMode`、`createComposedApp` 取
+   `executionAuthority?.mode`）原样保留会让 AC-1 需要白名单。应用图本就总是传入执行权，两处改为必填输入；RFC-376 的
+   `deployment-mode-branch-sites` 随之 8 → 6，`architecture/counts.json` 同步下调。生产行为不变。
+9. **偏离项**：无。

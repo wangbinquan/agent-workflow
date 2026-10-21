@@ -55,10 +55,7 @@ function property(source: ts.SourceFile, call: ts.CallExpression, name: string) 
 }
 
 test('RFC-383 shared conflict bindings and paired root selections retain the explicit receiver', () => {
-  for (const [path, receiver] of [
-    ['bootstrap/daemonApplication.ts', 'input'],
-    ['server.ts', 'deps'],
-  ] as const) {
+  for (const [path, receiver] of [['bootstrap/daemonApplication.ts', 'input']] as const) {
     const source = ts.createSourceFile(
       path,
       readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),

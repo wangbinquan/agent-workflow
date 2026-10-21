@@ -5,10 +5,7 @@ import { resolve } from 'node:path'
 import { backendUnits, sourceUnit, type SourceUnit } from './census'
 
 const PREFIX = 'packages/backend/src/'
-const ROOTS = [
-  ['bootstrap/daemonApplication.ts', 'composeDaemonApplication'],
-  ['server.ts', 'composeSqliteApplicationDeps'],
-] as const
+const ROOTS = [['bootstrap/daemonApplication.ts', 'composeDaemonApplication']] as const
 const RETIRED = [
   'composeSqliteApiRouteMounts',
   'SqliteApiRouteComposition',
@@ -81,36 +78,35 @@ export function neutralHttpViolations(units: readonly SourceUnit[]): string[] {
     }
   }
   const server = units.find((unit) => unit.path === PREFIX + 'server.ts')
-  const owner = server?.source.statements.find(
+  const http = units.find((unit) => unit.path === PREFIX + 'bootstrap/daemonHttpComposition.ts')
+  const owner = http?.source.statements.find(
     (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'composeProviderAppComposition',
   )
-  if (!server || !owner) return [...errors, 'neutral HTTP owner missing']
-  const anchor = server.source.text.indexOf('/** Named production entry points')
-  if (anchor < 0 || owner.getStart(server.source) <= anchor)
-    errors.push('neutral owner precedes closed route boundary')
+  if (!server || !http || !owner) return [...errors, 'neutral HTTP owner missing']
   for (const name of RETIRED) {
     walk(server.source, (node) => {
       if (ts.isIdentifier(node) && node.text === name) errors.push(`retired: ${name}`)
     })
   }
   walk(owner, (node) => {
-    if (ts.isCallExpression(node) && /^composeDaemon/.test(node.expression.getText(server.source)))
+    if (ts.isCallExpression(node) && /^composeDaemon/.test(node.expression.getText(http.source)))
       errors.push('neutral owner constructs a session bundle')
   })
-  walk(server.source, (node) => {
-    if (!ts.isCallExpression(node)) return
-    const callee = node.expression.getText(server.source)
-    if (!/^mount\w*Routes$/.test(callee) && callee !== 'registerResourcePackageRoutes') return
-    let parent: ts.Node | undefined = node.parent
-    while (parent !== undefined && !ts.isFunctionDeclaration(parent)) parent = parent.parent
-    const ownerName = parent && ts.isFunctionDeclaration(parent) ? parent.name?.text : undefined
-    if (
-      ownerName !== 'composeProviderAppDeps' &&
-      ownerName !== 'mountApiRoutes' &&
-      ownerName !== 'createComposedApp'
-    )
-      errors.push(`${ownerName ?? 'top-level'}: second route table (${callee})`)
-  })
+  for (const routeSource of [server, http])
+    walk(routeSource.source, (node) => {
+      if (!ts.isCallExpression(node)) return
+      const callee = node.expression.getText(routeSource.source)
+      if (!/^mount\w*Routes$/.test(callee) && callee !== 'registerResourcePackageRoutes') return
+      let parent: ts.Node | undefined = node.parent
+      while (parent !== undefined && !ts.isFunctionDeclaration(parent)) parent = parent.parent
+      const ownerName = parent && ts.isFunctionDeclaration(parent) ? parent.name?.text : undefined
+      if (
+        ownerName !== 'composeProviderAppDeps' &&
+        ownerName !== 'mountApiRoutes' &&
+        ownerName !== 'createComposedApp'
+      )
+        errors.push(`${ownerName ?? 'top-level'}: second route table (${callee})`)
+    })
   for (const path of [
     'cli/start.ts',
     'bootstrap/daemonApplication.ts',
@@ -131,55 +127,53 @@ describe('RFC-390 neutral HTTP binding', () => {
     expect(units.length).toBeGreaterThanOrEqual(2000)
     expect(neutralHttpViolations(units)).toEqual([])
   })
-  test('synthetic negative fixture exercises the production matcher without reading the corpus', () => {
-    const fixture = sourceUnit(
-      'packages/backend/src/server.ts',
-      `
-      /** Named production entry points */
-      function composeProviderAppComposition() { composeDaemonProviderCore({}) }
-      function composeSqliteApplicationDeps() {
-        composeProviderAppComposition({}); composeProviderAppDeps({}); composeProviderAppDeps({})
-      }
-      const alternate = (app) => mountHealthRoutes(app, {});
-    `,
-    )
-    expect(neutralHttpViolations([fixture])).toContain('neutral owner constructs a session bundle')
-    expect(neutralHttpViolations([fixture])).toContain(
-      'top-level: second route table (mountHealthRoutes)',
-    )
-    expect(neutralHttpViolations([fixture])).toContain(
-      'server.ts: composeSqliteApplicationDeps must call composeProviderAppDeps once',
-    )
-  })
   test('negative fixtures reject duplicate bindings, bundle reconstruction and a second route table', () => {
-    const server = units.find((unit) => unit.path === PREFIX + 'server.ts')!
-    const original = server.source.text
+    const http = units.find((unit) => unit.path === PREFIX + 'bootstrap/daemonHttpComposition.ts')!
     for (const [addition, message] of [
       ['composeDaemonProviderCore({})', 'neutral owner constructs a session bundle'],
       ['mountHealthRoutes(app, {})', 'second route table'],
     ]) {
-      const changed = original.replace(
+      const changed = http.text.replace(
         '  const resourcePackageBinding = composeResourcePackageBinding(input)',
-        `  ${addition}\n  const resourcePackageBinding = composeResourcePackageBinding(input)`,
+        `  ${addition}
+  const resourcePackageBinding = composeResourcePackageBinding(input)`,
       )
-      expect(changed).not.toBe(original)
-      const observed = neutralHttpViolations(
-        units.map((unit) => (unit === server ? sourceUnit(server.path, changed) : unit)),
-      )
-      expect(observed.some((error) => error.includes(message!))).toBe(true)
+      expect(changed).not.toBe(http.text)
+      expect(
+        neutralHttpViolations(
+          units.map((unit) => (unit === http ? sourceUnit(http.path, changed) : unit)),
+        ).some((error) => error.includes(message!)),
+      ).toBe(true)
     }
-    const duplicated = original.replace(
-      '  const application = composeProviderAppDeps(http.composition)',
-      '  composeProviderAppDeps(http.composition)\n  const application = composeProviderAppDeps(http.composition)',
+    const graph = units.find((unit) => unit.path === PREFIX + 'bootstrap/daemonApplication.ts')!
+    const duplicate = graph.text.replace(
+      'composeProviderAppDeps(http.composition)',
+      '(composeProviderAppDeps(http.composition), composeProviderAppDeps(http.composition))',
     )
+    expect(duplicate).not.toBe(graph.text)
     expect(
       neutralHttpViolations(
-        units.map((unit) => (unit === server ? sourceUnit(server.path, duplicated) : unit)),
+        units.map((unit) => (unit === graph ? sourceUnit(graph.path, duplicate) : unit)),
       ),
-    ).toContain('server.ts: composeSqliteApplicationDeps must call composeProviderAppDeps once')
+    ).toContain(
+      'bootstrap/daemonApplication.ts: composeDaemonApplication must call composeProviderAppDeps once',
+    )
+    const fixture = [
+      sourceUnit(PREFIX + 'server.ts', 'const alternate = app => mountHealthRoutes(app, {})'),
+      sourceUnit(
+        PREFIX + 'bootstrap/daemonHttpComposition.ts',
+        'function composeProviderAppComposition() { composeDaemonProviderCore({}) }',
+      ),
+    ]
+    expect(neutralHttpViolations(fixture)).toContain('neutral owner constructs a session bundle')
+    expect(neutralHttpViolations(fixture)).toContain(
+      'top-level: second route table (mountHealthRoutes)',
+    )
   })
   test('one installer, shared scheduler scope, complete migration and narrow fusion inputs', () => {
-    const server = units.find((unit) => unit.path === PREFIX + 'server.ts')!
+    const server = units.find(
+      (unit) => unit.path === PREFIX + 'bootstrap/daemonHttpComposition.ts',
+    )!
     expect(calls(server.source, 'createResourcePackagePluginInstaller')).toHaveLength(1)
     expect(calls(server.source, 'composeConfigConcurrencyHotApply')).toHaveLength(1)
     expect(server.source.text).toMatch(
@@ -188,10 +182,8 @@ describe('RFC-390 neutral HTTP binding', () => {
     expect(server.source.text).not.toContain('classicCatalogs.')
     expect(server.source.text).toContain('probeRunner: mcpRuntimeTests.probeRunner')
     expect(server.source.text).toContain('databaseTelemetry: input.databaseTelemetry')
-    const migration = calls(server.source, 'composeDatabaseMigrationModule')
-    expect(migration).toHaveLength(1)
-    expect(ts.isBinaryExpression(migration[0]!.parent)).toBe(true)
-    expect(migration[0]!.parent.getText(server.source)).toMatch(/^deps.databaseMigration \?\?/)
+    expect(calls(server.source, 'composeDatabaseMigrationModule')).toHaveLength(0)
+    expect(server.text).toContain('operations: input.databaseMigration')
     const fusion = units.find(
       (unit) => unit.path === PREFIX + 'modules/knowledge-evolution/inbound/fusionRoutes.ts',
     )!

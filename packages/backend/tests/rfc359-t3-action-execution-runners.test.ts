@@ -525,7 +525,7 @@ test('源码锁：三个组合根接上同一对 launcher 与终态观察者；�
   expect(bundle.match(/\.\.\.hostTasks,/g)).toHaveLength(2)
   const tasks = readFileSync(join(root, 'cli/daemonModules/taskExecution.ts'), 'utf8')
   expect(tasks).toContain('launch: provider.routeLaunch.workflow')
-  for (const file of ['bootstrap/daemonApplication.ts', 'server.ts']) {
+  for (const file of ['bootstrap/daemonApplication.ts']) {
     const source = readFileSync(join(root, file), 'utf8')
     expect(source).toContain('composeDaemonDevelopmentAutomationModules({')
     expect(source).toContain('hostTasks: taskExecutionModules.hostTasks')

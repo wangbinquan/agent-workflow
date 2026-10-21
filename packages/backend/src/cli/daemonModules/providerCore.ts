@@ -1,9 +1,6 @@
 import type { Actor } from '@/auth/actor'
 import { admitDaemonIdentity, actorOfDirectAuthority } from '@/auth/session'
-import {
-  ALWAYS_WRITABLE_DATABASE_SOURCE,
-  type DatabaseSourceWriteWindow,
-} from '@/auth/application/authPersistence'
+import { type DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { type AuthRuntime } from '@/auth/application/authRuntime'
 import { type TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
 import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
@@ -73,7 +70,7 @@ export interface DaemonProviderCoreCommonInput {
    * RFC-349 T10 — false while a migration has frozen the selected source. Only
    * daemon bootstrap supplies one; everything else stays always-writable.
    */
-  readonly sourceWriteWindow?: DatabaseSourceWriteWindow
+  readonly sourceWriteWindow: DatabaseSourceWriteWindow
   readonly realtimePolicy: RealtimeCompositionPolicy
   readonly onCredentialRevoked: (reason: DaemonCredentialRevocationReason) => void
   readonly identityEvents: DaemonIdentityAccessEventSink
@@ -156,7 +153,7 @@ export function composeDaemonProviderCore<P extends DatabaseProvider>(
   )
   const repositoryTransportCredentialRepository =
     new DrizzleRepositoryTransportCredentialRepository(input.db)
-  const sourceWriteWindow = input.sourceWriteWindow ?? ALWAYS_WRITABLE_DATABASE_SOURCE
+  const sourceWriteWindow = input.sourceWriteWindow
   const authRuntime = createAuthRuntimeFor({
     db: input.db,
     onCredentialRevoked: input.onCredentialRevoked,

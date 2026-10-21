@@ -185,6 +185,8 @@ const PROSE =
 const NAMED_ROOTS: ReadonlySet<string> = new Set([
   'server.ts',
   'bootstrap/daemonApplication.ts',
+  'bootstrap/daemonHttpComposition.ts',
+  'bootstrap/developmentPurposeRoot.ts',
   'bootstrap/daemonSession.ts',
   'bootstrap/daemonSessionAdapters.ts',
 ])

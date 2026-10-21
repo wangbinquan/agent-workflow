@@ -18,7 +18,6 @@
         "bootstrap/daemonSession.ts -> composition",
         "bootstrap/maintenanceWorkerGraph.ts -> composition",
         "cli/daemonModules/digitalEmployee.ts -> composition",
-        "cli/daemonModules/digitalEmployee.ts -> public/types",
         "cli/daemonModules/integration.ts -> composition",
         "cli/daemonModules/integration.ts -> public/events",
         "cli/daemonModules/resourceCatalog.ts -> composition",
@@ -38,8 +37,6 @@
         "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/types",
         "platform/background/maintenanceJobRunner.ts -> public/commands",
         "routes/digitalEmployees.ts -> composition",
-        "server.ts -> composition",
-        "server.ts -> public/types",
         "services/digitalEmployeeAgentTemplates.ts -> public/participants"
       ]
     },
@@ -79,8 +76,7 @@
         "modules/task-execution/application/taskLifecycleConsumers.ts -> public/participants",
         "modules/task-execution/public/events.ts -> public/types",
         "routes/eventCenter.ts -> composition",
-        "routes/webhookDeliveries.ts -> composition",
-        "server.ts -> composition"
+        "routes/webhookDeliveries.ts -> composition"
       ]
     },
     "execution-contract": {
@@ -101,8 +97,7 @@
         "modules/resource-catalog/infrastructure/legacy/agent.ts -> public/commands",
         "modules/task-execution/application/adapters/execution-contract-adapter.ts -> composition/required-ports",
         "modules/task-execution/composition/digitalEmployeeExecution.ts -> public/types",
-        "routes/executionContracts.ts -> public/types",
-        "server.ts -> composition"
+        "routes/executionContracts.ts -> public/types"
       ]
     }
   },

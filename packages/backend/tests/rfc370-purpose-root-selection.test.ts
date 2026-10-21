@@ -1,6 +1,6 @@
 // RFC-370: bootstrap chooses complete purpose pairs before any staging/program effect.
 import { describe, expect, test } from 'bun:test'
-import { composeDevelopmentPurposeRoot } from '@/server'
+import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
 import type { AdapterConfigurationReference } from '@/modules/integration/public/participants'
 import {
   MemoryPurposeContent,

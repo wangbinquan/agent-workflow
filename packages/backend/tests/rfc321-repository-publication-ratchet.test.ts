@@ -260,7 +260,6 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'packages/backend/src/modules/digital-employee/application/runtimeService.ts',
     )
     const composition = read('packages/backend/src/modules/source-control/composition.ts')
-    const server = read('packages/backend/src/server.ts')
     const cli = read('packages/backend/src/bootstrap/daemonApplication.ts')
 
     expect(commitPush).toContain('subject: publicationSubject')
@@ -289,7 +288,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     }
     expect(cli).toContain('repository: repositoryCredentials')
     expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
-      'input.repositoryTransport ?? composeRepositoryTransportCredentials',
+      'composeRepositoryTransportCredentials',
     )
     expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
       'repositoryTransport: repositoryTransport.adminConnections',
@@ -304,8 +303,8 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(read('packages/backend/src/bootstrap/daemonSession.ts')).toContain(
       'await lifecycleProgram.initialize(input.initializeExecution)',
     )
-    // Task execution, both employee bundles and the neutral HTTP owner share the selected repository.
-    expect(server.match(/repository: repositoryBootstrap,/g)).toHaveLength(4)
+    // Task execution, both employee bundles, the HTTP owner and the returned graph share this repository.
+    expect(cli.match(/repository: repositoryCredentials,/g)).toHaveLength(5)
   })
 
   test('personal credential routes are interactive-session-only and never accept PAT access', () => {
@@ -409,9 +408,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(developmentRest).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')
 
     const repository = read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')
-    expect(repository).toContain(
-      'input.repositoryTransport ?? composeRepositoryTransportCredentials',
-    )
+    expect(repository).toContain('composeRepositoryTransportCredentials')
     expect(read('packages/backend/src/cli/daemonModules/repositoryCredentials.ts')).toContain(
       'repositoryTransport: repositoryTransport.adminConnections',
     )

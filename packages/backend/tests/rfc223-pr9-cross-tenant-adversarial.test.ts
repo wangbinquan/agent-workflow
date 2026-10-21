@@ -10,6 +10,7 @@
 //
 // Existing strong coverage is intentionally not duplicated:
 //   - portable import 0/1/N + stale mapping: rfc223-import-refs.test.ts
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 //   - five-type transfer collision + workflow exception:
 //     rfc223-owner-transfer.test.ts
@@ -33,7 +34,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { docVersions, mcps, memories, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { __setProbeOptionsForTesting } from '../src/routes/mcps'
-import { createApp } from '../src/server'
 import { createAgent, renameAgent } from '../src/services/agent'
 import {
   approveFusion,
@@ -67,6 +67,8 @@ import { composeFusionOperationsFor } from '../src/modules/knowledge-evolution/c
 import { composeTestFusionTasks } from './helpers/fusionTaskBundle'
 import { createFileFusionWorkspaceEffects } from '../src/modules/source-control/composition'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -509,14 +511,18 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       type: 'local',
       config: JSON.stringify({ command: ['tenant-b-command'] }),
     })
-    const app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: TOKEN,
-      configPath: '/tmp/aw-rfc223-pr9-config-never-used.json',
-      opencodeVersion: '1.14.25',
-      dbVersion: 1,
-      db,
-    })
+    const app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: db },
+        {
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: TOKEN,
+          configPath: '/tmp/aw-rfc223-pr9-config-never-used.json',
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+        },
+      )
+    ).app
     const detail = await apiReq(app, `/api/mcps/${mcpB}`)
     expect(detail.status).toBe(200)
     const expectedConfigHash = ((await detail.json()) as { operationConfigHash: string })

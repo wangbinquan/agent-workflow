@@ -32,10 +32,7 @@ function calls(source: ts.SourceFile, expression: string) {
 
 test('real boot and HTTP roots choose one complete input receiver for both intake and materialization', () => {
   // RFC-383: roots forward their selection; the one bundle chooses and shares the receiver.
-  for (const [path, receiver] of [
-    ['bootstrap/daemonApplication.ts', 'input'],
-    ['server.ts', 'deps'],
-  ] as const) {
+  for (const [path, receiver] of [['bootstrap/daemonApplication.ts', 'input']] as const) {
     const root = load(path)
     const forwarded = calls(root, 'composeDaemonDigitalEmployeeModules')
     expect(forwarded).toHaveLength(1)

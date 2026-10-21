@@ -45,6 +45,7 @@ const compact = (node: ts.Node, file: ts.SourceFile): string =>
 const start = source('cli/start.ts')
 const pg = source('bootstrap/daemonApplication.ts')
 const server = source('server.ts')
+const owner = source('bootstrap/daemonHttpComposition.ts')
 const provider = source('modules/task-execution/composition/providerRuntime.ts')
 const bundle = source('cli/daemonModules/taskExecution.ts')
 
@@ -73,9 +74,7 @@ test('daemon selected archive binding survives provider creation and re-composit
   const http = calls(sqlite, start, 'composeProviderAppComposition')
   expect(http).toHaveLength(1)
   expect(compact(http[0]!.arguments[0]!, start)).toContain('taskExecution:taskExecutionModules,')
-  expect(compact(source('server.ts'), source('server.ts'))).toContain(
-    'taskArchiveMaintenance:taskExecutionProvider.archive,',
-  )
+  expect(compact(owner, owner)).toContain('taskArchiveMaintenance:taskExecutionProvider.archive,')
   expect(calls(sqlite, start, 'taskExecutionProvider.archive.recover')).toHaveLength(1)
 })
 
@@ -110,17 +109,10 @@ test('PostgreSQL boot and HTTP retain the same selected command', () => {
   expect(calls(root, pg, 'taskExecutionProvider.archive.recover')).toHaveLength(1)
 })
 
-test('the shared HTTP archive uses the bundle command and test fallback selects content once', () => {
+test('the shared HTTP archive uses the bundle command without rebuilding the selected content', () => {
   const mounts = calls(server, server, 'mountTaskArchiveRoutes')
   expect(mounts).toHaveLength(1)
   expect(compact(mounts[0]!.arguments[1]!, server)).toBe('input.taskExecution.archive')
-  expect(server.text).toContain('taskArchiveMaintenance: taskExecutionProvider.archive')
-  const fallback = calls(
-    declaration(server, 'composeSqliteApplicationDeps'),
-    server,
-    'composeDaemonTaskExecutionModules',
-  )
-  expect(fallback).toHaveLength(1)
-  expect(compact(fallback[0]!.arguments[0]!, server)).toContain('archive:deps.taskArchive,')
+  expect(owner.text).toContain('taskArchiveMaintenance: taskExecutionProvider.archive')
   expect(calls(server, server, 'createDrizzleTaskArchiveMaintenanceCommand')).toHaveLength(0)
 })

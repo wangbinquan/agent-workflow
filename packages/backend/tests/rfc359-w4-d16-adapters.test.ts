@@ -355,6 +355,7 @@ test('源码锁：Mcp 聚合没有 provider 命名的仓库 / 生命周期孪生
   for (const file of [
     'src/cli/daemonModules/resourceCatalog.ts',
     'src/server.ts',
+    'src/bootstrap/daemonHttpComposition.ts',
     'src/cli/start.ts',
     'src/bootstrap/daemonApplication.ts',
   ]) {

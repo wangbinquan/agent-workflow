@@ -1,4 +1,5 @@
 // RFC-384: pin one passive Intent graph, live defaults, maintenance activity and isolated run families on both providers.
+import { createProviderHttpCompositionFixture } from './helpers/providerHttpComposition'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -26,7 +27,6 @@ import {
   type MaintenanceServiceOptions,
 } from '@/platform/background/maintenanceService'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
-import { composeSqliteApplicationDeps, createComposedApp, type AppDeps } from '@/server'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunOptions,
@@ -36,7 +36,6 @@ import { createUser } from '@/services/users'
 import { createAgent } from '@/services/agent'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
-import { composeUnstartedApplication } from './helpers/providerHttpApplication'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { eventually } from './helpers/eventually'
@@ -529,54 +528,40 @@ describeEachProvider('RFC-384 intent bundle', (harness) => {
   })
 })
 
-describeEachProvider(
-  'RFC-384 SQLite HTTP injection boundary',
-  (harness) => {
-    test('HTTP preserves the session graph without constructing fallback members, and rejects an ignored fixture', async () => {
-      const binding = harness.applicationBinding
-      if (binding.provider !== 'sqlite') throw new Error('SQLite injection boundary required')
-      const f = fixture(harness),
-        bundle = composeDaemonIntentModules(f.input)
-      await f.employee.platformTools.load()
-      await f.employee.module.maintenance.ready()
-      const deps: AppDeps = {
-        db: binding.db,
-        token: 'rfc384-http',
-        dbVersion: 0,
-        opencodeVersion: null,
-        appHome: f.input.appHome,
-        configPath: join(f.input.appHome, 'config.json'),
-        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 8)),
-        providerCore: f.core,
-        resourceCatalogModules: f.tasks.resourceCatalog,
-        digitalEmployeeModules: f.employee,
-        developmentAutomationModules: f.automation,
-        intentModules: bundle,
-      }
-      expect(() => composeSqliteApplicationDeps({ ...deps, intentTestDependencies: {} })).toThrow(
-        'intent-modules-and-test-dependencies-conflict',
-      )
-      const apply = spyOn(applyComposition, 'composeIntentApplyOperations'),
-        catalog = spyOn(resourceComposition, 'composeIntentResourceCatalogBinding'),
-        persistence = spyOn(persistenceComposition, 'composeIntentPersistence')
-      const opened = await composeUnstartedApplication((scope) => {
-        const composed = composeSqliteApplicationDeps(deps, scope)
-        expect(composed.intentModules).toBe(bundle)
-        expect(composed.intentModules.applyOperations).toBe(bundle.applyOperations)
-        expect(composed.intentModules.persistence).toBe(bundle.persistence)
-        expect(composed.intentModules.resourceCatalogFor).toBe(bundle.resourceCatalogFor)
-        return { app: createComposedApp(composed) }
-      })
-      try {
-        for (const constructor of [apply, catalog, persistence])
-          expect(constructor).not.toHaveBeenCalled()
-      } finally {
-        await opened.dispose()
-        apply.mockRestore()
-        catalog.mockRestore()
-        persistence.mockRestore()
-      }
+describeEachProvider('RFC-384 HTTP injection boundary', (harness) => {
+  test('HTTP preserves the supplied intent routes without constructing fallback members', async () => {
+    const f = fixture(harness),
+      bundle = composeDaemonIntentModules(f.input)
+    await f.employee.platformTools.load()
+    await f.employee.module.maintenance.ready()
+    const opened = await createProviderHttpCompositionFixture(harness, {
+      token: 'rfc384-http',
+      dbVersion: 0,
+      appHome: f.input.appHome,
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 8)),
     })
-  },
-  { providers: ['sqlite'] },
-)
+    const apply = spyOn(applyComposition, 'composeIntentApplyOperations'),
+      catalog = spyOn(resourceComposition, 'composeIntentResourceCatalogBinding'),
+      persistence = spyOn(persistenceComposition, 'composeIntentPersistence')
+    const http = opened.compose({
+      core: f.core,
+      resourceCatalog: f.tasks.resourceCatalog,
+      digitalEmployee: f.employee,
+      developmentAutomation: f.automation,
+      intent: bundle,
+    })
+    expect(http.composition.intent).toBe(bundle.routes)
+    expect(bundle.applyOperations).toBeDefined()
+    expect(bundle.persistence).toBeDefined()
+    expect(bundle.resourceCatalogFor).toBeDefined()
+    try {
+      for (const constructor of [apply, catalog, persistence])
+        expect(constructor).not.toHaveBeenCalled()
+    } finally {
+      await opened.dispose()
+      apply.mockRestore()
+      catalog.mockRestore()
+      persistence.mockRestore()
+    }
+  })
+})

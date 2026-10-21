@@ -1,8 +1,4 @@
 // RFC-383: one digital-employee module and its satellites per provider session.
-import type {
-  EmployeeCaseDetailProjectionParticipant,
-  DigitalEmployeePlatformToolCatalogParticipant,
-} from '@/modules/digital-employee/public/types'
 import {
   composeDigitalEmployee,
   createProgramArtifactStore,
@@ -63,7 +59,7 @@ import type { ResourceAcl, UpdateResourceAclBody } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import type { Logger } from '@/util/log'
-import type { SelectedDevelopmentPurposeRoot } from '@/server'
+import type { SelectedDevelopmentPurposeRoot } from '@/modules/development-automation/composition'
 import type { DaemonProviderCore } from './providerCore'
 import type { DaemonResourceCatalogModules } from './resourceCatalog'
 import type { DaemonRepositoryCredentials } from './repositoryCredentials'
@@ -118,10 +114,6 @@ export interface DaemonDigitalEmployeeInput {
     readonly programFixtureProcess?: Parameters<
       typeof createExecutionContractProgramFixtureAdapter
     >[0]['process']
-    /** Existing direct-HTTP fixture overrides; removed with those fallbacks in RFC-386. */
-    readonly platformTools?: EmployeeOptions['platformTools'] & { load?(): Promise<void> }
-    readonly executionContracts?: ReturnType<typeof composeExecutionContract>
-    readonly caseDetailProjection?: EmployeeCaseDetailProjectionParticipant
   }
 }
 
@@ -130,46 +122,25 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
   const { db, appHome, resources, repository, integration, taskExecution, log } = input
   const employeePrograms = input.adapters?.employeePrograms ?? createProgramArtifactStore(appHome)
   const programToolSource = createArtifactProgramToolSource(employeePrograms)
-  const executionContracts =
-    input.adapters?.executionContracts ??
-    composeExecutionContract({
-      resources: createExecutionContractResourceAdapter(
-        db,
-        developmentImplicitAgentContractDeclarations,
-      ),
-      registrations: developmentExecutionContractRegistrations,
-      programFixtures: createExecutionContractProgramFixtureAdapter({
-        appHome,
-        programs: programToolSource,
-        process: input.adapters?.programFixtureProcess,
-      }),
-    })
-  const platformTools =
-    input.adapters?.platformTools === undefined
-      ? composeDigitalEmployeeBuiltinToolCatalog({
-          agentTemplates: resources.digitalEmployeeAgentTemplates,
-          typePackageDescriptorJsons: async () => [
-            ...(await composeDigitalEmployeeBootstrapReadsFor(db).listTypePackageDescriptorJsons()),
-            developmentEmployeeTypePackage.descriptorJson,
-          ],
-        })
-      : Object.freeze({
-          listJson: (
-            ...args: Parameters<DigitalEmployeePlatformToolCatalogParticipant['listJson']>
-          ) => input.adapters!.platformTools!.listJson(...args),
-          getRevisionJson: (
-            ...args: Parameters<DigitalEmployeePlatformToolCatalogParticipant['getRevisionJson']>
-          ) => input.adapters!.platformTools!.getRevisionJson(...args),
-          resolveCompatibleRevisionJson: (
-            ...args: Parameters<
-              NonNullable<
-                DigitalEmployeePlatformToolCatalogParticipant['resolveCompatibleRevisionJson']
-              >
-            >
-          ) => input.adapters!.platformTools!.resolveCompatibleRevisionJson?.(...args) ?? null,
-          isPlatformTool: (id: string) => input.adapters!.platformTools!.isPlatformTool(id),
-          load: () => input.adapters!.platformTools!.load?.() ?? Promise.resolve(),
-        })
+  const executionContracts = composeExecutionContract({
+    resources: createExecutionContractResourceAdapter(
+      db,
+      developmentImplicitAgentContractDeclarations,
+    ),
+    registrations: developmentExecutionContractRegistrations,
+    programFixtures: createExecutionContractProgramFixtureAdapter({
+      appHome,
+      programs: programToolSource,
+      process: input.adapters?.programFixtureProcess,
+    }),
+  })
+  const platformTools = composeDigitalEmployeeBuiltinToolCatalog({
+    agentTemplates: resources.digitalEmployeeAgentTemplates,
+    typePackageDescriptorJsons: async () => [
+      ...(await composeDigitalEmployeeBootstrapReadsFor(db).listTypePackageDescriptorJsons()),
+      developmentEmployeeTypePackage.descriptorJson,
+    ],
+  })
   const writerCutover = composeDigitalEmployeeWriterCutoverFor(db)
   const employeeInputArtifacts =
     input.adapters?.employeeInputArtifacts ??
@@ -223,11 +194,9 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
       ...sourceControl,
     },
   })
-  const caseDetailProjection =
-    input.adapters?.caseDetailProjection ??
-    composeDevelopmentEmployeeCaseDetailProjection(
-      createDevelopmentEmployeeCaseWorkspaceDetailReader(db),
-    )
+  const caseDetailProjection = composeDevelopmentEmployeeCaseDetailProjection(
+    createDevelopmentEmployeeCaseWorkspaceDetailReader(db),
+  )
   const module = composeDigitalEmployee({
     db,
     appHome,

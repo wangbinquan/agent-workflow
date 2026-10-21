@@ -200,7 +200,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewObjectSweep.ts -> system-operations',
     'packages/backend/src/modules/collaboration/public/commands.ts -> memory',
     'packages/backend/src/modules/development-automation/composition/crewstationEvidence.ts -> system-operations',
-    'packages/backend/src/modules/development-automation/composition/pipelineEvidence.ts -> integration',
+    'packages/backend/src/modules/development-automation/composition.ts -> integration',
     'packages/backend/src/modules/development-automation/infrastructure/crewstation/evidenceArtifacts.ts -> system-operations',
     'packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts -> integration',
     'packages/backend/src/modules/development-automation/infrastructure/local/legacyPipelineEvidence.ts -> integration',
@@ -324,8 +324,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort#port-literal#1',
     'packages/backend/src/modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort#port-literal#2',
     'packages/backend/src/platform/http/executionAvailability.ts#readExecutionStatus#comparison#1',
-    'packages/backend/src/server.ts#createComposedApp.deploymentMode#comparison#1',
-    'packages/backend/src/server.ts#createHttpRequestApp.response#comparison#1',
   ],
   'export-star-barrels': [
     'packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts',

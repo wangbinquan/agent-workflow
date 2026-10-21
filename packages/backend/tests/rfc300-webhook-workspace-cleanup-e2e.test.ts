@@ -39,7 +39,7 @@ import {
 } from './helpers/integrationTriggerResourceBinding'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
-import { composeSqliteUnstartedApplication } from './helpers/providerHttpApplication'
+import { createProviderHttpApplicationFromBinding } from './helpers/providerHttpApplication'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { finishClaimedWebhookWorkspacePrune } from '../src/services/gc'
 import { registerTerminalWorkspacePrunePolicy, setTaskStatus } from '../src/services/lifecycle'
@@ -546,16 +546,18 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     getDefaultRuntime: async () => null,
     terminalControl,
   })
-  const application = await composeSqliteUnstartedApplication({
-    token: 'a'.repeat(64),
-    configPath,
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-    secretBox: box,
-    webhookDispatcher: dispatcher,
-    webhookTerminalControl: terminalControl,
-  })
+  const application = await createProviderHttpApplicationFromBinding(
+    { provider: 'sqlite', db },
+    {
+      token: 'a'.repeat(64),
+      configPath,
+      opencodeVersion: '1.14.25',
+      dbVersion: 1,
+      secretBox: box,
+      webhookDispatcher: dispatcher,
+      webhookTerminalControl: terminalControl,
+    },
+  )
 
   const app = application.app
   const mrBody = (action: 'open' | 'close') =>

@@ -24,7 +24,6 @@ import { composeCapabilityTemplateOperations } from '../src/modules/code-capabil
 
 import type { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import type { createApp } from '../src/server'
 import { capabilityTemplates } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { createCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/capabilityTemplatePersistence'
@@ -403,7 +402,7 @@ describeEachProvider('RFC-309 — the template routes', (harness) => {
 
     const TOKEN = 'a'.repeat(64)
 
-    let app: ReturnType<typeof createApp>
+    let app: Hono
 
     beforeEach(async () => {
       ownedHome = createFixtureDirectory(

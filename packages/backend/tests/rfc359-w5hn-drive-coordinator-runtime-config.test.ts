@@ -13,7 +13,7 @@ function carriesConfiguration(source: string, factory: string) {
   )
 }
 test('all root callers share one coordinator with the complete live projection', () => {
-  for (const root of ['server.ts', 'bootstrap/daemonApplication.ts']) {
+  for (const root of ['bootstrap/daemonApplication.ts']) {
     const source = readFileSync(resolve(SRC, root), 'utf8')
     expect(source.match(/composeDaemonTaskExecutionModules\(/g)).toHaveLength(1)
     expect(source).not.toMatch(/(?:createTaskDriveCoordinator|new DefaultTaskDriveCoordinator)\(/)

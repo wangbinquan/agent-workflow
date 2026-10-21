@@ -8,6 +8,7 @@
 // the e2e tests) + a tiny workflow: input → designer (agent producing
 // kind=markdown 'design' port) → reviewDesign (review node) → output.
 
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -19,7 +20,6 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { docVersions, nodeRunOutputs, nodeRuns, reviewComments, tasks } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import {
@@ -41,6 +41,8 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTaskBase,
 } from './helpers/taskExecutionTestTopology'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
@@ -624,14 +626,18 @@ describe('RFC-005 review REST endpoints', () => {
   const HEADERS = { Authorization: 'Bearer tok' }
 
   test('GET /api/reviews lists pending reviews + GET /:nodeRunId returns detail', async () => {
-    const app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: 'tok',
-      configPath: '',
-      opencodeVersion: '1.14.99',
-      dbVersion: 1,
-      db: h.db,
-    })
+    const app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: h.db },
+        {
+          appHome: h.appHome,
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: 'tok',
+          opencodeVersion: '1.14.99',
+          dbVersion: 1,
+        },
+      )
+    ).app
 
     process.env.AGENT_WORKFLOW_HOME = h.appHome
     const listRes = await app.fetch(
@@ -651,14 +657,18 @@ describe('RFC-005 review REST endpoints', () => {
   })
 
   test('GET /api/reviews/pending-count returns the badge count', async () => {
-    const app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: 'tok',
-      configPath: '',
-      opencodeVersion: '1.14.99',
-      dbVersion: 1,
-      db: h.db,
-    })
+    const app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: h.db },
+        {
+          appHome: h.appHome,
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: 'tok',
+          opencodeVersion: '1.14.99',
+          dbVersion: 1,
+        },
+      )
+    ).app
     const res = await app.fetch(
       new Request('http://localhost/api/reviews/pending-count', { headers: HEADERS }),
     )
@@ -668,14 +678,18 @@ describe('RFC-005 review REST endpoints', () => {
   })
 
   test('POST /api/reviews/:nodeRunId/comments + DELETE round-trip', async () => {
-    const app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: 'tok',
-      configPath: '',
-      opencodeVersion: '1.14.99',
-      dbVersion: 1,
-      db: h.db,
-    })
+    const app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: h.db },
+        {
+          appHome: h.appHome,
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: 'tok',
+          opencodeVersion: '1.14.99',
+          dbVersion: 1,
+        },
+      )
+    ).app
     const addRes = await app.fetch(
       new Request(`http://localhost/api/reviews/${h.reviewNodeRunId}/comments`, {
         method: 'POST',
@@ -714,14 +728,18 @@ describe('RFC-005 review REST endpoints', () => {
   })
 
   test('POST /api/reviews/:nodeRunId/decision approve → ok', async () => {
-    const app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: 'tok',
-      configPath: '',
-      opencodeVersion: '1.14.99',
-      dbVersion: 1,
-      db: h.db,
-    })
+    const app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: h.db },
+        {
+          appHome: h.appHome,
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: 'tok',
+          opencodeVersion: '1.14.99',
+          dbVersion: 1,
+        },
+      )
+    ).app
     const res = await app.fetch(
       new Request(`http://localhost/api/reviews/${h.reviewNodeRunId}/decision`, {
         method: 'POST',
@@ -749,14 +767,18 @@ describe('RFC-005 review REST endpoints', () => {
   })
 
   test('POST /api/reviews/:nodeRunId/decision reject without reason → 422', async () => {
-    const app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: 'tok',
-      configPath: '',
-      opencodeVersion: '1.14.99',
-      dbVersion: 1,
-      db: h.db,
-    })
+    const app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: h.db },
+        {
+          appHome: h.appHome,
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: 'tok',
+          opencodeVersion: '1.14.99',
+          dbVersion: 1,
+        },
+      )
+    ).app
     const res = await app.fetch(
       new Request(`http://localhost/api/reviews/${h.reviewNodeRunId}/decision`, {
         method: 'POST',

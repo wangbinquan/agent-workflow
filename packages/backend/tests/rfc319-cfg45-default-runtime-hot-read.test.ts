@@ -118,7 +118,7 @@ describe('RFC-319 CFG-45 —— 默认运行时的热读', () => {
 
   // RFC-382: all former root sites now share this one live getter.
   test('三个组合根里的每一台长驻协调器都接上了热读（枚举，不是点名）', () => {
-    for (const relative of ['server.ts', 'bootstrap/daemonApplication.ts']) {
+    for (const relative of ['bootstrap/daemonApplication.ts']) {
       const source = readFileSync(resolve(ROOT, 'packages/backend/src', relative), 'utf8')
       expect(source).not.toMatch(/(?:createTaskDriveCoordinator|new DefaultTaskDriveCoordinator)\(/)
       expect(source.match(/composeDaemonTaskExecutionModules\(/g)).toHaveLength(1)
@@ -299,8 +299,8 @@ test('RFC-381 roots connect fusion adapters and routes to the same live session 
     expect(fusion[1]).toContain('cancellation')
   }
   expect(pg).toContain('fusion: fusionModules')
-  const http = source('server.ts')
-  expect(http).toContain('tasks: taskExecutionModules.fusion')
+  const http = source('bootstrap/daemonHttpComposition.ts')
+  expect(pg).toContain('tasks: taskExecutionProvider.fusion')
   expect(http).toContain('operations: fusionOperations')
   expect(source('modules/knowledge-evolution/inbound/fusionRoutes.ts')).not.toContain(
     'launchConfiguration',

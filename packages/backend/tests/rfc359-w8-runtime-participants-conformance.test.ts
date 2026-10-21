@@ -619,8 +619,6 @@ test('第 12 刀 · 引擎差异只剩三个端口：认领策略 / 活跃度 / 
     'finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId)',
   )
   expect(graph).not.toContain('finishClaimedWebhookWorkspacePrune')
-  const http = readFileSync(resolve(import.meta.dir, '../src/server.ts'), 'utf8')
-  expect(http).toContain('await finishClaimedWebhookWorkspacePrune(deps.db, taskId)')
   expect(
     graph.match(
       /finalizeWorkspace: \(taskId\) => workspaceMaintenance\.finalizeClaimedWorkspace\(taskId\)/g,

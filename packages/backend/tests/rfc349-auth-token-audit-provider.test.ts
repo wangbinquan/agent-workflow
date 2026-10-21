@@ -46,7 +46,7 @@ describeEachProviderHttpApplication(
       }
       expect(facade).toContain('legacyTokenCallAudit')
       expect(facade).not.toContain('export function listTokenAudit')
-      const server = source('src/server.ts')
+      const server = source('src/bootstrap/daemonHttpComposition.ts')
       expect(server).toContain('core.tokenCallAudit.listForUser(userId)')
       expect(server).toContain('core.tokenCallAudit.list()')
       expect(application).not.toContain('DbClient')

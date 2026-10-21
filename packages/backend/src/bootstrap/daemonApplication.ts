@@ -5,7 +5,7 @@ import {
   type DaemonApplicationProvider,
   type DaemonApplicationDatabase,
 } from './daemonSessionAdapters'
-import type { ProviderAppOwnerInput } from '@/server'
+import { composeProviderAppComposition, type ProviderAppOwnerInput } from './daemonHttpComposition'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { DEFAULT_DISTILL_POLICY, resolveDistillPolicy } from '@agent-workflow/shared'
@@ -69,9 +69,10 @@ import type { ScratchWorkspaceEffects } from '@/modules/source-control/compositi
 import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
 import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
-import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
+import type { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
-import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
+import { composeDevelopmentPurposeRoot } from './developmentPurposeRoot'
+import type { DevelopmentPurposeSelection } from '@/modules/development-automation/composition'
 import type { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import {
   composeLocalTaskRunRootSelection,
@@ -119,14 +120,8 @@ import {
   type DaemonStartupLease,
 } from '@/modules/system-operations/composition'
 import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
-import {
-  composeApplicationConfigurationBinding,
-  type ApplicationConfigurationBinding,
-} from '@/modules/system-operations/composition/applicationConfiguration'
-import type {
-  ApplicationConfigurationQueries,
-  DaemonRuntimeQueries,
-} from '@/modules/system-operations/public/queries'
+import { type ApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
+import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 import {
   type EmployeeCaseWorkspaceEffectsFactory,
   type RepositoryRemoteEffects,
@@ -202,7 +197,7 @@ import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-ca
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { materializingSpaces } from '@/services/gc'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
-import { createLogger } from '@/util/log'
+import type { createLogger } from '@/util/log'
 import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
@@ -212,10 +207,8 @@ import { batchOwnerUserId } from '@/services/repoBatchImport'
 import { redactEventPayload } from '@/services/tokenRedaction'
 import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
 import {
-  composeProviderAppComposition,
   composeProviderAppDeps,
   createComposedApp,
-  type UnstartedApplicationScope,
   type ProviderAppCompositionInput,
 } from '@/server'
 import { buildWebSocketAdapter } from '@/ws/server'
@@ -230,21 +223,28 @@ import type {
   EmployeeInputArtifactPort,
 } from '@/modules/digital-employee/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
+import type { LocalMcpDiagnosticsCompositionInput as McpDiagnosticsCompositionInput } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
+import type { McpDiagnosticsRuntime } from '@/modules/resource-catalog/composition/mcpDiagnostics'
+
+/** Owned finite resource initialization and runtime-test composition for one application. */
+export interface UnstartedApplicationScope {
+  readonly trackReady: <T>(ready: Promise<T>) => Promise<T>
+  readonly createMcpRuntimeTests: (deps: McpDiagnosticsCompositionInput) => McpDiagnosticsRuntime
+}
 
 export interface DaemonApplicationInput<P extends DatabaseProvider = DatabaseProvider> {
   readonly digitalEmployeeTypePackageDriftPolicy?: 'reject' | 'draft-overlay'
   readonly provider: DaemonApplicationProvider<P>
   readonly db: DaemonApplicationDatabase<P>
   readonly config: Config
-  readonly log?: ReturnType<typeof createLogger>
+  readonly log: ReturnType<typeof createLogger>
   readonly runtimeLegacyConfiguration?: RuntimeLegacyConfigurationPort
   readonly dbPath?: string
   readonly token: string
   readonly appHome: string
   readonly configPath: string
-  readonly configuration?: ApplicationConfigurationQueries
-  readonly applicationConfiguration?: ApplicationConfigurationBinding
-  readonly taskLaunchConfiguration?: ReturnType<typeof composeTaskLaunchConfiguration>
+  readonly applicationConfiguration: ApplicationConfigurationBinding
+  readonly taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>
   readonly taskArchive?: TaskArchiveContentBinding
   readonly skillContent?: SkillContentBinding
   readonly employeePrograms?: ProgramArtifactPort
@@ -324,64 +324,33 @@ export interface DaemonApplicationInput<P extends DatabaseProvider = DatabasePro
   readonly workspacePresence?: WorkspacePresenceQueries
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   /** RFC-349 T10 — see `DatabaseSourceWriteWindow`; bootstrap supplies the live one. */
-  readonly sourceWriteWindow?: DatabaseSourceWriteWindow
+  readonly sourceWriteWindow: DatabaseSourceWriteWindow
   readonly databaseMigration: DatabaseMigrationModule
   readonly dbVersion: number
-  /**
-   * RFC-159 / RFC-359 —— 覆盖定时任务 run-now 的启动闭包。生产不传（下面从
-   * `taskExecutionProvider.trigger` 取真的那个），测试注入桩，免得
-   * POST /:id/run-now 真去 spawn 一个 opencode 任务。
-   *
-   * 为什么补这个口子：SQLite 根**早就有**同形的可选覆盖（`server.ts` 的
-   * `buildScheduleLaunch?`，取值处 `deps.buildScheduleLaunch ?? …`），PG 根却没有
-   * ——两个组合根的**装配签名不对称**，而它恰好挡住 `scheduled-tasks-run-now`
-   * 的 AC-6 双引擎迁移。补成同形（默认值不变）比在测试里给 PG 开特例分支干净。
-   */
+  readonly maintenanceStatus?: NonNullable<
+    ProviderAppCompositionInput<P>['platform']['maintenance']['maintenanceStatus']
+  >
+  /** Test-only instance ports. The production session never supplies this object. */
+  readonly testSeams?: DaemonApplicationTestSeams<P>
+}
+
+export interface DaemonApplicationTestSeams<P extends DatabaseProvider = DatabaseProvider> {
   readonly buildScheduleLaunch?: BuildScheduleLaunch
-  /**
-   * RFC-284 T26 / RFC-359 —— 运行时诊断的测试注入口（生产两侧都省略）。
-   *
-   * 与 `buildScheduleLaunch` 同理：`RuntimesRouteDependencies`
-   * （`routes/runtimes.ts`）**本来就**声明了这个可选字段，SQLite 根也一直从
-   * `deps` 透传进去；PG 根只是没把它从自己的入参转下去，于是同一批运行时诊断
-   * 用例在 PG 上没法双跑。这里补的是一次纯透传，不改任何默认行为。
-   */
   readonly runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticDependencies>
-  /**
-   * RFC-257 / RFC-359 —— 覆盖 webhook 派发器。生产两侧都省略（PG 根自己构造、
-   * SQLite 根由 `cli/start.ts` 注入真的那个）；测试注入桩，免得真的去投递。
-   *
-   * 与另外两个覆盖口不同：两个根对它的**所有权**本来就不同，所以这里不是简单透传
-   * ——覆盖件只有部分能力时，事件中心那几处按 `supports*` 探测降级，与 `server.ts`
-   * 对同一件事的做法逐字同构。见 plan §5bi。
-   */
   readonly webhookDispatcher?: WebhookDispatcher
-  /**
-   * RFC-238 / RFC-359 —— MCP 运行时测试的测试接缝。生产两侧都省略（用真的 runner 与真时钟）。
-   *
-   * 与 `runtimeDiagnosticTestDependencies` 同类：SQLite 根一直把这三项条件展开进
-   * `composeLocalMcpDiagnostics(...)`（`server.ts` 的 `runFn` / `now` / `capacity`），
-   * PG 根建的是**同一个**服务却没转发它们，于是同一批用例在 PG 上没法双跑。
-   * `appHome` 不在这里——PG 根本来就从 `input.appHome` 取。
-   */
   readonly mcpRuntimeTestDependencies?: {
     readonly runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
     readonly now?: () => number
     readonly capacity?: number
   }
-  /**
-   * RFC-234 / RFC-359 —— 意图回合的 system-agent 运行接缝。生产两侧都省略。
-   * 与 MCP 那一个同理：`IntentSessionRouteDependencies` 本来就有 `runTurn`，
-   * SQLite 根一直条件展开进去（`server.ts:2750-2752`），PG 根没转发。
-   */
   readonly intentTestDependencies?: {
     readonly runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
   }
-  readonly maintenanceStatus?: NonNullable<
-    ProviderAppCompositionInput<P>['platform']['maintenance']['maintenanceStatus']
-  >
   readonly workflowRuntime?: ProviderAppCompositionInput<P>['resourceCatalog']['workflows']['runtime']
   readonly opencodeVersion?: string | null
+  readonly codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
+  readonly webhookTerminalControl?: ReturnType<typeof composeMrTerminalControl>
+  readonly systemOperations?: SelectedDaemonProviderCore<P>['systemOperations']
 }
 
 export type DaemonApplicationPhase =
@@ -453,7 +422,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
 ): Promise<DaemonApplication<P>> {
   const adapter = DAEMON_SESSION_ADAPTERS[input.provider.provider] as DaemonSessionAdapter<P>
   adapter.admitSelections(input)
-  const log = input.log ?? createLogger('daemon')
+  const log = input.log
   const developmentPurposeRoot = composeDevelopmentPurposeRoot({
     appHome: input.appHome,
     selection: input.developmentPurposes,
@@ -488,22 +457,9 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     selectedTaskRuns === undefined
       ? composeLocalTaskRunRootSelection({ nodeRunPrompts, portArtifacts })
       : selectedTaskRuns
-  const applicationConfiguration =
-    input.applicationConfiguration ??
-    composeApplicationConfigurationBinding({
-      kind: 'file',
-      configPath: input.configPath,
-      ...(input.configuration === undefined ? {} : { queries: input.configuration }),
-    })
+  const applicationConfiguration = input.applicationConfiguration
   const configuration = applicationConfiguration.queries
-  const taskLaunchConfiguration =
-    input.taskLaunchConfiguration ??
-    composeTaskLaunchConfiguration(
-      input.applicationConfiguration !== undefined ||
-        applicationConfiguration.synchronousQueries === undefined
-        ? { kind: 'selected', queries: configuration }
-        : { kind: 'local-sync', queries: applicationConfiguration.synchronousQueries },
-    )
+  const taskLaunchConfiguration = input.taskLaunchConfiguration
   const realtimePolicy = composeDaemonRealtimePolicy({
     resourceVisibility: {
       canViewResource: (actor, type, row) =>
@@ -516,13 +472,11 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     repoImportOwnerUserId: batchOwnerUserId,
     redactTaskEventPayload: redactEventPayload,
   })
-  const core = composeDaemonProviderCore({
+  const selectedCore = composeDaemonProviderCore({
     daemonToken: input.token,
     db: input.db,
     ...(input.credentials === undefined ? {} : { credentials: input.credentials }),
-    ...(input.sourceWriteWindow === undefined
-      ? {}
-      : { sourceWriteWindow: input.sourceWriteWindow }),
+    sourceWriteWindow: input.sourceWriteWindow,
     adapters: adapter.core(input),
     appHome: input.appHome,
     secretBox: input.secretBox,
@@ -544,6 +498,10 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       },
     },
   })
+  const core =
+    input.testSeams?.systemOperations === undefined
+      ? selectedCore
+      : Object.freeze({ ...selectedCore, systemOperations: input.testSeams.systemOperations })
   // Cold restore is a provider boot hook, not an HTTP/background operation.
   // Apply it while admission is still closed and before any owner module reads
   // the selected schema. A live non-empty target is rejected by the restore
@@ -573,8 +531,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       runtimeManagement: input.runtimeManagement ?? standalone.runtimeManagement,
       workspacePresence: () => input.workspacePresence ?? standalone.workspacePresence(),
     },
-    mcpRuntimeTestDependencies: input.mcpRuntimeTestDependencies,
-    runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies,
+    mcpRuntimeTestDependencies: input.testSeams?.mcpRuntimeTestDependencies,
+    runtimeDiagnosticTestDependencies: input.testSeams?.runtimeDiagnosticTestDependencies,
   })
   const { observationCalls, memorySystemAgentBinding, runtimeSessionLeases, mcpRuntimeTests } =
     observationModules
@@ -604,6 +562,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     repositoryWorkspaceStore: core.repositoryWorkspaceStore,
     repositoryWorkspaceOperations: core.repositoryWorkspaceOperations,
     repositoryTransportCredentialRepository: core.repositoryTransportCredentialRepository,
+    codeHostFetch: input.testSeams?.codeHostFetch,
     repositoryPublicationTransport: input.repositoryPublicationTransport,
     developmentWorkspaceRepositoryPreparation: input.developmentWorkspaceRepositoryPreparation,
   })
@@ -731,7 +690,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       customObserverPrograms: input.customObserverPrograms,
       beforeEventObservationWrite: input.beforeEventObservationWrite,
       crewStationEvents: input.crewStationEvents,
-      webhookDispatcher: input.webhookDispatcher,
+      webhookDispatcher: input.testSeams?.webhookDispatcher,
+      webhookTerminalControl: input.testSeams?.webhookTerminalControl,
     },
   })
   const { webhookTerminalControl, eventCenter } = integrationModules
@@ -816,7 +776,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     digitalEmployee: digitalEmployeeModules,
     adapters: {
       intentArtifacts: input.intentArtifacts,
-      httpTurnFixture: input.intentTestDependencies?.runFn,
+      httpTurnFixture: input.testSeams?.intentTestDependencies?.runFn,
     },
   })
   const http = composeProviderAppComposition({
@@ -825,7 +785,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     appHome: input.appHome,
     secretBox: input.secretBox,
     dbVersion: input.dbVersion,
-    opencodeVersion: phase.kind === 'daemon' ? null : (input.opencodeVersion ?? null),
+    opencodeVersion: phase.kind === 'daemon' ? null : (input.testSeams?.opencodeVersion ?? null),
     applicationConfiguration,
     executionAuthority: input.executionAuthority ?? composeLocalExecutionAuthority(),
     databaseTelemetry: input.provider.telemetry,
@@ -860,8 +820,9 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       repositoryRemote: input.repositoryRemote,
     },
     testSeams: {
-      workflowRuntime: phase.kind === 'daemon' ? undefined : input.workflowRuntime,
-      buildScheduleLaunch: input.buildScheduleLaunch,
+      codeHostRuntime: { codeHostFetch: input.testSeams?.codeHostFetch },
+      workflowRuntime: phase.kind === 'daemon' ? undefined : input.testSeams?.workflowRuntime,
+      buildScheduleLaunch: input.testSeams?.buildScheduleLaunch,
     },
   })
   // RFC-359 W3-T4（P0-3 / P0-4）：boot 恢复四步与 SQLite 同一段序列（composition/bootRecovery.ts）——

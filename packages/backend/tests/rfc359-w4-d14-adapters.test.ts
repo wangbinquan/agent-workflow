@@ -252,6 +252,7 @@ test('源码锁：Agent 聚合没有 provider 命名的仓库 / 语义 / 快照�
   for (const file of [
     'src/cli/daemonModules/resourceCatalog.ts',
     'src/server.ts',
+    'src/bootstrap/daemonHttpComposition.ts',
     'src/bootstrap/daemonApplication.ts',
   ]) {
     const source = /(?:^|\/)cli\/start\.ts$/.test(file)

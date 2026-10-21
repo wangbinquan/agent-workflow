@@ -19,6 +19,7 @@
 // case: two owners, one shared name, and two distinct frozen ids/runtime
 // profiles crossing generate → execute without a name-based mis-selection.
 
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
@@ -39,7 +40,6 @@ import {
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runtimes, tasks, workflows, workgroupTaskState } from '../src/db/schema'
-import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import {
   DW_GATE_CAUSE,
@@ -71,6 +71,8 @@ import { createLogger } from '../src/util/log'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -407,14 +409,18 @@ describe('RFC-223 PR-3b — live generate + save-as consume id form', () => {
   })
 
   test('save-as persists an id-canonical workflow (nodes carry agentId, not a token/name)', async () => {
-    const app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: 'a'.repeat(64),
-      configPath: '/tmp/aw-rfc223-pr3b-config.json',
-      opencodeVersion: '1.14.25',
-      dbVersion: 1,
-      db,
-    })
+    const app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: db },
+        {
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: 'a'.repeat(64),
+          configPath: '/tmp/aw-rfc223-pr3b-config.json',
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+        },
+      )
+    ).app
     const user = await createUser(db, {
       username: 'carol',
       displayName: 'carol',

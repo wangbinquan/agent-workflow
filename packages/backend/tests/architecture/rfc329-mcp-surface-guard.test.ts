@@ -25,6 +25,8 @@
 // 就会提前结束，后续路径永远不会发生，守卫会把它们误报成 uncovered。`TOOL_FIXTURES` 就是为
 // 这件事存在的（`list_repo_refs` 自 RFC-370 §10 V17 起按 id 一跳，不再需要 fixture）。
 
+import { registerProviderHttpApplicationLifetime } from '../helpers/providerHttpApplication'
+
 import { describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -36,13 +38,14 @@ import { createInMemoryDb } from '@/db/client'
 import { ALL_TOOLS, MCP_RESOURCE_KINDS, type McpToolContext } from '@/mcp/tools'
 import { allRouteMeta } from '@/routes/registry'
 import { recordingOperationHandles } from '../helpers/mcpOperationRecording'
-import { createApp } from '@/server'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import {
   EXEMPT_REASONS,
   MCP_SURFACE_EXEMPTION_LEAVES,
   exemptionLeaves,
 } from './rfc329McpSurfaceLedger'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const MIGRATIONS = join(import.meta.dir, '..', '..', 'db', 'migrations')
 
@@ -59,29 +62,34 @@ function canon(method: string, path: string): string {
  * smaller surface than the daemon actually serves — the first version of the
  * RFC-329 audit read 440 routes instead of 470 for exactly this reason.
  */
-function mountedRoutes(): Array<{ key: string; permissions: ReadonlyArray<Permission> }> {
+async function mountedRoutes(): Promise<
+  Array<{ key: string; permissions: ReadonlyArray<Permission> }>
+> {
   const home = mkdtempSync(join(tmpdir(), 'aw-rfc329-guard-'))
   writeFileSync(join(home, 'config.json'), JSON.stringify({ $schema_version: 1 }), 'utf-8')
-  createApp({
-    token: 'rfc329-guard',
-    configPath: join(home, 'config.json'),
-    opencodeVersion: '1.15.5',
-    dbVersion: 28,
-    db: createInMemoryDb(MIGRATIONS),
-    secretBox: createSecretBoxFromKey(randomBytes(32)),
-    databaseMigration: composeDatabaseMigrationModule({
-      sqlitePath: join(home, 'db.sqlite'),
-      operationsRoot: join(home, 'database-migrations'),
-      generationPointerPath: join(home, 'database-generation.json'),
+  await openTestApplication(
+    { provider: 'sqlite', db: createInMemoryDb(MIGRATIONS) },
+    {
+      token: 'rfc329-guard',
       configPath: join(home, 'config.json'),
-      admission: {
-        async freezeAndDrain() {},
-        async reopenSqlite() {},
-        async activatePostgresql() {},
-        async openPostgresqlAdmission() {},
-      },
-    }),
-  })
+      opencodeVersion: '1.15.5',
+      dbVersion: 28,
+      secretBox: createSecretBoxFromKey(randomBytes(32)),
+      databaseMigration: composeDatabaseMigrationModule({
+        sqlitePath: join(home, 'db.sqlite'),
+        operationsRoot: join(home, 'database-migrations'),
+        generationPointerPath: join(home, 'database-generation.json'),
+        configPath: join(home, 'config.json'),
+        admission: {
+          async freezeAndDrain() {},
+          async reopenSqlite() {},
+          async activatePostgresql() {},
+          async openPostgresqlAdmission() {},
+        },
+      }),
+      appHome: home,
+    },
+  )
   return allRouteMeta().map((meta) => ({
     key: canon(meta.method, meta.path),
     permissions: meta.permissions as ReadonlyArray<Permission>,
@@ -227,7 +235,7 @@ const PARAMETERISED_TOOLS = new Set(['resource_read', 'resource_write', 'describ
 
 describe('RFC-329 AC-11 — every mounted route is either covered by a tool or on the ledger', () => {
   test('corpus: both sides are non-trivial (an empty side would pass everything)', async () => {
-    const routes = mountedRoutes()
+    const routes = await mountedRoutes()
     const byTool = await dispatchedByTool()
     expect(routes.length).toBeGreaterThan(400)
     expect(ALL_TOOLS.length).toBeGreaterThan(25)
@@ -235,7 +243,7 @@ describe('RFC-329 AC-11 — every mounted route is either covered by a tool or o
   })
 
   test('no uncovered route, no stale exemption, no tool pointing at a missing route', async () => {
-    const routes = mountedRoutes().map((r) => r.key)
+    const routes = (await mountedRoutes()).map((r) => r.key)
     const byTool = await dispatchedByTool()
     const toolPaths = [...new Set([...byTool.values()].flatMap((s) => [...s]))]
     const drift = surfaceDrift(routes, toolPaths, exemptionLeaves())
@@ -248,7 +256,7 @@ describe('RFC-329 AC-11 — every mounted route is either covered by a tool or o
   })
 
   test('a tool declares exactly the non-read permissions its target routes require', async () => {
-    const routes = new Map(mountedRoutes().map((r) => [r.key, r.permissions]))
+    const routes = new Map((await mountedRoutes()).map((r) => [r.key, r.permissions]))
     const byTool = await dispatchedByTool()
     const offenders: string[] = []
     for (const tool of ALL_TOOLS) {
@@ -270,7 +278,7 @@ describe('RFC-329 AC-11 — every mounted route is either covered by a tool or o
 })
 
 describe('RFC-329 AC-12 — the ledger is a ledger, not a wildcard', () => {
-  test('every leaf is an exact `METHOD /path` template, never a hand-rolled prefix', () => {
+  test('every leaf is an exact `METHOD /path` template, never a hand-rolled prefix', async () => {
     expect(exemptionLeaves().filter((leaf) => !/^[A-Z]+ \/\S*$/.test(leaf))).toEqual([])
     // Bulk syntax of my own invention (`/**`, a trailing `...`) is what this
     // guards against. Hono's own single-segment wildcard — `GET
@@ -282,7 +290,7 @@ describe('RFC-329 AC-12 — the ledger is a ledger, not a wildcard', () => {
     )
   })
 
-  test('no leaf appears twice', () => {
+  test('no leaf appears twice', async () => {
     const counts = new Map<string, number>()
     for (const entry of MCP_SURFACE_EXEMPTION_LEAVES) {
       counts.set(entry.leaf, (counts.get(entry.leaf) ?? 0) + 1)
@@ -290,13 +298,13 @@ describe('RFC-329 AC-12 — the ledger is a ledger, not a wildcard', () => {
     expect([...counts].filter(([, n]) => n > 1)).toEqual([])
   })
 
-  test('every group a leaf claims has a real reason written down', () => {
+  test('every group a leaf claims has a real reason written down', async () => {
     const used = [...new Set(MCP_SURFACE_EXEMPTION_LEAVES.map((entry) => entry.group))]
     const thin = used.filter((group) => (EXEMPT_REASONS[group] ?? '').trim().length < 12)
     expect(thin, '一个没有理由的分组等于一张空白许可证').toEqual([])
   })
 
-  test('no reason is left behind by the leaves it used to explain', () => {
+  test('no reason is left behind by the leaves it used to explain', async () => {
     const used = new Set(MCP_SURFACE_EXEMPTION_LEAVES.map((entry) => entry.group))
     // A reason whose last leaf was removed is a stale entry: it reads like the
     // exemption is still in force when nothing is exempt under it any more.
@@ -307,7 +315,7 @@ describe('RFC-329 AC-12 — the ledger is a ledger, not a wildcard', () => {
     ).toEqual([])
   })
 
-  test('the count the high-water ledger pins is the LEAF count, not a group count', () => {
+  test('the count the high-water ledger pins is the LEAF count, not a group count', async () => {
     // RFC-376 retires the global count pin; this test keeps the exact exemption leaves.
     // If this ever became a grouped structure again, adding a leaf to an
     // existing group would leave the baseline untouched — the same hole a
@@ -318,7 +326,7 @@ describe('RFC-329 AC-12 — the ledger is a ledger, not a wildcard', () => {
 })
 
 describe('RFC-329 AC-13 — the comparison itself is proven to fail', () => {
-  test('negative fixture: an uncovered route, a stale exemption and an unrouted tool', () => {
+  test('negative fixture: an uncovered route, a stale exemption and an unrouted tool', async () => {
     const drift = surfaceDrift(
       ['GET /api/a', 'GET /api/b', 'GET /api/c'],
       ['GET /api/a', 'POST /api/ghost'],
@@ -329,13 +337,13 @@ describe('RFC-329 AC-13 — the comparison itself is proven to fail', () => {
     expect(drift.unroutedTools).toEqual(['POST /api/ghost'])
   })
 
-  test('negative fixture: a leaf that is also covered by a tool is a stale exemption', () => {
+  test('negative fixture: a leaf that is also covered by a tool is a stale exemption', async () => {
     // This is the mutation "give an exempt route a tool but forget the ledger".
     const drift = surfaceDrift(['GET /api/a'], ['GET /api/a'], ['GET /api/a'])
     expect(drift.staleExemptions).toEqual(['GET /api/a'])
   })
 
-  test('negative fixture: permission drift is caught in BOTH directions', () => {
+  test('negative fixture: permission drift is caught in BOTH directions', async () => {
     expect(permissionDrift([], ['tasks:execute'])).toEqual({
       missing: ['tasks:execute'],
       extra: [],

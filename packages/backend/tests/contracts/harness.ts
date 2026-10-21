@@ -10,6 +10,7 @@
 //   - packages/backend/tests/api-contract.test.ts          (drives the registry)
 //   - packages/backend/tests/api-contract-coverage.test.ts (scans + matches)
 
+import { registerProviderHttpApplicationLifetime } from '../helpers/providerHttpApplication'
 import { resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -20,7 +21,6 @@ import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../../src/db/client'
 import { composeDatabaseMigrationModule } from '../../src/modules/system-operations/composition/databaseMigration'
-import { createApp } from '../../src/server'
 import { getWorkflow } from '../../src/services/workflow'
 import { createUser } from '../../src/services/users'
 import {
@@ -36,6 +36,8 @@ import {
   workflows,
   workgroups,
 } from '../../src/db/schema'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 export const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
@@ -102,15 +104,20 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     },
   })
 
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath,
-    opencodeVersion: '1.15.5',
-    dbVersion: 28,
-    db,
-    secretBox,
-    databaseMigration,
-  })
+  const app = (
+    await openTestApplication(
+      { provider: 'sqlite', db: db },
+      {
+        token: DAEMON_TOKEN,
+        configPath,
+        opencodeVersion: '1.15.5',
+        dbVersion: 28,
+        secretBox,
+        databaseMigration,
+        appHome: homePath,
+      },
+    )
+  ).app
 
   // RFC-036 — one real user (id stable for `/api/users/:id` & PAT/identity
   // endpoints). Password matches the auth-routes.test.ts convention.

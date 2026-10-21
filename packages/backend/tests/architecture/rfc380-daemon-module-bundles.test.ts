@@ -1,4 +1,4 @@
-// RFC-380 / RFC-381 / RFC-382 / RFC-383 / RFC-384 / RFC-376 hard gate: bundles are session-scoped, and HTTP only composes fallbacks.
+// RFC-380 / RFC-381 / RFC-382 / RFC-383 / RFC-384 / RFC-376 hard gate: bundles are session-scoped, and the application graph constructs each bundle once.
 import { describe, expect, test } from 'bun:test'
 import ts from 'typescript'
 import { resolve } from 'node:path'
@@ -19,10 +19,7 @@ const BUNDLES = [
   'composeDaemonDevelopmentAutomationModules',
   'composeDaemonIntentModules',
 ] as const
-const ROOTS = [
-  ['bootstrap/daemonApplication.ts', 'composeDaemonApplication'],
-  ['server.ts', 'composeSqliteApplicationDeps'],
-] as const
+const ROOTS = [['bootstrap/daemonApplication.ts', 'composeDaemonApplication']] as const
 const FACTORIES = new Set([
   'composeIntentResourceCatalogFor',
   'composeIntentResourceCatalogBinding',
@@ -234,15 +231,6 @@ export function daemonBundleViolations(units: readonly SourceUnit[]): string[] {
       let ancestor: ts.Node | undefined = node.parent
       while (ancestor && ancestor !== root) ancestor = ancestor.parent
       if (!ancestor) errors.push(`${path}: bundle outside provider session ${called}`)
-      if (
-        path === 'server.ts' &&
-        !(
-          ts.isBinaryExpression(node.parent) &&
-          node.parent.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
-          node.parent.right === node
-        )
-      )
-        errors.push(`${path}: bundle is not a nullish fallback ${called}`)
     })
   }
   for (const unit of units) {
@@ -281,22 +269,22 @@ function valid() {
   return ROOTS.map(([path, name]) =>
     unit(
       path,
-      `function ${name}() { ${BUNDLES.map((b, i) => `const x${i} = ${path === 'server.ts' ? 'deps.x ?? ' : ''}${b}({});`).join(' ')} }`,
+      `function ${name}() { ${BUNDLES.map((b, i) => `const x${i} = ${b}({});`).join(' ')} }`,
     ),
   )
 }
 describe('RFC-380 daemon module bundles', () => {
-  test('complete source corpus keeps the twelve session bundles and the HTTP fallbacks', () => {
+  test('complete source corpus keeps the twelve application-session bundles', () => {
     const units = backendUnits(resolve(import.meta.dir, '../../../..'))
     expect(units.length).toBeGreaterThanOrEqual(2000)
     expect(units.filter((u) => u.path.startsWith(PREFIX + 'cli/daemonModules/'))).toHaveLength(13)
     expect(daemonBundleViolations(units)).toEqual([])
   })
-  test('accepts one bundle per session and nullish HTTP fallbacks', () => {
+  test('accepts one bundle per session', () => {
     expect(daemonBundleViolations(valid())).toEqual([])
   })
   test('rejects missing and duplicated session calls', () => {
-    expect(daemonBundleViolations([])).toHaveLength(24)
+    expect(daemonBundleViolations([])).toHaveLength(12)
     const units = valid()
     units[0] = unit(
       ROOTS[0][0],
@@ -304,15 +292,11 @@ describe('RFC-380 daemon module bundles', () => {
     )
     expect(daemonBundleViolations(units).filter((e) => e.includes('got 2'))).toHaveLength(12)
   })
-  test('rejects process-level construction and unconditional HTTP construction', () => {
+  test('rejects process-level construction', () => {
     const units = valid()
     units[0] = unit(ROOTS[0][0], units[0]!.source.text + 'composeDaemonMemoryModules({});')
-    units[1] = unit(ROOTS[1][0], units[1]!.source.text.replace('deps.x ?? ', ''))
     expect(daemonBundleViolations(units)).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('outside provider session'),
-        expect.stringContaining('not a nullish fallback'),
-      ]),
+      expect.arrayContaining([expect.stringContaining('outside provider session')]),
     )
   })
   test('rejects every member factory left in a root, including constructors', () => {
@@ -436,14 +420,13 @@ test('application and intent precede maintenance; inversions and missing reads f
   expect(intentMaintenanceOrderViolations(fixture(true))).toHaveLength(1)
   expect(intentMaintenanceOrderViolations(unit('bootstrap/daemonSession.ts', ''))).toHaveLength(2)
 })
-test('HTTP intent fallback cannot move to route mounting', () => {
+test('the session intent bundle cannot move outside the application graph', () => {
   const units = valid()
-  units[1] = unit(
-    'server.ts',
-    units[1]!.text.replace('deps.x ?? composeDaemonIntentModules({});', 'null;') +
-      'function composeSqliteApiRouteMounts() { const x = deps.intentModules ?? composeDaemonIntentModules({}); }',
+  units[0] = unit(
+    ROOTS[0][0],
+    units[0]!.text + 'function mountRoutes() { composeDaemonIntentModules({}); }',
   )
   expect(daemonBundleViolations(units)).toContain(
-    'server.ts: bundle outside provider session composeDaemonIntentModules',
+    'bootstrap/daemonApplication.ts: bundle outside provider session composeDaemonIntentModules',
   )
 })

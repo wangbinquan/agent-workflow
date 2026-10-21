@@ -1,4 +1,4 @@
-import { composeDevelopmentPurposeRoot } from '../src/server'
+import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
 // RFC-310 PR-3 —— 收口 journey：HTTP 面 + composition 装配的连接组织。
 //
 // fork 交付的部件测试（materialize/placement/questions/adapter-runner/...）

@@ -65,7 +65,7 @@ describe('RFC-319 TASK-27 —— 演员发起的仓库准备重试必须带着�
   })
 
   test('两个组合根共用的适配器把 authorization.actorUserId 原样传下去（写死 SYSTEM 就红）', () => {
-    for (const path of ['cli/start.ts', 'server.ts']) {
+    for (const path of ['cli/start.ts']) {
       const root = /(?:^|\/)cli\/start\.ts$/.test(path)
         ? readDaemonGraphSource()
         : readFileSync(resolve(ROOT, 'packages/backend/src', path), 'utf8')
@@ -154,12 +154,9 @@ describe('RFC-319 DE-28 —— 启动前必须播种，中立应用图与 SQLite
     expect(ensureAt).toBeLessThan(launchAt)
   })
 
-  test('中立应用图与 SQLite 测试根都绑上了这个端口（漏一个 = 那条路的评审页打不开）', () => {
+  test('中立应用图为 HTTP 与守护进程绑定同一个端口', () => {
     // RFC-383: all three roots select the employee bundle; the execution core supplies its hostWorkflow default once.
-    for (const relative of [
-      'packages/backend/src/server.ts',
-      'packages/backend/src/bootstrap/daemonApplication.ts',
-    ]) {
+    for (const relative of ['packages/backend/src/bootstrap/daemonApplication.ts']) {
       const source = readFileSync(resolve(ROOT, relative), 'utf-8')
       expect(source).toContain('composeDaemonDigitalEmployeeModules({')
       expect(source).not.toContain('composeDatabaseDigitalEmployeeExecutionPorts(')

@@ -1,37 +1,37 @@
-import type { Hono } from 'hono'
-import type { DaemonProviderCore } from '@/cli/daemonModules/providerCore'
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+// RFC-392: every HTTP fixture enters the same application graph and owns its finite lifetime.
+import { afterEach } from 'bun:test'
+import { existsSync, readFileSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
-
+import { tmpdir } from 'node:os'
 import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
+import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import {
   composeDaemonApplication,
+  type DaemonApplication,
   type DaemonApplicationInput,
+  type DaemonApplicationTestSeams,
+  type UnstartedApplicationScope,
 } from '@/bootstrap/daemonApplication'
 import { invalidateReadConfigCache, loadConfig, saveConfigRaw } from '@/config'
-import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
-import type { RepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
-import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
-import type { IdentityAccessRuntime } from '@/modules/identity-access/composition'
-import type { SelectedTaskExecutionProviderRuntime } from '@/modules/task-execution/composition/providerRuntime'
-import type { WorkspaceClaimFinalizationCommand } from '@/modules/source-control/public/commands'
 import {
-  composeSqliteApplicationDeps,
-  createComposedApp,
-  type AppDeps,
-  type UnstartedApplicationScope,
-} from '@/server'
+  composeDatabaseMigrationModule,
+  type DatabaseMigrationModule,
+} from '@/modules/system-operations/composition/databaseMigration'
+import {
+  composeApplicationConfigurationBinding,
+  type ApplicationConfigurationBinding,
+} from '@/modules/system-operations/composition/applicationConfiguration'
+import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
+import type { DatabaseRuntimeTelemetry } from '@agent-workflow/shared'
+import { createLogger } from '@/util/log'
 import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { McpDiagnosticsRuntime } from '@/modules/resource-catalog/composition/mcpDiagnostics'
-import type { ProviderDatabaseHarness } from './eachProvider'
+import type { ProviderDatabaseHarness, ProviderApplicationBinding } from './eachProvider'
 
 export type ProviderHttpApplicationInput = Pick<
-  AppDeps,
+  DaemonApplicationInput,
   | 'token'
-  | 'configPath'
-  | 'configuration'
-  | 'applicationConfiguration'
   | 'taskArchive'
   | 'skillContent'
   | 'employeePrograms'
@@ -61,84 +61,41 @@ export type ProviderHttpApplicationInput = Pick<
   | 'evidenceDocumentCommands'
   | 'daemonRuntime'
   | 'dbVersion'
-  | 'opencodeVersion'
-  | 'workflowExactOperationHook'
-  // RFC-359 AC-6：定时任务 run-now 的启动闭包覆盖口。两个组合根现在都收它
-  // （SQLite 根本来就有，PG 根同轮补上），所以这里一个 key 就能同时喂到两侧
-  // ——两个分支都是 `...input` 展开的。
-  | 'buildScheduleLaunch'
-  // 同上：运行时诊断的测试注入口（`RuntimesRouteDependencies` 本来就声明了它，
-  // PG 根同轮补上透传）。运行时诊断那一批用例是 AC-6 runway 上最大的一簇。
-  | 'runtimeDiagnosticTestDependencies'
-  // webhook 派发器。两个根对它的所有权不同（SQLite 当依赖收、PG 自己构造），PG 根同轮
-  // 补上「覆盖 + 能力探测」，两侧观察到的于是是同一件事（plan §5bi）。
-  | 'webhookDispatcher'
-  // 同上：MCP 运行时测试的接缝（`runFn` / `now` / `capacity`）。PG 根同轮补上转发。
-  | 'mcpRuntimeTestDependencies'
-  // 同上：意图回合的 system-agent 运行接缝。
-  | 'intentTestDependencies'
   | 'maintenanceStatus'
-  | 'databaseTelemetry'
-> & {
-  readonly appHome: string
-  /**
-   * 装配前并进配置文件的字段（`plantumlEndpoint` 这类守护进程配置）。
-   *
-   * 为什么需要这个口子：应用读的是 `input.configPath`，而这个路径由作用域在 `open()` 里
-   * 现建——用例无从提前往那个文件里写东西。合一前每份用例自建 app home、自写 config，
-   * 迁到共用作用域后那份自写的 config 就被绕开了，测出来的永远是默认值（`plantuml-proxy`
-   * 迁移时实测：配了端点的用例照样回 `{ unconfigured: true }`）。
-   */
-  readonly config?: Readonly<Record<string, unknown>>
-}
+  | 'executionAuthority'
+> &
+  Omit<DaemonApplicationTestSeams, 'workflowRuntime'> & {
+    readonly appHome?: string
+    readonly configPath?: string
+    readonly configuration?: ApplicationConfigurationQueries
+    readonly applicationConfiguration?: ApplicationConfigurationBinding
+    readonly secretBox?: SecretBox
+    readonly databaseMigration?: DatabaseMigrationModule
+    readonly databaseTelemetry?: () => DatabaseRuntimeTelemetry
+    readonly workflowExactOperationHook?: NonNullable<
+      DaemonApplicationTestSeams['workflowRuntime']
+    >['workflowExactOperationHook']
+    /** Configuration fields written before finite application initialization. */
+    readonly config?: Readonly<Record<string, unknown>>
+  }
 
-export interface ProviderHttpApplication {
-  readonly app: Hono
-  /**
-   * The very `SecretBox` the composed application was built with. Fixtures that seed
-   * encrypted rows (OIDC client secrets, stored tokens) must encrypt with *this* box,
-   * not a freshly keyed one — a second box decrypts to garbage against the same rows.
-   */
+export interface ProviderHttpApplication extends Pick<
+  DaemonApplication,
+  'app' | 'core' | 'modules' | 'runtime' | 'operations'
+> {
+  readonly appHome: string
   readonly secretBox: SecretBox
-  /**
-   * 守护进程级并发池的 scope key（`getNodePoolSemaphore` / `resizeAllNodePools` 的第一个实参）。
-   *
-   * RFC-390: 两侧都直接交出任务执行模块组的 processConcurrencyScope。
-   * 调度器与中立 HTTP 热应用助手消费同一引用；这里不再独立重选 db/runtime。
-   * 要检查池就从这里取。
-   */
   readonly processConcurrencyScope: object
-  readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
-  /**
-   * 应用**自己装配好**的任务执行读模型。
-   *
-   * RFC-359 —— 合一前一批用例为了拿到它，在外面再 `createTaskExecutionReadModels(db)` 建一份
-   * 一模一样的，再从 `AppDeps.taskExecutionReadModels` 塞回去（`rfc340-review-access` /
-   * `rfc314-session-view-window` / `rfc311-session-view-bounded` 等）。那个形状把用例钉死在
-   * SQLite 上——`DaemonApplicationInput<'postgresql'>` 没有、也不该有这个只服务测试的字段。
-   * 两个 provider 本来都已经装配了它（SQLite 的 `SqliteAppComposition.taskExecutionReadModels`、
-   * PostgreSQL 的 `taskExecutionProvider.readModels`），这里只是把结果交出来。
-   */
-  readonly taskExecutionReadModels: TaskExecutionReadModels
-  /** 同上：应用**自己装配好**的协作命令上下文，别在外面再建一份。 */
-  readonly collaborationContext: CollaborationRouteContext
-  /**
-   * 同上：应用自己装配好的身份运行时。
-   *
-   * `tests/helpers/routeOperationDispatcher` 需要它的 `directAuthority` 来准入测试 actor；
-   * 合一前那个 helper 只能吃 `AppDeps` 并自己 `createApp`，于是所有 MCP dispatcher 用例都被
-   * 钉死在 SQLite 上。交出它之后，helper 可以直接吃**已装配的应用**。
-   */
-  readonly identityAccess: IdentityAccessRuntime
-  readonly tokenCallAudit: DaemonProviderCore['tokenCallAudit']
-  readonly taskExecution:
-    | Readonly<{ provider: 'sqlite' }>
-    | Readonly<{
-        provider: 'postgresql'
-        selected: SelectedTaskExecutionProviderRuntime
-        workspace: WorkspaceClaimFinalizationCommand
-      }>
-  /** Close application-owned work before the harness resets its borrowed database. */
+  readonly repositoryWorkspaceStore: DaemonApplication['core']['repositoryWorkspaceStore']
+  readonly taskExecutionReadModels: DaemonApplication['runtime']['taskExecution']['readModels']
+  readonly collaborationContext: DaemonApplication['runtime']['collaborationContext']
+  readonly identityAccess: DaemonApplication['core']['identityAccess']
+  readonly tokenCallAudit: DaemonApplication['core']['tokenCallAudit']
+  readonly taskExecution: Readonly<{
+    provider: ProviderApplicationBinding['provider']
+    selected: DaemonApplication['runtime']['taskExecution']
+    workspace: DaemonApplication['runtime']['workspaceMaintenance']
+  }>
   dispose(): Promise<void>
 }
 
@@ -194,147 +151,182 @@ export async function composeUnstartedApplication<T extends object>(
   }
 }
 
-/** Test-only lifetime around the same complete composer called by the daemon. */
-export function composePostgresqlUnstartedApplication(input: DaemonApplicationInput<'postgresql'>) {
-  return composeUnstartedApplication((scope) =>
-    composeDaemonApplication(input, { kind: 'unstarted', scope }),
-  )
-}
-
-/** Test-only lifetime around the same complete composer called by createApp. */
-export function composeSqliteUnstartedApplication(deps: AppDeps) {
-  return composeUnstartedApplication(async (scope) => {
-    const composed = composeSqliteApplicationDeps(deps, scope)
-    // RFC-383: direct HTTP fixtures initialize the same bundle the daemon boots.
-    await composed.digitalEmployeeModules.platformTools.load()
-    await composed.digitalEmployeeModules.module.maintenance.ready()
-    return {
-      app: createComposedApp(composed),
-      repositoryWorkspaceStore: composed.repositoryWorkspaceStore,
-      taskExecutionReadModels: composed.taskExecutionReadModels,
-      collaborationContext: composed.collaborationContext,
-      core: composed.core,
-      processConcurrencyScope: composed.taskExecutionModules.processConcurrencyScope,
-    }
-  })
-}
-
-/**
- * Complete production application composition on the harness's actual selected
- * client and recorded pool. Module initialization is real and awaited; daemon
- * recovery and recurring work are not started. No HTTP listener is opened.
- *
- * Migration routes receive the real module, but this workflow fixture does not
- * supply daemon admission. Invoking that boundary fails explicitly and is not
- * evidence of migration behavior. The harness alone owns database cleanup.
- */
-export async function createProviderHttpApplication(
+/** Borrow a harness binding; the harness retains ownership of its database. */
+export function createProviderHttpApplication(
   harness: ProviderDatabaseHarness,
   input: ProviderHttpApplicationInput,
 ): Promise<ProviderHttpApplication> {
-  const binding = harness.applicationBinding
-  const originalConfig = existsSync(input.configPath) ? readFileSync(input.configPath) : null
-  let application: Pick<ProviderHttpApplication, 'app' | 'dispose'> | undefined
-  let repositoryWorkspaceStore: RepositoryWorkspaceStore
-  let taskExecutionReadModels: TaskExecutionReadModels
-  let collaborationContext: CollaborationRouteContext
-  let identityAccess: IdentityAccessRuntime
-  let tokenCallAudit: DaemonProviderCore['tokenCallAudit']
-  let taskExecution: ProviderHttpApplication['taskExecution']
-  let processConcurrencyScope: object
+  return createProviderHttpApplicationFromBinding(harness.applicationBinding, input)
+}
+
+/** Direct fixtures register this lifetime before their database cleanup hooks. */
+export function registerProviderHttpApplicationLifetime() {
+  const applications: ProviderHttpApplication[] = []
+  afterEach(async () => {
+    const outcomes = await Promise.allSettled(
+      applications
+        .splice(0)
+        .reverse()
+        .map((app) => app.dispose()),
+    )
+    const failures = outcomes.flatMap((outcome) =>
+      outcome.status === 'rejected' ? [outcome.reason] : [],
+    )
+    if (failures.length > 0) throw new AggregateError(failures, 'HTTP fixture disposal failed')
+  })
+  return async (binding: ProviderApplicationBinding, input: ProviderHttpApplicationInput) => {
+    const application = await createProviderHttpApplicationFromBinding(binding, input)
+    applications.push(application)
+    return application
+  }
+}
+
+/** One composition call for SQLite and PostgreSQL, including former direct HTTP fixtures. */
+export async function createProviderHttpApplicationFromBinding(
+  binding: ProviderApplicationBinding,
+  input: ProviderHttpApplicationInput,
+): Promise<ProviderHttpApplication> {
+  const ownedHome =
+    input.appHome === undefined ? mkdtempSync(join(tmpdir(), 'aw-http-application-')) : undefined
+  const appHome = input.appHome ?? ownedHome!
+  const configPath = input.configPath ?? join(appHome, 'config.json')
+  const originalConfig = existsSync(configPath) ? readFileSync(configPath) : null
+  let application: Awaited<ReturnType<typeof compose>> | undefined
   let disposal: Promise<void> | undefined
   const dispose = (): Promise<void> => {
     disposal ??= (async () => {
       try {
         await application?.dispose()
       } finally {
-        if (originalConfig === null) rmSync(input.configPath, { force: true })
-        else writeFileSync(input.configPath, originalConfig)
-        invalidateReadConfigCache(input.configPath)
+        application?.core.identityAccess.shutdown()
+        if (originalConfig === null) rmSync(configPath, { force: true })
+        else writeFileSync(configPath, originalConfig)
+        invalidateReadConfigCache(configPath)
+        if (ownedHome !== undefined) rmSync(ownedHome, { recursive: true, force: true })
       }
     })()
     return disposal
   }
-
+  const compose = (graphInput: DaemonApplicationInput) =>
+    composeUnstartedApplication((scope) =>
+      composeDaemonApplication(graphInput, { kind: 'unstarted', scope }),
+    )
   try {
-    const config = { ...loadConfig(input.configPath), ...input.config }
+    const config = {
+      ...loadConfig(configPath),
+      ...input.config,
+      database:
+        binding.provider === 'sqlite' ? { provider: 'sqlite' as const } : binding.databaseConfig,
+    }
+    saveConfigRaw(configPath, config)
     const unexpectedAdmission = async (): Promise<never> => {
       throw new Error('provider HTTP fixture does not implement daemon migration admission')
     }
-    const databaseMigration = composeDatabaseMigrationModule({
-      admission: {
-        freezeAndDrain: unexpectedAdmission,
-        reopenSqlite: unexpectedAdmission,
-        activatePostgresql: unexpectedAdmission,
-        openPostgresqlAdmission: unexpectedAdmission,
-      },
-      sqlitePath: join(input.appHome, 'workflow.db'),
-      operationsRoot: join(input.appHome, 'database-migrations'),
-      generationPointerPath: join(input.appHome, 'database-generation.json'),
-      configPath: input.configPath,
-      executionMode: 'inline',
-    })
-    const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 29))
-    if (binding.provider === 'sqlite') {
-      saveConfigRaw(input.configPath, { ...config, database: { provider: 'sqlite' } })
-      const sqliteApplication = await composeSqliteUnstartedApplication({
-        ...input,
-        db: binding.db,
-        secretBox,
-        databaseMigration,
-        daemonInfoPath: join(input.appHome, '.daemon.info'),
-      })
-      application = sqliteApplication
-      repositoryWorkspaceStore = sqliteApplication.repositoryWorkspaceStore
-      taskExecutionReadModels = sqliteApplication.taskExecutionReadModels
-      collaborationContext = sqliteApplication.collaborationContext
-      identityAccess = sqliteApplication.core.identityAccess
-      tokenCallAudit = sqliteApplication.core.tokenCallAudit
-      taskExecution = Object.freeze({ provider: 'sqlite' })
-      processConcurrencyScope = sqliteApplication.processConcurrencyScope
-    } else {
-      const selectedConfig = { ...config, database: binding.databaseConfig }
-      saveConfigRaw(input.configPath, selectedConfig)
-      const postgresqlApplication = await composePostgresqlUnstartedApplication({
-        ...input,
-        db: binding.db,
-        provider: {
-          provider: 'postgresql',
-          runtime: binding.runtime,
-          telemetry: input.databaseTelemetry ?? binding.runtime.telemetry,
+    const databaseMigration =
+      input.databaseMigration ??
+      composeDatabaseMigrationModule({
+        admission: {
+          freezeAndDrain: unexpectedAdmission,
+          reopenSqlite: unexpectedAdmission,
+          activatePostgresql: unexpectedAdmission,
+          openPostgresqlAdmission: unexpectedAdmission,
         },
-        config: selectedConfig,
-        secretBox,
-        databaseMigration,
-        daemonInfoPath: join(input.appHome, '.daemon.info'),
-        lockPath: join(input.appHome, '.daemon.lock'),
-        workflowRuntime: { workflowExactOperationHook: input.workflowExactOperationHook },
+        sqlitePath: join(appHome, 'db.sqlite'),
+        operationsRoot: join(appHome, 'database-migrations'),
+        generationPointerPath: join(appHome, 'database-generation.json'),
+        configPath,
+        executionMode: 'inline',
       })
-      application = postgresqlApplication
-      repositoryWorkspaceStore = postgresqlApplication.core.repositoryWorkspaceStore
-      taskExecutionReadModels = postgresqlApplication.runtime.taskExecution.readModels
-      collaborationContext = postgresqlApplication.runtime.collaborationContext
-      identityAccess = postgresqlApplication.core.identityAccess
-      tokenCallAudit = postgresqlApplication.core.tokenCallAudit
-      processConcurrencyScope =
-        postgresqlApplication.runtime.taskExecutionModules.processConcurrencyScope
-      taskExecution = Object.freeze({
-        provider: 'postgresql',
-        selected: postgresqlApplication.runtime.taskExecution,
-        workspace: postgresqlApplication.runtime.workspaceMaintenance,
+    const applicationConfiguration =
+      input.applicationConfiguration ??
+      composeApplicationConfigurationBinding({
+        kind: 'file',
+        configPath,
+        ...(input.configuration === undefined ? {} : { queries: input.configuration }),
       })
-    }
+    const taskLaunchConfiguration = composeTaskLaunchConfiguration(
+      input.applicationConfiguration !== undefined ||
+        applicationConfiguration.synchronousQueries === undefined
+        ? { kind: 'selected', queries: applicationConfiguration.queries }
+        : { kind: 'local-sync', queries: applicationConfiguration.synchronousQueries },
+    )
+    const secretBox = input.secretBox ?? createSecretBoxFromKey(Buffer.alloc(32, 29))
+    const provider =
+      binding.provider === 'sqlite'
+        ? {
+            provider: 'sqlite' as const,
+            telemetry:
+              input.databaseTelemetry ??
+              (() => ({ version: 1 as const, provider: 'sqlite' as const, poolWait: null })),
+          }
+        : {
+            provider: 'postgresql' as const,
+            runtime: binding.runtime,
+            telemetry: input.databaseTelemetry ?? binding.runtime.telemetry,
+          }
+    const {
+      buildScheduleLaunch,
+      runtimeDiagnosticTestDependencies,
+      webhookDispatcher,
+      mcpRuntimeTestDependencies,
+      intentTestDependencies,
+      opencodeVersion,
+      codeHostFetch,
+      webhookTerminalControl,
+      systemOperations,
+      workflowExactOperationHook,
+      ...selections
+    } = input
+    application = await compose({
+      ...selections,
+      db: binding.db,
+      provider,
+      config,
+      secretBox,
+      databaseMigration,
+      appHome,
+      configPath,
+      dbPath: join(appHome, 'db.sqlite'),
+      lockPath: join(appHome, '.daemon.lock'),
+      daemonInfoPath: join(appHome, '.daemon.info'),
+      log: createLogger('daemon'),
+      applicationConfiguration,
+      taskLaunchConfiguration,
+      sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
+      testSeams: {
+        buildScheduleLaunch,
+        runtimeDiagnosticTestDependencies,
+        webhookDispatcher,
+        mcpRuntimeTestDependencies,
+        intentTestDependencies,
+        opencodeVersion,
+        codeHostFetch,
+        webhookTerminalControl,
+        systemOperations,
+        workflowRuntime: { workflowExactOperationHook },
+      },
+    })
+    const { core, runtime } = application
     return Object.freeze({
       app: application.app,
+      appHome,
       secretBox,
-      processConcurrencyScope,
-      repositoryWorkspaceStore,
-      taskExecutionReadModels,
-      collaborationContext,
-      identityAccess,
-      tokenCallAudit,
+      core,
+      runtime,
+      modules: application.modules,
+      operations: application.operations,
+      processConcurrencyScope: runtime.taskExecutionModules.processConcurrencyScope,
+      repositoryWorkspaceStore: core.repositoryWorkspaceStore,
+      taskExecutionReadModels: runtime.taskExecution.readModels,
+      collaborationContext: runtime.collaborationContext,
+      identityAccess: core.identityAccess,
+      tokenCallAudit: core.tokenCallAudit,
+      taskExecution: Object.freeze({
+        provider: binding.provider,
+        selected: runtime.taskExecution,
+        workspace: runtime.workspaceMaintenance,
+      }),
       dispose,
-      taskExecution,
     })
   } catch (error) {
     try {

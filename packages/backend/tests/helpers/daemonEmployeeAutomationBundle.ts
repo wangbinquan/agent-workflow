@@ -1,4 +1,5 @@
 // RFC-383: real session bundles on each provider; no daemon, timers or external services.
+import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeDaemonProviderCore } from '@/cli/daemonModules/providerCore'
@@ -14,7 +15,7 @@ import { composeDaemonDevelopmentAutomationModules } from '@/cli/daemonModules/d
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import { selectDevelopmentWorkspaceEffectBinding } from '@/modules/development-automation/composition'
-import { composeDevelopmentPurposeRoot } from '@/server'
+import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
 import { taskBundleInput } from './daemonTaskExecutionBundle'
 import type { ProviderDatabaseHarness } from './eachProvider'
 
@@ -32,6 +33,7 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
           appHome,
         })
   const core = composeDaemonProviderCore({
+    sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
     db,
     appHome,
     secretBox,

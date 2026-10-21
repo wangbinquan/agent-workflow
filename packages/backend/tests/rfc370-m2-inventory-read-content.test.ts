@@ -12,7 +12,7 @@ import { createProviderHttpApplication } from './helpers/providerHttpApplication
 import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 
 describeEachProvider('RFC-370 selected runtime inventory read', (harness) => {
-  test('both HTTP roots use selected live evidence, then stored stream facts after reconstruction', async () => {
+  test('PostgreSQL reads hosted inventory; SQLite rejects the hosted selection', async () => {
     const taskId = freshTaskId(),
       nodeRunId = ulid(),
       appHome = mkdtempSync(join(tmpdir(), 'aw-inventory-content-'))
@@ -35,6 +35,13 @@ describeEachProvider('RFC-370 selected runtime inventory read', (harness) => {
       },
     }
     try {
+      if (harness.applicationBinding.provider === 'sqlite') {
+        await expect(createProviderHttpApplication(harness, input)).rejects.toThrow(
+          'hosted-deployment-requires-postgresql',
+        )
+        expect(reads).toBe(0)
+        return
+      }
       await seedTask(harness.db, taskId)
       await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
       await harness.db.insert(nodeRuns).values({

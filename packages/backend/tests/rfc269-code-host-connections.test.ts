@@ -8,6 +8,7 @@
 //   3. **探活四类可区分**：设计门 D7 —— 不可区分的失败让"测试连接"变成安慰剂，
 //      管理员看到红叉却不知道该改 token 还是改 base URL 还是找网络。
 
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
@@ -15,7 +16,6 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '../src/db/client'
-import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
 import { createSession } from './helpers/auth/sessionStore'
@@ -26,6 +26,8 @@ import {
 } from '../src/services/codeHost/connections'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 7))
@@ -57,15 +59,18 @@ async function harness(opts?: { role?: 'admin' | 'user' | 'manager'; fetchImpl?:
     password: 'longEnoughPassword',
   })
   const { token } = await createSession({ db, userId: user.id })
-  const app = createApp({
-    token: 'a'.repeat(64),
-    configPath: '',
-    opencodeVersion: null,
-    dbVersion: 1,
-    db,
-    secretBox: box,
-    ...(opts?.fetchImpl !== undefined ? { codeHostFetch: opts.fetchImpl } : {}),
-  })
+  const app = (
+    await openTestApplication(
+      { provider: 'sqlite', db: db },
+      {
+        token: 'a'.repeat(64),
+        opencodeVersion: null,
+        dbVersion: 1,
+        secretBox: box,
+        ...(opts?.fetchImpl !== undefined ? { codeHostFetch: opts.fetchImpl } : {}),
+      },
+    )
+  ).app
   const call = async (method: string, path: string, body?: unknown) =>
     app.request(path, {
       method,

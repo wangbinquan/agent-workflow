@@ -14,6 +14,8 @@
 //     reviews by brute-forcing ULIDs).
 //   - HTTP route returns the same shape and 404s consistently.
 
+import type { ProviderHttpApplicationInput } from './helpers/providerHttpApplication'
+import type { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -21,8 +23,6 @@ import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { DbClient } from '../src/db/client'
 import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
-import type { createApp } from '../src/server'
-import { type AppDeps } from '../src/server'
 import { getDocVersionDetail } from '@/modules/collaboration/infrastructure/review'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -340,7 +340,7 @@ describeEachProvider(
     describe('fixture lifetime', () => {
       let application: ProviderHttpApplication | undefined
       async function composeProviderApp(
-        input: Omit<AppDeps, 'db'> & { db: ProviderNeutralDatabase },
+        input: ProviderHttpApplicationInput & { db: ProviderNeutralDatabase },
       ) {
         application = await createProviderHttpApplication(harness, {
           token: input.token,
@@ -361,7 +361,7 @@ describeEachProvider(
         process.env.AGENT_WORKFLOW_HOME = s.appHome
       })
 
-      async function app(): Promise<ReturnType<typeof createApp>> {
+      async function app(): Promise<Hono> {
         return composeProviderApp({
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'tok',
@@ -406,7 +406,7 @@ describeEachProvider(
     describe('fixture lifetime', () => {
       let application: ProviderHttpApplication | undefined
       async function composeProviderApp(
-        input: Omit<AppDeps, 'db'> & { db: ProviderNeutralDatabase },
+        input: ProviderHttpApplicationInput & { db: ProviderNeutralDatabase },
       ) {
         application = await createProviderHttpApplication(harness, {
           token: input.token,
@@ -427,7 +427,7 @@ describeEachProvider(
         process.env.AGENT_WORKFLOW_HOME = s.appHome
       })
 
-      async function app(): Promise<ReturnType<typeof createApp>> {
+      async function app(): Promise<Hono> {
         return composeProviderApp({
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'tok',

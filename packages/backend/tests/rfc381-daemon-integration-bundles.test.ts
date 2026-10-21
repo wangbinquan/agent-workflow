@@ -1,4 +1,5 @@
 // RFC-381: one passive session graph owns all integration state; MR termination stops the selected driver and cleanup failures never stall its stream.
+import { createProviderHttpCompositionFixture } from './helpers/providerHttpComposition'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,8 +26,6 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { integrationBundleFixture } from './helpers/daemonIntegrationBundles'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { composeSqliteApplicationDeps, createComposedApp } from '@/server'
-import { composeUnstartedApplication } from './helpers/providerHttpApplication'
 
 const homes: string[] = []
 function home() {
@@ -183,9 +182,8 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
       )
   })
 
-  test('SQLite HTTP uses the injected session services, runtime and fusion persistence', async () => {
+  test('HTTP uses the injected session services, runtime and fusion persistence', async () => {
     const binding = harness.applicationBinding
-    if (binding.provider !== 'sqlite') return
     const dir = home(),
       token = 'x'.repeat(64)
     const graph = integrationBundleFixture(binding.db, dir)
@@ -200,25 +198,19 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
     )
     const fusionReads = spyOn(graph.fusionModules.fusionOperations.persistence, 'listSummaries')
     const eventReads = spyOn(graph.integrationModules.eventCenter.queries.catalog, 'catalogJson')
-    const composition = await composeUnstartedApplication((scope) =>
-      composeSqliteApplicationDeps(
-        {
-          db: binding.db,
-          appHome: dir,
-          configPath: `${dir}/config.json`,
-          token,
-          opencodeVersion: null,
-          dbVersion: 1,
-          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 17)),
-          scheduledTaskModules: graph.scheduledTaskModules,
-          integrationModules: graph.integrationModules,
-          fusionModules: graph.fusionModules,
-        },
-        scope,
-      ),
-    )
+    const composition = await createProviderHttpCompositionFixture(harness, {
+      appHome: dir,
+      token,
+      dbVersion: 1,
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 17)),
+    })
+    const http = composition.compose({
+      scheduledTasks: graph.scheduledTaskModules,
+      integration: graph.integrationModules,
+      fusion: graph.fusionModules,
+    })
     try {
-      const app = createComposedApp(composition)
+      const app = http.app
       for (const path of [
         '/api/webhook-endpoints',
         '/api/scheduled-tasks',

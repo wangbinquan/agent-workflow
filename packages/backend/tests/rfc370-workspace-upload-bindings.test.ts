@@ -388,7 +388,7 @@ test('real roots, provider reassembly, SQLite arms and PG preselection preserve 
   const cli = source('cli/start.ts'),
     session = source('bootstrap/daemonSession.ts'),
     pg = source('bootstrap/daemonApplication.ts'),
-    http = source('server.ts')
+    http = source('bootstrap/daemonHttpComposition.ts')
   function values(text: string, property: string) {
     const sf = ts.createSourceFile('root.ts', text, ts.ScriptTarget.Latest, true),
       result: string[] = []
@@ -408,7 +408,6 @@ test('real roots, provider reassembly, SQLite arms and PG preselection preserve 
   expect(values(session, 'workspaceUploads')).toEqual(['input.workspaceUploads'])
   expect(values(pg, 'workspaceUploads')).toEqual(['workspaceUploads'])
   // RFC-382 shares the selected receiver with the bundle and the HTTP dependency record.
-  expect(values(http, 'workspaceUploads')).toEqual(['workspaceUploads'])
   expect(http).toContain('taskLaunch: taskExecutionProvider.routeLaunch.agent')
   expect(http).toContain('taskLaunch: taskExecutionProvider.routeLaunch.workgroup')
   expect(http).toContain('operations: taskExecutionProvider.routes.tasks')

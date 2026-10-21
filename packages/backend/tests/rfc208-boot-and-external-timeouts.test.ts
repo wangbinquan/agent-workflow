@@ -33,7 +33,7 @@ describe('RFC-208 / RFC-226 · boot probes', () => {
     expect(boot).not.toContain('ocDriver.probe')
     expect(boot).not.toContain('opencode probe ok')
     expect(startSource).toContain(
-      "opencodeVersion: phase.kind === 'daemon' ? null : (input.opencodeVersion ?? null)",
+      "opencodeVersion: phase.kind === 'daemon' ? null : (input.testSeams?.opencodeVersion ?? null)",
     )
   })
 

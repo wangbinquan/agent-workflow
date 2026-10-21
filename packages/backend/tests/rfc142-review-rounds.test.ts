@@ -14,6 +14,7 @@
 //     404 task-not-found（RFC-285 B1 与不存在同形）；未知 nodeRunId 404。
 // 如果本文件变红，先对照 design/RFC-142-review-history-echo/design.md D3-D5。
 
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -35,7 +36,6 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { createApp } from '../src/server'
 import {
   dispatchReviewNode,
   getReviewDetail,
@@ -47,6 +47,8 @@ import {
 import { createUser } from '../src/services/users'
 import { wakeHumanGateContinuation } from '../src/services/task'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const CASE_GEN_AGENT_ID = 'agent-case-gen'
@@ -561,14 +563,18 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
     appHome = join(tmp, 'appHome')
     mkdirSync(appHome, { recursive: true })
     process.env.AGENT_WORKFLOW_HOME = appHome
-    app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: DAEMON_TOKEN,
-      configPath: '',
-      opencodeVersion: '1.14.25',
-      dbVersion: 1,
-      db,
-    })
+    app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: db },
+        {
+          appHome,
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: DAEMON_TOKEN,
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+        },
+      )
+    ).app
     async function mk(username: string) {
       const u = await createUser(db, {
         username,

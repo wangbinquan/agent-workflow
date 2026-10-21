@@ -547,7 +547,8 @@ test('CLI initial and replacement sessions carry raw content selection into the 
 
 test('PG and HTTP roots share one selected service between runtime, review and the real artifact route', () => {
   const pg = source('bootstrap/daemonApplication.ts'),
-    server = source('server.ts')
+    server = source('server.ts'),
+    owner = source('bootstrap/daemonHttpComposition.ts')
   const pgSelection = calls(pg, pg, 'composePortArtifactOperations')
   expect(pgSelection).toHaveLength(1)
   expect(pgSelection[0]!.arguments.map((arg) => arg.getText(pg))).toEqual([
@@ -560,22 +561,8 @@ test('PG and HTTP roots share one selected service between runtime, review and t
   expect(pgBundle).toHaveLength(1)
   expect(pgBundle[0]!.arguments[0]!.getText(pg)).toMatch(/selection:\s*\{[\s\S]*?\bportArtifacts,/)
   expect(pg.text).toContain('portArtifacts,')
-  expect(server.text).toMatch(
+  expect(owner.text).toMatch(
     /portArtifacts:\s*Object\.freeze\(\{\s*taskExecutionReadModels: [^,]+,\s*portArtifacts,\s*\}\)/,
-  )
-  const selections = calls(server, server, 'composePortArtifactOperations')
-  expect(selections).toHaveLength(1)
-  expect(selections[0]!.arguments.map((arg) => arg.getText(server))).toEqual([
-    'deps.portArtifactContentEffects',
-    'appHome',
-  ])
-  expect(server.text).toContain('deps.portArtifacts === undefined')
-  expect(server.text).toContain('selectPortArtifactOperations(deps.portArtifacts, appHome)')
-  expect(server.text).toContain('taskRunBinding: taskRunRoot.drive')
-  const httpBundle = calls(server, server, 'composeDaemonTaskExecutionModules')
-  expect(httpBundle).toHaveLength(1)
-  expect(httpBundle[0]!.arguments[0]!.getText(server)).toMatch(
-    /selection:\s*\{[\s\S]*?\bportArtifacts,/,
   )
   expect(
     bundle.text.match(/portArtifactReaderFor: \(\) => selection\.portArtifacts/g),

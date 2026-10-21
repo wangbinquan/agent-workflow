@@ -18,6 +18,7 @@
 // All git is offline via a `file://` bare repo (mirrors start-task-url.test.ts);
 // no `RUN_GIT_NETWORK` dependency.
 
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import {
   afterEach,
   beforeEach,
@@ -51,7 +52,6 @@ import { cachedRepos, taskRepos as taskReposTable, tasks as tasksTable } from '.
 import { attachWorkspaceCleanupToMultipartError } from '../src/routes/tasks'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { UPLOAD_INPUTS_DIR } from '@agent-workflow/shared'
-import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
@@ -69,6 +69,8 @@ import { ValidationError } from '../src/util/errors'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -294,14 +296,18 @@ async function buildHarness(): Promise<Harness> {
     } as never,
   })
 
-  const app = createApp({
-    secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-    token: TOKEN,
-    configPath: join(tmp, 'config.json'),
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+  const app = (
+    await openTestApplication(
+      { provider: 'sqlite', db: db },
+      {
+        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+        token: TOKEN,
+        configPath: join(tmp, 'config.json'),
+        opencodeVersion: '1.14.25',
+        dbVersion: 1,
+      },
+    )
+  ).app
   writeFileSync(
     join(tmp, 'config.json'),
     JSON.stringify({
@@ -684,14 +690,18 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
         ],
       } as never,
     })
-    const app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: TOKEN,
-      configPath: join(tmp, 'config.json'),
-      opencodeVersion: '1.14.25',
-      dbVersion: 1,
-      db,
-    })
+    const app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: db },
+        {
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: TOKEN,
+          configPath: join(tmp, 'config.json'),
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+        },
+      )
+    ).app
     writeFileSync(
       join(tmp, 'config.json'),
       JSON.stringify({

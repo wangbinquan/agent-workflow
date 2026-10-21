@@ -1,5 +1,6 @@
 // RFC-257 — 路由错误码逐个行为触发（route-error-code-coverage 锁要求每个新
 // code 被测试点名——点名的正确姿势是把那条错误路径真的走一遍并断言 code）。
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -12,7 +13,6 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
@@ -20,6 +20,8 @@ import { createUser } from '../src/services/users'
 import { createSession } from './helpers/auth/sessionStore'
 import { webhookDeliveries, webhookEndpoints, webhookTriggers, workflows } from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 11))
@@ -115,15 +117,18 @@ async function harness(opts?: { unsupportedDispatcher?: boolean }) {
     secretEnc: box.seal('s'),
     enabled: true,
   })
-  const app = createApp({
-    token: 'a'.repeat(64),
-    configPath: '',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-    secretBox: box,
-    webhookDispatcher: opts?.unsupportedDispatcher ? { dispatch: async () => {} } : dispatcher,
-  })
+  const app = (
+    await openTestApplication(
+      { provider: 'sqlite', db: db },
+      {
+        token: 'a'.repeat(64),
+        opencodeVersion: '1.14.25',
+        dbVersion: 1,
+        secretBox: box,
+        webhookDispatcher: opts?.unsupportedDispatcher ? { dispatch: async () => {} } : dispatcher,
+      },
+    )
+  ).app
   const call = async (method: string, path: string, body?: unknown) =>
     app.request(path, {
       method,

@@ -11,7 +11,7 @@ import {
 import { composeMemoryCatalogOperations } from '@/modules/memory/composition'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
-import { composeDevelopmentPurposeRoot } from '@/server'
+import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
 import { taskExecutionResourceBinding } from './integrationTriggerResourceBinding'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'
 

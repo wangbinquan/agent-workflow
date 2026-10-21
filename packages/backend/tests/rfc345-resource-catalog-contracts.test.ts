@@ -1046,13 +1046,13 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(mcpBindings).toContain(operationId)
     }
     expect(operations).toContain('mcp-catalog.rename-mcp.v1')
-    // RFC-359 —— helper 多了一条「吃**已装配的应用**」的入参形态（两个 provider 通用），
-    // 旧的 `AppDeps` 形态保留给存量调用方；形参随之从 `deps` 改名 `input`。锁的东西没变：
-    // 走旧形态时仍是「给了就用、没给就按 db 现建」。
-    expect(routeDispatcher).toContain(
-      'input.identityAccess ?? createIdentityAccessRuntime({ db: input.db })',
+    // RFC-392: both providers pass the app and identity runtime from the single graph entry.
+    expect(routeDispatcher).toContain('const { app, identityAccess } = input')
+    expect(routeDispatcher).toMatch(
+      /input:\s*\{\s*readonly app: Hono\s+readonly identityAccess: IdentityAccessRuntime\s*\}/,
     )
-    expect(routeDispatcher).toContain('const app = composed ? input.app : createApp(')
+    expect(routeDispatcher).not.toContain('AppDeps')
+    expect(routeDispatcher).not.toContain('createIdentityAccessRuntime')
     expect(routeDispatcher).toContain('admitTestDirectAuthority(')
     expect(routeDispatcher).toContain('createBoundOperationInvoker(app, identity.actor)')
     expect(routeDispatcher).not.toContain('mcpTestOperationActor(actor)')

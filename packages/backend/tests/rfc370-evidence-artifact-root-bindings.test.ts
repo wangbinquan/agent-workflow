@@ -53,12 +53,10 @@ function bind(source: ts.SourceFile, expression: string, key: string, receiver: 
 
 test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the same complete object', () => {
   const start = load('cli/start.ts'),
-    pg = load('bootstrap/daemonApplication.ts'),
-    server = load('server.ts')
+    pg = load('bootstrap/daemonApplication.ts')
   for (const [source, receiver] of [
     [start, 'input'],
     [pg, 'input'],
-    [server, 'deps'],
   ] as const) {
     bind(source, 'composeDevelopmentPurposeRoot', 'evidenceArtifacts', receiver)
     bind(source, 'composeDaemonDevelopmentAutomationModules', 'evidenceArtifacts', receiver)

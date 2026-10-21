@@ -263,7 +263,7 @@ describe('RFC-370 complete Task run selection', () => {
       path === 'cli/start.ts'
         ? readDaemonGraphSource()
         : readFileSync(resolve(import.meta.dir, '../src', path), 'utf8')
-    for (const path of ['bootstrap/daemonApplication.ts', 'server.ts']) {
+    for (const path of ['bootstrap/daemonApplication.ts']) {
       const source = ts.createSourceFile(path, read(path), ts.ScriptTarget.Latest, true)
       const calls: string[] = []
       const visit = (node: ts.Node) => {

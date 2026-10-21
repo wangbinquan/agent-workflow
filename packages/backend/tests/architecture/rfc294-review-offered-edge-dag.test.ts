@@ -395,9 +395,9 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W9-E（托管内容端口归位）',
   },
   {
-    from: 'packages/backend/src/modules/development-automation/composition/pipelineEvidence.ts',
+    from: 'packages/backend/src/modules/development-automation/composition.ts',
     to: 'integration',
-    why: 'RFC-370 Purpose 完整效果家族的 DA 装配消费 Integration exact public 的所选 pipeline 执行合同。现有收集/触发/重跑语义仍由原 owner 负责；精确登记实际 offered type 边，在 A-T7 收敛 required SPI 归属，不改变目标 DAG、分类器或集合断言。',
+    why: 'RFC-392 将既有 pipeline 合同的类型边归并至 development-automation composition，与开发用途选择共用一个边界；pipelineEvidence 改消费本模块的类型出口，边数不增。RFC-370 Purpose 完整效果家族的 DA 装配消费 Integration exact public 的所选 pipeline 执行合同。现有收集/触发/重跑语义仍由原 owner 负责；精确登记实际 offered type 边，在 A-T7 收敛 required SPI 归属，不改变目标 DAG、分类器或集合断言。',
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
   },
   {

@@ -17,7 +17,7 @@ import type { ScratchWorkspaceEffects } from '@/modules/source-control/compositi
 import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
-import { type DevelopmentPurposeSelection } from '@/server'
+import { type DevelopmentPurposeSelection } from '@/modules/development-automation/composition'
 import type { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import { type TaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'

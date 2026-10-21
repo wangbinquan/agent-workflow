@@ -176,7 +176,7 @@ describe('RFC-317 — 精确债务账本（architecture/commons-debt.json）', (
    * 已解决的条目加 `resolvedIn` 并改写 `why`；这条断言钉死 `resolvedIn` 必须
    * 点名一个**真实存在于本 RFC plan.md 里的任务号**，而不是一句好听的话。
    */
-  test('已解决的 P3 必须点名本 RFC plan.md 里真实存在的任务号', () => {
+  test('已解决的 P3 必须点名原 RFC 或后继 RFC 中真实存在的任务号', () => {
     const plan = readFileSync(
       resolve(REPO_ROOT, 'design/RFC-317-commons-boundary-hardening/plan.md'),
       'utf8',
@@ -184,20 +184,35 @@ describe('RFC-317 — 精确债务账本（architecture/commons-debt.json）', (
     const known = new Set([...plan.matchAll(/\bT(\d{1,3})\b/g)].map((match) => `T${match[1]!}`))
     expect(known.size, 'plan.md 里一个任务号都没解析出来，本断言的派生端断了').toBeGreaterThan(20)
 
+    // RFC-392: a successor can close an old finding; its actual plan remains the authority.
+    const successor = readFileSync(
+      resolve(REPO_ROOT, 'design/RFC-392-unified-test-entry/plan.md'),
+      'utf8',
+    )
+    const knownByRfc = new Map([
+      ['RFC-317', known],
+      [
+        'RFC-392',
+        new Set([...successor.matchAll(/\bT(\d{1,3})\b/g)].map((match) => `T${match[1]!}`)),
+      ],
+    ])
+    expect(knownByRfc.get('RFC-392')!.size).toBe(8)
     const bad: string[] = []
     for (const finding of debt.registeredFindings) {
       const resolvedIn = finding.resolvedIn
       if (resolvedIn === undefined) continue
       const tasks = [...resolvedIn.matchAll(/\bT(\d{1,3})\b/g)].map((match) => `T${match[1]!}`)
-      if (tasks.length === 0 || tasks.some((task) => !known.has(task))) {
+      const rfc = resolvedIn.match(/RFC-\d+/)?.[0]
+      const declared = rfc === undefined ? undefined : knownByRfc.get(rfc)
+      if (
+        tasks.length === 0 ||
+        declared === undefined ||
+        tasks.some((task) => !declared.has(task))
+      ) {
         bad.push(`${finding.findingId}: resolvedIn='${resolvedIn}'`)
       }
-      if (!/RFC-317/.test(resolvedIn)) bad.push(`${finding.findingId}: resolvedIn 未点名 RFC`)
     }
-    expect(
-      bad,
-      'resolvedIn 必须写成「RFC-317 T<n>」且 T<n> 在本 RFC 的 plan.md 里真实存在',
-    ).toEqual([])
+    expect(bad, 'resolvedIn 必须点名已登记的 RFC 与其 plan.md 中真实存在的 T<n>').toEqual([])
   })
 })
 

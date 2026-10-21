@@ -22,7 +22,6 @@ export interface DaemonObservationInput {
   readonly runtimeRegistry: DaemonProviderCore['runtimeRegistry']
   readonly mcpCatalog: () => McpCatalogModule
   readonly adapters: DaemonModuleAdapters
-  readonly mcpRuntimeTests?: ReturnType<DaemonModuleAdapters['mcpDiagnostics']>
   readonly mcpRuntimeTestDependencies?: Partial<
     Pick<
       Parameters<DaemonModuleAdapters['mcpDiagnostics']>[0],
@@ -49,56 +48,54 @@ export function composeDaemonObservationModules(input: DaemonObservationInput) {
   const intentHttpSystemAgentBinding = family()
   const workspacePresence = input.adapters.workspacePresence()
   const runtimeSessionLeases = createRuntimeSessionLeaseOperations(input.db)
-  const mcpRuntimeTests =
-    input.mcpRuntimeTests ??
-    input.adapters.mcpDiagnostics({
-      observe:
-        ({ session, turn, runtime, callId }) =>
-        (startedAt) =>
-          systemAgentObservations.open({
-            ...(callId === undefined ? {} : { callId }),
-            feature: 'mcp-runtime-test',
-            agentName: 'aw-mcp-runtime-test',
-            protocol: session.runtimeProtocol,
-            startedAt,
-            runtimeObservationIdentity: {
-              registrationId: runtime.row.id,
-              configurationRevision: runtime.row.probeFence,
-              acceptedName: runtime.row.name,
-            },
-            ...(turn.seq > 1 && session.runtimeSessionId !== null
-              ? { resumeSessionId: session.runtimeSessionId }
-              : {}),
-            demand: {
-              kind: 'mcp-runtime-test',
-              originalId: session.id,
-              originalAttempt: turn.id,
-              name: 'MCP 测试 · ' + session.runtimeName,
-              ownerUserId: session.ownerUserId,
-              purpose: 'playground',
-            },
-          }),
-      ...composeMcpRuntimeTestProvider(input.db),
-      isRuntimeEligible: isRuntimeMcpTestEligible,
-      coordinator: mcpOperationCoordinator,
-      requestBinding: {
-        contexts: identityAccess.contexts,
-        directAuthority: identityAccess.directAuthority,
-        loadVisibleMcp: (authority, id) => input.mcpCatalog().queries.get(authority, { id }),
-      },
-      async loadMcp(mcpId) {
-        const actor = await input.daemonActor('mcp-runtime-test-authority-not-admitted')
-        return input
-          .mcpCatalog()
-          .queries.get(directOperationAuthority(identityAccess.directAuthority, actor), {
-            id: mcpId,
-          })
-      },
-      loadRuntime: (name) => runtimeRegistry.getRuntime(name),
-      configuration: input.configuration,
-      ...input.mcpRuntimeTestDependencies,
-      appHome: input.mcpRuntimeTestDependencies?.appHome ?? input.appHome,
-    })
+  const mcpRuntimeTests = input.adapters.mcpDiagnostics({
+    observe:
+      ({ session, turn, runtime, callId }) =>
+      (startedAt) =>
+        systemAgentObservations.open({
+          ...(callId === undefined ? {} : { callId }),
+          feature: 'mcp-runtime-test',
+          agentName: 'aw-mcp-runtime-test',
+          protocol: session.runtimeProtocol,
+          startedAt,
+          runtimeObservationIdentity: {
+            registrationId: runtime.row.id,
+            configurationRevision: runtime.row.probeFence,
+            acceptedName: runtime.row.name,
+          },
+          ...(turn.seq > 1 && session.runtimeSessionId !== null
+            ? { resumeSessionId: session.runtimeSessionId }
+            : {}),
+          demand: {
+            kind: 'mcp-runtime-test',
+            originalId: session.id,
+            originalAttempt: turn.id,
+            name: 'MCP 测试 · ' + session.runtimeName,
+            ownerUserId: session.ownerUserId,
+            purpose: 'playground',
+          },
+        }),
+    ...composeMcpRuntimeTestProvider(input.db),
+    isRuntimeEligible: isRuntimeMcpTestEligible,
+    coordinator: mcpOperationCoordinator,
+    requestBinding: {
+      contexts: identityAccess.contexts,
+      directAuthority: identityAccess.directAuthority,
+      loadVisibleMcp: (authority, id) => input.mcpCatalog().queries.get(authority, { id }),
+    },
+    async loadMcp(mcpId) {
+      const actor = await input.daemonActor('mcp-runtime-test-authority-not-admitted')
+      return input
+        .mcpCatalog()
+        .queries.get(directOperationAuthority(identityAccess.directAuthority, actor), {
+          id: mcpId,
+        })
+    },
+    loadRuntime: (name) => runtimeRegistry.getRuntime(name),
+    configuration: input.configuration,
+    ...input.mcpRuntimeTestDependencies,
+    appHome: input.mcpRuntimeTestDependencies?.appHome ?? input.appHome,
+  })
   const runtimeManagement = input.adapters.runtimeManagement({
     observations: () => systemAgentObservations,
     configuration: {

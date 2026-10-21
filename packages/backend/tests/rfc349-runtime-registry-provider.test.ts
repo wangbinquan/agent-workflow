@@ -149,7 +149,7 @@ describe('RFC-349 runtime registry provider operations', () => {
     const root = source('src/bootstrap/daemonApplication.ts')
     expect(root).toContain('runtimeRegistry: core.runtimeRegistry')
     expect(root).toContain('observation: observationModules,')
-    expect(source('src/server.ts')).toMatch(
+    expect(source('src/bootstrap/daemonHttpComposition.ts')).toMatch(
       /runtimeRegistry:\s+runtimeManagement\.configuration satisfies RuntimeProfileConfigurationCommands/,
     )
     const config = source('src/modules/system-operations/application/applicationConfiguration.ts')
@@ -164,11 +164,7 @@ describe('RFC-349 runtime registry provider operations', () => {
     expect(adapter).toContain('selection.freeze(binding.capability')
     const persistence = source('src/modules/task-execution/composition/taskExecutionPersistence.ts')
     expect(persistence).not.toContain('nodeRunRuntime:')
-    for (const path of [
-      'src/server.ts',
-      'src/cli/start.ts',
-      'src/bootstrap/daemonApplication.ts',
-    ]) {
+    for (const path of ['src/cli/start.ts', 'src/bootstrap/daemonApplication.ts']) {
       const root = source(path)
       expect(root).toContain('composeDaemonTaskExecutionModules({')
       expect(root).not.toContain('nodeRunRuntime: composeNodeRunRuntimePersistence(')

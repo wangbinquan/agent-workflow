@@ -3,13 +3,13 @@
 // inheritance remains intact, and neither config save nor turn launch invents
 // a platform permission-profile capability gate.
 
+import type { Hono } from 'hono'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { loadConfig } from '@/config'
-import type { createApp } from '@/server'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { resolveIntentTurnConfig } from '@/modules/intent/application/turnEngine'
@@ -30,12 +30,8 @@ afterEach(() => {
 
 async function buildApplication<TDatabase extends ProviderNeutralDatabase>(
   database: () => TDatabase,
-  compose: (
-    db: TDatabase,
-    root: string,
-    configPath: string,
-  ) => ReturnType<typeof createApp> | Promise<ReturnType<typeof createApp>>,
-): Promise<{ app: ReturnType<typeof createApp>; configPath: string; db: TDatabase }> {
+  compose: (db: TDatabase, root: string, configPath: string) => Hono | Promise<Hono>,
+): Promise<{ app: Hono; configPath: string; db: TDatabase }> {
   const root = mkdtempSync(join(tmpdir(), 'rfc234-intent-runtime-'))
   roots.push(root)
   const configPath = join(root, 'config.json')
@@ -50,10 +46,7 @@ async function buildApplication<TDatabase extends ProviderNeutralDatabase>(
   return { app, configPath, db }
 }
 
-async function putConfig(
-  app: ReturnType<typeof createApp>,
-  body: Record<string, unknown>,
-): Promise<Response> {
+async function putConfig(app: Hono, body: Record<string, unknown>): Promise<Response> {
   return app.request('/api/config', {
     method: 'PUT',
     headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
@@ -131,7 +124,7 @@ describe('RFC-276 natural intentBuilderRuntime admission', () => {
 function registerProviderApplication(
   register: (
     makeApp: () => Promise<{
-      app: ReturnType<typeof createApp>
+      app: Hono
       configPath: string
       db: ProviderNeutralDatabase
     }>,

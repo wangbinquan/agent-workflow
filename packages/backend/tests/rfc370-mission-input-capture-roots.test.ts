@@ -38,10 +38,7 @@ test('mission upload capture is selected lazily and forwarded through every real
   if (!ts.isBinaryExpression(selection)) throw new Error('selected capture is missing')
   expect(selection.left.getText(composition)).toBe('input.blobs ?? input.artifacts')
   expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
-  for (const [path, receiver] of [
-    ['bootstrap/daemonApplication.ts', 'input'],
-    ['server.ts', 'deps'],
-  ] as const) {
+  for (const [path, receiver] of [['bootstrap/daemonApplication.ts', 'input']] as const) {
     const source = load(path)
     const roots = calls(source, 'composeDaemonDevelopmentAutomationModules')
     expect(roots).toHaveLength(1)

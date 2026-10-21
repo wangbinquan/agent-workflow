@@ -72,16 +72,13 @@ describe('RFC-364 production bindings', () => {
         expect(parse('cli/daemonModules/adapters.ts').text).toContain(
           'mcpDiagnostics: composeLocalMcpDiagnostics',
         )
-        expect(parse('server.ts').text).toContain(
-          'unstarted?.createMcpRuntimeTests ?? standalone.mcpDiagnostics',
-        )
         expect(parse('bootstrap/daemonApplication.ts').text).toContain(
           'phase.scope.createMcpRuntimeTests',
         )
       },
     )
   }
-  for (const path of ['server.ts']) {
+  for (const path of ['bootstrap/daemonHttpComposition.ts']) {
     test(
       path + ' shares the same commands, queries, contexts and narrow reconciliation object',
       () => {
@@ -114,7 +111,9 @@ describe('RFC-364 production bindings', () => {
       expect(parse(path).text).toContain('observation: observationModules')
       expect(parse(path).text).toContain('composeProviderAppComposition({')
     }
-    expect(parse('server.ts').text).toContain('probeRunner: mcpRuntimeTests.probeRunner')
+    expect(parse('bootstrap/daemonHttpComposition.ts').text).toContain(
+      'probeRunner: mcpRuntimeTests.probeRunner',
+    )
   })
   test('shared runtime management consumes the same diagnostic reconciliation', () => {
     const source = parse('cli/daemonModules/observation.ts')

@@ -9,7 +9,6 @@ import {
   composeEventCenter,
   deferEventCenterModule,
   createEventAutomationWorkIntentStore,
-  type EventCenterModule,
 } from '@/modules/event-center/composition'
 import {
   createCodeHostWebhookDeliveryConsumer,
@@ -30,10 +29,7 @@ import {
   createWebhookDispatchExecutionRuntime,
 } from '@/modules/integration/composition/webhookDispatch'
 import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
-import {
-  composeWebhookDeliveryRuntimeFor,
-  type WebhookIngressPersistence,
-} from '@/modules/integration/composition/webhookIngress'
+import { composeWebhookDeliveryRuntimeFor } from '@/modules/integration/composition/webhookIngress'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import type { WorkspaceClaimFinalizationCommand } from '@/modules/source-control/public/commands'
@@ -99,8 +95,6 @@ export function composeDaemonIntegrationModules(input: {
     readonly crewStationEvents?: CrewStationEventIngress
     readonly webhookDispatcher?: WebhookDispatcher
     readonly webhookTerminalControl?: ReturnType<typeof composeMrTerminalControl>
-    readonly eventCenter?: EventCenterModule
-    readonly webhookIngressPersistence?: WebhookIngressPersistence
   }
 }) {
   // A failed physical cleanup retains its durable claim for maintenance recovery.
@@ -165,67 +159,65 @@ export function composeDaemonIntegrationModules(input: {
     input.developmentPurposeRoot.approval,
   )
   const missionEventContinuation = createMissionCodeHostEventContinuation(input.db)
-  const eventCenter =
-    input.adapters?.eventCenter ??
-    deferEventCenterModule(
-      composeEventCenter({
-        db: input.db,
-        beforeObservationWrite: input.adapters?.beforeEventObservationWrite,
-        customObserverPrograms: input.adapters?.customObserverPrograms,
-        typePackageDescriptorJsons: [
-          developmentEmployeeTypePackage.descriptorJson,
-          codeHostEventCatalogJson,
-          taskLifecycleEventCatalogJson,
-          collaborationCommittedEventCatalogJson,
-          digitalEmployeeLifecycleEventCatalogJson,
-        ],
-        observer: composeDevelopmentEmployeeEventObserver({
-          codeHost: composeDevelopmentCodeHostEventObserver({
-            binding: (repositoryId) =>
-              resolveDevelopmentRepoBinding(input.developmentDeliveryProvider, repositoryId),
-          }),
-          approval: composeDevelopmentApprovalEventObserver({
-            gateway: developmentApprovalGateway,
-          }),
+  const eventCenter = deferEventCenterModule(
+    composeEventCenter({
+      db: input.db,
+      beforeObservationWrite: input.adapters?.beforeEventObservationWrite,
+      customObserverPrograms: input.adapters?.customObserverPrograms,
+      typePackageDescriptorJsons: [
+        developmentEmployeeTypePackage.descriptorJson,
+        codeHostEventCatalogJson,
+        taskLifecycleEventCatalogJson,
+        collaborationCommittedEventCatalogJson,
+        digitalEmployeeLifecycleEventCatalogJson,
+      ],
+      observer: composeDevelopmentEmployeeEventObserver({
+        codeHost: composeDevelopmentCodeHostEventObserver({
+          binding: (repositoryId) =>
+            resolveDevelopmentRepoBinding(input.developmentDeliveryProvider, repositoryId),
         }),
-        routingSubscriptions: createCodeHostWebhookRoutingDirectory(
-          input.db,
-          missionEventContinuation,
-        ),
-        automation: {
-          kind: 'automation',
-          workIntents: eventAutomationWorkIntents,
-          delegatedContexts: eventAutomationContexts.factory,
-          taskWorkStart: taskAutomationWorkStart,
-          employeeWorkStart: employeeAutomationWorkStart,
-        },
-        deliveryConsumers: supportsEventCenterCodeHostDelivery(webhookDispatcher)
-          ? [
-              createCodeHostWebhookDeliveryConsumer(
-                input.db,
-                webhookDispatcher,
-                missionEventContinuation,
-              ),
-            ]
-          : [],
-        deliveryRetryLimits: {
-          async current() {
-            const current = await input.configuration.read()
-            return {
-              defaultNodeRetries: current.defaultNodeRetries,
-              sessionRestartBudget: current.sessionRestartBudget,
-            }
-          },
-        },
+        approval: composeDevelopmentApprovalEventObserver({
+          gateway: developmentApprovalGateway,
+        }),
       }),
-    )
+      routingSubscriptions: createCodeHostWebhookRoutingDirectory(
+        input.db,
+        missionEventContinuation,
+      ),
+      automation: {
+        kind: 'automation',
+        workIntents: eventAutomationWorkIntents,
+        delegatedContexts: eventAutomationContexts.factory,
+        taskWorkStart: taskAutomationWorkStart,
+        employeeWorkStart: employeeAutomationWorkStart,
+      },
+      deliveryConsumers: supportsEventCenterCodeHostDelivery(webhookDispatcher)
+        ? [
+            createCodeHostWebhookDeliveryConsumer(
+              input.db,
+              webhookDispatcher,
+              missionEventContinuation,
+            ),
+          ]
+        : [],
+      deliveryRetryLimits: {
+        async current() {
+          const current = await input.configuration.read()
+          return {
+            defaultNodeRetries: current.defaultNodeRetries,
+            sessionRestartBudget: current.sessionRestartBudget,
+          }
+        },
+      },
+    }),
+  )
   const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(input.db)
   return Object.freeze({
     webhookTerminalControl,
     webhookDispatcher,
     webhookDeliveryPersistence,
     webhookDeliveryRuntime,
-    webhookIngressPersistence: input.adapters?.webhookIngressPersistence ?? webhookDeliveryRuntime,
+    webhookIngressPersistence: webhookDeliveryRuntime,
     webhookEndpointService: composeWebhookEndpointServiceDependencies(input),
     webhookTriggerService: composeWebhookTriggerServiceDependenciesFor(
       input.db,

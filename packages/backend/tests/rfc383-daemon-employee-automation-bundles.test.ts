@@ -1,13 +1,12 @@
 // RFC-383: session identity, initialization and selected program reads, with former SQLite/PG controls.
+import { createProviderHttpCompositionFixture } from './helpers/providerHttpComposition'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { composeDaemonDigitalEmployeeModules } from '@/cli/daemonModules/digitalEmployee'
 import { composeDaemonDevelopmentAutomationModules } from '@/cli/daemonModules/developmentAutomation'
-import { composeSqliteApplicationDeps, createComposedApp } from '@/server'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { composeUnstartedApplication } from './helpers/providerHttpApplication'
 import * as employeeComposition from '@/modules/digital-employee/composition'
 import * as authoringStore from '@/modules/digital-employee/infrastructure/authoringStore'
 import * as reactionComposition from '@/modules/task-execution/composition/digitalEmployeeExecution'
@@ -293,61 +292,46 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
   }
 })
 
-// This injection seam exists only on SQLite; the bundle behavior above runs on both providers.
-describeEachProvider(
-  'RFC-383 SQLite HTTP uses the initialized session',
-  (harness) => {
-    test('HTTP authoring and migration reads preserve the injected module, writer and mission operations', async () => {
-      const binding = harness.applicationBinding
-      if (binding.provider !== 'sqlite') throw new Error('SQLite injection boundary required')
-      const appHome = home(),
-        f = employeeAutomationFixture(harness, appHome),
-        token = 'rfc383-http'
-      await f.employee.platformTools.load()
-      await f.employee.module.maintenance.ready()
-      await f.employee.writerCutover.activate()
-      const constructEmployee = spyOn(employeeComposition, 'composeDigitalEmployee')
-      const opened = await composeUnstartedApplication((scope) => {
-        const composed = composeSqliteApplicationDeps(
-          {
-            db: binding.db,
-            appHome,
-            configPath: join(appHome, 'config.json'),
-            token,
-            dbVersion: 0,
-            opencodeVersion: null,
-            secretBox: createSecretBoxFromKey(Buffer.alloc(32, 8)),
-            digitalEmployeeModules: f.employee,
-            developmentAutomationModules: f.automation,
-          },
-          scope,
-        )
-        expect(composed.digitalEmployeeModules).toBe(f.employee)
-        expect(composed.developmentAutomationModules).toBe(f.automation)
-        expect(composed.digitalEmployeeModules.writerCutover).toBe(f.employee.writerCutover)
-        expect(composed.developmentAutomationModules.missionOperations).toBe(
-          f.automation.missionOperations,
-        )
-        return { app: createComposedApp(composed) }
-      })
-      try {
-        for (const path of [
-          '/api/digital-employee-types',
-          '/api/digital-employees/migration-status',
-        ]) {
-          const response = await opened.app.request(path, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          expect(response.status, await response.clone().text()).toBe(200)
-          if (path.endsWith('migration-status'))
-            expect(await response.json()).toMatchObject({ writer: { mode: 'os-active' } })
-        }
-        expect(constructEmployee).not.toHaveBeenCalled()
-      } finally {
-        constructEmployee.mockRestore()
-        await opened.dispose()
-      }
+// RFC-392: the initialized session is injected at the neutral HTTP boundary.
+describeEachProvider('RFC-383 HTTP uses the initialized session', (harness) => {
+  test('HTTP authoring and migration reads preserve the injected module, writer and mission operations', async () => {
+    const appHome = home(),
+      f = employeeAutomationFixture(harness, appHome),
+      token = 'rfc383-http'
+    await f.employee.platformTools.load()
+    await f.employee.module.maintenance.ready()
+    await f.employee.writerCutover.activate()
+    const opened = await createProviderHttpCompositionFixture(harness, {
+      appHome,
+      token,
+      dbVersion: 0,
+      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 8)),
     })
-  },
-  { providers: ['sqlite'] },
-)
+    const constructEmployee = spyOn(employeeComposition, 'composeDigitalEmployee')
+    const http = opened.compose({
+      digitalEmployee: f.employee,
+      developmentAutomation: f.automation,
+    })
+    expect(http.composition.digitalDevelopment.digitalEmployees.module).toBe(f.employee.module)
+    expect(http.composition.digitalDevelopment.developmentMissions.operations).toBe(
+      f.automation.missionOperations,
+    )
+    try {
+      for (const path of [
+        '/api/digital-employee-types',
+        '/api/digital-employees/migration-status',
+      ]) {
+        const response = await http.app.request(path, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        expect(response.status, await response.clone().text()).toBe(200)
+        if (path.endsWith('migration-status'))
+          expect(await response.json()).toMatchObject({ writer: { mode: 'os-active' } })
+      }
+      expect(constructEmployee).not.toHaveBeenCalled()
+    } finally {
+      constructEmployee.mockRestore()
+      await opened.dispose()
+    }
+  })
+})

@@ -54,11 +54,7 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
 
     expect(bundle).toContain('export function composeClassicCatalogs(')
     expect(bundle).toContain('readonly db: ProviderNeutralDatabase')
-    for (const root of [
-      'src/cli/start.ts',
-      'src/bootstrap/daemonApplication.ts',
-      'src/server.ts',
-    ]) {
+    for (const root of ['src/cli/start.ts', 'src/bootstrap/daemonApplication.ts']) {
       expect(source(root), root).toContain('composeDaemonResourceCatalogModules({')
       expect(source('src/cli/daemonModules/resourceCatalog.ts')).toContain(
         'composeClassicCatalogs({',

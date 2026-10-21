@@ -5253,10 +5253,10 @@ AW_TEST_PROVIDERS=sqlite bun test tests/rfc305-architecture-lock.test.ts tests/r
 **机制**：`platform/operations/catalog.ts:719` 遍历 `snapshot.declarations`，要求每条声明都有
 挂载的路由。而声明集是**进程全局**、靠模块 import 副作用累积的；挂载集属于**某一个 app**。
 `rfc311-repos-page` 经 `tests/helpers/providerHttpApplication.ts` 的
-`createProviderHttpApplication` 把 **PostgreSQL 组合根**也加载进同一个进程，于是
+`createProviderHttpApplication` 当时把 **PostgreSQL 组合根**也加载进同一个进程，于是
 `system-operations.get-database-runtime.v1`（`modules/system-operations/public/operations.ts:291`，
 数据库迁移那族，只在 PG 侧组合）进了全局声明集；随后 `rfc305-architecture-lock` 里的
-`createApp(...)`（SQLite 侧）挂的路由里没有它，闭合检查就抛。
+旧 `createApp(...)`（SQLite 侧）挂的路由里没有它，闭合检查就抛。RFC-392 已删除这个分叉：两种绑定经同一应用图和中立 HTTP owner，直接用例也进入统一 helper；多文件复验仍使用 `bun test --isolate`。
 
 **为什么 CI 一直没红**：后端测试是分片跑的，这两个文件落在不同分片里。这不是「不会发生」，
 是「还没撞上」——分片一变就会红，而且红的原因与改动者本次工作毫无关系（同
@@ -5306,9 +5306,9 @@ bun 把失败的 `beforeAll` 记成 `(unnamed)`（`tests/helpers/eachProvider.ts
 
 **仍然成立的那半个事实**（与上面的错误结论无关，是读源码得到的）：
 `bootstrap/daemonApplication.ts` 的 `composeProviderAppComposition` 调用（RFC-391 从原 PostgreSQL 应用迁入）把路由的 `databaseTelemetry` 接成
-`input.provider.telemetry`，所以从 `AppDeps` 喂进去的 `databaseTelemetry` 在 PG 侧会被忽略。
+`input.provider.telemetry`，因此测试注入的 `databaseTelemetry` 必须在统一 helper 内映射到 provider 遥测。
 测试作用域要让那条「注入伪造投影、断言路由原样回显」的用例在两个引擎上都跑，就得在
-`tests/helpers/providerHttpApplication.ts` 的 PG 分支上传
+`tests/helpers/providerHttpApplication.ts` 的 provider 绑定上传
 `telemetry: input.databaseTelemetry ?? binding.runtime.telemetry`——这条**已经做了**，用例已并入双引擎块。
 
 ## 共享 Docker VM 磁盘写满会把 PG 测试全线打成随机 `(unnamed)` 失败（2026-09-14，未处置）

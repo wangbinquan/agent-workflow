@@ -2297,6 +2297,18 @@
       "assertsAbsence": true,
       "classified": true,
       "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc392-unified-test-entry.test.ts",
+      "id": "rfc392-unified-test-entry",
+      "lines": 196,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "id": "runtime-parameter-ratchet",
       "lines": 83,

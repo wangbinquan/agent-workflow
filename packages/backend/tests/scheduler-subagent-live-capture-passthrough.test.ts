@@ -99,10 +99,7 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     expect(deps).toContain('function resolveSubagentLiveCapture(')
     expect(deps).toContain('...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {})')
     // RFC-382: each session gets capture from the bundle's live configuration.
-    for (const path of [
-      'packages/backend/src/server.ts',
-      'packages/backend/src/bootstrap/daemonApplication.ts',
-    ])
+    for (const path of ['packages/backend/src/bootstrap/daemonApplication.ts'])
       expect(read(path)).toContain('composeDaemonTaskExecutionModules({')
     const assembly = read('packages/backend/src/cli/daemonModules/taskExecution.ts')
     expect(assembly).toContain('const fresh = await taskLaunchConfiguration.start()')

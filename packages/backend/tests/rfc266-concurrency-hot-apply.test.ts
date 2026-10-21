@@ -217,7 +217,10 @@ describeEachProviderHttpApplication(
       )
       expect(routesSrc).toContain('await deps.concurrencyHotApply.apply({')
 
-      const serverSrc = readFileSync(resolve(import.meta.dir, '..', 'src', 'server.ts'), 'utf8')
+      const serverSrc = readFileSync(
+        resolve(import.meta.dir, '..', 'src', 'bootstrap/daemonHttpComposition.ts'),
+        'utf8',
+      )
       expect(serverSrc).toMatch(
         /composeConfigConcurrencyHotApply\(\s*taskExecutionProvider\.processConcurrencyScope,?\s*\)/,
       )

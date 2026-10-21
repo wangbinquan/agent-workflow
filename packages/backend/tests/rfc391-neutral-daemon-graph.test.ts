@@ -1,5 +1,9 @@
 // RFC-391: both engines use one passive graph; cold restore, selection admission and
 // maintenance materialization protection retain their explicit behavior contracts.
+import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
+import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
+import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
+import { createLogger } from '@/util/log'
 import { expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -50,7 +54,18 @@ function fixture(harness: ProviderDatabaseHarness) {
     executionMode: 'inline',
   })
   const binding = harness.applicationBinding
+  const applicationConfiguration = composeApplicationConfigurationBinding({
+    kind: 'file',
+    configPath,
+  })
   const input: DaemonApplicationInput = {
+    log: createLogger('rfc391-test'),
+    sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
+    applicationConfiguration,
+    taskLaunchConfiguration: composeTaskLaunchConfiguration({
+      kind: 'selected',
+      queries: applicationConfiguration.queries,
+    }),
     db: binding.db,
     provider:
       binding.provider === 'sqlite'

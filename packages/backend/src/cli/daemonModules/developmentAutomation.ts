@@ -25,7 +25,7 @@ import { composeScriptActionExecution } from '@/modules/task-execution/compositi
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { Logger } from '@/util/log'
-import type { SelectedDevelopmentPurposeRoot } from '@/server'
+import type { SelectedDevelopmentPurposeRoot } from '@/modules/development-automation/composition'
 import {
   sweepWakesWhileDraining,
   recoverWhileDraining,
@@ -67,11 +67,6 @@ export interface DaemonDevelopmentAutomationInput {
   readonly actionWorkspaceEntries?: Parameters<
     typeof composeAgentActionExecution
   >[0]['workspaceEntries']
-  /** Direct HTTP fixture seams, retained until RFC-386 removes test fallbacks. */
-  readonly adapters?: {
-    readonly automation?: ReturnType<typeof composeDevelopmentAutomation>
-    readonly admissionLookup?: ReturnType<typeof composeDevelopmentAdmissionLookup>
-  }
 }
 
 export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopmentAutomationInput) {
@@ -85,7 +80,7 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
     hostTasks,
     writerCutover,
   } = input
-  const admissionLookup = input.adapters?.admissionLookup ?? composeDevelopmentAdmissionLookup(db)
+  const admissionLookup = composeDevelopmentAdmissionLookup(db)
   const developmentTerminalObserver = createDevelopmentMissionExecutionTerminalObserver({
     db,
     async drive(missionId) {
@@ -106,61 +101,59 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
       }
     },
   })
-  const automation =
-    input.adapters?.automation ??
-    composeDevelopmentAutomation({
-      verificationCommands:
-        input.verificationCommands ?? createLocalVerificationCommandEffectsFactory(),
-      actionWorkspaceEffects: input.workspaceEffects.actionWorkspaceEffects,
-      automationWorkspaceEffects: input.workspaceEffects.automationWorkspaceEffects,
-      repositoryBaselines: input.repositoryBaselines,
+  const automation = composeDevelopmentAutomation({
+    verificationCommands:
+      input.verificationCommands ?? createLocalVerificationCommandEffectsFactory(),
+    actionWorkspaceEffects: input.workspaceEffects.actionWorkspaceEffects,
+    automationWorkspaceEffects: input.workspaceEffects.automationWorkspaceEffects,
+    repositoryBaselines: input.repositoryBaselines,
+    db,
+    appHome,
+    evidenceArtifacts: developmentPurposeRoot.evidenceArtifacts,
+    evidenceRead: input.evidenceRead,
+    evidenceDocumentCommands: developmentPurposeRoot.requirement.documentCommands,
+    requirementStaging: developmentPurposeRoot.requirement.staging,
+    attemptContext: input.attemptContext,
+    admissionLookup,
+    requirementSource: composeSelectedRequirementSourceRunnerFor(
       db,
-      appHome,
-      evidenceArtifacts: developmentPurposeRoot.evidenceArtifacts,
-      evidenceRead: input.evidenceRead,
-      evidenceDocumentCommands: developmentPurposeRoot.requirement.documentCommands,
-      requirementStaging: developmentPurposeRoot.requirement.staging,
-      attemptContext: input.attemptContext,
-      admissionLookup,
-      requirementSource: composeSelectedRequirementSourceRunnerFor(
-        db,
-        developmentPurposeRoot.requirement,
-      ),
-      changeCandidate: bindChangeCandidateParticipant({
-        candidateEffects: input.repositoryCandidateEffects,
-      }),
-      candidateDelivery: bindCandidateDeliveryParticipant({
-        candidateEffects: input.repositoryCandidateEffects,
-        publicationTransport: repository.repositoryPublicationTransport,
-      }),
-      conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
-      ...buildDevelopmentDeliveryDeps(
-        repository.developmentDeliveryProvider,
-        developmentPurposeRoot.pipeline.staging,
-      ),
-      ...buildDevelopmentPipelineDeps(
-        repository.developmentDeliveryProvider.pipeline,
-        developmentPurposeRoot.pipeline.staging,
-      ),
-      ...buildDevelopmentMrFactsDeps(repository.developmentDeliveryProvider),
-      approvalGateway: integration.developmentApprovalGateway,
-      agentLauncher: composeAgentActionExecution({
-        ...hostTasks,
-        agents: { get: (id) => hostTasks.agents.get(id, 'agent-action-authority-not-admitted') },
-        workspaceEntries: input.actionWorkspaceEntries,
-        onTerminal: (executionRef) => {
-          void developmentTerminalObserver.agent(executionRef)
-        },
-      }),
-      scriptLauncher: composeScriptActionExecution({
-        ...hostTasks,
-        agents: { get: (id) => hostTasks.agents.get(id, 'agent-action-authority-not-admitted') },
-        workspaceEntries: input.actionWorkspaceEntries,
-        onTerminal: (executionRef) => {
-          void developmentTerminalObserver.script(executionRef)
-        },
-      }),
-    })
+      developmentPurposeRoot.requirement,
+    ),
+    changeCandidate: bindChangeCandidateParticipant({
+      candidateEffects: input.repositoryCandidateEffects,
+    }),
+    candidateDelivery: bindCandidateDeliveryParticipant({
+      candidateEffects: input.repositoryCandidateEffects,
+      publicationTransport: repository.repositoryPublicationTransport,
+    }),
+    conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
+    ...buildDevelopmentDeliveryDeps(
+      repository.developmentDeliveryProvider,
+      developmentPurposeRoot.pipeline.staging,
+    ),
+    ...buildDevelopmentPipelineDeps(
+      repository.developmentDeliveryProvider.pipeline,
+      developmentPurposeRoot.pipeline.staging,
+    ),
+    ...buildDevelopmentMrFactsDeps(repository.developmentDeliveryProvider),
+    approvalGateway: integration.developmentApprovalGateway,
+    agentLauncher: composeAgentActionExecution({
+      ...hostTasks,
+      agents: { get: (id) => hostTasks.agents.get(id, 'agent-action-authority-not-admitted') },
+      workspaceEntries: input.actionWorkspaceEntries,
+      onTerminal: (executionRef) => {
+        void developmentTerminalObserver.agent(executionRef)
+      },
+    }),
+    scriptLauncher: composeScriptActionExecution({
+      ...hostTasks,
+      agents: { get: (id) => hostTasks.agents.get(id, 'agent-action-authority-not-admitted') },
+      workspaceEntries: input.actionWorkspaceEntries,
+      onTerminal: (executionRef) => {
+        void developmentTerminalObserver.script(executionRef)
+      },
+    }),
+  })
   const missionOperations = composeDevelopmentMissionOperations({
     repositoryBaselines: input.repositoryBaselines,
     db,

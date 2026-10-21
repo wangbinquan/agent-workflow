@@ -44,7 +44,6 @@ const compact = (node: ts.Node, file: ts.SourceFile): string =>
 
 const start = source('cli/start.ts')
 const pg = source('bootstrap/daemonApplication.ts')
-const server = source('server.ts')
 const bundle = source('cli/daemonModules/resourceCatalog.ts')
 
 function selectedCatalog(
@@ -90,14 +89,6 @@ test('PostgreSQL HTTP and daemon boot choose the same store while retaining thei
   expect(
     compact(calls(root, pg, 'composeDaemonResourceCatalogModules')[0]!.arguments[0]!, pg),
   ).toContain('db:input.db,')
-})
-
-test('SQLite standalone HTTP accepts the complete selected store', () => {
-  const root = declaration(server, 'composeSqliteApplicationDeps')
-  selectedCatalog(root, server, 'composeDaemonResourceCatalogModules', 'deps', 'Paths.root')
-  expect(
-    compact(calls(root, server, 'composeDaemonResourceCatalogModules')[0]!.arguments[0]!, server),
-  ).toContain('db:deps.db,')
 })
 
 test('RFC-380 shared bundle passes the complete selection once to editing and once to boot', () => {

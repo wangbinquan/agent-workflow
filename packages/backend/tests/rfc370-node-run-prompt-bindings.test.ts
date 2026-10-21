@@ -774,7 +774,7 @@ test('PG application carries its one prompt receiver through memory, runtime and
   expect(compact(onlyCall(body, sf, 'composeProviderAppDeps').arguments[0]!, sf)).toBe(
     'http.composition',
   )
-  const neutral = source('server.ts'),
+  const neutral = source('bootstrap/daemonHttpComposition.ts'),
     owner = compositionBody(neutral, 'composeProviderAppComposition')
   expect(
     compact(properties(binding(owner, neutral, 'taskRoutes'), neutral).get('operations')!, neutral),
@@ -792,74 +792,6 @@ test('PG application carries its one prompt receiver through memory, runtime and
     ),
   ).toBe('taskExecutionRoutes')
   expect(calls(body, sf, 'selectNodeRunPromptOperations')).toHaveLength(0)
-})
-
-test('standalone HTTP chooses raw content only for absent operations and forwards one receiver to mounts', () => {
-  const sf = source('server.ts'),
-    body = compositionBody(sf, 'composeSqliteApplicationDeps'),
-    choice = binding(body, sf, 'nodeRunPrompts')
-  optionalPromptContract(sf, 'AppDeps', true)
-  if (!ts.isConditionalExpression(choice)) throw new Error('actual complete selection required')
-  expect(compact(choice.condition, sf)).toBe('deps.nodeRunPrompts===undefined')
-  expect(choice.whenTrue).toBe(onlyCall(body, sf, 'composeNodeRunPromptOperations'))
-  expect(choice.whenFalse).toBe(onlyCall(body, sf, 'selectNodeRunPromptOperations'))
-  const raw = onlyCall(body, sf, 'composeNodeRunPromptOperations'),
-    existing = onlyCall(body, sf, 'selectNodeRunPromptOperations')
-  expect(raw.arguments.map((value) => compact(value, sf))).toEqual([
-    'deps.nodeRunPromptContentEffects',
-    "join(appHome,'runs')",
-  ])
-  expect(existing.arguments.map((value) => compact(value, sf))).toEqual(['deps.nodeRunPrompts'])
-  expect(
-    compact(
-      properties(
-        properties(onlyCall(body, sf, 'composeDaemonTaskExecutionModules').arguments[0]!, sf).get(
-          'selection',
-        )!,
-        sf,
-      ).get('taskRunBinding')!,
-      sf,
-    ),
-  ).toBe('taskRunRoot.drive')
-  const memory = binding(body, sf, 'memoryModules')
-  if (!ts.isBinaryExpression(memory)) throw new Error('original memory receiver choice required')
-  expect(memory.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
-  expect(compact(memory.left, sf)).toBe('deps.memoryModules')
-  expect(memory.right).toBe(onlyCall(body, sf, 'composeDaemonMemoryModules'))
-  expect(
-    properties(onlyCall(body, sf, 'composeDaemonMemoryModules').arguments[0]!, sf).has(
-      'operations',
-    ),
-  ).toBe(false)
-  expect(
-    compact(
-      properties(onlyCall(body, sf, 'composeDaemonMemoryModules').arguments[0]!, sf).get(
-        'nodeRunPrompts',
-      )!,
-      sf,
-    ),
-  ).toBe('nodeRunPrompts')
-  const httpInput = properties(
-    onlyCall(body, sf, 'composeProviderAppComposition').arguments[0]!,
-    sf,
-  )
-  expect(compact(properties(httpInput.get('modules')!, sf).get('taskExecution')!, sf)).toBe(
-    'taskExecutionModules',
-  )
-  const mount = compositionBody(sf, 'composeProviderAppComposition')
-  expect(compact(binding(mount, sf, 'taskRoutes'), sf)).toContain(
-    'operations:taskExecutionProvider.routes.tasks',
-  )
-  expect(calls(mount, sf, 'createTaskRouteOperations')).toHaveLength(0)
-  const selected = properties(
-    onlyCall(body, sf, 'composeDaemonTaskExecutionModules').arguments[0]!,
-    sf,
-  )
-  expect(compact(properties(selected.get('selection')!, sf).get('nodeRunPrompts')!, sf)).toBe(
-    'nodeRunPrompts',
-  )
-  expect(calls(mount, sf, 'composeNodeRunPromptOperations')).toHaveLength(0)
-  expect(calls(mount, sf, 'selectNodeRunPromptOperations')).toHaveLength(0)
 })
 
 // RFC-382: the selected prompt receiver must survive the newly shared bundle boundary.

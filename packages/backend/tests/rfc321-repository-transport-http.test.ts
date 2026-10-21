@@ -2,6 +2,7 @@
 // never echoes plaintext, and stays transactionally coupled to the admin
 // connection trust boundary.
 
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
 import type { MiddlewareHandler } from 'hono'
@@ -18,13 +19,13 @@ import {
   repositoryTransportConnections,
   userRepositoryTransportCredentials,
 } from '../src/db/schema'
-import { createApp } from '../src/server'
-import type { AppDeps } from '../src/server'
 import { mountAccountRepositoryTransportCredentialRoutes } from '../src/routes/accountRepositoryTransportCredentials'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { createUser } from '../src/services/users'
 import { errorHandler } from '../src/util/errors'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 21))
@@ -68,27 +69,27 @@ async function fixture() {
     createSession({ db, userId: alice.id }),
     createSession({ db, userId: bob.id }),
   ])
-  const repositoryTransport = composeRepositoryTransportCredentials(
-    new DrizzleRepositoryTransportCredentialRepository(db),
-    box,
-  )
-  const app = createApp({
-    token: DAEMON_TOKEN,
-    configPath: '',
-    opencodeVersion: null,
-    dbVersion: 1,
-    db,
-    secretBox: box,
-    repositoryTransport,
-    codeHostFetch: async (_url, init) => {
-      const token = new Headers(init?.headers).get('private-token') ?? ''
-      probedTokens.push(token)
-      if (token.includes('invalid')) {
-        return new Response(null, { status: 401 })
-      }
-      return Response.json({ username: token.endsWith('7001') ? 'alice-code-host' : 'draft-user' })
-    },
-  })
+  const app = (
+    await openTestApplication(
+      { provider: 'sqlite', db: db },
+      {
+        token: DAEMON_TOKEN,
+        opencodeVersion: null,
+        dbVersion: 1,
+        secretBox: box,
+        codeHostFetch: async (_url, init) => {
+          const token = new Headers(init?.headers).get('private-token') ?? ''
+          probedTokens.push(token)
+          if (token.includes('invalid')) {
+            return new Response(null, { status: 401 })
+          }
+          return Response.json({
+            username: token.endsWith('7001') ? 'alice-code-host' : 'draft-user',
+          })
+        },
+      },
+    )
+  ).app
   const call = async (
     token: string | null,
     method: string,
@@ -255,17 +256,21 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
     }
     app.use('*', injectActor)
     app.onError(errorHandler)
-    mountAccountRepositoryTransportCredentialRoutes(app, { db: h.db, secretBox: box } as AppDeps, {
-      credentials: composeRepositoryTransportCredentials(
-        new DrizzleRepositoryTransportCredentialRepository(h.db),
-        box,
-      ).ownCredentials,
-      currentSubjects: {
-        async resolveCurrentSubject() {
-          return null
+    mountAccountRepositoryTransportCredentialRoutes(
+      app,
+      {},
+      {
+        credentials: composeRepositoryTransportCredentials(
+          new DrizzleRepositoryTransportCredentialRepository(h.db),
+          box,
+        ).ownCredentials,
+        currentSubjects: {
+          async resolveCurrentSubject() {
+            return null
+          },
         },
       },
-    })
+    )
 
     const response = await app.request('/api/account/code-host-push-credentials')
     expect(response.status).toBe(403)

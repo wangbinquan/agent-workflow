@@ -46,10 +46,7 @@ test('RFC-383 roots forward the selected candidate factory to both shared derive
       ts.ScriptTarget.Latest,
       true,
     )
-  for (const [path, receiver] of [
-    ['bootstrap/daemonApplication.ts', 'input'],
-    ['server.ts', 'deps'],
-  ] as const) {
+  for (const [path, receiver] of [['bootstrap/daemonApplication.ts', 'input']] as const) {
     const source = load(path)
     for (const name of [
       'composeDaemonDigitalEmployeeModules',

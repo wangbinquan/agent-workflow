@@ -30,6 +30,8 @@
 //   A9  F15 permission carve-out: tasks:launch WITHOUT agents:write may
 //       launch; agents:write WITHOUT tasks:launch may NOT.
 
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
+import type { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, test, beforeAll } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -56,7 +58,7 @@ import {
   releaseAgentLaunch,
 } from '../src/services/agentLaunchReservation'
 import { getAgentById } from '../src/services/agent'
-import { createApp } from '../src/server'
+
 import { createAgent, deleteAgent, renameAgent } from '../src/services/agent'
 import {
   AGENT_HOST_AGENT_NODE_ID,
@@ -80,6 +82,8 @@ import { runGit } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -495,7 +499,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
 
 describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
   let db: DbClient
-  let app: ReturnType<typeof createApp>
+  let app: Hono
   let appHome: string
   let adminToken: string
   let soloId: string
@@ -505,14 +509,18 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     await seedTestDefaultOpencodeRuntime(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-agent-http-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
-    app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: 'a'.repeat(64),
-      configPath: join(appHome, 'config.json'),
-      opencodeVersion: '1.14.25',
-      dbVersion: 1,
-      db,
-    })
+    app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: db },
+        {
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: 'a'.repeat(64),
+          configPath: join(appHome, 'config.json'),
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+        },
+      )
+    ).app
     const admin = await createUser(db, {
       username: 'alice',
       email: 'alice@example.test',

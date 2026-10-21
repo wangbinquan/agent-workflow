@@ -25,6 +25,8 @@
 //               closed gate 409s. POST dw-save-as-workflow persists the
 //               generated DAG as a reusable workflows row.
 
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
+import type { Hono } from 'hono'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
@@ -53,7 +55,6 @@ import {
   workgroupTaskState,
 } from '../src/db/schema'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
-import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import {
@@ -90,6 +91,8 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -856,7 +859,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
 
 describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
   let db: DbClient
-  let app: ReturnType<typeof createApp>
+  let app: Hono
   let token: string
   let ownerId: string
 
@@ -864,14 +867,18 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     db = createInMemoryDb(MIGRATIONS)
     await seedTestDefaultOpencodeRuntime(db)
     await seedPoolAgents(db)
-    app = createApp({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-      token: 'a'.repeat(64),
-      configPath: '/tmp/aw-rfc167-dw-config.json',
-      opencodeVersion: '1.14.25',
-      dbVersion: 1,
-      db,
-    })
+    app = (
+      await openTestApplication(
+        { provider: 'sqlite', db: db },
+        {
+          secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+          token: 'a'.repeat(64),
+          configPath: '/tmp/aw-rfc167-dw-config.json',
+          opencodeVersion: '1.14.25',
+          dbVersion: 1,
+        },
+      )
+    ).app
     const u = await createUser(db, {
       username: 'alice',
       displayName: 'alice',

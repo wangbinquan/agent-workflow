@@ -765,7 +765,7 @@ Playwright e2e 六个分片同时红。此前没暴露，只是因为走那台�
 1. 任何自己拼 `deps` 的调用点，都要 `...resolveLaunchRuntimeConfig(configPath)`
    ——和 `buildStartTaskDeps` 取自同一处；
 2. 写一条**扫全部调用点**的判据，不要逐个回忆。本仓那条是
-   `rfc359-w5hn-drive-coordinator-runtime-config`：扫 `bootstrap/daemonApplication.ts` 与 `server.ts` 测试回退里的每一处
+   `rfc359-w5hn-drive-coordinator-runtime-config`：扫 `bootstrap/daemonApplication.ts` 里的每一处
    `createTaskDriveCoordinator({ deps: … })`，字面量 deps 必须 spread 配置漏斗，
    整体交一个已构造好的 `StartTaskDeps`（裸标识符）天然合格。
    **它当场找出了第三台手改时漏掉的协调器**——写判据比逐个回忆可靠。
@@ -6382,7 +6382,7 @@ instead of importing another SQLite/PostgreSQL factory.」
 **跨 context 的 provider 装配没有任何模块内的合法落点**，只剩：
 
 > 模块之间只交换 **provider 中性的端口类型**；具体挑哪个 provider 一律在 **bootstrap
-> （`bootstrap/daemonApplication.ts` / `bootstrap/daemonSessionAdapters.ts`；SQLite 测试回退暂在 `server.ts`）或 system-operation 根**上完成。
+> （`bootstrap/daemonApplication.ts` / `bootstrap/daemonSessionAdapters.ts`）或 system-operation 根**上完成。
 
 **做法**：owner context 在自己的 `composition/` 下开一个装配出口（`composition.ts` 或
 `composition/xxx.ts`，那一层不在判据的负样本里），消费方的 compose 函数把 participant 作为**入参**收，
@@ -8411,7 +8411,7 @@ SHA 有多个 workflow 时会返回多行，取 run id 要加 `select(.workflowN
     split -n l/4 radius.txt part-       # 或 awk 'NR%4==<i>'
     for p in part-*; do bun test --isolate $(cat $p | tr '\n' ' ') || break; done
 
-RFC-391 后，守护进程应用与会话分别在 `bootstrap/daemonApplication.ts`、`bootstrap/daemonSession.ts`，provider 差异在 `bootstrap/daemonSessionAdapters.ts`；`server.ts` 保留中立 HTTP 绑定与 SQLite 测试回退。旧 W29 摘要守卫已退役。改动接线时应覆盖 RFC-379/380/390/391 结构锁、RFC-370 根绑定测试与双引擎行为用例，不能只按符号 import 缩小范围。先完成全部开发与用例，再集中验证。
+RFC-391 后，守护进程应用与会话分别在 `bootstrap/daemonApplication.ts`、`bootstrap/daemonSession.ts`，provider 差异在 `bootstrap/daemonSessionAdapters.ts`；RFC-392 后 HTTP owner 位于 `bootstrap/daemonHttpComposition.ts`，开发用途根位于 `bootstrap/developmentPurposeRoot.ts`，`server.ts` 只保留中立挂载表和请求管线。旧 W29 摘要守卫已退役。改动接线时应覆盖 RFC-379/380/390/391/392 结构锁、RFC-370 根绑定测试与双引擎行为用例，不能只按符号 import 缩小范围。先完成全部开发与用例，再集中验证。
 
 ### 批量改符号名要**带词边界**：`composePostgresqlDigitalEmployee` 是 `…DigitalEmployeeExecution` 的前缀
 
@@ -8749,7 +8749,7 @@ SQLite 专有的东西。判据是整份源码 `not.toContain('sqlite')`，**注
 
 ## HTTP 组合根变更要同步结构锁与真实入口用例
 
-RFC-390 已将 HTTP owner 绑定收为 `server.ts` 的 `composeProviderAppComposition`，RFC-391 的中立应用图和 SQLite 测试回退都经它进入同一张 `composeProviderAppDeps` 路由表。旧 W29 的三段源码摘要守卫已退役，不再按旧函数名更新摘要。修改接线时同步 RFC-380 模块组单次构造守卫、RFC-390 中立绑定守卫和实际双引擎 HTTP 用例；先完成全部实现与用例，再集中验证。
+RFC-392 将 HTTP owner 绑定迁入 `bootstrap/daemonHttpComposition.ts`；守护进程与两个测试 lane 都经过 `bootstrap/daemonApplication.ts`，再进入 `server.ts` 的同一张 `composeProviderAppDeps` 路由表。旧 W29 的三段源码摘要守卫已退役，不再按旧函数名更新摘要。修改接线时同步 RFC-380 模块组单次构造守卫、RFC-390 中立绑定守卫和实际双引擎 HTTP 用例；先完成全部实现与用例，再集中验证。
 
 ## 复现 CI 的 PG 失败要用仓库钉死的 Bun 版本（2026-09-23）
 
@@ -8770,11 +8770,11 @@ Add boot steps, background jobs and close participants to `packages/backend/src/
 
 ## RFC-380：同构守护进程模块按会话装配一次
 
-provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行时管理、记忆只在 `cli/daemonModules/` 的共享函数构造。两个 provider 的会话根各调用一次，SQLite 将同一实例注入 `server.ts`，HTTP 测试回退也调用同一函数。根与 `server.ts` 不再自行构造组内成员。粒度是 provider 会话，迁移目标必须有独立实例；构造不执行 SQL、不启动定时器，启动恢复与 MCP 诊断作业仍归 `daemonLifecycleProgram.ts`。 RFC-390 后 HTTP 绑定也已中立：`composeProviderAppComposition` 只消费这 12 个模块组，不再调用组工厂；并发热应用取任务执行组的 `processConcurrencyScope`，与调度器使用同一对象。
+provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行时管理、记忆只在 `cli/daemonModules/` 的共享函数构造。中立应用图按会话调用一次，HTTP 组合只消费该会话的实例；HTTP 测试也通过同一应用图装配。根与 `server.ts` 不再自行构造组内成员。粒度是 provider 会话，迁移目标必须有独立实例；构造不执行 SQL、不启动定时器，启动恢复与 MCP 诊断作业仍归 `daemonLifecycleProgram.ts`。 RFC-390 后 HTTP 绑定也已中立：`composeProviderAppComposition` 只消费这 12 个模块组，不再调用组工厂；并发热应用取任务执行组的 `processConcurrencyScope`，与调度器使用同一对象。
 
 ## RFC-383：数字员工与开发自动化按会话装配，两个引擎共用写者门控
 
-数字员工与开发自动化只在 `cli/daemonModules/digitalEmployee.ts`、`developmentAutomation.ts` 构造；SQLite 的 HTTP、工作启动、启动初始化与 OS 作业共用一个数字员工实例（取代 RFC-359 W12 的两实例决定），`server.ts` 仅保留同构测试回退。写者切换每会话一份，迁移状态、任务准入、启动与周期共用；两个引擎的唤醒先刷新状态，遗留恢复读当前状态，门控在 development-automation 应用层。宿主任务共用任务执行组的 `hostTasks` 与会话取消成员，守护身份经 provider 核心每次准入。新增接线不要把构造挪出 `??` 回退而让生产创建无人使用的实例。
+数字员工与开发自动化只在 `cli/daemonModules/digitalEmployee.ts`、`developmentAutomation.ts` 构造；SQLite 的 HTTP、工作启动、启动初始化与 OS 作业共用一个数字员工实例（取代 RFC-359 W12 的两实例决定），`server.ts` 不再保留测试回退。写者切换每会话一份，迁移状态、任务准入、启动与周期共用；两个引擎的唤醒先刷新状态，遗留恢复读当前状态，门控在 development-automation 应用层。宿主任务共用任务执行组的 `hostTasks` 与会话取消成员，守护身份经 provider 核心每次准入。新增接线不要让生产创建无人使用的实例；测试替身只经应用图的 `testSeams` 注入（RFC-392）。
 
 ## RFC-384：意图按会话装配，维护直接读取同一应用引擎
 
@@ -8803,4 +8803,4 @@ provider 核心、仓库凭据、资源目录、观测 / 系统 Agent / 运行�
 
 `main.ts` 将 `composeDaemonSession` 注入 `startCommand`；`cli/start.ts` / `cli/dev.ts` 不得导入 `bootstrap/`。应用图只构造被动模块，`unstarted` 相位仅做有限初始化；会话图拥有唯一 `composeDaemonLifecycle` 调用。冷恢复经适配表的 `afterCore` 在核心组之后、资源目录之前执行。受限启动步骤只读 `DAEMON_BOOT_STEPS`，不得在图里另写 provider 分支。恢复证明保留 SQLite 的进程世代与 PostgreSQL 的数据库世代，执行 owner 仍统一使用 `DAEMON_GENERATION`。
 
-维护 Worker 的任务保护集取会话驱动注册表与 `materializingSpaces.keys()` 的并集。新增源代码锁应读取真实图文件；跨层接线锁可用 `tests/helpers/daemonGraphSource.ts`，它每个文件只读取一次。不要恢复两个 provider 副本的计数或按旧 `backgroundJobs[1]` 找 SQLite。`composeProviderAppComposition` 暂留 `server.ts`，避免 SQLite 测试回退形成值依赖环；测试入口与机制目录迁移分别留给 RFC-392 与 S2c。
+维护 Worker 的任务保护集取会话驱动注册表与 `materializingSpaces.keys()` 的并集。新增源代码锁应读取真实图文件；跨层接线锁可用 `tests/helpers/daemonGraphSource.ts`，它每个文件只读取一次。不要恢复两个 provider 副本的计数或按旧 `backgroundJobs[1]` 找 SQLite。RFC-392 已将 `composeProviderAppComposition` 迁到 `bootstrap/daemonHttpComposition.ts`；它只类型依赖挂载表，`server.ts` 不导入 bootstrap。开发用途类型留在 development-automation composition，CLI 不新增 bootstrap 边。`readDaemonGraphSource()` 不包含 HTTP owner 文件，需要该源码的锁单独读取。测试绑定由 `tests/helpers/providerHttpApplication.ts` 补齐临时路径、配置、日志和写窗口，生产会话不传 `testSeams`；入口根瘦身与机制目录迁移留给 S2c。

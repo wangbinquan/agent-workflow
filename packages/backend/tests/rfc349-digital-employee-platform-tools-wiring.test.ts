@@ -1,49 +1,40 @@
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import type { Hono } from 'hono'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { bootImplementation, expectBootOrder } from './helpers/daemonProgramSource'
-// RFC-349 回归防护 —— HTTP 授权面必须和 OS 运行时读同一份平台工具目录。
-//
-// 为什么这条测试存在：RFC-349 把内置工具目录的组装改成 provider-bound 且异步，
-// 于是 `server.ts` 里原本自己 `composeDigitalEmployeeBuiltinToolCatalog({ db })`
-// 的那段变成了一个**可选注入**（`deps.digitalEmployeePlatformTools`）——而
-// `cli/start.ts` 只把目录交给了自己那份 `employeeOs`，从没交给 `createComposedApp`。
-// 结果：SQLite daemon 的 `/work-items/:ref/tools` 恒返回 `{"items":[]}`，岗位模版
-// 编辑器里「选择默认工具」下拉根本不存在（占位符退化成「请先在该节点增加工具」），
-// 零配置上手流程整条断掉。e2e `rfc310-zero-config-onboarding` 就死在这里。
-//
-// 这里锁两端：①注入到位时 HTTP 面确实能列出平台工具；②`cli/start.ts` 确实把
-// 同一个目录交给了 app 组装（否则第 ① 条在生产里永远走不到）。
+// RFC-349 / RFC-392: HTTP and WorkStart consume the application graph's single platform-tool catalog on both engines.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import ts from 'typescript'
 import { createSession } from './helpers/auth/sessionStore'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createUser } from '../src/services/users'
-import { composeSqliteAppDeps, createComposedApp, type SqliteAppComposition } from '../src/server'
 import type { DigitalEmployeeWorkStartPort } from '../src/modules/integration/public/participants'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '../src/modules/digital-employee/composition'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '../src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
-import { composeDigitalEmployeeBuiltinToolCatalog } from '../src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { developmentEmployeeTypePackage } from '../src/modules/development-automation/composition/employeeTypePackage'
 import { ensureDigitalEmployeeAgentTemplates } from '../src/services/digitalEmployeeAgentTemplates'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const backendRoot = resolve(import.meta.dir, '..')
 
-describe('RFC-349 digital employee platform tool wiring', () => {
-  let db: DbClient
+describeEachProvider('RFC-349 digital employee platform tool wiring', (harness) => {
+  let db: ProviderNeutralDatabase
   let appHome: string
-  let composition: SqliteAppComposition
-  let app: ReturnType<typeof createComposedApp>
+  let composition: ProviderHttpApplication
+  let app: Hono
   let token: string
   let actorUserId: string
   let typeRef: string
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = harness.db
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc349-platform-tools-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
     const templates = composeDigitalEmployeeAgentTemplateCatalogFor(
@@ -55,22 +46,14 @@ describe('RFC-349 digital employee platform tool wiring', () => {
       typeRef: { typeId: string; revision: number }
     }
     typeRef = `${descriptor.typeRef.typeId}@${descriptor.typeRef.revision}`
-    const digitalEmployeePlatformTools = composeDigitalEmployeeBuiltinToolCatalog({
-      agentTemplates: templates,
-      typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
-    })
-    await digitalEmployeePlatformTools.load()
-    composition = composeSqliteAppDeps({
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+    composition = await createProviderHttpApplication(harness, {
       token: 'd'.repeat(64),
-      configPath: join(appHome, 'config.json'),
-      opencodeVersion: null,
-      dbVersion: 1,
-      db,
       appHome,
-      digitalEmployeePlatformTools,
+      configPath: join(appHome, 'config.json'),
+      dbVersion: 1,
+      opencodeVersion: null,
     })
-    app = createComposedApp(composition)
+    app = composition.app
     const admin = await createUser(db, {
       username: 'platform_tools_admin',
       email: 'platform-tools@example.test',
@@ -82,7 +65,10 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     actorUserId = admin.id
   })
 
-  afterEach(() => rmSync(appHome, { recursive: true, force: true }))
+  afterEach(async () => {
+    await composition?.dispose()
+    rmSync(appHome, { recursive: true, force: true })
+  })
 
   test('the HTTP tool listing surfaces the built-in platform tools for a business-tool work item', async () => {
     const response = await app.request(
@@ -105,7 +91,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     ).toBeGreaterThan(0)
   })
 
-  test('the SQLite daemon hands its one catalog to the app composition, not only to the OS runtime', () => {
+  test('the daemon hands its one catalog to the app composition, not only to the OS runtime', () => {
     const source = readDaemonGraphSource()
     // RFC-383: the session bundle builds and owns the catalog before HTTP assembly.
     const bundle = readFileSync(
@@ -162,12 +148,12 @@ describe('RFC-349 digital employee platform tool wiring', () => {
   })
 
   test('the completed HTTP composition exposes a required WorkStart port without a bind phase', async () => {
-    const port: DigitalEmployeeWorkStartPort = composition.digitalEmployeeWorkStart
+    const port: DigitalEmployeeWorkStartPort = composition.runtime.digitalEmployeeModules.workStart
     expect(Object.isFrozen(composition)).toBe(true)
     expect(Object.isFrozen(port)).toBe(true)
     // @ts-expect-error A completed WorkStart port has no mutable binding phase.
     expect(port.bind).toBeUndefined()
-    expect('digitalEmployeeWorkStart' in composition.apiRoutes).toBe(false)
+    expect(composition.modules.digitalEmployee.workStart).toBe(port)
     await expect(
       port.launch({
         employeeId: 'missing-employee',
@@ -188,7 +174,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     ).rejects.toMatchObject({ code: 'employee-definition-not-found' })
   })
 
-  test('WorkStart uses the HTTP employee and stays usable after the same routes mount again', async () => {
+  test('WorkStart uses the HTTP employee and repeated intake preserves the graph participant', async () => {
     async function requestJson<T>(path: string, body?: unknown): Promise<T> {
       const response = await app.request(path, {
         method: body === undefined ? 'GET' : 'POST',
@@ -236,7 +222,7 @@ describe('RFC-349 digital employee platform tool wiring', () => {
       jobTemplateRef: published.ref,
       workScope: { kind: 'repository', repositoryId: 'repository-1' },
     })
-    const port = composition.digitalEmployeeWorkStart
+    const port = composition.runtime.digitalEmployeeModules.workStart
     const request: Parameters<DigitalEmployeeWorkStartPort['launch']>[0] = {
       employeeId: employee.id,
       intake: {
@@ -252,8 +238,8 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     }
     const first = await port.launch(request)
     expect(first.caseId).toBeString()
-    app = createComposedApp(composition)
-    expect(composition.digitalEmployeeWorkStart).toBe(port)
+    expect(composition.modules.digitalEmployee).toBe(composition.runtime.digitalEmployeeModules)
+    expect(composition.runtime.digitalEmployeeModules.workStart).toBe(port)
     expect(await port.launch(request)).toEqual(first)
     const detail = await requestJson<{ case: Record<string, unknown> }>(
       `/api/employee-cases/${first.caseId}`,

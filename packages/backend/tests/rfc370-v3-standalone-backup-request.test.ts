@@ -5,6 +5,7 @@
 // send any body, or none, would have started failing or capturing worktrees.
 // This locks the standalone contract exactly as before; the hosted decode (with
 // its C10 refusal) is covered by `rfc370-m3-backup-http.test.ts`.
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,7 +13,8 @@ import { join, resolve } from 'node:path'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createInMemoryDb } from '@/db/client'
 import { composeSystemOperationsWithRecoveryAdapter } from '@/modules/system-operations/composition'
-import { createApp } from '@/server'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -26,36 +28,43 @@ test('a standalone HTTP backup never reads its body and never captures worktrees
   const unused = (): never => {
     throw new Error('restore must not be invoked')
   }
-  const app = createApp({
-    db: createInMemoryDb(resolve(import.meta.dirname, '../db/migrations')),
-    token: 'daemon-backup',
-    configPath: join(appHome, 'config.json'),
-    dbVersion: 1,
-    opencodeVersion: '1.14.25',
-    secretBox: createSecretBoxFromKey(Buffer.alloc(32, 9)),
-    systemOperations: composeSystemOperationsWithRecoveryAdapter({
-      appHome,
-      adapter: {
-        backup: {
-          async request(input) {
-            calls.push(input)
-            return {
-              path: join(appHome, 'backup.tar.gz'),
-              sizeBytes: 1,
-              contents: { db: true, config: true, workflows: 0, skills: 0 },
-            }
-          },
-        },
-        restore: {
-          plan: unused,
-          stage: unused,
-          cancel: unused,
-          status: unused,
-          activateLocal: unused,
-        },
+  const app = (
+    await openTestApplication(
+      {
+        provider: 'sqlite',
+        db: createInMemoryDb(resolve(import.meta.dirname, '../db/migrations')),
       },
-    }),
-  })
+      {
+        token: 'daemon-backup',
+        configPath: join(appHome, 'config.json'),
+        dbVersion: 1,
+        opencodeVersion: '1.14.25',
+        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 9)),
+        systemOperations: composeSystemOperationsWithRecoveryAdapter({
+          appHome,
+          adapter: {
+            backup: {
+              async request(input) {
+                calls.push(input)
+                return {
+                  path: join(appHome, 'backup.tar.gz'),
+                  sizeBytes: 1,
+                  contents: { db: true, config: true, workflows: 0, skills: 0 },
+                }
+              },
+            },
+            restore: {
+              plan: unused,
+              stage: unused,
+              cancel: unused,
+              status: unused,
+              activateLocal: unused,
+            },
+          },
+        }),
+      },
+    )
+  ).app
   const post = (body?: string) =>
     app.fetch(
       new Request('http://localhost/api/backup', {

@@ -62,10 +62,12 @@ describe('RFC-383 single employee and lexical work-start forwarding', () => {
   })
   test('HTTP and work-start consume the same module and its activity worker', () => {
     const server = source('server.ts'),
+      http = source('bootstrap/daemonHttpComposition.ts'),
+      graph = source('bootstrap/daemonApplication.ts'),
       bundle = source('cli/daemonModules/digitalEmployee.ts')
-    expect(server).toContain('const digitalEmployee = digitalEmployeeModules.module')
-    expect(server).toContain('digitalEmployeeWorkStart: digitalEmployeeModules.workStart')
-    expect(server).toContain(
+    expect(http).toContain('const digitalEmployee = digitalEmployeeModules.module')
+    expect(graph).toContain('launch: (request) => digitalEmployeeModules.workStart.launch(request)')
+    expect(http).toContain(
       'const developmentActivityOperations = digitalEmployeeModules.activityOperations',
     )
     expect(server).toMatch(
@@ -75,7 +77,7 @@ describe('RFC-383 single employee and lexical work-start forwarding', () => {
     expect(bundle).toContain('eventOrigin: request.origin')
     expect(bundle).toContain('return { caseId: result.caseRef.id }')
     expect(bundle).toContain('composeDevelopmentActivityOperations(module.runtime.worker)')
-    expect(server).not.toContain('trackReady(digitalEmployee.maintenance.ready())')
+    expect(http).not.toContain('trackReady(digitalEmployee.maintenance.ready())')
   })
 })
 

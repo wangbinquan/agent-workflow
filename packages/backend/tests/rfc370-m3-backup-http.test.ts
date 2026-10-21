@@ -2,18 +2,20 @@
 // creation, while verification never invokes the live database restore path.
 // RFC-370 v3 V5: the hosted refusal of workspace capture (C10) surfaces with its
 // own translated code through the operation boundary.
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
-import { createApp } from '@/server'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeSystemOperationsWithRecoveryAdapter } from '@/modules/system-operations/composition'
 import { createStandbyExecutionAuthority } from '@/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority'
 import { HostedBackupWorktreesUnsupportedError } from '@/modules/system-operations/infrastructure/crewstation/databaseBackups'
 import { createUser } from '@/services/users'
 import { createSession } from './helpers/auth/sessionStore'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -70,18 +72,26 @@ async function setup(standby = false) {
       },
     },
   })
-  const app = createApp({
-    db,
-    token: 'daemon-backup',
-    configPath: join(appHome, 'config.json'),
-    dbVersion: 1,
-    opencodeVersion: '1.14.25',
-    secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-    systemOperations,
-    ...(standby
-      ? { executionAuthority: createStandbyExecutionAuthority({ reason: 'lease-held-elsewhere' }) }
-      : {}),
-  })
+  const app = (
+    await openTestApplication(
+      { provider: 'sqlite', db: db },
+      {
+        token: 'daemon-backup',
+        configPath: join(appHome, 'config.json'),
+        dbVersion: 1,
+        opencodeVersion: '1.14.25',
+        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+        systemOperations,
+        ...(standby
+          ? {
+              executionAuthority: createStandbyExecutionAuthority({
+                reason: 'lease-held-elsewhere',
+              }),
+            }
+          : {}),
+      },
+    )
+  ).app
   const user = await createUser(db, {
     username: 'viewer',
     displayName: 'Viewer',

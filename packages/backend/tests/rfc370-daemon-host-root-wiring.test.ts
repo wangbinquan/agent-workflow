@@ -46,7 +46,7 @@ function selected(node: ts.Node, file: ts.SourceFile, expression: string, proper
 }
 const start = source('cli/start.ts')
 const pg = source('bootstrap/daemonApplication.ts')
-const server = source('server.ts')
+const server = source('bootstrap/daemonHttpComposition.ts')
 
 test('start selects the host once and passes the same object to serving, initial composition and recompose', () => {
   const root = declaration(start, 'startCommand')

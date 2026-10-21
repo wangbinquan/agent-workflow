@@ -32,7 +32,7 @@ const MISSION_OPERATIONS_SOURCE = resolve(
   'composition',
   'missionOperations.ts',
 )
-const SERVER_SOURCE = resolve(import.meta.dir, '..', 'src', 'server.ts')
+const SERVER_SOURCE = resolve(import.meta.dir, '..', 'src', 'bootstrap/daemonHttpComposition.ts')
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
   return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {

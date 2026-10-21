@@ -80,10 +80,7 @@ const fields = {
 } as const
 
 test('RFC-383 roots forward baselines and the three bundle consumers retain their lexical selection', () => {
-  for (const [path, receiver] of [
-    ['bootstrap/daemonApplication.ts', 'input'],
-    ['server.ts', 'deps'],
-  ] as const) {
+  for (const [path, receiver] of [['bootstrap/daemonApplication.ts', 'input']] as const) {
     const source = load(path)
     for (const name of [
       'composeDaemonDigitalEmployeeModules',
@@ -213,7 +210,7 @@ test('CLI initial and replacement sessions forward the same selected storage obj
 
 test('both actual HTTP composers select complete workspace and package owners with lazy native defaults', () => {
   for (const [path, receiver, workspaceReceiver] of [
-    ['server.ts', 'input.selections?', 'input.selections?'],
+    ['bootstrap/daemonHttpComposition.ts', 'input.selections?', 'input.selections?'],
   ] as const) {
     const source = load(path)
     const workspace = oneRoot(source, 'composeTaskWorkspaceQueries')
@@ -270,10 +267,7 @@ test('both actual HTTP composers select complete workspace and package owners wi
 })
 
 test('HTTP callers forward selected workspace and package owners into the neutral binding', () => {
-  for (const [path, receiver] of [
-    ['bootstrap/daemonApplication.ts', 'input'],
-    ['server.ts', 'deps'],
-  ] as const) {
+  for (const [path, receiver] of [['bootstrap/daemonApplication.ts', 'input']] as const) {
     const source = load(path)
     const selection = property(
       oneRoot(source, 'composeProviderAppComposition'),
@@ -292,10 +286,7 @@ test('HTTP callers forward selected workspace and package owners into the neutra
 })
 
 test('RFC-383 one employee case participant supplies workspace and platform work items', () => {
-  for (const [path, receiver] of [
-    ['bootstrap/daemonApplication.ts', 'input'],
-    ['server.ts', 'deps'],
-  ] as const) {
+  for (const [path, receiver] of [['bootstrap/daemonApplication.ts', 'input']] as const) {
     const source = load(path)
     const root = oneRoot(source, 'composeDaemonDigitalEmployeeModules')
     expect(compact(root, source)).toContain(
@@ -348,7 +339,6 @@ test('public root types expose existing complete contracts without adding partia
   for (const [path, names] of [
     ['cli/start.ts', ['StartOptions', 'DaemonProviderSessionComposeInput']],
     ['bootstrap/daemonApplication.ts', ['DaemonApplicationInput']],
-    ['server.ts', ['AppDeps']],
   ] as const) {
     const source = load(path)
     for (const name of names) {
@@ -374,10 +364,7 @@ test('public root types expose existing complete contracts without adding partia
 })
 
 test('RFC-383 workspace selection reaches the three shared consumers and the HTTP fallback', () => {
-  for (const [path, receiver] of [
-    ['bootstrap/daemonApplication.ts', 'input'],
-    ['server.ts', 'deps'],
-  ] as const) {
+  for (const [path, receiver] of [['bootstrap/daemonApplication.ts', 'input']] as const) {
     const source = load(path),
       selection = oneRoot(source, 'selectDevelopmentWorkspaceEffectBinding')
     expect(compact(property(selection, source, 'automationWorkspaceEffects'), source)).toBe(

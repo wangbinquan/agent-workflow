@@ -5,6 +5,8 @@
 // after the guard and require Validate/Export to consume the immutable detail
 // captured before that writer committed.
 
+import type { ProviderHttpApplicationInput } from './helpers/providerHttpApplication'
+import type { Hono } from 'hono'
 import {
   WorkflowValidationReceiptSchema,
   type WorkflowDefinition,
@@ -15,7 +17,6 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
-import type { createApp, AppDeps } from '../src/server'
 import {
   createWorkflow,
   deleteWorkflow,
@@ -57,8 +58,8 @@ const SYSTEM = { kind: 'system', reason: 'rfc199-exact-operation-test' } as cons
 
 async function buildHarness(
   harness: ProviderDatabaseHarness,
-  hook?: AppDeps['workflowExactOperationHook'],
-): Promise<{ db: ProviderNeutralDatabase; app: ReturnType<typeof createApp> }> {
+  hook?: ProviderHttpApplicationInput['workflowExactOperationHook'],
+): Promise<{ db: ProviderNeutralDatabase; app: Hono }> {
   const db = harness.db
   const appHome = mkdtempSync(join(tmpdir(), 'rfc199-workflow-'))
   applicationHomes.add(appHome)
@@ -82,11 +83,7 @@ async function seed(db: ProviderNeutralDatabase, name: string): Promise<Workflow
   })
 }
 
-async function api(
-  app: ReturnType<typeof createApp>,
-  path: string,
-  init: RequestInit = {},
-): Promise<Response> {
+async function api(app: Hono, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
   headers.set('authorization', `Bearer ${TOKEN}`)
   if (init.body !== undefined) headers.set('content-type', 'application/json')

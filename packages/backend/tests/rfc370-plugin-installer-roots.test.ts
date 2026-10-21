@@ -29,10 +29,7 @@ function calls(source: ts.SourceFile, expression: string) {
 }
 
 test('the complete plugin installer receiver reaches the real startup and HTTP catalogs', () => {
-  for (const [path, receiver] of [
-    ['bootstrap/daemonApplication.ts', 'input'],
-    ['server.ts', 'deps'],
-  ] as const) {
+  for (const [path, receiver] of [['bootstrap/daemonApplication.ts', 'input']] as const) {
     const source = load(path)
     const catalogs = calls(source, 'composeDaemonResourceCatalogModules')
     expect(catalogs).toHaveLength(1)

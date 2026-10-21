@@ -22,6 +22,7 @@
 //   B7  scheduled save gate (design P2-2): ported agent + description payload
 //       / upload-port agent → 422 at save; text-port payload saves.
 
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Hono } from 'hono'
@@ -36,7 +37,6 @@ import {
 import { buildActor } from '../src/auth/actor'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import {
   AGENT_HOST_AGENT_NODE_ID,
@@ -61,6 +61,8 @@ import {
   validateWorkflowDef,
 } from '../src/services/workflow.validator'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+
+const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -426,14 +428,18 @@ async function buildHarness(): Promise<Harness> {
   })
   const configPath = join(tmp, 'config.json')
   writeFileSync(configPath, JSON.stringify({ $schema_version: 1 }))
-  const app = createApp({
-    secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
-    token: TOKEN,
-    configPath,
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
-  })
+  const app = (
+    await openTestApplication(
+      { provider: 'sqlite', db: db },
+      {
+        secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
+        token: TOKEN,
+        configPath,
+        opencodeVersion: '1.14.25',
+        dbVersion: 1,
+      },
+    )
+  ).app
   return { db, app, home, agentId: agent.id }
 }
 

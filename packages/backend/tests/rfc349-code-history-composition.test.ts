@@ -114,7 +114,9 @@ describe('RFC-349 code-history composition', () => {
 
     expect(routeSource).not.toContain('sqliteCodeHistoryFallback')
     expect(routeSource).not.toContain('deps.db')
-    expect(serverSource).toContain('const codeHistoryQueries = composeCodeHistoryQueries(input.db)')
+    expect(
+      readFileSync(resolve(import.meta.dir, '../src/bootstrap/daemonHttpComposition.ts'), 'utf8'),
+    ).toContain('const codeHistoryQueries = composeCodeHistoryQueries(input.db)')
     expect(serverSource).toContain('mountCodeRoutes(app, input.code.history)')
     expect(applicationSource).not.toContain('composeCodeHistoryQueries(')
     expect(applicationSource).toContain('composeProviderAppComposition({')

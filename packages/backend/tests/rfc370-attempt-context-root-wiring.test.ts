@@ -63,14 +63,12 @@ test('the actual DA composition selects one context receiver and invokes its nat
 test('all real startup and HTTP roots forward the same selected context through provider recomposition', () => {
   const start = load('cli/start.ts')
   const pg = load('bootstrap/daemonApplication.ts')
-  const server = load('server.ts')
   const pgRoot = calls(start, 'composeDaemonApplication')
   expect(pgRoot).toHaveLength(1)
   binding(start, pgRoot[0]!, 'input')
   for (const [source, receiver] of [
     [start, 'input'],
     [pg, 'input'],
-    [server, 'deps'],
   ] as const) {
     const roots = calls(source, 'composeDaemonDevelopmentAutomationModules')
     expect(roots).toHaveLength(1)
