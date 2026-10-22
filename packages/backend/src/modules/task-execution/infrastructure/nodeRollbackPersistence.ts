@@ -26,7 +26,6 @@ export async function loadNodeRollbackTarget(db: ProviderNeutralDatabase, taskId
   return {
     taskId,
     db,
-    repoCount: task.repoCount,
     worktreePath: task.worktreePath,
     repos,
   }

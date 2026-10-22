@@ -183,7 +183,6 @@ describe('RFC-098 WP-9 修订#3 — multi-repo rollback is two-phase all-or-noth
 
   function multiTarget(container: string, repoA: string, repoB: string): RollbackTarget {
     return {
-      repoCount: 2,
       worktreePath: container,
       repos: [
         { worktreePath: repoA, worktreeDirName: 'repo-a' },

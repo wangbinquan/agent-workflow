@@ -6,7 +6,6 @@ export interface TaskRollbackRepositorySnapshot {
 
 export interface TaskRollbackTargetSnapshot {
   readonly taskId: string
-  readonly repoCount: number
   readonly worktreePath: string
   readonly repositories: readonly TaskRollbackRepositorySnapshot[]
 }

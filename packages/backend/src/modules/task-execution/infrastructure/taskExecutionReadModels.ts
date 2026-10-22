@@ -1,7 +1,7 @@
 // RFC-359 W4-B1 —— task-execution 读模型：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { isWorkgroupTask } from '@agent-workflow/shared'
+import { isSingleRootRepository, isWorkgroupTask } from '@agent-workflow/shared'
 import { and, asc, desc, eq } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -287,7 +287,6 @@ export function createTaskExecutionReadModels(
           taskId: tasks.id,
           ownerUserId: tasks.ownerUserId,
           worktreePath: tasks.worktreePath,
-          repoCount: tasks.repoCount,
         })
         .from(tasks)
         .where(eq(tasks.id, input.taskId))
@@ -333,16 +332,14 @@ export function createTaskExecutionReadModels(
       const output = outputRows[0]
       if (output === undefined) return { status: 'port-not-found' as const }
 
-      let legacyRepoDirName = ''
-      if (task.repoCount > 1) {
-        const repoRows = await db
-          .select({ worktreeDirName: taskRepos.worktreeDirName })
-          .from(taskRepos)
-          .where(eq(taskRepos.taskId, input.taskId))
-          .orderBy(asc(taskRepos.repoIndex))
-          .limit(1)
-        legacyRepoDirName = repoRows[0]?.worktreeDirName ?? ''
-      }
+      const repoRows = await db
+        .select({ mountPath: taskRepos.mountPath, worktreeDirName: taskRepos.worktreeDirName })
+        .from(taskRepos)
+        .where(eq(taskRepos.taskId, input.taskId))
+        .orderBy(asc(taskRepos.repoIndex))
+      const legacyRepoDirName = isSingleRootRepository(repoRows.map((repo) => repo.mountPath))
+        ? ''
+        : (repoRows[0]?.worktreeDirName ?? '')
       return {
         status: 'found' as const,
         artifact: {

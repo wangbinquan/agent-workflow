@@ -12,6 +12,7 @@
 import type { TaskArchivedEventsReader } from '../public/types'
 import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 import {
+  isSingleRootRepository,
   compareNodeRunMintOrder,
   CommitPushMetaSchema,
   NodeRunSchema,
@@ -1237,7 +1238,7 @@ export async function nodeRunStdoutProjection(
 /**
  * RFC-359 AC-1（同上，第 2 刀）—— 任务工作树的累计 diff，两个引擎共用同一份。
  *
- * 单仓（`repoCount === 1`，前 RFC-066 的字节基线）：先查 base commit（缺 → 409），
+ * 单根仓库（唯一成员挂根，前 RFC-066 的字节基线）：先查 base commit（缺 → 409），
  * 再查工作树（不是 git 工作树 → 410），然后回 `worktreeDiff` 的 1 MiB 封顶结果。
  * **检查次序不能调**：两门同时失败时必须先报 409——「任务在准备阶段就没成」是主因，
  * 工作树在不在是次要信息（`rfc359-w5hn-task-read-route-provider-parity` 专门钉了这一格）。
@@ -1264,7 +1265,7 @@ export async function taskDiffProjection(
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
-  if (task.repoCount === 1) {
+  if (isSingleRootRepository(task.repos.map((repo) => repo.mountPath))) {
     if (task.baseCommit === null) {
       throw new DomainError(
         'task-no-base-commit',

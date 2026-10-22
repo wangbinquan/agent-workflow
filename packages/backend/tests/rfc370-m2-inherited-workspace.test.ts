@@ -97,7 +97,6 @@ test('workspace GC never reclaims a borrowed canonical scene and orphan isolatio
     branch: 'main',
     baseBranch: 'main',
     spaceKind: 'remote',
-    repoCount: 1,
     startedAt: 0,
     finishedAt: 1,
     workspacePruningAt: null,

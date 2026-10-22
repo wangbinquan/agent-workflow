@@ -22,6 +22,7 @@
 //
 // Per-repo errors are warn-and-continue; callers decide what to do next.
 
+import { isSingleRootRepository } from '@agent-workflow/shared'
 import { gitCommitExists, rollbackToSnapshot } from '@/util/git'
 import type { Logger } from '@/util/log'
 import { sha256Hex } from '@/util/hash'
@@ -35,7 +36,6 @@ import type { TaskRollbackQueries } from '@/modules/task-execution/application/p
 export interface RollbackTarget {
   taskId?: string
   db?: NodeRollbackDatabase
-  repoCount: number
   /** Single-repo worktree; for multi-repo this is the container dir (never rolled back in retry mode). */
   worktreePath: string
   repos: Array<{ worktreePath: string; worktreeDirName: string }>
@@ -94,7 +94,9 @@ export function planNodeRunRollbackTargets(
   run: RollbackRunRow,
   opts: { resetOnEmptySnapshot: boolean },
 ): PlannedNodeRunRollbackTarget[] {
-  const multiRepo = target.repoCount > 1 && target.repos.length > 0
+  const multiRepo =
+    !isSingleRootRepository(target.repos.map((repo) => repo.worktreeDirName)) &&
+    target.repos.length > 0
   if (multiRepo && (run.preSnapshotReposJson !== null || opts.resetOnEmptySnapshot)) {
     let map: Record<string, string> = {}
     if (run.preSnapshotReposJson !== null) {
@@ -143,7 +145,6 @@ export async function loadRollbackTargetFrom(
   if (snapshot === null) return null
   return {
     taskId: snapshot.taskId,
-    repoCount: snapshot.repoCount,
     worktreePath: snapshot.worktreePath,
     repos: snapshot.repositories.map((repository) => ({ ...repository })),
   }
@@ -165,7 +166,9 @@ export async function rollbackNodeRunWorktrees(
   log: Logger,
 ): Promise<RollbackOutcome> {
   const outcome: RollbackOutcome = { attempted: false, failures: [] }
-  const multiRepo = target.repoCount > 1 && target.repos.length > 0
+  const multiRepo =
+    !isSingleRootRepository(target.repos.map((repo) => repo.worktreeDirName)) &&
+    target.repos.length > 0
   // Multi-repo branch. In resume mode (`resetOnEmptySnapshot: false`) it is
   // entered only when a per-repo map exists — a null map is a legacy pre-PR-B
   // row and falls through to the single-string path below (historical resume

@@ -1,4 +1,8 @@
-import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
+import {
+  isSingleRootRepository,
+  isTerminalTaskStatus,
+  type TaskStatus,
+} from '@agent-workflow/shared'
 
 import { DomainError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -162,7 +166,7 @@ export function createWorkspaceMaintenanceCommand(input: {
             `task '${plan.taskId}' no longer owns a workspace-prune tombstone`,
           )
         }
-        const repositories = task.repoCount > 1 ? await store.listTaskRepositories(plan.taskId) : []
+        const repositories = await store.listTaskRepositories(plan.taskId)
         removed = await filesystem.removeWorkspace(task, repositories)
       } else {
         removed = await filesystem.removeIsoContainer(task, plan.taskId)
@@ -276,8 +280,10 @@ export function createWorkspaceMaintenanceCommand(input: {
         continue
       }
       if (input.worktreeAutoGc.onlyMerged === true && task.spaceKind !== 'scratch') {
-        if (task.repoCount > 1) {
-          const repositories = await store.listTaskRepositories(task.id)
+        const repositories = await store.listTaskRepositories(task.id)
+        // Rows predating task_repos retain the task-level root projection.
+        const mounts = repositories.length === 0 ? [''] : repositories.map((repo) => repo.mountPath)
+        if (!isSingleRootRepository(mounts)) {
           let allMerged = repositories.length > 0
           for (const repository of repositories) {
             if (

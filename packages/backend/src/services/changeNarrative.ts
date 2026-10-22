@@ -11,6 +11,7 @@
 // artifact store and its input is read through the selected revision content.
 
 import {
+  isSingleRootRepository,
   buildChangeGroups,
   changeNarrativeSchema,
   classifyFileKind,
@@ -88,7 +89,7 @@ export async function buildNarrativeInput(
 ): Promise<NarrativeInput> {
   const reads = codeReviewReads(input)
   const diff = await getTaskStructuralDiff(reads, task.id, 'task')
-  const multiRepo = task.repoCount > 1
+  const multiRepo = !isSingleRootRepository(task.repos.map((repo) => repo.mountPath))
 
   // The FILE universe is the git enumeration, NOT diff.files — the structural
   // artifact only carries code + manifest files, but the groups must cover

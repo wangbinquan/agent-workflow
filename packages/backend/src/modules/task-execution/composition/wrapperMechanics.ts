@@ -1,5 +1,6 @@
 // RFC-339 — task-execution-owned loop/git/fanout wrapper mechanics.
 
+import { isSingleRootRepository } from '@agent-workflow/shared'
 import type { computeShardScope } from '@/modules/task-execution/domain/fanoutScope'
 import type {
   Agent,
@@ -615,7 +616,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     const priorMergedRow = doneMergedCandidates[0]!
     const priorBase: Record<string, string> = {}
     const priorNode: Record<string, string> = {}
-    if (state.repos.length === 1 && state.repos[0]!.mountPath === '') {
+    if (isSingleRootRepository(state.repos.map((repo) => repo.mountPath))) {
       if (priorMergedRow.isoBaseSnapshot !== null) priorBase[''] = priorMergedRow.isoBaseSnapshot
       if (priorMergedRow.isoNodeTree !== null) priorNode[''] = priorMergedRow.isoNodeTree
     } else {
@@ -790,12 +791,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
         persistBase: 'in-setup',
         persist: async (h: IsoLike) => {
           if (!h.passthrough)
-            await persistIsoBase(
-              isolatedRunBinding(state),
-              shardRunId,
-              task.repoCount,
-              shardIso as IsoHandle,
-            )
+            await persistIsoBase(isolatedRunBinding(state), shardRunId, shardIso as IsoHandle)
         },
       },
       beforeSpawn: async () => {
@@ -952,7 +948,6 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
             writeSem: state.writeSem,
             handle: iso,
             nodeRunId: shardRunId,
-            repoCount: task.repoCount,
             via: 'live',
             extraForcedContainerPaths: (result.portFilePaths ?? []).map((p) =>
               toContainerRelative(state.repos[0]?.worktreeDirName ?? '', p),
@@ -1341,12 +1336,7 @@ async function dispatchFanoutAggregatorAttempt(
         persistBase: 'in-setup',
         persist: async (h: IsoLike) => {
           if (!h.passthrough)
-            await persistIsoBase(
-              isolatedRunBinding(state),
-              aggRunId,
-              task.repoCount,
-              aggIso as IsoHandle,
-            )
+            await persistIsoBase(isolatedRunBinding(state), aggRunId, aggIso as IsoHandle)
         },
       },
       onIsoSetupFailure: () => ({
@@ -1476,7 +1466,6 @@ async function dispatchFanoutAggregatorAttempt(
             writeSem: state.writeSem,
             handle: iso,
             nodeRunId: aggRunId,
-            repoCount: task.repoCount,
             via: 'live',
             extraForcedContainerPaths: (result.portFilePaths ?? []).map((p) =>
               toContainerRelative(state.repos[0]?.worktreeDirName ?? '', p),
@@ -1660,7 +1649,7 @@ export async function createOrRebuildWrapperIso(
     isoSubmodulesReposJson?: string | null
   } | null,
 ): Promise<IsoHandle> {
-  const { task, taskId } = state
+  const { taskId } = state
   // RFC-144 (Codex impl-gate P2) — same-row wrapper revival: a revived wrapper
   // row may arrive with a SETTLED prior generation ('merged': crash inside
   // mergeBackWrapperIso got its pending-merge replayed at entry;
@@ -1726,7 +1715,7 @@ export async function createOrRebuildWrapperIso(
   }
   if (effectiveExisting !== null) {
     const baseSnapshots: Record<string, string> = {}
-    if (state.repos.length === 1 && state.repos[0]!.mountPath === '') {
+    if (isSingleRootRepository(state.repos.map((repo) => repo.mountPath))) {
       if (effectiveExisting.isoBaseSnapshot !== null) {
         baseSnapshots[''] = effectiveExisting.isoBaseSnapshot
       }
@@ -1800,8 +1789,7 @@ export async function createOrRebuildWrapperIso(
     binding: isolatedRunBinding(state),
     log: state.log,
   })
-  if (!handle.passthrough)
-    await persistIsoBase(isolatedRunBinding(state), wrapperRunId, task.repoCount, handle)
+  if (!handle.passthrough) await persistIsoBase(isolatedRunBinding(state), wrapperRunId, handle)
   return handle
 }
 
@@ -1830,7 +1818,7 @@ async function mergeBackWrapperIso(
   | { kind: 'conflict-human'; detail: string }
   | { kind: 'merge-failed'; msg: string }
 > {
-  const { task, taskId } = state
+  const { taskId } = state
   try {
     // RFC-193 K1: re-aggregate at wrapper-final time — the wrapper handle is
     // the one LONG-LIVED handle (inner nodes archived new port files during
@@ -1840,13 +1828,7 @@ async function mergeBackWrapperIso(
     ])
     // RFC-210 impl-gate: the handle rides along so a topology the snapshot
     // extended (submodule added inside the wrapper) survives into crash replay.
-    await persistIsoNodeTree(
-      isolatedRunBinding(state),
-      wrapperRunId,
-      task.repoCount,
-      nodeTrees,
-      wrapperIso,
-    )
+    await persistIsoNodeTree(isolatedRunBinding(state), wrapperRunId, nodeTrees, wrapperIso)
     const merge = await state.writeSem.run(async () => {
       const mr = await mergeIsolatedWorkspace(wrapperIso, nodeTrees, log)
       if (mr.clean) return { kind: 'merged' as const }

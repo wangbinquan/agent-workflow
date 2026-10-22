@@ -24,6 +24,7 @@
 // ban — binary-build incident). The conflict resolver (which mints child runs
 // and calls runNode directly) is injected by the scheduler as a callback.
 
+import { isSingleRootRepository } from '@agent-workflow/shared'
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
 import {
   scopeForIsolatedRun,
@@ -163,13 +164,12 @@ export async function createIsoUnderLock(args: {
 export async function persistIsoBase(
   binding: IsolatedAgentRunBinding,
   nodeRunId: string,
-  _repoCount: number,
   handle: IsoHandle,
 ): Promise<void> {
   if (handle.passthrough) return // in-place run — leave iso columns NULL (golden-lock)
   // The isolation view carries mountPath as worktreeDirName. One member at
   // 'svc' still needs the per-repo columns; only the root mount uses scalars.
-  if (handle.repos.length === 1 && handle.repos[0]!.worktreeDirName === '') {
+  if (isSingleRootRepository(handle.repos.map((repo) => repo.worktreeDirName))) {
     await binding.persistence.mergeStates.transition({
       nodeRunId,
       event: { kind: 'begin-isolation' },
@@ -245,13 +245,12 @@ function submodulesReposJsonFor(handle: IsoHandle): string | null {
 export async function persistIsoNodeTree(
   binding: IsolatedAgentRunBinding,
   nodeRunId: string,
-  _repoCount: number,
   nodeTrees: Record<string, string>,
   handle?: IsoHandle,
 ): Promise<void> {
   const mounts =
     handle === undefined ? Object.keys(nodeTrees) : handle.repos.map((repo) => repo.worktreeDirName)
-  const singleRoot = mounts.length === 1 && mounts[0] === ''
+  const singleRoot = isSingleRootRepository(mounts)
   const topology =
     handle === undefined
       ? {}
@@ -293,7 +292,6 @@ export async function mergeBackAndSettle(args: {
   writeSem: WriteSemLike
   handle: IsoHandle
   nodeRunId: string
-  repoCount: number
   nodeTrees?: Record<string, string>
   via: 'live' | 'replay'
   /**
@@ -350,7 +348,7 @@ export async function mergeBackAndSettle(args: {
   let nodeTrees = args.nodeTrees
   if (nodeTrees === undefined) {
     nodeTrees = await snapshotIsolatedWorkspace(handle, log)
-    await persistIsoNodeTree(binding, nodeRunId, args.repoCount, nodeTrees, handle)
+    await persistIsoNodeTree(binding, nodeRunId, nodeTrees, handle)
   }
   const trees = nodeTrees
   // Snapshotting stays parallel in each private iso. Only the canonical merge
@@ -443,7 +441,7 @@ async function persistPendingSubResolves(
     return JSON.stringify({ ...base, pendingSubResolves: repo.pendingSubResolves })
   }
 
-  if (handle.repos.length === 1 && handle.repos[0]!.worktreeDirName === '') {
+  if (isSingleRootRepository(handle.repos.map((repo) => repo.worktreeDirName))) {
     await binding.persistence.nodeExecution.patch({
       nodeRunId,
       values: { isoSubmodulesJson: withPending(row.isoSubmodulesJson, handle.repos[0]) },

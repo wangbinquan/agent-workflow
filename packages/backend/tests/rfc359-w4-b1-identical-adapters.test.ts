@@ -244,7 +244,7 @@ describeEachProvider('RFC-359 W4-B1 —— 回滚目标投影一份实现', (har
       { worktreePath: '/tmp/wt/a', worktreeDirName: 'a' },
       { worktreePath: '/tmp/wt/b', worktreeDirName: 'b' },
     ])
-    expect(target?.repoCount).toBe(2)
+    expect(target?.repositories).toHaveLength(2)
     const single = await seedTask(db, wf, { status: 'running' })
     expect((await queries.load(single))?.repositories).toEqual([
       { worktreePath: `/tmp/worktree/${single}`, worktreeDirName: '' },

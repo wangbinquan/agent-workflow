@@ -16,6 +16,7 @@
 
 import { extname } from 'node:path'
 import {
+  isSingleRootRepository,
   parseRepoKeyWire,
   type CodePosition,
   type CodeReference,
@@ -122,7 +123,9 @@ export async function getCodeIntel(
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
   const { worktreePath } = resolveRepoTarget(task, q.repo)
-  const repoKey = task.repoCount > 1 ? parseRepoKeyWire(q.repo ?? '') : ''
+  const repoKey = !isSingleRootRepository(task.repos.map((repo) => repo.mountPath))
+    ? parseRepoKeyWire(q.repo ?? '')
+    : ''
 
   if (q.mode === 'deep' && q.side === 'worktree') {
     const content = reads.content.bind(worktreePath)
@@ -250,7 +253,7 @@ async function baseline(
   // Single-repo only: the stored artifact's file paths carry display labels in
   // multi-repo tasks and MUST NOT be prefix-guessed back to repos (F-04).
   let multiRepoLimited = false
-  if (task.repoCount <= 1) {
+  if (isSingleRootRepository(task.repos.map((repo) => repo.mountPath))) {
     const stored = await readStoredTaskDiff(reads.artifacts, {
       taskId: task.id,
       scope: 'task',

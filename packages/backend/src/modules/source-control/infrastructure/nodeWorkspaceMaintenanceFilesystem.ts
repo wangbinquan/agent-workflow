@@ -1,3 +1,4 @@
+import { isSingleRootRepository } from '@agent-workflow/shared'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -28,13 +29,15 @@ export function createNodeWorkspaceMaintenanceFilesystem(input: {
       repositories: readonly WorkspaceTaskRepositoryRecord[],
     ): Promise<boolean> {
       const workspaceExisted = task.worktreePath !== '' && existsSync(task.worktreePath)
+      // An absent legacy task_repos projection still denotes the task-level root.
+      const mounts = repositories.length === 0 ? [''] : repositories.map((repo) => repo.mountPath)
       if (task.spaceKind === 'scratch') {
         if (workspaceExisted) {
           // RFC-356 T5：Windows 上一击即弃会在句柄尚未释放时留下整棵树。
           await removeDirectoryWithRetry(task.worktreePath, { log })
           input.invalidateWorkspacePath(task.worktreePath)
         }
-      } else if (task.repoCount > 1) {
+      } else if (!isSingleRootRepository(mounts)) {
         for (const repository of repositories) {
           if (repository.worktreePath !== '' && existsSync(repository.worktreePath)) {
             await removeWorktree({

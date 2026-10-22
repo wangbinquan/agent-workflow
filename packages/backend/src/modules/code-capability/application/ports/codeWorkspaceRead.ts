@@ -15,7 +15,6 @@ export interface CodeWorkspaceTask {
   readonly spaceKind: string
   readonly worktreePath: string
   readonly baseCommit: string | null
-  readonly repoCount: number
   readonly repos: readonly CodeWorkspaceRepository[]
   /** RFC-370 §10 V16 — set on each terminal transition, cleared on resume:
    * the generation a stored code-review artifact belongs to. */

@@ -317,7 +317,7 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
         })
         const pending = runWithTaskExecutionContext(f.context, async () => {
           const handle = await create(f, id)
-          await persistIsoBase(isolatedRunBinding(f.state), id, 1, handle)
+          await persistIsoBase(isolatedRunBinding(f.state), id, handle)
           return handle
         })
         await bindEntered.promise
@@ -359,7 +359,7 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
       try {
         await runWithTaskExecutionContext(f.context, async () => {
           const handle = await create(f, id)
-          await persistIsoBase(isolatedRunBinding(f.state), id, 1, handle)
+          await persistIsoBase(isolatedRunBinding(f.state), id, handle)
           const snapshotEntered = held<void>(),
             snapshotAck = held<void>(),
             entered = held<void>(),
@@ -379,7 +379,6 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
             writeSem: f.state.writeSem,
             handle,
             nodeRunId: id,
-            repoCount: 1,
             via: 'live',
             conflictResolver: async () => ({ allResolved: true, detail: '' }),
           })
@@ -468,13 +467,12 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
                 ).toEqual({ kind: 'merged' })
               } else {
                 const handle = await create(f, nodeId, innerState)
-                await persistIsoBase(isolatedRunBinding(innerState), nodeId, 1, handle)
+                await persistIsoBase(isolatedRunBinding(innerState), nodeId, handle)
                 await mergeBackAndSettle({
                   binding: isolatedRunBinding(innerState),
                   writeSem: innerState.writeSem,
                   handle,
                   nodeRunId: nodeId,
-                  repoCount: 1,
                   via: 'live',
                   conflictResolver: async () => ({ allResolved: true, detail: '' }),
                 })

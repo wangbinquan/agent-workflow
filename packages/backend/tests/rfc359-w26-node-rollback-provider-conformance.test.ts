@@ -85,7 +85,6 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
       expect(target).toEqual({
         taskId,
         db: harness.db,
-        repoCount: 1,
         worktreePath: '/fixture/worktrees/task',
         repos: [{ worktreePath: '/fixture/worktrees/task', worktreeDirName: '' }],
       })
@@ -113,7 +112,6 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
       expect(target).toEqual({
         taskId,
         db: harness.db,
-        repoCount: 7,
         worktreePath: '/fixture/worktrees/task',
         repos: [1, 2, 4].map((index) => ({
           worktreePath: `/fixture/worktrees/repo-${index}`,
@@ -155,7 +153,6 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
         expect(target).toEqual({
           taskId,
           db: tx,
-          repoCount: 9,
           worktreePath: '/fixture/transaction/task',
           repos: [
             { worktreePath: '/fixture/worktrees/repo-0', worktreeDirName: 'repo-0' },

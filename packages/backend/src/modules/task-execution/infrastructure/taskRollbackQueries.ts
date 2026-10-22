@@ -16,7 +16,6 @@ export class DrizzleTaskRollbackQueries implements TaskRollbackQueries {
     const taskRows = await this.db
       .select({
         taskId: tasks.id,
-        repoCount: tasks.repoCount,
         worktreePath: tasks.worktreePath,
       })
       .from(tasks)
@@ -36,7 +35,6 @@ export class DrizzleTaskRollbackQueries implements TaskRollbackQueries {
 
     return Object.freeze({
       taskId: task.taskId,
-      repoCount: task.repoCount,
       worktreePath: task.worktreePath,
       repositories: Object.freeze(
         repositoryRows.length > 0

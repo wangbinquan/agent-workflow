@@ -18,7 +18,12 @@
 // generation is served from the store first: no worktree read, no volume wake.
 
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { computeSummary, type StructuralDiff, type StructuralScope } from '@agent-workflow/shared'
+import {
+  isSingleRootRepository,
+  computeSummary,
+  type StructuralDiff,
+  type StructuralScope,
+} from '@agent-workflow/shared'
 import type {
   CodeWorkspaceRead,
   CodeWorkspaceTask,
@@ -184,7 +189,7 @@ export async function getTaskStructuralDiff(
   const stored = await storedFirst(reads, storeKey, content, deepOpts)
   if (stored !== null) return withContentDigest(stored)
 
-  if (task.repoCount === 1) {
+  if (isSingleRootRepository(task.repos.map((repo) => repo.mountPath))) {
     if (task.baseCommit === null) {
       throw new DomainError(
         'task-no-base-commit',
@@ -350,9 +355,9 @@ async function getNodeStructuralDiff(
 
   // RFC-089 P3 — multi-repo node scope: resolve + compute per repo (reusing the
   // single-repo resolveNodeScope over each repo's column via perRepoNodeRuns),
-  // then merge. Multi-repo tasks have NO wrapper-git nodes (RFC-066 forbids
-  // them), so there's no wrapper delegation in this branch.
-  if (task.repoCount > 1) {
+  // then merge. Wrapper structural scope still requires a single root repo;
+  // this branch consumes the node's per-repository snapshots.
+  if (!isSingleRootRepository(task.repos.map((repo) => repo.mountPath))) {
     if (!rows.some((r) => r.id === nodeRunId)) {
       throw new NotFoundError(
         'node-run-not-found',
@@ -428,7 +433,7 @@ async function getNodeStructuralDiff(
     return hadError ? merged : persistScoped(reads, storeKey, merged, deepOpts)
   }
 
-  // Single-repo (repoCount === 1) — unchanged.
+  // Single root repository — unchanged.
   // A git-wrapper node selected in the per-node picker → use its recorded
   // baseline (the wrapper's diff is baseline → worktree, not a snapshot pair).
   const target = rows.find((r) => r.id === nodeRunId)
@@ -533,7 +538,7 @@ async function getWrapperStructuralDiff(
       `structural-diff scope 'wrapper' requires a 'nodeRunId' query param`,
     )
   }
-  if (task.repoCount !== 1) {
+  if (!isSingleRootRepository(task.repos.map((repo) => repo.mountPath))) {
     throw new ValidationError(
       'structural-wrapper-scope-multi-repo-unsupported',
       `per-wrapper structural diff is single-repo only in v1`,

@@ -26,6 +26,7 @@ import {
   exclusionPlanFor,
   flattenRepoGroup,
   isUnder,
+  isSingleRootRepository,
   joinMountPath,
   mountDepth,
   normalizeMountPath,
@@ -606,5 +607,18 @@ describe('splitRepoPrefix', () => {
 
   test('key 集合里没有根仓时，未匹配路径仍归空串兜底（不抛）', () => {
     expect(splitRepoPrefix('whatever/x', ['a', 'b'])).toEqual(['', 'whatever/x'])
+  })
+})
+
+// Standalone 2026-10-21 defect fix: repository count is not a root-layout test.
+describe('isSingleRootRepository', () => {
+  test('only one canonical root mount uses scalar workspace/checkpoint fields', () => {
+    expect(isSingleRootRepository([''])).toBe(true)
+    expect(isSingleRootRepository([])).toBe(false)
+    expect(isSingleRootRepository(['svc'])).toBe(false)
+    expect(isSingleRootRepository(['apps/svc'])).toBe(false)
+    expect(isSingleRootRepository(['', 'svc'])).toBe(false)
+    expect(isSingleRootRepository(['api', 'svc'])).toBe(false)
+    expect(isSingleRootRepository(['.'])).toBe(false) // wire key is not a mount
   })
 })

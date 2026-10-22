@@ -72,7 +72,7 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
   test('cell parameters and workspace/node snapshots read PostgreSQL projections', async () => {
     const fake = fixture([
       [['[{"name":"limit","kind":"number"}]', '{"limit":2}', '{"limit":3}']],
-      [['task-1', 'running', 'local', '/workspace', 'base-sha', 2]],
+      [['task-1', 'running', 'local', '/workspace', 'base-sha', null]],
       [
         ['', '', '/workspace', 'base-sha'],
         ['packages/api', 'api', '/workspace/packages/api', 'api-sha'],
@@ -91,7 +91,6 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
     })
     await expect(workspace.findTask('task-1')).resolves.toMatchObject({
       id: 'task-1',
-      repoCount: 2,
       repos: [
         { mountPath: '', worktreePath: '/workspace' },
         { mountPath: 'packages/api', worktreePath: '/workspace/packages/api' },

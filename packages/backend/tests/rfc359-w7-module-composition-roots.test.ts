@@ -129,7 +129,8 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
     const postgresql = composeLegacyCodeReadProviders(asPostgresql(harness.db))
 
     const task = await sqlite.workspace.findTask(taskId)
-    expect(task).toMatchObject({ id: taskId, status: 'running', repoCount: 1 })
+    expect(task).toMatchObject({ id: taskId, status: 'running' })
+    expect(task?.repos).toHaveLength(1)
     expect(task?.repos.map((repo) => repo.mountPath)).toEqual(['main'])
     expect(await postgresql.workspace.findTask(`t_${ulid()}`)).toBeNull()
     expect((await postgresql.workspace.listNodeRuns(taskId)).map((run) => run.id)).toEqual([

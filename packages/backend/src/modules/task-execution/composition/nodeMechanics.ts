@@ -138,6 +138,7 @@ import type {
   WorkflowNode,
 } from '@agent-workflow/shared'
 import {
+  isSingleRootRepository,
   compareNodeRunMintOrder,
   type NodeRunOrderKey,
   agentHasClarifyChannel,
@@ -349,8 +350,7 @@ export async function executeWorkgroupHostMechanics(
         },
         persistBase: 'in-setup',
         persist: async (h: IsoLike) => {
-          if (!h.passthrough)
-            await persistIsoBase(isolatedRunBinding(state), req.nodeRunId, task.repoCount, iso)
+          if (!h.passthrough) await persistIsoBase(isolatedRunBinding(state), req.nodeRunId, iso)
         },
       },
       onIsoSetupFailure: (err) => {
@@ -730,7 +730,6 @@ export async function executeWorkgroupHostMechanics(
               writeSem: state.writeSem,
               handle: iso as IsoHandle,
               nodeRunId: req.nodeRunId,
-              repoCount: task.repoCount,
               via: 'live',
               conflictResolver: (conflicts, containerPath) =>
                 resolveMergeConflicts(state, {
@@ -1032,7 +1031,7 @@ export function parseIsoSubmodules(
     pendingSubResolves: string[]
   }
 > {
-  const singleRoot = repos.length === 1 && repos[0]!.mountPath === ''
+  const singleRoot = isSingleRootRepository(repos.map((repo) => repo.mountPath))
   const raw = singleRoot ? row.isoSubmodulesJson : row.isoSubmodulesReposJson
   if (raw === null || raw === '') return {}
   try {
@@ -1481,8 +1480,7 @@ export async function runCallWorkflowNode(
         message: 'iso-setup-failed',
       }
     }
-    if (!liveIso.passthrough)
-      await persistIsoBase(isolatedRunBinding(state), nodeRunId, task.repoCount, liveIso)
+    if (!liveIso.passthrough) await persistIsoBase(isolatedRunBinding(state), nodeRunId, liveIso)
     const childIso: IsoHandle = liveIso
 
     // ---- L: launch the child through the executor facade. The child task id
@@ -1853,7 +1851,7 @@ export async function runCallWorkflowNode(
     if (handle === null) {
       // Adoption after restart — rebuild from persisted columns (replay idiom).
       const baseSnapshots: Record<string, string> = {}
-      if (state.repos.length === 1 && state.repos[0]!.mountPath === '') {
+      if (isSingleRootRepository(state.repos.map((repo) => repo.mountPath))) {
         if (currentRow?.isoBaseSnapshot != null) baseSnapshots[''] = currentRow.isoBaseSnapshot
       } else {
         Object.assign(baseSnapshots, parseIsoJsonMap(currentRow?.isoBaseSnapshotReposJson ?? null))
@@ -1895,7 +1893,6 @@ export async function runCallWorkflowNode(
           writeSem,
           handle,
           nodeRunId,
-          repoCount: task.repoCount,
           via: 'live',
           conflictResolver: (conflicts, containerPath) =>
             resolveMergeConflicts(state, {
@@ -2636,7 +2633,7 @@ export async function runScriptNode(
 ): Promise<OneNodeResult> {
   // RFC-266: the SCRIPT pool, not the agent pool — a second-scale script must
   // not queue behind multi-minute agent runs (and cannot starve them either).
-  const { task, taskId, definition, opts, log, scriptSem, writeSem } = state
+  const { taskId, definition, opts, log, scriptSem, writeSem } = state
   const { node, iteration } = args
 
   const language = readScriptLanguage(node)
@@ -2755,7 +2752,7 @@ export async function runScriptNode(
         persistBase: 'in-window',
         persist: async () => {
           if (isoHandle !== null)
-            await persistIsoBase(isolatedRunBinding(state), nodeRunId, task.repoCount, isoHandle)
+            await persistIsoBase(isolatedRunBinding(state), nodeRunId, isoHandle)
         },
       },
       onIsoSetupFailure: (err) => {
@@ -2846,7 +2843,7 @@ export async function runScriptNode(
           })
           broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
           if (isoHandle !== null)
-            await persistIsoBase(isolatedRunBinding(state), nodeRunId, task.repoCount, isoHandle)
+            await persistIsoBase(isolatedRunBinding(state), nodeRunId, isoHandle)
         },
       },
       mergePhase: (_c, outcome) => {
@@ -2878,7 +2875,6 @@ export async function runScriptNode(
             writeSem,
             handle: iso,
             nodeRunId,
-            repoCount: task.repoCount,
             via: 'live',
             conflictResolver: (conflicts, containerPath) =>
               resolveMergeConflicts(state, {
@@ -4049,7 +4045,7 @@ export async function runAgentSingleNode(
         // RFC-130: carry the iso columns onto the freshly-minted retry row so a
         // crash mid-retry can still find the iso worktree (the physical iso is
         // keyed by isoKeyRunId and shared across the invocation's attempts).
-        await persistIsoBase(isolatedRunBinding(state), nodeRunId, task.repoCount, isoHandle)
+        await persistIsoBase(isolatedRunBinding(state), nodeRunId, isoHandle)
 
         // RFC-042 / RFC-049: surface the follow-up decision as an audit
         // event so operators can replay how a green run recovered from a
@@ -4763,7 +4759,7 @@ export async function runAgentSingleNode(
         // daemon-wide permit per occurrence with no way back short of a restart.
         persistBase: 'in-window',
         persist: async () => {
-          await persistIsoBase(isolatedRunBinding(state), nodeRunId, task.repoCount, isoHandle)
+          await persistIsoBase(isolatedRunBinding(state), nodeRunId, isoHandle)
         },
       },
       onIsoSetupFailure: (err) => {
@@ -4849,7 +4845,6 @@ export async function runAgentSingleNode(
             writeSem,
             handle: isoHandle,
             nodeRunId,
-            repoCount: task.repoCount,
             via: 'live',
             // RFC-193 K1: this run's own just-emitted port files (not yet in the
             // handle's DB-aggregated roster) join the final-snapshot force list.

@@ -64,12 +64,11 @@ function expectResetClean(repo: string): void {
 }
 
 function singleTarget(repo: string): RollbackTarget {
-  return { repoCount: 1, worktreePath: repo, repos: [] }
+  return { worktreePath: repo, repos: [] }
 }
 
 function multiTarget(container: string, repoA: string, repoB: string): RollbackTarget {
   return {
-    repoCount: 2,
     worktreePath: container,
     repos: [
       { worktreePath: repoA, worktreeDirName: 'repo-a' },

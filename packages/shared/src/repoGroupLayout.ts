@@ -663,6 +663,16 @@ export function assignBranchNames(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Whether the materialized workspace root is its only repository. Keys are
+ * canonical mount paths (also persisted as worktreeDirName in isolation views).
+ * Sparse checkout and extra directory nodes do not change the repository root,
+ * even when the materializer chose the group layout. An empty list is not a repo.
+ */
+export function isSingleRootRepository(mountPaths: readonly string[]): boolean {
+  return mountPaths.length === 1 && mountPaths[0] === ''
+}
+
+/**
  * 线上/展示形态：根仓的 key 是空串，空串在 `# === Repo: X ===` 标记里没法表达，
  * 所以线上写 `.`。`normalizeMountPath` 拒绝 `.` 段，故 `.` 不可能与真实挂载
  * 路径冲突。

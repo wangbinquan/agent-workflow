@@ -26,7 +26,6 @@ interface RawWorkspaceTaskRow extends Record<string, unknown> {
   readonly branch: string
   readonly base_branch: string
   readonly space_kind: string
-  readonly repo_count: number
   readonly started_at: number
   readonly finished_at: number | null
   readonly workspace_pruning_at: number | null
@@ -36,6 +35,7 @@ interface RawWorkspaceTaskRow extends Record<string, unknown> {
 }
 
 interface RawWorkspaceRepositoryRow extends Record<string, unknown> {
+  readonly mount_path: string
   readonly repo_path: string
   readonly worktree_path: string
   readonly branch: string
@@ -50,7 +50,6 @@ const taskProjection = sql`
   ${tasks.branch} AS branch,
   ${tasks.baseBranch} AS base_branch,
   ${tasks.spaceKind} AS space_kind,
-  ${tasks.repoCount} AS repo_count,
   ${tasks.startedAt} AS started_at,
   ${tasks.finishedAt} AS finished_at,
   ${tasks.workspacePruningAt} AS workspace_pruning_at,
@@ -80,7 +79,6 @@ function mapTask(row: RawWorkspaceTaskRow): WorkspaceTaskRecord {
     branch: row.branch,
     baseBranch: row.base_branch,
     spaceKind: row.space_kind,
-    repoCount: Number(row.repo_count),
     startedAt: Number(row.started_at),
     finishedAt: row.finished_at === null ? null : Number(row.finished_at),
     workspacePruningAt: row.workspace_pruning_at === null ? null : Number(row.workspace_pruning_at),
@@ -92,6 +90,7 @@ function mapTask(row: RawWorkspaceTaskRow): WorkspaceTaskRecord {
 
 function mapRepository(row: RawWorkspaceRepositoryRow): WorkspaceTaskRepositoryRecord {
   return {
+    mountPath: row.mount_path,
     repoPath: row.repo_path,
     worktreePath: row.worktree_path,
     branch: row.branch,
@@ -129,6 +128,7 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
   async listTaskRepositories(taskId: string): Promise<readonly WorkspaceTaskRepositoryRecord[]> {
     const rows = await this.executor.all<RawWorkspaceRepositoryRow>(sql`
       SELECT
+        ${taskRepos.mountPath} AS mount_path,
         ${taskRepos.repoPath} AS repo_path,
         ${taskRepos.worktreePath} AS worktree_path,
         ${taskRepos.branch} AS branch,

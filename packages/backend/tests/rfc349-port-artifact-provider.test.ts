@@ -66,10 +66,10 @@ afterEach(() => {
 describe('RFC-349 port-artifact provider cutover', () => {
   test('PostgreSQL freezes visibility, run ownership, output and repo prefix in one closed result', async () => {
     const fake = fixture([
-      [['task-1', 'owner-1', '/worktrees/task-1', 2]],
+      [['task-1', 'owner-1', '/worktrees/task-1']],
       [['run-1']],
       [['{"v":1,"items":[]}', 'docs/result.md', 'path<md>']],
-      [['api']],
+      [['api', 'api']],
     ])
 
     await expect(
@@ -95,7 +95,7 @@ describe('RFC-349 port-artifact provider cutover', () => {
   })
 
   test('PostgreSQL collapses missing membership into task-not-found before reading the run', async () => {
-    const fake = fixture([[['task-2', 'owner-2', '/worktrees/task-2', 1]], []])
+    const fake = fixture([[['task-2', 'owner-2', '/worktrees/task-2']], []])
 
     await expect(
       fake.reads.portArtifacts.find({

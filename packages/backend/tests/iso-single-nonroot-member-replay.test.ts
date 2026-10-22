@@ -9,18 +9,13 @@
 // discarded iso follow rfc130-crash-replay. Both DB providers run these cases.
 
 import { afterEach, beforeAll, beforeEach, expect, test } from 'bun:test'
-import { WORKFLOW_SCHEMA_VERSION, type WorkflowDefinition } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { agents, cachedRepos, nodeRunOutputs, nodeRuns, tasks, users, workflows } from '@/db/schema'
-import { composeRepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
+import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
-import { createRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
-import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
 import { createOrRebuildWrapperIso } from '@/modules/task-execution/composition/wrapperMechanics'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
@@ -32,16 +27,13 @@ import {
   type IsolatedAgentRunBinding,
 } from '@/services/isolatedAgentRun'
 import { discardNodeIso, snapshotNodeIsoFinal, type IsoHandle } from '@/services/nodeIsolation'
-import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
-import { createRepoGroup } from '@/services/repoGroup'
 import { runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
 import { Semaphore } from '@/util/semaphore'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
-import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
-import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
-import { repoGroupNodesFromAttachments } from './helpers/repoGroupFixture'
+import { startGitHttpRemote } from './helpers/gitHttpRemote'
+import { singleMemberWorkspaceFixture } from './helpers/singleMemberWorkspaceFixture'
 import { createProviderTaskExecutionTestTopology } from './helpers/providerTaskExecutionTestTopology'
 
 const TIMEOUT = 60_000
@@ -87,106 +79,12 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
 
   async function fixture(mounts: readonly string[]) {
     const db = harness.db
-    const userId = ulid(),
-      agentId = ulid(),
-      workflowId = ulid()
-    await db.insert(users).values({
-      id: userId,
-      username: userId,
-      displayName: userId,
-      gitName: 'iso-regression',
-      email: `${userId}@test.local`,
-      role: 'admin',
-      status: 'active',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+    const { task, definition } = await singleMemberWorkspaceFixture(harness, {
+      tmp,
+      appHome,
+      mounts,
+      cleanup,
     })
-    await db.insert(agents).values({ id: agentId, name: agentId, outputs: '["summary"]' })
-    const definition: WorkflowDefinition = {
-      $schema_version: WORKFLOW_SCHEMA_VERSION,
-      inputs: [],
-      nodes: [{ id: 'A', kind: 'agent-single', agentId, agentName: agentId }],
-      edges: [],
-    }
-    await db.insert(workflows).values({
-      id: workflowId,
-      name: workflowId,
-      definition: JSON.stringify(definition),
-      schemaVersion: WORKFLOW_SCHEMA_VERSION,
-    })
-    const attachments = []
-    for (const [index, mountPath] of mounts.entries()) {
-      const repoPath = join(tmp, `src-${index}`)
-      mkdirSync(repoPath, { recursive: true })
-      await git(repoPath, ['init', '-q', '-b', 'main'])
-      await git(repoPath, ['config', 'user.name', 'iso-regression'])
-      await git(repoPath, ['config', 'user.email', 'iso@test.local'])
-      writeFileSync(join(repoPath, 'base.txt'), 'base\n')
-      await git(repoPath, ['add', '.'])
-      await git(repoPath, ['-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-qm', 'base'])
-      const id = ulid(),
-        url = remoteUrlFor(repoPath)
-      await db.insert(cachedRepos).values({
-        id,
-        urlHash: id,
-        urlRedacted: url,
-        localPath: repoPath,
-        defaultBranch: 'main',
-        lastFetchedAt: Date.now(),
-        createdAt: Date.now(),
-      })
-      rememberVolatileRepoUrl(db, id, url)
-      attachments.push({
-        kind: 'repo' as const,
-        cachedRepoId: id,
-        mountPath,
-        ref: '',
-        subdir: '',
-        readonly: false,
-      })
-    }
-    const group = await createRepoGroup(
-      { store: composeRepositoryWorkspaceStore(db) },
-      { name: ulid(), description: '', nodes: repoGroupNodesFromAttachments(attachments) },
-      null,
-    )
-    const execution = await createEachProviderTaskExecution(harness, { appHome }, userId)
-    cleanup.push(() => execution.shutdown())
-    const submitted: string[] = []
-    const kernel = createRootTaskLaunchKernel({
-      db,
-      gitCommitIdentity: execution.identityAccess.getUserGitCommitIdentity,
-      workspace: createTaskRouteWorkspaceParticipant({
-        db,
-        appHome,
-        sourceContexts: execution.identityAccess.taskPreparationContext,
-        repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
-      }),
-      coordinator: {
-        async submit(request) {
-          submitted.push(request.taskId)
-          return { kind: 'accepted', taskId: request.taskId }
-        },
-      },
-    })
-    const task = await kernel.launch({
-      actor: execution.actor,
-      resourceAuthority: execution.launchResources,
-      invoker: { type: 'user', launchKind: 'direct-json' },
-      task: { workflowId, name: 'iso regression', inputs: {}, repoGroupId: group.id },
-      subject: {
-        workflowId,
-        workflowName: workflowId,
-        workflowVersion: 1,
-        workflowSnapshot: definition,
-        builtin: false,
-      },
-    })
-    expect(submitted).toEqual([task.id])
-    expect(task.status).toBe('pending')
-    expect(task.repoCount).toBe(mounts.length)
-    expect(task.repos.map((repo) => repo.mountPath)).toEqual([...mounts])
-    expect(task.repos.map((repo) => repo.worktreeDirName)).toEqual([...mounts])
     const binding: IsolatedAgentRunBinding = { persistence: createTaskExecutionPersistence(db) }
     const writeSem = new Semaphore(1)
     const state = {
@@ -255,14 +153,8 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
             repo.subBases = { vendor: `base-${repo.worktreeDirName}` }
             repo.poolDirs = { vendor: join(tmp, 'pool', repo.worktreeDirName) }
           }
-          await persistIsoBase(f.binding, runId, f.task.repoCount, handle)
-          await persistIsoNodeTree(
-            f.binding,
-            runId,
-            f.task.repoCount,
-            trees,
-            withHandle ? handle : undefined,
-          )
+          await persistIsoBase(f.binding, runId, handle)
+          await persistIsoNodeTree(f.binding, runId, trees, withHandle ? handle : undefined)
           const row = await f.row(runId)
           expect(decodeMap(row.isoNodeTree, row.isoNodeTreeReposJson)).toEqual(trees)
           expect(decodeMap(row.isoBaseSnapshot, row.isoBaseSnapshotReposJson)).toEqual(
@@ -306,7 +198,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
           repo.subBases = { vendor: `base-${repo.worktreeDirName}` }
           repo.poolDirs = { vendor: join(tmp, 'pool', repo.worktreeDirName) }
         }
-        await persistIsoBase(f.binding, runId, f.task.repoCount, handle)
+        await persistIsoBase(f.binding, runId, handle)
         const rebuilt = await createOrRebuildWrapperIso(f.state, runId, await f.row(runId))
         for (const [index, repo] of handle.repos.entries()) {
           expect(rebuilt.repos[index]!.baseSnapshot).toBe(repo.baseSnapshot)
@@ -323,7 +215,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
       async () => {
         const f = await fixture(shape.mounts)
         const { runId, handle } = await f.isolate()
-        await persistIsoBase(f.binding, runId, f.task.repoCount, handle)
+        await persistIsoBase(f.binding, runId, handle)
         let runtimeCalls = 0
         // Fake runtime: only execution is replaced; isolation, snapshots, column
         // writes, recovery, frontier and task completion use production mechanics.
@@ -360,7 +252,6 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
             writeSem: f.writeSem,
             handle,
             nodeRunId: runId,
-            repoCount: f.task.repoCount,
             via: 'live',
             conflictResolver: async () => {
               throw new Error('unexpected conflict')
@@ -400,7 +291,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
       async () => {
         const f = await fixture(shape.mounts)
         const { runId, handle } = await f.isolate()
-        await persistIsoBase(f.binding, runId, f.task.repoCount, handle)
+        await persistIsoBase(f.binding, runId, handle)
         const repo = handle.repos[0]!
         writeFileSync(join(repo.isoWorktreePath, 'base.txt'), 'node version\n')
         writeFileSync(join(repo.canonWorktreePath, 'base.txt'), 'canonical version\n')
@@ -409,7 +300,6 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
           writeSem: f.writeSem,
           handle,
           nodeRunId: runId,
-          repoCount: f.task.repoCount,
           via: 'live',
           async conflictResolver() {
             // The resolver reports a remaining submodule conflict. This isolates

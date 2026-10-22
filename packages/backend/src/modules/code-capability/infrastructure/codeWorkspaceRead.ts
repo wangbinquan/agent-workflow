@@ -46,7 +46,6 @@ export function createCodeWorkspaceRead(db: ProviderNeutralDatabase): CodeWorksp
           spaceKind: tasks.spaceKind,
           worktreePath: tasks.worktreePath,
           baseCommit: tasks.baseCommit,
-          repoCount: tasks.repoCount,
           finishedAt: tasks.finishedAt,
         })
         .from(tasks)

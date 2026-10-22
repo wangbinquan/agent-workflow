@@ -18,7 +18,7 @@
 // 注意 `hasRepoPrepRow` 直接吃 port，不经 `services/taskWorkspacePhase` 那层包装——模块内部
 // 反向 import legacy 层是 RFC-317 T23 的红。
 
-import { taskWorkspacePhase, type Task } from '@agent-workflow/shared'
+import { isSingleRootRepository, taskWorkspacePhase, type Task } from '@agent-workflow/shared'
 import { ConflictError, DomainError } from '@/util/errors'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 
@@ -91,7 +91,7 @@ export async function assertWorktreePresentForResume(
     gone(`worktree '${task.worktreePath}' does not exist`)
   }
   // Multi-repo: the container survived but every per-repo worktree was reclaimed.
-  if (task.repoCount > 1 && task.repos.length > 0) {
+  if (!isSingleRootRepository(task.repos.map((repo) => repo.mountPath)) && task.repos.length > 0) {
     let anyRepoPresent = false
     for (const repo of task.repos) {
       if (await worktreeExists(repo.worktreePath)) {

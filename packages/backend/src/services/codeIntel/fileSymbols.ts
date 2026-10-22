@@ -6,7 +6,12 @@
 // RFC-370 §10 V16 — both sides are read through the selected revision content.
 
 import { basename } from 'node:path'
-import { parseRepoKeyWire, type FileSymbolsResult, type SymbolNode } from '@agent-workflow/shared'
+import {
+  isSingleRootRepository,
+  parseRepoKeyWire,
+  type FileSymbolsResult,
+  type SymbolNode,
+} from '@agent-workflow/shared'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { CodeWorkspaceTask } from '@/modules/code-capability/application/ports/codeWorkspaceRead'
 import { canonicalRepoKeys } from '@/services/repoLabels'
@@ -41,7 +46,8 @@ export function resolveRepoTarget(
   //
   // 注意单仓分支尤其危险：延后准备时 `repoCount` 恒为 1（回填后才变 N），所以多仓
   // 任务在窗口内也走这一支，攻击者连 `repo` 参数都不用给。
-  if (task.repoCount <= 1) {
+  const mounts = task.repos.length === 0 ? [''] : task.repos.map((repo) => repo.mountPath)
+  if (isSingleRootRepository(mounts)) {
     if (task.worktreePath === '') {
       throw new NotFoundError(
         'task-worktree-not-ready',

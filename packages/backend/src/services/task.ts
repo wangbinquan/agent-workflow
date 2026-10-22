@@ -2787,7 +2787,6 @@ async function rollbackNodeRunForResume(
     {
       taskId: task.id,
       db,
-      repoCount: task.repoCount,
       worktreePath: task.worktreePath,
       repos: task.repos,
     },

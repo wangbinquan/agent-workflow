@@ -140,7 +140,7 @@ describeEachProvider(
         canonRepos: canonRepos(repo),
       })
       expect(writeSem.maxDepth()).toBeGreaterThanOrEqual(1)
-      await persistIsoBase(binding, runId, 1, iso)
+      await persistIsoBase(binding, runId, iso)
       writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'out.txt'), 'from-agent\n')
 
       const settle = await mergeBackAndSettle({
@@ -148,7 +148,6 @@ describeEachProvider(
         writeSem,
         handle: iso,
         nodeRunId: runId,
-        repoCount: 1,
         via: 'live',
         conflictResolver: () => {
           throw new Error('clean merge must not consult the resolver')
@@ -183,7 +182,7 @@ describeEachProvider(
           isoKeyRunId: runId,
           canonRepos: canonRepos(repo),
         })
-        await persistIsoBase(binding, runId, 1, iso)
+        await persistIsoBase(binding, runId, iso)
         // iso 与 canonical 同文件分叉 → 真冲突。
         writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'f.txt'), `iso-${resolved}\n`)
         writeFileSync(join(repo, 'f.txt'), `canon-${resolved}\n`)
@@ -194,7 +193,6 @@ describeEachProvider(
           writeSem,
           handle: iso,
           nodeRunId: runId,
-          repoCount: 1,
           via: 'live',
           conflictResolver: async (conflicts) => {
             sawConflicts = conflicts.length
@@ -236,7 +234,7 @@ describeEachProvider(
         isoKeyRunId: runId,
         canonRepos: canonRepos(repo),
       })
-      await persistIsoBase(binding, runId, 1, iso)
+      await persistIsoBase(binding, runId, iso)
       writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'crash.txt'), 'survived\n')
       // 模拟 runner 成功后崩溃：pin 树、置 pending-merge、丢 iso 工作树。
       const nodeTree = await snapshotFullState(iso.repos[0]!.isoWorktreePath)
@@ -252,7 +250,6 @@ describeEachProvider(
         writeSem,
         handle: iso, // rebuildIsoHandle 等价物：repos 元数据仍在
         nodeRunId: runId,
-        repoCount: 1,
         nodeTrees: { '': nodeTree },
         via: 'replay',
         conflictResolver: () => {

@@ -14,7 +14,6 @@ export interface WorkspaceTaskRecord {
   readonly branch: string
   readonly baseBranch: string
   readonly spaceKind: string
-  readonly repoCount: number
   readonly startedAt: number
   readonly finishedAt: number | null
   readonly workspacePruningAt: number | null
@@ -24,6 +23,7 @@ export interface WorkspaceTaskRecord {
 }
 
 export interface WorkspaceTaskRepositoryRecord {
+  readonly mountPath: string
   readonly repoPath: string
   readonly worktreePath: string
   readonly branch: string

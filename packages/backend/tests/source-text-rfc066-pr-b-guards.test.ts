@@ -17,7 +17,8 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 //          both `resumeTask` and `retryNode` call into. New rollback paths
 //          must reuse it; ad-hoc inline rollback in either function is a
 //          regression target.
-//   PB-G5: the task diff projection branches on `task.repoCount === 1` for the
+//   PB-G5: the task diff projection branches on
+//          `isSingleRootRepository(task.repos.map((repo) => repo.mountPath))` for the
 //          byte-baseline single-repo path and `# === Repo:` for the multi-repo
 //          concat header (RFC-359 AC-1 起它是两个引擎共用的 `taskDiffProjection`,
 //          锚见 TASK_DIFF_SRC).
@@ -122,8 +123,10 @@ describe('RFC-066 PR-B — source guards', () => {
     expect(calls.length).toBeGreaterThanOrEqual(2)
   })
 
-  test('PB-G5 diff endpoint branches on single vs multi via task.repoCount + `# === Repo:` header', () => {
-    expect(TASK_DIFF_SRC.includes('task.repoCount === 1')).toBe(true)
+  test('PB-G5 diff endpoint branches on single vs multi via canonical mount paths + `# === Repo:` header', () => {
+    expect(
+      TASK_DIFF_SRC.includes('isSingleRootRepository(task.repos.map((repo) => repo.mountPath))'),
+    ).toBe(true)
     // Multi-repo concat uses the stable header literal so the frontend can
     // safely split on it.
     expect(TASK_DIFF_SRC.includes('# === Repo:')).toBe(true)

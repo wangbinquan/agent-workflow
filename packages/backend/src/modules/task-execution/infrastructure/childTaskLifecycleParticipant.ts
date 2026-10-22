@@ -3,6 +3,7 @@
 // git rollback complete before the replacement driver can touch a workspace.
 
 import {
+  isSingleRootRepository,
   CANCELABLE_TASK_STATUSES,
   REPO_PREP_NODE_ID,
   RESUMABLE_TASK_STATUSES,
@@ -366,7 +367,7 @@ async function assertResumeAdmission(
   const rollbackTarget = await new DrizzleTaskRollbackQueries(dependencies.db).load(task.id)
   if (
     rollbackTarget !== null &&
-    rollbackTarget.repoCount > 1 &&
+    !isSingleRootRepository(rollbackTarget.repositories.map((repo) => repo.worktreeDirName)) &&
     rollbackTarget.repositories.length > 0
   ) {
     let remainingWorkspace = false

@@ -43,7 +43,6 @@ function workspace(task: Partial<CodeWorkspaceTask> = {}): CodeWorkspaceRead {
     spaceKind: 'repo',
     worktreePath: REF,
     baseCommit: 'base',
-    repoCount: 1,
     repos: [{ mountPath: '', worktreeDirName: '', worktreePath: REF, baseCommit: 'base' }],
     finishedAt: null,
     ...task,

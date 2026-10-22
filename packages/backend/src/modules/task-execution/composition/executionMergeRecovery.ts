@@ -1,5 +1,6 @@
 // RFC-339 — task-execution-owned pre-drive merge recovery mechanics.
 
+import { isSingleRootRepository } from '@agent-workflow/shared'
 import { type Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
@@ -118,10 +119,10 @@ async function replayPendingMerge(
   r: NodeExecutionSnapshot,
   log: Logger,
 ): Promise<void> {
-  const { taskId, task } = state
+  const { taskId } = state
   const baseSnapshots: Record<string, string> = {}
   const nodeTrees: Record<string, string> = {}
-  if (state.repos.length === 1 && state.repos[0]!.mountPath === '') {
+  if (isSingleRootRepository(state.repos.map((repo) => repo.mountPath))) {
     if (r.isoBaseSnapshot !== null) baseSnapshots[''] = r.isoBaseSnapshot
     if (r.isoNodeTree !== null) nodeTrees[''] = r.isoNodeTree
   } else {
@@ -163,7 +164,6 @@ async function replayPendingMerge(
     writeSem: state.writeSem,
     handle,
     nodeRunId: r.id,
-    repoCount: task.repoCount,
     nodeTrees,
     via: 'replay',
     conflictResolver: (conflicts, containerPath) =>
@@ -208,13 +208,14 @@ async function completeInterruptedRun(
   r: NodeExecutionSnapshot,
   log: Logger,
 ): Promise<void> {
-  const { taskId, task } = state
-  const baseSnapshots: Record<string, string> =
-    state.repos.length === 1 && state.repos[0]!.mountPath === ''
-      ? r.isoBaseSnapshot === null
-        ? {}
-        : { '': r.isoBaseSnapshot }
-      : parseIsoJsonMap(r.isoBaseSnapshotReposJson)
+  const { taskId } = state
+  const baseSnapshots: Record<string, string> = isSingleRootRepository(
+    state.repos.map((repo) => repo.mountPath),
+  )
+    ? r.isoBaseSnapshot === null
+      ? {}
+      : { '': r.isoBaseSnapshot }
+    : parseIsoJsonMap(r.isoBaseSnapshotReposJson)
   try {
     if (Object.keys(baseSnapshots).length === 0) {
       throw new Error(`interrupted merge-back: iso base snapshot missing for run ${r.id}`)
@@ -235,7 +236,6 @@ async function completeInterruptedRun(
       writeSem: state.writeSem,
       handle,
       nodeRunId: r.id,
-      repoCount: task.repoCount,
       via: 'replay',
       conflictResolver: (conflicts, containerPath) =>
         resolveMergeConflicts(state, {
@@ -348,7 +348,7 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
   for (const r of rows) {
     const baseSnapshots: Record<string, string> = {}
     const nodeTrees: Record<string, string> = {}
-    if (state.repos.length === 1 && state.repos[0]!.mountPath === '') {
+    if (isSingleRootRepository(state.repos.map((repo) => repo.mountPath))) {
       if (r.isoBaseSnapshot !== null) baseSnapshots[''] = r.isoBaseSnapshot
       if (r.isoNodeTree !== null) nodeTrees[''] = r.isoNodeTree
     } else {

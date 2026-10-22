@@ -69,7 +69,6 @@ const task = (
   branch: 'aw/task',
   baseBranch: 'main',
   spaceKind: 'remote',
-  repoCount: 1,
   startedAt: 0,
   finishedAt: 1,
   workspacePruningAt: 1,
