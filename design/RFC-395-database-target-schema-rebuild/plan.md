@@ -14,10 +14,10 @@
 
 | 任务 | 完整交付 | 依赖 | 覆盖验收 |
 | --- | --- | --- | --- |
-| RFC-395-T1 | 固化 source fingerprint 支持列表、217 表 / 2,639 列逐项映射与当前读写者；每列明确 immutable / CAS mutable / derived；现有约束和 index 去向；收录本机差异源 fixture | 设计批准 | AC-1 |
+| RFC-395-T1 | 固化 source fingerprint 支持列表、217 表 / 2,639 列逐项映射与当前读写者；每列明确 immutable / CAS mutable / derived；现有约束和 index 去向；收录本机差异源 fixture；启动序列逐步分类表（旧数据升级 / 在途恢复） | 设计批准 | AC-1 |
 | RFC-395-T2 | 领域 schema contribution 与显式 owner / codec / FK / CHECK / 索引 / retention，编译两种原生 DDL；保存最终 target contract digest | T1 | AC-1、6 |
 | RFC-395-T3 | 原生 SQLite / PostgreSQL driver/query adapters、session/transaction/error contract；删除 SQLite proxy 类型伪装与 SQL 修补；统一业务 ports | T2 | AC-6 |
-| RFC-395-T4 | Task core / definition / launch / termination / workspace 拆分；Agent / Workgroup launch 删除假 host；所有入口与子任务接线，API 兼容投影 | T2、3 | AC-2、9 |
+| RFC-395-T4 | Task core / definition / launch / workspace 拆分与来源终止状态归位（design §3.1～§3.4）；四个宿主 workflow（Agent / Workgroup / 数字员工 / code-round）退出 catalog；所有入口与子任务接线，API 兼容投影 | T2、3 | AC-2、9 |
 | RFC-395-T5 | 仓库挂载与 per-run checkpoint，目录树旧数据离线物化；单仓/多仓 rollback / merge / prepare / prune 接线 | T4 | AC-2、7 |
 | RFC-395-T6 | NodeRun role / generation / selected / provenance；冻结 config、运行态与结果；所有 mint / retry / resume / supersession / fanout / review / child continuation 读写转换 | T3、4、5 | AC-3 |
 | RFC-395-T7 | 澄清答案/草稿/归属按问题存储；编辑 / 封口 / abandoned / 代理答复 / UI map 投影全部接线 | T3、6 | AC-4、9 |
@@ -26,10 +26,10 @@
 | RFC-395-T10 | AtomicApply 共用状态机，Intent / bundle / 既有相关恢复场景统一；原幂等域与回执保持；不合并 effect journals | T8、9 | AC-5、8 |
 | RFC-395-T11 | 未改形状的表迁入各 owner contribution / 原生适配；移除跨域 schema 访问；事件、观测、identity、OS、development 等既有行为不缩减 | T2、3 | AC-1、6 |
 | RFC-395-T12 | versioned source readers、确定性 transformer、row disposition、legacy evidence/history reader；旧 code work 历史、writer drain 退出；保留当前事件家族路由 | T4～11 | AC-1、3、8 |
-| RFC-395-T13 | 迁移 run/chunk/receipt 与现有 logical-copy / generation 元数据整合；新 baseline、source/target schema admission、旧 binary 拒绝协议 | T2、12 | AC-6、7 |
+| RFC-395-T13 | 迁移 run/chunk/receipt 与现有 logical-copy / generation 元数据整合；新 baseline、source/target schema admission、旧 binary 拒绝协议；两 provider 统一的合同历史机制、边编译器与准入；`scripts/schema-history.ts`；`migrationRole` 退役与约 20 处消费者、shared DTO、启动序列守卫账本同一提交改齐 | T2、12 | AC-6、7 |
 | RFC-395-T14 | maintenance/quiesce、备份、水位、活动恢复、独立目标库、activation、首写边界、错误恢复与操作报告；现有 CLI/托管部署入口接线 | T9、12、13 | AC-7、9 |
-| RFC-395-T15 | API、WebSocket、任务目录、history、导出、归档、浏览器草稿引用的兼容；用户完整旅程；如需新界面先审原型 | T4～14 | AC-9 |
-| RFC-395-T16 | 删除清单 D1～D12 全部销账；旧 codec 仅迁移/历史可达；结构守卫按原意重定向；架构清单与必要计数更新，不提高债务基线掩盖遗漏 | T4～15 | AC-8 |
+| RFC-395-T15 | API、WebSocket、任务目录、history、导出、归档、浏览器草稿引用的兼容；用户完整旅程；如需新界面先审原型；DTO 对拍夹具与测试 | T4～14 | AC-9 |
+| RFC-395-T16 | 删除清单 D1～D13 全部销账；旧 codec 仅迁移/历史可达；结构守卫按原意重定向；架构清单与必要计数更新，不提高债务基线掩盖遗漏 | T4～15 | AC-8 |
 | RFC-395-T17 | 完成下述全部单元 / 双 provider / 迁移 / fault / 用户旅程 / 二进制测试编写；操作手册与真实演练模板 | T1～16 | AC-1～10 |
 | RFC-395-T18 | 集中验证；功能实现门；exact-SHA hosted CI；逐项记录差异和真实引擎证据 | T1～17 完整 | AC-1～10 |
 | RFC-395-T19 | 基于通过的完整候选，对真实实例只读预检并生成 reviewable MigrationPlan；取得该次切换批准后备份 / 搬迁 / 验收 | T18 + 实例操作批准 | AC-7、9、10 |
@@ -40,20 +40,23 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 
 | 面 | 正向与边界用例 | 旧写法反例 / 失败用例 |
 | --- | --- | --- |
-| schema / codec | 两 provider 生成一致合同；整数/时间边界、Unicode、JSON null、空值、bytea/BLOB、unique-null、排序 | 漏 owner/codec、错误 jsonb 原文转换、bigint 截断、未生效 CHECK、弱化 FK |
-| Task 主体 | Agent / Workflow / Workgroup、child launch、固定 snapshot、已删除 source 历史 | 仍创建 host 行；从当前资源补历史配置；重复主仓权威 |
-| 工作区 | 一仓/多仓/internal/inherited/detached/unborn、只读挂载、submodule、显式空目录 | 227 branch 差异形状；缺 map 当 root；repo reorder 改身份；缺文件丢失 |
-| NodeRun | 同毫秒/多进程 mint、负 seq、allocator 高水位、role、task synthetic、container、retry、review、loop、fanout shard 集合、selected anchor 删除、child continuation | `max(seq)+1`、ID 新鲜度、把 parent 当容器、简单 MAX 丢 supersession 语义、当前 producer 冒充实际消费 |
-| 协作 | 同题 revision 冲突、不同题并发成功、草稿恢复、attribution、部分提交、封口、abandoned | 整 map 覆盖导致答案丢失；封口后继续写；未知 question key 静默丢弃 |
+| schema / codec | 两 provider 生成一致合同；整数/时间边界、Unicode、JSON null、空值、bytea/BLOB、unique-null、排序；每类边在两 provider 上编译并应用后物理结构等于新头合同编译结果；rebuild-table 边保留行、FK 与索引；两种行级规则（`immutableOnceSet` / `appendOnly`）在两 provider 上都拒绝改写 / 删除并映射同一错误；8 条 FK 的删除动作两侧一致；记忆删除后引用置空；t19g 对账守卫改为「两份编译 DDL 同义」，并补 FK、可空性、默认值的对账 | 漏 owner/codec、错误 jsonb 原文转换、bigint 截断、未生效 CHECK、弱化 FK；物理结构偏离头合同仍被准入；旧二进制在非只扩展后继上继续服务；合同出现无类型触发器；PG 上可删除 append-only 账本行 |
+| Task 主体 | 五类主体（Agent / Workflow / Workgroup / 数字员工两种实现 / 历史 code-round）启动 / 恢复 / 详情 / 评审列表、child launch、固定 snapshot、已删除 source 历史；切换前冻结的 v2 调用闭包在目标上仍按边键取到定义（含 workgroup 宿主任务内的 call 节点）；读时排版对 platform 定义生效、对 authored 不生效 | 任何代码路径插入或查询四个宿主 id 的 `workflows` 行（仍创建 host 行）；从当前资源补历史配置；重复主仓权威；`workflowId` 投影为空串；数字员工任务被判为 agent / workgroup；删除根任务后留下任何后代任务或后代的从属行（两 provider）；删除后父链 `branch_started_at` 未重算 |
+| 工作区 | 一仓/多仓/internal/inherited/detached/unborn、只读挂载、submodule、显式空目录；延后准备占位与物化失败任务的 GET / 列表 / 重试 / 引用计数投影与旧二进制逐字段相等；单仓任务重新启动仍走根仓物化；单个非根成员仓库组的隔离运行崩溃重放、收养与 wrapper 重建 | 227 branch 差异形状；缺 map 当 root；repo reorder 改身份；缺文件丢失；`repoCount` 投影为 0；`repos[]` 为空；未绑定用空串而非 NULL；以 `repoCount === 1` 代替根挂载判据 |
+| NodeRun | 同毫秒/多进程 mint、负 seq、allocator 高水位、role、task synthetic、container、retry、review、loop、fanout shard 集合、selected anchor 删除、child continuation；每种槽位（node / container / shard / aggregator / synthetic / workgroup-host）的 oracle 与表实现在随机任务历史上逐槽位相等（参照 `packages/backend/tests/rfc369-node-run-supersession.test.ts:192` 的对拍形式）；跨 wrapper 代 shard 复用；聚合输入集合判据与旧「比每个 shard 都新」判据等价；评审原地重置后选中不变；call 续接收养；wrapper / io / review / clarify / commit 行铸行即有 nonce 且无运行态行；历史无 nonce 行的输出解析与提示渲染与今天一致；多仓 checkpoint 三态与部分仓记录；iso 目录推导与 `worktree_dir_name` 等值 | `max(seq)+1`、ID 新鲜度、把 parent 当容器、简单 MAX 丢 supersession 语义、当前 producer 冒充实际消费；业务模块直接查询 `node_runs` 做选择（结构守卫）；按 id / startedAt 排序做业务选择；选择写入不在 owner 事务内；目标启动序列仍含 seq / frame 回填步骤（`packages/backend/tests/rfc379-daemon-lifecycle.test.ts` 的步骤清单改指） |
+| 聚合写协议 | 双 provider 并发：生命周期迁移 vs prune 认领 vs 复活；同步工作流 vs 取消；runner 结算 CAS vs 评审取代；merge-state CAS vs 取代收尾；会话租约竞争 | CAS 未命中却留下 tokens / 快照；从属表 UPDATE 出现在协议文件外；source-control 直写 `tasks` |
+| 协作 | 同题 revision 冲突、不同题并发成功、草稿恢复、attribution、部分提交、封口、abandoned；follow-up 追加与同轮草稿保存并发；封口时题集已变 | 整 map 覆盖导致答案丢失；封口后继续写；未知 question key 静默丢弃；改写既有题目；封口后追加 |
 | 资源 | 四类关系顺序、传递依赖、Workflow ID/name selector、资源 rename / delete / 同名创建、包跨实例 import/export | name/ID 混用；索引与定义 revision 不一致；解析缓存取代动态 selector；重复依赖改变顺序 |
 | 内容 | inline/文件/DB/object、BOM、非法 UTF-8、空 bytes、版本/目录/staging/trash、归档、备份恢复 | base64 解码变 bytes；JSON stringify 改 digest；发布未 ready 就引用；仍被备份持有却释放 |
 | AtomicApply | prepared / applying 崩溃、幂等重复请求、失败重试、领域提交同事务、artifact 恢复 | 两条状态机分叉；重试事务重复外部 effect；同幂等键不同 payload 被忽略 |
 | 其他保留表 | commit event 顺序/投递、event 去重/订阅、Case/Reaction/Task 关系、开发配置与 OS 共存、观测费用独立保留 | 合并事件导致重放；Task 删除级联费用；旧命名配置被误删 |
-| 源识别 | 当前合同、无 seq 源、本机差异合同、非空 PG 源、已有跨 provider 路径 | journal 行数冒充版本；未知表/列悄悄忽略；不支持版本直接写目标 |
-| 转换恢复 | chunk 中断重启、row disposition 守恒、source 不变、ID 高水位、历史可查 | receipt 响应丢失重复插入；source 变化仍复用 checkpoint；行数相等但链接错 |
+| 源识别 | 当前合同、无 seq 源、本机差异合同、非空 PG 源、已有跨 provider 路径；新装、测试 baseline、托管安装三处的种子行逐字节一致；epoch-1 SQLite 备份、epoch-1 逻辑工件、托管备份三种源恢复到目标 epoch | journal 行数冒充版本；未知表/列悄悄忽略；不支持版本直接写目标；转换器把种子覆盖到迁入库的已有行 |
+| 转换恢复 | chunk 中断重启、row disposition 守恒、source 不变、ID 高水位、历史可查；任一源键可经 trace 得到处置；chunk 回执与行同事务 | receipt 响应丢失重复插入；source 变化仍复用 checkpoint；行数相等但链接错；行级处置表出现同键可推导行（守卫）；chunk 行已提交而回执缺失 |
 | 活动恢复 | awaitHuman / awaitReview / interrupted、进行中的 effect/Apply/delivery、lease 重接管 | 自动取消任务；复制旧 owner 当新存活；重复外部效果；ACK 后丢 ingress |
-| 激活 / 回退 | 每个阶段 crash、配置切换未开 admission、切换前撤回、首写后前滚 / 目标恢复 | 两套 active generation；部分 Worker 留旧库；首写后直接退源造成丢事实 |
+| 持久化载荷 | 切换前已决定、尚未驱动的续跑（含工作区回滚计划）在目标上执行；切换前等待人工、切换后决定；托管领养重建请求逐字节相等；同代 effect 重开 CAS 命中 | 预检放过 prepared 的开门清单；非字面量对象写入被重塑表静默丢列；派生键被重算 |
+| 激活 / 回退 | 每个阶段 crash、配置切换未开 admission、切换前撤回、首写后前滚 / 目标恢复；pointer 替换前后各点崩溃；首写前撤回恢复原 pointer 字节；新装写 v2 | 两套 active generation；部分 Worker 留旧库；首写后直接退源造成丢事实；epoch-1 二进制打开目标文件或读取 v2 pointer 后继续服务；SQLite 目标首写后仍允许撤回 |
 | 完整产品旅程 | 启动 → 执行 → 人工门 → 恢复 → 完成 → retry/rollback → 历史/导出；single/hosted 与双 provider | 只看新建空库；历史链接断；浏览器草稿被清空 |
+| API 投影对拍 | 同一迁移 fixture：旧二进制在源库上的 `GET /api/tasks/:id`、`/node-runs`、任务目录、评审列表、澄清详情，与新二进制在目标库上的响应逐字节相等（只允许 design 登记的差异） | 投影多键使 strict 解析失败；`parentNodeRunId` 被替换为 container；`repoCount` 为 0；agent 任务被判为 workflow |
 | 二进制与运行图 | Linux/macOS/Windows binary 启动、新 baseline/旧库识别、维护 Worker、实际 driver 导入初始化 | 静态 TS 通过但打包 driver 不可用；应用图重复装配；错用旧 `cli/` 路径 |
 
 测试使用项目现有双 provider harness 与统一应用图；新的 scope 对应的前后端行为必须都被覆盖。PostgreSQL 测试需要真实引擎和非空 fixture，不能只检查生成 SQL 文本。former-wiring 对照应证明旧写法触发相同功能缺陷，不是仅断言文件名消失。
@@ -81,7 +84,7 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 ### 5.2 实现与运行（未开始）
 
 - [ ] T1～T17 全部开发与测试用例编写完成
-- [ ] AC-1～AC-10 逐项证据；D1～D12 删除清单逐项销账
+- [ ] AC-1～AC-10 逐项证据；D1～D13 删除清单逐项销账
 - [ ] SQLite targeted / full evidence、PostgreSQL real-engine evidence 分别记录
 - [ ] 用户完整旅程、性能、故障恢复、备份恢复及二进制证据
 - [ ] 功能实现门 + 必需 hosted exact-SHA CI
@@ -114,8 +117,9 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 | --- | --- | --- |
 | I-a | T1 机器可读库存与源指纹基础 + T2a：217 表按今日声明等价重述为各领域显式 contribution，`@/db/schema` 导出编译出的表，336 个引用方不动 | 不改物理 schema、不搬数据；全部开发与用例写完后集中验证一次，单独提交 |
 | I-b | T3（方案 B）：中立查询接口、会话提供表集、原生 bun-sqlite / bun-sql，删除 sqlite-proxy、SQL 修补与进程级表投影 | 同上；单行 INSERT 往返合并的性能须以原生方式保持 |
-| II-0 | 本会话修订设计：§6.4 缺口逐条裁决，写回 design / migration / table-mapping | 文档 |
-| II | T2b、T4～T17：目标模型造数 builder 与 codemod、领域重建、转换器、回执与切换、兼容投影、删除清单 | 全部开发与用例写完后集中验证（T18），一次激活交付 |
+| II-0 | 本会话修订设计：§6.4 缺口逐条裁决，写回 design / migration / table-mapping（2026-10-21 完成，见 §6.6） | 文档 |
+| II-pre | §6.4-13 的死代码删除与测试改接线 | 独立提交；不改产品行为；完成后集中验证一次 |
+| II | T2b、T4～T17：目标模型造数 builder 与 codemod、领域重建、转换器、回执与切换、兼容投影、删除清单。T6 的开发顺序固定为：先立选择端口与 oracle 适配器并迁移全部调用点，再写表实现与双实现对拍，最后把 oracle 适配器移入迁移模块 | 全部开发与用例写完后集中验证（T18），一次激活交付 |
 | III | T19：每个真实实例只读预检 → MigrationPlan → 用户批准 → 备份、搬迁、验收 | 逐实例批准 |
 
 阶段 I 在现有物理 schema 上完成，现有双引擎测试即等价判据，不产生 schema epoch，符合本 plan §4「前置提交不激活新合同」。
@@ -130,28 +134,21 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 
 I-b1 与 I-b2 在开发上前后衔接，作为一次交付集中验证。
 
-### 6.4 阶段 II 实施前须修订的设计缺口
+### 6.4 阶段 II 实施前须修订的设计缺口（2026-10-21 已全部裁决，见 §6.6）
 
-1. 宿主 workflow 共 4 个（另有数字员工宿主 `00000000000000DIGEMPHOST0`），`subject_kind` 缺数字员工与 code-round；宿主行被评审 join、
-   内置布局、workflowName、记忆 scope、闭包 / intent 哈希隐性依赖。
-2. 旧行形状已写进持久化 JSON（人工门续跑 payload、澄清 / 评审开门 manifest），新库需 v1 解码，否则迁移前等待人工的任务恢复后被拒。
-3. 「当前选中哪次运行」约 77 处各自计算（9 种槽位键、5 种排序），先立统一选择端口，再拆表。
-4. 拆表后变成多表 CAS：任务生命周期 CAS（状态 + prune 认领 + fence 同句）、node_run 状态 CAS、merge-state CAS。
-5. 子任务树删除依赖 `tasks.parent_task_id` 的级联；移到 `task_launch_contexts` 会改变删除语义。
-6. 「主仓 = ordinal 0 投影」的例外：延后准备的占位任务无挂载；`tasks.worktree_path` 兼作「未绑定」标记并参与 CAS；无 `task_repos`
-   时合成 `repos[]` 的回落。
-7. D 清单补项：`pre_snapshot` 自 RFC-130 起无新写入、`pre_snapshot_repos_json` 无写入点；启动期 seq 与 frame 回填。
-8. `envelope_nonce` 在每行铸造时生成，与「运行态只给需要的角色建行」冲突。
-9. design 内部待定：`merge_state` 归属（§4 与 §5.3）；`isolation_root_ref` 与 `iso_worktree_path` 重叠；per-repo map 的键是
-   `worktree_dir_name`；快照四态；脑图下问题快照会被改写；consumed 记录只到源节点粒度；`review_iteration` 兼作并发令牌；
-   `operation_generation` 与 `generation_seq` 两轴。
-10. 前端严格解析：投影须精确；Agent / Workgroup 任务的 `Task.workflowId`；`NodeRun.seq` 非空与 `nodeRunOrder` 兜底退出；
-    `worktreeDirName` / `repoCount` 是否保留投影；`parentNodeRunId` 保持「历史 parent」含义。
-11. 迁移机制待决：新 epoch 后 SQLite 的演进机制；行处置粒度与存放；SQLite 目标文件位置与 pointer v2；provider 差异的目标裁决
-    （7 trigger、8 FK、`tasks.name`、partial 与 full unique）；种子行 contribution；跨 epoch 备份恢复；`migrationRole` 退役。
-12. 疑似现存缺陷：只有一个非根成员的仓库组任务，`isoNodeTree` 可能存为 NULL（崩溃重放报 node_tree missing）；先复现，属实则单独修复。
-13. 先删 test-only 与死代码（`startTask`、`getTaskNodeRuns`、`systemWorkspaceGc` 的 DB 函数、intent 引擎 converge、
-    `services/bundle/provider.ts`、无调用方的 `decideIntentApplyConverge`）可缩小 T4～T6 与 T10 的改动面。
+1. **宿主 workflow**——已裁决：四个宿主（Agent / 工作组 / 数字员工 / code-round）全部退出 catalog；`subject_kind` 五值；`definitionAnchorId()` 领域常量只在边界投影 `workflowId`，并作为调用闭包与记忆 workflow 作用域的稳定键；读时排版改由冻结的 `definition_origin` 决定；共享记忆作用域保留（Q1）、显示不变（Q2）。见 design §3.1、§3.2、§8、§10 D1，migration §4.1 第 5～7 条，table-mapping §2 `workflows`，本文 §3「Task 主体」。
+2. **旧行形状写进持久化 JSON**——已裁决：人工门续跑围栏在决定事务内计算与比较，提交后不再重算，不是切换风险；会回插被重塑表的在途清单与准备回执冻结前收敛、目标只处理 v2，由旧字段派生的身份与幂等键按值搬运，自含载荷与托管协议保持原字节，归档升 v3。见 migration §4.6，design §7.3、§10 D13，本文 §3「持久化载荷」。
+3. **「当前选中哪次运行」**——已裁决：先在现有 schema 上立 `RunSelection` 端口与 oracle 适配器并迁移全部调用点，再写表实现、双实现对拍；`node_run_selections` 主键 `(task_id, slot_key)`，代次作为属性；任务内唯一排序是 seq。见 design §5.1、§5.2、§5.4、§10 D4，本文 §6.2 II 行、§3「NodeRun」。
+4. **多表 CAS**——已裁决：与生命周期 CAS 同句读写的可变列（`workspace_root_ref`、prune 三列、来源终止 fence / effect_rev）留在 `tasks`，`task_source_termination_states` 不再成表；同时写 `tasks` 与从属表的事务先锁聚合根；NodeRun 根行 CAS 先行、从属表同事务后写，`merge_state` 与 iso 根、wrapper 进度同在运行态表；工作组运行期配置进 `workgroup_task_state`。见 design §3.1、§3.3、§5.5，migration §4.1 第 8 条，table-mapping §2 `tasks` / `workgroup_task_state` 与 §3「Task 分层」，本文 §3「聚合写协议」。
+5. **子任务树删除**——已裁决：树结构列（`parent_task_id` 自引用级联、`root_task_id`、`invocation_depth`、`branch_started_at`）留在 `tasks`，删除语义不变；启动来源事实进 `task_launch_contexts`；纠正 `branch_started_at` 被误归工作区。见 design §3.2、§3.4、§9，本文 §3「Task 主体」。
+6. **「主仓 = ordinal 0 投影」的例外**——已裁决：显式 `requested_source` 与 `task_branch`（`task_workspaces`，冻结）、`tasks.workspace_root_ref` 可空（NULL = 未绑定）、单一投影函数；无挂载时合成 `repos[0]`、`repoCount = max(1, n)`；写者总落最小目录树。见 design §4「主仓字段投影」、§10 D2，migration §4.2，本文 §3「工作区」。
+7. **D 清单补项**——已裁决：D3 补 pre-snapshot 无生产者事实与 retry 模式删除，D4 / D5 补启动期 seq / frame 回填（改由转换器一次性完成），D12 补启动期旧数据升级步骤的逐项分类义务。见 design §10，本文 §2 T1、§3「NodeRun」。
+8. **`envelope_nonce`**——已裁决：归 `node_runs` 身份列（铸行即生成、不可变），`node_run_runtime_states` 保持按需建行。见 design §5.1、§5.3、§5.6。
+9. **design 内部待定 8 点**——已裁决：`merge_state` 归运行态表；checkpoint 不存 `isolation_root_ref`；map 键经 `worktree_dir_name → repo_key` 映射；checkpoint 三态字段 + 行存在性；问题集只增 + `questions_revision`；消费边按（源节点, shard）粒度；`review_iteration` 是 CAS 可变属性；两条代轴独立。见 design §4、§5.1～§5.3、§6.1，migration §4.3，本文 §3「NodeRun」「协作」。
+10. **前端严格解析**——已裁决：现有 shared zod 合同即投影验收标准，除 `NodeRunSchema.seq` 收紧为非空外不改合同；逐字段投影规则写入 design；增新旧二进制 DTO 对拍。见 design §8「API 兼容投影合同」，本文 §2 T15、§3「API 投影对拍」。
+11. **迁移机制待决**——已裁决（拆为 M1～M8）：M1 两 provider 统一的「合同历史 + 类型化边」，drizzle-kit 不再生成迁移（design §13、§10 D12）；M2 同键可推导转换用 chunk 级证明、例外行级记录，元数据存目标库（migration §3，table-mapping §3「迁移元数据」）；M3 代次目录文件 + pointer v2（migration §3、§5 第 8 步，Q3）；M4 provider 差异逐条裁决到两侧一致的原生表达（design §2.4，migration §4.7，Q4）；M5 contribution `seeds`（design §9、§12.1，migration §4.5）；M6 旧 epoch 备份经转换器恢复（migration §2）；M7 `migrationRole` 退役（migration §3，design §10 D10，本文 §2 T13）；M8 规范化只作用于 SQL 表达式文本（design §12.1）。
+12. **疑似现存缺陷**——已确认属实（代码阅读）：仓库组展平后只有一个非根成员时，`iso_node_tree` 落 NULL、恢复时 base 以 `''` 为键错配；按缺陷修复 + 回归用例单独修复，不属于 RFC-395（Q5）；RFC-395 转换器按 migration §4.2 处理已受影响的行。见本文 §3「工作区」。
+13. **先删 test-only 与死代码**——已裁决：阶段 II 之前单独提交删除 `startTask` / `startTaskWithLocalRepo` 与 `codeRoundLaunch` 写槽（42 个测试改走生产启动内核）、`getTaskNodeRuns`（8 个测试改用 `taskNodeRunsProjection`）、`systemWorkspaceGc` 的库函数（9 个测试，`materializingSpaces` 迁至使用方模块）、intent 引擎内 `converge`、`services/bundle/provider.ts` 中 RFC-271 旧合同段（`opSlug / planBundleOps / resourceTypeOfOp` 有生产使用，保留）；`decideIntentApplyConverge` 不删，由 T10 收编。见本文 §6.2 II-pre 行。
 
 ### 6.5 并发约束
 
@@ -159,3 +156,22 @@ RFC-396 正在工作树中实施，改动 `db/schema.ts`、SQLite 迁移链与 `
 阶段 I 的代码实施在 RFC-396 的持久化改动提交后开始；之后新增的表须同时提供 contribution（I-a 的结构锁会要求）。
 用户 2026-10-21 选择由接手会话协调：本会话不向其他会话发消息，以工作树中 `db/**`、`platform/persistence/**` 的提交状态为准，
 在此之前只做 II-0 设计修订。
+
+### 6.6 II-0 修订记录（2026-10-21）
+
+本会话依据只读研究写出 II-0 修订草案，逐项裁决 §6.4 的第 1～10、12、13 项与迁移机制 M1～M8（由第 11 项拆出），共 20 项；全部按草案推荐采纳，
+并写回 design / migration / table-mapping / plan，各项去向见 §6.4。用户 2026-10-21 对需决定的问题答复如下：
+
+| 编号 | 问题 | 用户决定 |
+| --- | --- | --- |
+| Q1 | Agent / 工作组 / 数字员工任务今天共用以宿主 id 为键的 workflow 记忆作用域，宿主行删除后是否保留 | 保留：作用域键改由领域常量提供，现有记忆原样迁移，注入与蒸馏结果不变（design §3.1，migration §4.1 第 7 条） |
+| Q2 | 非 workflow 任务在首页任务行、评审列表里显示宿主名，是否顺带改为显示真实主体名 | 不改：RFC-395 只做等价投影（design §3.1、§8） |
+| Q3 | SQLite 业务库文件改为 `~/.agent-workflow/databases/<generationId>/db.sqlite`，由 pointer v2 指定；旧文件在 `completed` 后移入迁移操作目录保留 | 接受（migration §3、§5 第 8 步） |
+| Q4 | PostgreSQL 删除记忆后，其他记忆中的 `supersedes_id / superseded_by_id` 今天保持悬空 | 两 provider 统一为 `ON DELETE SET NULL`；转换器把 PostgreSQL 存量悬空指针置空并记证据（design §2.4，migration §4.7） |
+| Q5 | 第 12 项缺陷的修复方式 | 按缺陷修复 + 回归用例单独提交（进行中，不属于 RFC-395）；RFC-395 只记录转换器对已受影响行的规则（migration §4.2） |
+
+M6（切换前的旧 epoch 备份可经转换器在新版本上恢复）此前已由用户确认，II-0 只补实现约束（migration §2）。
+
+逐项事实、方案对比与未逐字转录的实施细节（「当前选中运行」77 处计算点的 12 组迁移分组、各项事实表、复现步骤）保存在附录 [ii0-revision.md](./ii0-revision.md)。
+
+至此阶段 II 的其余工作在设计上不再有待决项，只等阶段 I（I-a、I-b）交付；阶段 I 的开工时点仍按 §6.5。

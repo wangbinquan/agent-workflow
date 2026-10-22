@@ -203,7 +203,7 @@
 | `task_repos` | task-execution / KEEP；21 | task-execution | 替换 | `task_repository_mounts`；稳定 repo_key、ordinal 与 mount_path；合并主仓镜像，保留来源/分支语义。 |
 | `task_space_nodes` | task-execution / KEEP；3 | task-execution | 保留 | `task_space_nodes`；冻结目录树，旧版缺省 ancestor closure 在迁移时物化；正常读取无旧版重建回退。 |
 | `task_workspace_preparations` | task-execution / KEEP；12 | task-execution | 保留 | `task_workspace_preparations`；保留各自准入/准备/归档/恢复/租约事实，改指新 Task/run/workspace 身份；admission owner 校正。 |
-| `tasks` | task-execution / KEEP；70 | task-execution | 拆分 | `tasks + task_definitions + task_launch_contexts + task_source_termination_states + task_workspaces + task_repository_mounts`；保留热生命周期，主体/定义/启动/终止状态/工作区分离；源 70 列见 design §3。 |
+| `tasks` | task-execution / KEEP；70 | task-execution | 拆分 | `tasks + task_definitions + task_launch_contexts + task_workspaces + task_repository_mounts`；保留热生命周期、与生命周期 CAS 同句的可变状态（工作区根、prune、来源终止 fence）与任务树，主体/定义/启动/工作区分离；源 70 列见 design §3.2。 |
 | `token_audit` | identity-access / KEEP；12 | identity-access | 保留 | `token_audit`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 |
 | `token_delete_snapshot` | identity-access / KEEP；6 | identity-access | 保留 | `token_delete_snapshot`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 |
 | `user_access_audit` | identity-access / KEEP；12 | identity-access | 保留 | `user_access_audit`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 |
@@ -224,12 +224,12 @@
 | `webhook_trigger_fires` | integration / KEEP；10 | integration | 保留 | `webhook_trigger_fires`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 |
 | `webhook_trigger_streams` | integration / KEEP；6 | integration | 保留 | `webhook_trigger_streams`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 |
 | `webhook_triggers` | integration / KEEP；24 | integration | 保留 | `webhook_triggers`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 |
-| `workflows` | resource-catalog / KEEP；12 | resource-catalog | 投影索引 | `workflows + workflow_dependency_index`；保留 canonical definition JSON；按 revision / reference_path 维护只读依赖索引；保留原 name selector。 |
+| `workflows` | resource-catalog / KEEP；12 | resource-catalog | 投影索引 | `workflows + workflow_dependency_index`；保留 canonical definition JSON；按 revision / reference_path 维护只读依赖索引；保留原 name selector。转换时删除四个宿主占位行（证据入包），目标库不再存在宿主行。 |
 | `workgroup_assignments` | task-execution / KEEP；16 | task-execution | 保留 | `workgroup_assignments`；运行中的派工/游标/消息/轮次状态归执行域，和 catalog 定义分开。 |
 | `workgroup_member_cursors` | task-execution / KEEP；4 | task-execution | 保留 | `workgroup_member_cursors`；运行中的派工/游标/消息/轮次状态归执行域，和 catalog 定义分开。 |
 | `workgroup_members` | task-execution / KEEP；10 | resource-catalog | 保留 | `workgroup_members`；定义与 roster 归 catalog；成员 ID、角色、顺序与合法可空条件保留，不与运行表混合。 |
 | `workgroup_messages` | task-execution / KEEP；14 | task-execution | 保留 | `workgroup_messages`；运行中的派工/游标/消息/轮次状态归执行域，和 catalog 定义分开。 |
-| `workgroup_task_state` | task-execution / KEEP；8 | task-execution | 保留 | `workgroup_task_state`；运行中的派工/游标/消息/轮次状态归执行域，和 catalog 定义分开。 |
+| `workgroup_task_state` | task-execution / KEEP；8 | task-execution | 保留 | `workgroup_task_state`；运行中的派工/游标/消息/轮次状态归执行域，和 catalog 定义分开。新增运行期配置 `runtime_config_json, config_revision`，承接 `tasks.workgroup_config_json` 中运行中可编辑的部分；`task_definitions` 只保存启动时不变的部分（mode、workgroup id / name、goal、leader）。 |
 | `workgroups` | task-execution / KEEP；21 | resource-catalog | 保留 | `workgroups`；定义与 roster 归 catalog；成员 ID、角色、顺序与合法可空条件保留，不与运行表混合。 |
 
 ## 3. 新增 / 重建目标集合
@@ -238,13 +238,13 @@
 
 | 集合 | 目标表 | owner / 依据 |
 | --- | --- | --- |
-| Task 分层 | `task_definitions`、`task_launch_contexts`、`task_source_termination_states`、`task_workspaces` | task-execution；design §3 |
+| Task 分层 | `task_definitions`、`task_launch_contexts`、`task_workspaces` | task-execution；design §3 |
 | 仓库与 checkpoint | `task_repository_mounts`、`node_run_repo_checkpoints` | task-execution；design §4 |
 | Run 身份与数据分层 | `task_execution_generations`、`node_run_selections`、`node_run_inputs`、`node_run_configs`、`node_run_runtime_states`、`node_run_results`、`execution_legacy_evidence` | task-execution；design §5 |
 | 独立协作编辑单元 | `clarify_answers`、`clarify_answer_drafts` | collaboration；design §6.1 |
 | 资源依赖 | `agent_skill_refs`、`agent_mcp_refs`、`agent_plugin_refs`、`agent_dependencies`、`workflow_dependency_index` | resource-catalog；design §6.2 |
 | 内容机制 | `content_objects`、`content_bytes`、`content_publications`（替代现有 publication 表） | platform/content 提供机制，system-operations 维护其持久生命周期；design §7 |
-| 迁移元数据 | plan / run / table receipt / row disposition / artifact receipt | system-operations；migration §3；复用现有 logical-copy 与 generation 概念，扩展到 transform 而不是另建第二套激活事实 |
+| 迁移元数据 | `migration_runs`、`migration_chunk_receipts`、`migration_table_receipts`、`migration_row_dispositions`、`migration_artifact_receipts`、`activation_receipts`（由 logical-copy 与 generation 元数据泛化） | system-operations；migration §3；复用现有 logical-copy 与 generation 概念，扩展到 transform 而不是另建第二套激活事实 |
 | 旧代码历史 | versioned archive + 原 ID 查找索引 | code-capability 历史查询；不回流当前业务写模型 |
 
 ## 4. 不属于 217 张源码业务表的存储
