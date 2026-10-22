@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-22T14:44:00Z",
+  "rfc": "RFC-396",
+  "rfcStatus": "In Progress",
+  "acceptanceCriterion": "AC14",
+  "result": "incomplete",
+  "scope": "Deterministic hosted Graph transport and execution fixture; real model quality is recorded separately.",
+  "deployment": {
+    "projectId": "01a16258-52b4-7000-8510-afa1ee567504",
+    "serviceId": "01a16258-52b4-7001-a23f-ab6109ec10ce",
+    "projectSlug": "rfc396-graph-acceptance",
+    "releaseId": "01a16383-b997-7000-93d3-910a448addd9",
+    "releaseVersion": "0.1.6",
+    "sourceCommit": "ccde54fafcee93c21ca0d66ca79d574f14ef34fc",
+    "serviceImageDigest": "sha256:770bad2cf80068a2b5662a38d18bacddd554bf9db28483a72db2efb0b0543c90",
+    "releaseJourneyId": "01a16383-bab3-7000-a976-54c7e37dc1f7",
+    "activationId": "01a16395-b4e5-7000-b887-a61e0aa4465b",
+    "activationResult": "succeeded",
+    "manualRouteReconciliation": true,
+    "actualTaskParentId": "01a16306-bf25-7000-b9e2-0ed0ae73e2e9",
+    "actualTaskGeneration": 1,
+    "actualTaskImageDigest": "sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91",
+    "declaredNewTaskImageDigest": "sha256:21b2a5640e5d2970392cd7ca0e9ad85beb7ea26b327bd5ad42c832041d2f9043",
+    "actualTaskImageUpgradeObserved": false
+  },
+  "fixture": {
+    "caseId": "01M5HWSH80PTX0K0ER0WADS9FF",
+    "employeeId": "01M5HWSG3791BYBY256AERM56M",
+    "employeeVersion": 1,
+    "designTaskId": "01M5HX8MM5C1TAMVWYCGCE4E8X",
+    "designTaskStatus": "done",
+    "designRevision": 2,
+    "includedElementIds": ["req-clamp"],
+    "viewKinds": ["flow"],
+    "freezeRequestId": "hosted-clamp-inline-basis-v2",
+    "basisReceipt": null,
+    "reviewWorkflowId": "01M5HWSBYEFZGJH48TKM8V4KMM",
+    "reviewReceipt": null,
+    "candidate": null,
+    "verificationReceipt": null,
+    "deliveryReceipt": null,
+    "expectedVerification": {
+      "profileId": "01M5HCDKS9T3174V2B9JKV2CDE",
+      "profileVersion": 1,
+      "profileDigest": "09ca94409b9f984781c1e468ae6464d0ba361a3e3e97503f824417de81c67c67",
+      "testCount": 1,
+      "assertionCount": 6,
+      "executed": false
+    }
+  },
+  "storageObservation": {
+    "observedAt": "2026-10-22T14:37:04.742Z",
+    "spaceId": "01a16276-b7a9-7000-b0b1-7ab7f04240d9",
+    "health": "ready",
+    "stale": false,
+    "usedBytes": 59444,
+    "quotaBytes": 268435456,
+    "adminContentRead": {
+      "observedAt": "2026-10-22T14:38:25.486Z",
+      "objectId": "01a163ef-738c-7000-9fd7-2e2ad9cbefb4",
+      "httpStatus": 200,
+      "bytes": 3351,
+      "sha256": "d012cfcc70607eda8832cae304cdf598fb66d72db4c9c90b91dac0a1cff36f6b"
+    },
+    "applicationGatewayWindow": {
+      "scope": "Only object requests originating from this service pod",
+      "httpStatusCounts": { "200": 258, "201": 1, "202": 2, "502": 1, "503": 4 },
+      "lastObservedAt": "2026-10-22T14:44:00Z",
+      "lastReferenceFailureAt": "2026-10-22T14:39:37Z",
+      "lastReferenceFailureStatus": 502
+    },
+    "rootCause": "unconfirmed"
+  },
+  "resumeRequirements": [
+    "Freeze the same revision and request ID through the normal Graph API.",
+    "Read the complete frozen implementation.md and compare the native review body byte for byte.",
+    "Approve only that verified native review and obtain its actual receipt.",
+    "Request implementation using that basis and review receipt.",
+    "Collect the actual candidate, independent profile result and terminal delivered Case.",
+    "Record actual service and task image versions; retain prior failures and manual routing intervention."
+  ]
+}

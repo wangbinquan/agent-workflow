@@ -162,3 +162,11 @@
 - 对部署源码 `ccde54faf` 的限定排查表明：自定义 script 的 `outputs:[{name:'document',kind:'path<md>'}]` 声明保留，但 `nodeMechanics.ts` 的 script `upsertOutputs` 没写 `kind`，`loadUpstreamPortKind` 的回退只识别 agent-single。因此这条自定义脚本审核把路径当内联文本。该行为在本次以前即存在，不能归因于持久任务镜像未升级；本次没有修改并发在制的通用执行/协作文件。内置 graph 审核使用 agent-single，三条真实单机旅程已经核对其完整正文。
 - 为继续验证实际托管 Graph→原生审核→候选→独立 profile 的链路，建立独立修正样例 `01M5HWSH80PTX0K0ER0WADS9FF`，employee `01M5HWSG3791BYBY256AERM56M`，review workflow `01M5HWSBYEFZGJH48TKM8V4KMM`。脚本先逐字比较工作区文件与 basis 文件，再经原生 inline Markdown 端口提交完整正文；原失败 Case 和工作流未覆盖。它仍是确定性运输夹具，不是新的模型质量证据，也不证明 script 的 path 类型缺口已修复。
 - 实际 `development:shared` 父任务 `01a16306-bf25-7000-b9e2-0ed0ae73e2e9` 此时仍为 generation 1 / 旧任务镜像 `sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91`。虽然 release 声明的新镜像独立验证通过，未观察到该父任务切换，因此必须继续按实际服务与任务镜像分别记证据。AC14 仍待完整执行与交付回执。
+
+### 2026-10-22 14:44 UTC：文档 CI 与托管冻结恢复证据
+
+- 实现与来源映射文档提交 `6b245b7fb3d42d049898fc4e31c8076c7a7111c0` 的主 [CI 39792129284](https://github.com/wangbinquan/agent-workflow/actions/runs/39792129284) 已 completed / success，49/49；前一证据文档提交 `bef395e4cb0460aadcbf5c0be20fe44c52fa1093` 的主 [CI 39788817192](https://github.com/wangbinquan/agent-workflow/actions/runs/39788817192) 也为 49/49 success。代码候选、记录提交和托管运行继续分别归档。
+- 修正的内联正文 Case `01M5HWSH80PTX0K0ER0WADS9FF` 已完成设计 Task `01M5HX8MM5C1TAMVWYCGCE4E8X`，设计为 revision 2，需求 `req-clamp`。后续同一冻结请求 `hosted-clamp-inline-basis-v2` 在一小时观察期内仍多次收到 500/502；应用日志对应对象接口 502/503。没有取得可供新审核使用的 basis 回执，没有批准新的原生审核，也没有候选或交付回执。
+- 14:37 UTC 该项目对象空间的正常管理员观测为 ready / 非过期，使用 59,444 bytes、配额 268,435,456 bytes，上传、验证、删除、活动下载与未知下载队列均为 0。14:38 UTC 管理员下载对象 `01a163ef-738c-7000-9fd7-2e2ad9cbefb4` 返回 200 / 3351 bytes / SHA-256 `d012cfcc70607eda8832cae304cdf598fb66d72db4c9c90b91dac0a1cff36f6b`，与登记摘要一致。这证明该次材料读取成功，不证明应用侧全部对象操作已恢复。
+- 限定到本项目 Pod 的网关记录在 14:32～14:44 UTC 共包含 266 次对象请求：258 个 200、1 个 201、2 个 202、1 个 502、4 个 503。14:39:37 的失败是对象引用 `PUT`，其后仍有同一应用的内容 `GET` 返回 200；因此不能笼统声称所有对象读取失败。应用实际使用 `http://api.svc.cs.internal:8088/v3/objects`，已核对专用对象入口。尚未取得足够证据确定这些间歇错误的根因，未修改 CrewStation 源码、全局配置、执行租约或任务镜像。
+- 当前恢复位置、精确版本与缺失证据见 [托管验收状态](./hosted-acceptance-status.json)。继续使用原 Case、revision 2 与同一个幂等请求；只有冻结材料完整可重读、原生审核全文相符、候选实际生成且独立 profile 取得真实结果后，才能签署该托管闭环。AC14 / T14 继续待验，RFC 保持 In Progress。
