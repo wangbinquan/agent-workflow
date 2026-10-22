@@ -206,13 +206,75 @@ describe('opencode prompt argv size guard (B4-runtime-5)', () => {
 describe('RFC-396 large OpenCode prompt transport', () => {
   it('keeps the exact boundary positional and pipes one byte more without losing resume flags', () => {
     expect(
-      buildOpencodeSpawn({ ...BASE, prompt: 'x'.repeat(MAX_OPENCODE_PROMPT_BYTES) }).stdin,
+      buildOpencodeSpawn({ ...BASE, prompt: 'x'.repeat(MAX_OPENCODE_PROMPT_BYTES) }, 'linux').stdin,
     ).toBeUndefined()
     const prompt = 'x'.repeat(MAX_OPENCODE_PROMPT_BYTES + 1)
     const plan = buildOpencodeSpawn({ ...BASE, prompt, resumeSessionId: 'same-session' })
     expect(plan.stdin).toEqual({ mode: 'pipe', data: prompt })
     expect(plan.cmd.slice(-2)).toEqual(['--session', 'same-session'])
     expect(plan.cmd).not.toContain(prompt)
+  })
+
+  // Windows CI 39763563985 / 39767238898: all graph review journeys failed
+  // before the native review with ENAMETOOLONG, below Linux's byte limit.
+  it('pipes a medium Windows review while retaining small argv and POSIX compatibility', () => {
+    const prompt = 'frozen review "basis" \\ path\n'.repeat(2000)
+    expect(Buffer.byteLength(prompt)).toBeLessThan(MAX_OPENCODE_PROMPT_BYTES)
+    const win = buildOpencodeSpawn({ ...BASE, prompt, resumeSessionId: 'review-session' }, 'win32')
+    expect(win.stdin).toEqual({ mode: 'pipe', data: prompt })
+    expect(win.cmd.slice(-2)).toEqual(['--session', 'review-session'])
+    expect(win.cmd).not.toContain(prompt)
+    expect(buildOpencodeSpawn({ ...BASE }, 'win32').cmd.slice(-2)).toEqual(['--', BASE.prompt])
+    for (const platform of ['linux', 'darwin'] as const) {
+      const posix = buildOpencodeSpawn({ ...BASE, prompt }, platform)
+      expect(posix.stdin).toBeUndefined()
+      expect(posix.cmd.slice(-2)).toEqual(['--', prompt])
+    }
+  })
+
+  it('includes runtime head, agent, resume flags and UTF-16 units in the Windows budget', () => {
+    const prompt = 'x'.repeat(14_000)
+    expect(buildOpencodeSpawn({ ...BASE, prompt }, 'win32').stdin).toBeUndefined()
+    const longHead = ['C:\\' + 'runtime\\'.repeat(160) + 'opencode.exe']
+    expect(buildOpencodeSpawn({ ...BASE, prompt, opencodeCmd: longHead }, 'win32').stdin).toEqual({
+      mode: 'pipe',
+      data: prompt,
+    })
+    expect(
+      buildOpencodeSpawn({ ...BASE, prompt, resumeSessionId: 's'.repeat(1200) }, 'win32').stdin,
+    ).toEqual({ mode: 'pipe', data: prompt })
+    expect(buildOpencodeSpawn({ ...BASE, prompt: '🙂'.repeat(8000) }, 'win32').stdin?.data).toBe(
+      '🙂'.repeat(8000),
+    )
+  })
+
+  it('sends a sub-Linux-limit Windows review intact to an actual child process', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc396-win-review-'))
+    try {
+      const receiver = join(root, 'receiver.ts')
+      writeFileSync(
+        receiver,
+        'const s=await Bun.stdin.text();console.log(JSON.stringify({s,args:Bun.argv.slice(2)}))',
+      )
+      const prompt = '"frozen\\basis"\n'.repeat(3000) + 'END_OF_REVIEW'
+      expect(Buffer.byteLength(prompt)).toBeLessThan(MAX_OPENCODE_PROMPT_BYTES)
+      const plan = buildOpencodeSpawn(
+        { ...BASE, prompt, opencodeCmd: [process.execPath, receiver], resumeSessionId: 'review' },
+        'win32',
+      )
+      expect(plan.stdin?.mode).toBe('pipe')
+      const proc = Bun.spawn(plan.cmd, {
+        stdin: new Blob([plan.stdin!.data]),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      })
+      const received = (await new Response(proc.stdout).json()) as { s: string; args: string[] }
+      expect(await proc.exited).toBe(0)
+      expect(received.s).toBe(prompt)
+      expect(received.args).toEqual(plan.cmd.slice(2))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('delivers a CJK multiline input and its final sentinel intact to an actual subprocess', async () => {

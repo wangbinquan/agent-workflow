@@ -238,16 +238,18 @@ export interface OpencodeSpawnContext extends OpencodeEnvContext {
 /**
  * Keep small-prompt argv compatibility; deliver large input intact over stdin.
  * OpenCode reads piped input before dispatching either a fresh or resumed run:
- * https://github.com/anomalyco/opencode/blob/v1.19.0/packages/opencode/src/cli/cmd/run.ts#L400
+ * opencode/packages/opencode/src/cli/cmd/run.ts:416-418, cb562b2c6289.
  * RFC-396: frozen design/review material can exceed the single-argument limit.
  * buildCommand retains its guard for callers that explicitly request argv only.
  */
-export function buildOpencodeSpawn(ctx: OpencodeSpawnContext): {
+export function buildOpencodeSpawn(
+  ctx: OpencodeSpawnContext,
+  platform: NodeJS.Platform = process.platform,
+): {
   cmd: string[]
   env: Record<string, string>
   stdin?: { mode: 'pipe'; data: string }
 } {
-  const piped = Buffer.byteLength(ctx.prompt, 'utf8') > MAX_OPENCODE_PROMPT_BYTES
   const cmd = buildCommand(
     {
       opencodeCmd: ctx.opencodeCmd,
@@ -255,9 +257,25 @@ export function buildOpencodeSpawn(ctx: OpencodeSpawnContext): {
       resumeSessionId: ctx.resumeSessionId,
       binaryVersion: ctx.binaryVersion,
     },
-    piped ? '' : ctx.prompt,
+    '',
   )
-  if (piped) cmd.splice(-2) // No positional message; stdin is the complete prompt.
+  // Windows CreateProcessW limits the WHOLE command line to 32,767 UTF-16
+  // code units, including its terminator. A prompt below Linux's per-argument
+  // limit can still fail with ENAMETOOLONG before a review task starts.
+  // Conservatively allow every code unit to double under argument quoting,
+  // plus quotes/spaces and room for the executable's resolved path. Include
+  // the runtime head, agent and resume flags instead of counting only prompt.
+  // Microsoft Learn: CreateProcessW, lpCommandLine.
+  const windowsCommandUnits = [...cmd.slice(0, -1), ctx.prompt].reduce(
+    (total, argument) => total + 2 * argument.length + 3,
+    1,
+  )
+  const piped =
+    Buffer.byteLength(ctx.prompt, 'utf8') > MAX_OPENCODE_PROMPT_BYTES ||
+    (platform === 'win32' && windowsCommandUnits > 30_000)
+  if (piped)
+    cmd.splice(-2) // No positional message; stdin is the complete prompt.
+  else cmd[cmd.length - 1] = ctx.prompt
   const env = buildOpencodeEnv(ctx)
   return { cmd, env, ...(piped ? { stdin: { mode: 'pipe' as const, data: ctx.prompt } } : {}) }
 }

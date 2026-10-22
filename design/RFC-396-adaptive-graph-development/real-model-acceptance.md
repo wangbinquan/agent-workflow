@@ -16,9 +16,9 @@
 
 | 案例 | Case | 初始需求与主要变化 | 当前结果 |
 | --- | --- | --- | --- |
-| 预约 | `01M5H550KMNV5RQX7S9RP7S5GX` | 单资源时段预约、幂等、冲突、取消；后续讨论优先级与并发 | 进行中 |
-| 异步通知 | `01M5H59S2462BFFJBJWGMF4SY9` | 按 entity 去重、版本乱序、失败重试与版本内终态 | 进行中 |
-| 已有模块 | `01M5H59TF3767SKWW9T280J4K3` | 修正 `normalizeResponse` 对非法 data 的处理；保留签名、返回结构和 consumer | 进行中 |
+| 预约 | `01M5H550KMNV5RQX7S9RP7S5GX` | 单资源时段预约、幂等、冲突、取消；后续讨论优先级与并发 | v9 已验证并交付候选提交；24 项实际测试通过 |
+| 异步通知 | `01M5H59S2462BFFJBJWGMF4SY9` | 按 entity 去重、版本乱序、失败重试与版本内终态 | v9 已验证并交付候选提交；44 项实际测试通过 |
+| 已有模块 | `01M5H59TF3767SKWW9T280J4K3` | 修正 `normalizeResponse` 对非法 data 的处理；保留签名、返回结构和 consumer | v8 已验证并交付候选提交；13 项实际测试通过 |
 
 实际测试 profile：`01M5H59QNZ4T44H5388ZGMVRS8@1`，内容 digest `346d744b8456279d6faa14dd7e41327ef7e4669dc49aabd13b9e6479b5700513`。它要求执行候选仓库中的 `verify.sh`，收集实际 stdout、退出码和原始回执；脚本需执行 `bun test`。模型声称测试通过不能代替该证据。
 
@@ -34,7 +34,7 @@
 
 ## 证据边界
 
-当前仍需收齐三个完整闭环、变化前后的图组合对照、代码和真实验证回执，以及托管业务执行结果。模型调用累计 token 字段包含其会话记账，不能直接推算费用或独立输入规模。
+三个单机真实模型闭环及固定图组合对照已收齐，详细版本与失败历史见后文；托管业务执行、最后 exact-SHA CI 和收尾仍在进行。模型调用累计 token 字段包含其会话记账，不能直接推算费用或独立输入规模。
 
 文档提交 `b45f3712740e6f70c45d88fe4912434dbb738749` 的 [CI 39732007816](https://github.com/wangbinquan/agent-workflow/actions/runs/39732007816) 终态为 47 success / 2 failure；失败根因仍是 [backend 12/24](https://github.com/wangbinquan/agent-workflow/actions/runs/39732007816/job/119668947797) 的 `Expected length: 217 / Received length: 222`，另一个失败是汇总门。用户已明确这不阻止继续验收；该事实不等同于整仓 CI 通过。
 
@@ -71,7 +71,7 @@
 - `cfe25471eff2475c5c1546e1892ece92981e0002` 已推送并在同一单机验收数据目录运行（CI `39746345356` 的 macOS artifact `12412061085`）。预约走原 action retry，已有模块走新的原生 clarification request，保留先前超时、无效候选与答案历史。
 - 通知 v3 重规划再次达到 10 分钟限制。代理逐项审核 v2 的状态机和规则表后，经正常 changes API 修正第三次仍 applied / 第四次才 attempts-exhausted 的两处歧义及旧版门控说明；未冒充模型自动修正，未删除量化 coverage 元数据漏项的限制。冻结 revision 4、52 个 included 元素、12 个义务、3 条原始 provisional 答案，basis digest `94ed81132c1e0c5bf4aeff76ba11e9426d5eb7ff889e11516c49cce4cb5f299d`。
 - 原生审核任务 `01M5HBB9G719ENFD92D0CFC5F6` 和恢复任务 `01M5HBBCJ7G2VDT5H3SYH44Q7W` 启动失败：`prompt-too-large`，实际提示分别 322366 / 322689 bytes，argv guard 为 122880 bytes。尚未批准此依据、未执行代码生成。
-- 修复选择完整 stdin 传输大提示，保留小提示既有 argv 协议和 argv-only guard，两个统一装配入口均传递 stdin；不裁掉设计、原回答或审批材料。[本机 OpenCode 1.19.0 对应源码](https://github.com/anomalyco/opencode/blob/v1.19.0/packages/opencode/src/cli/cmd/run.ts#L400) 明确在分派前读取 piped input。增加真实子进程大段 CJK/多行/尾部哨兵和业务、系统装配回归；真实模型上的修复效果待新候选继续验收。
+- 修复选择完整 stdin 传输大提示，保留小提示既有 argv 协议和 argv-only guard，两个统一装配入口均传递 stdin；不裁掉设计、原回答或审批材料。OpenCode v1.19.0 的 `packages/opencode/src/cli/cmd/run.ts:400` 明确在分派前读取 piped input；后续本机源码 `cb562b2c6289` 对应逻辑位于 `packages/opencode/src/cli/cmd/run.ts:416-418`。增加真实子进程大段 CJK/多行/尾部哨兵和业务、系统装配回归；真实模型上的修复效果待新候选继续验收。
 - 独立托管 v0.1.2 已从 Ready 切到 prod，release journey `01a1629d-cfba-7000-86f8-3897db7833c4` 为 succeeded，激活 `01a162ab-407b-7000-afef-248060b34ce0`。仅该项目的部署就绪，不代表托管业务链路完成。
 - CI `66c084c3` 的两个剩余根失败是 provider 函数语料 47/门槛48，以及新增 `rfc395-head-history-injection.test.ts` 假 PG runtime 未登记；RFC-395 自行提交 `228f726c0` 修复，已为 `cfe25471e` 祖先。旧 CI 仍按自己的失败记录保存，后继 exact-SHA CI 另记。
 
@@ -126,3 +126,16 @@
 - 独立托管 v0.1.4 源码提交 `e802441cabdafcd81e8f92377b5fbdd6d92aa846` 对应 `c38be1ef0`，release `01a16330-cc08-7000-bcca-54dd6b4db7e2`。构建阶段失败，平台消息 `Job has reached the specified backoff limit`；尚未进入迁移、部署或激活，具体根因继续读取日志，不能据此断言业务代码错误或资源不足。
 - 执行材料暴露环境记录错误：编译验证进程报告内嵌 Bun 1.4.3 / Node 兼容版本，而真实 `verify.sh` 日志使用 PATH 中 Bun 1.3.13。修复将 `verifierRuntime` 与实际 PATH 的 `bun/node --version` 观测分列，探测失败/缺失/超时明确保留，不回填内嵌版本；环境 digest 会随观测变化。该观测范围只涵盖 PATH Bun/Node，任意 profile 脚本仍可能选择其他工具，不宣称完整工具链证明。
 - 环境回归通过实际子进程验证版本变化、缺失、失败、超时和同环境摘要稳定；连同真实候选验证和测试清单三文件 SQLite 27 pass / 0 fail、95 assertions，backend typecheck、目标 lint 通过。真实实例的新环境记录与 PostgreSQL 相关复验另记。
+
+### 2026-10-22 11:41 UTC：三条真实模型旅程完成，Windows 失败归因
+
+- 单机运行 `ccde54fafcee93c21ca0d66ca79d574f14ef34fc`（CI `39767238898`，artifact `12420274604`）。三条 Case 都经完整冻结正文核对、原生审核批准、模型代码生成、独立 profile、代理人工义务核对，最终状态为 terminal / delivered。以下是虚构业务候选提交，未配置业务远端发布；不等于 RFC 仓库 CI 或托管服务已通过。
+- 已有模块 v8：basis `a4524d9492df4e92e6ea03407b000dd71a800bb9b411a7f33d26d34ddbded697`，tree `6cb114c7678258359c3559e42b9f977c3c3d327c`，交付 commit `6dcda12b3f1897a5867800c4092d6eb4b31cbdea`。新环境下 execution `execution:01M5HNDKFG4GRSE587J88CC8J2:4b5b2bd050323ec3` 为 13 pass / 0 fail、16 assertions；三个原始 provisional 回答与 consumer blob 均未变。
+- 预约 v5 原 profile 虽为 21 pass / 0 fail，但代理业务复核发现键碰撞：`("a", "b\\u0000c")` 与 `("a\\u0000b", "c")` 的分隔符编码相同，不相交时段仍返回 `accepted / idempotency-conflict`。通过正常设计变更补充无损二元键要求与回归义务，刷新受影响视图并重新批准 v9；不是直接代改模型候选或放宽验证。
+- 预约 v9：basis `c085816d91c0b8f65e6115cbfe2cca3da87a0d434b9c0c74f1257e512c32cfe0`，Task `01M5HNN67G2NZ69J0Q76BTR2P3`，tree `746925f72ffc19d0c784087126bfc1ecad412722`，交付 commit `7485e154f176b40a7a69ba60c3a0f653cef04643`。模型改为嵌套 Map 并加入 NUL 键回归及单进程交错调用测试；profile 实际 24 pass / 0 fail、90 assertions，原反例独立重放也得到两个 accepted。六条原始回答和 confirmedBasis 保留，全部仍 provisional，负责人和复查日期未知。最终证据 round `01M5HPHABK3X5WY01FZJH715J5`。
+- 通知 v9：basis `65572e58d141e320e47d1823ef980c3946207fbf0b7d4ae8a134f6c4644c6d0b`，Task `01M5HNG126KBR5SBANSF447NR4`，tree `b7d5c10b97511b5b823066196bca7b26ee2c4330`，交付 commit `dc2f0e1a2c39b3ab081d78cf87423a302a2c45b4`。核心代码与 v7 相同，新增实际决策规则测试；profile 为 44 pass / 0 fail、129 assertions。已读独立规则函数、状态/返回类型及尝试预算常量，判断内部可扩展且不用增加现有 ingest 输入字段；未来终态/新策略仍需后续实现，不宣称已支持。三个回答及暂定策略、未知责任信息保留。最终证据 round `01M5HPHAB1S1ACNSWCB7HQBWJC`。
+- 预约与通知原报告把已批准范围、后续 profile 和人工待办误列为“未实现”。其原始失败报告保留，普通 feedback 提案进入模型后形成新约束，明确 `limitations` 只报告未履行的批准范围；人工义务和真实执行仍由平台单独检查。新候选在人工核对前继续 blocked，直到收到精确 tree 的 acceptance 后才交付；没有过滤或清空旧失败回执来变绿。
+- 新真实环境回执区分 PATH Bun `1.3.13` / Node `v26.0.0` 与内嵌验证器 Bun `1.4.3` / Node 兼容值 `26.3.0`；环境 digest `f58cfe32cbba9f6365c5cd48330eeb86523b260e4bed3a380052d9d8781ce692`。环境修正后的真实 PostgreSQL 候选验证 13 pass / 0 fail、65 assertions，与 SQLite 相关范围分别记账。
+- `c38be1ef0` 的 CI `39763563985` 和 `ccde54faf` 的 CI `39767238898` 均为 47 success / 2 failure。后者唯一功能失败是 Windows e2e shard 3/4 的三条图研发旅程（同分片其余 135 项通过），另一失败为汇总门。下载前者 trace，Case round `01M5HMPZ2VQG7ZTGW13QH1BKWB` 明确记录 `spawn opencode failed: ENAMETOOLONG: name too long, uv_spawn`，不是审核业务超时。原实现仅按 Linux 单参数 120 KiB 判断；Windows 的整个命令行更小，且 JSON 引号会增加传输长度。修正改为对 Windows 计算全 argv 的保守 UTF-16/转义预算，超限完整走 stdin；保留小提示、POSIX 和 argv-only 旧合同。[Microsoft CreateProcessW 文档](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw) 给出的命令行上限为 32767 字符，包含末尾空字符。
+- 托管 v0.1.4 构建完整日志最后为 BuildKit `error: failed to receive status: rpc error: code = Unavailable desc = error reading from server: EOF`；未见足以判定 OOM 或业务编译错误的证据。GitLab 全树 GET 两次 HTTP 500 后读取成功，只对只读请求加入有限重试；v0.1.5 已发布源码 `22fdad79c0e043fd88ac643977d7f914e56c0e82`（对应 `ccde54faf`），构建成功并进入部署。新任务 helper 镜像、实际托管业务和最终 CI 继续另验。
+- Windows 传输修正的集中复验：runtime golden 与统一装配两文件 24 pass / 0 fail、79 assertions，目标 lint 与格式检查通过。覆盖低于 Linux 阈值的中等提示、引号/反斜线、运行时路径和 session 参数、UTF-16 代理对，以及真实子进程完整 stdin；本机跨平台参数用例不冒充 Windows OS 实测，最终仍消费新的 hosted Windows E2E。
