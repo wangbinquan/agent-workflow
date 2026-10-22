@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "observedAt": "2026-10-22T19:26:26.183Z",
+  "observedAt": "2026-10-22T20:17:18.490Z",
   "rfc": "RFC-396",
   "rfcStatus": "In Progress",
   "acceptanceCriterion": "AC14",
@@ -31,7 +31,14 @@
       "cpu": "500m",
       "memory": "512Mi"
     },
-    "internalRouteObserved": "rfc396-graph-acceptance-green"
+    "internalRouteObserved": "rfc396-graph-acceptance-green",
+    "previewOffline": {
+      "at": "2026-10-22T19:46:57.035Z",
+      "method": "normal preview/offline API",
+      "releaseId": "01a16484-de19-7000-b60c-4ba2b51f2bcd",
+      "replicas": 0,
+      "physicalPodDeletionConfirmed": true
+    }
   },
   "failedInlineFixture": {
     "caseId": "01M5HWSH80PTX0K0ER0WADS9FF",
@@ -117,7 +124,7 @@
       "roundId": "01M5JAY36499QEA29XXNZ7YEKN",
       "preallocatedTaskId": "01M5JAY3G3WYAFAY0KX986JXG7",
       "actualTaskObserved": true,
-      "lastObservedTaskStatus": "interrupted",
+      "lastObservedTaskStatus": "running",
       "materialNodeRunId": "01M5JBRHH6X77XZC54Y1AKAYCF",
       "agentSubtask": {
         "id": "01a164be-b8b5-7000-bfac-b9e4cda64522",
@@ -131,9 +138,11 @@
       },
       "nativeGateReceipt": null,
       "stageBoundary": "A preallocated execution identity initially returned task-not-found. The Task was later observed running with its input complete and material agent running; platform agent success does not establish native approval.",
-      "lastObservedAt": "2026-10-22T19:26:26.183Z",
-      "errorSummary": "daemon-restart",
-      "errorMessage": "remote execution retained; the next owner adopts it"
+      "lastObservedAt": "2026-10-22T20:16:45.979Z",
+      "errorSummary": null,
+      "errorMessage": null,
+      "latestMaterialNodeRunId": "01M5JM340DMD1AT4XFN45E2GGB",
+      "latestMaterialRetryIndex": 1
     }
   },
   "documentationCi": {
@@ -253,20 +262,17 @@
     "preservedGuards": ["expected remote head", "per-file revision", "exact committed source"]
   },
   "serviceRecoveryObservation": {
-    "observedAt": "2026-10-22T19:26:26.183Z",
+    "observedAt": "2026-10-22T20:17:18.490Z",
     "release": "0.1.8",
-    "pod": "rfc396-graph-acceptance-green-7c579d49cb-9dmcf",
-    "observedRestartCount": 2,
-    "epoch": 56,
-    "leaseAcquiredAt": "2026-10-22T19:22:12.196Z",
-    "leaseLostAt": "2026-10-22T19:22:30.612Z",
-    "exitAt": "2026-10-22T19:22:40.643Z",
-    "exitCode": 1,
-    "reason": "platform-unreachable",
-    "effect": "The original review Task remained interrupted / daemon-restart. Its successful remote agent result was retained, but no pending native review gate was present.",
-    "rootCause": "unconfirmed"
+    "pod": "rfc396-graph-acceptance-green-7c579d49cb-9xwpv",
+    "observedRestartCount": 0,
+    "epoch": 58,
+    "leaseAcquiredAt": "2026-10-22T20:09:48.805Z",
+    "manualInstanceReplacement": true,
+    "effect": "Normal boot auto-resume recovered the sole interrupted Task. Material retry 1 was pending at the API snapshot and its hosted agent dispatch was logged at 20:18:25 UTC. No native review receipt yet.",
+    "rootCause": "The original platform-unreachable and intermittent object-storage errors remain unconfirmed."
   },
-  "currentAcceptancePosition": "Frozen revision 2; approved-profile material agent succeeded. The original review Task remains interrupted after the 500m resource trial. Native review receipt, candidate, independent verification and delivery are still absent. AC14 and RFC stay open.",
+  "currentAcceptancePosition": "Frozen revision 2 is unchanged. The original review Task is running again after scoped normal boot recovery; material retry 1 has been dispatched. Native review, exact body approval, candidate, independent verification and delivery remain open. Earlier failures and remote results are retained.",
   "resourceTrial": {
     "sourceCommit": "67795ed462db9b78cea82fad5ae14c9d09bbca91",
     "gitlabCommit": "eea8eda466c0a7afa739153e74e6c926fe2690cb",
@@ -302,27 +308,237 @@
       "reason": "platform-unreachable",
       "effect": "Service endpoint temporarily unavailable; workspace command detached for the next owner. Agent result remained persisted in the platform.",
       "rootCause": "unconfirmed"
+    },
+    {
+      "observedAt": "2026-10-22T19:26:26.183Z",
+      "release": "0.1.8",
+      "pod": "rfc396-graph-acceptance-green-7c579d49cb-9dmcf",
+      "observedRestartCount": 2,
+      "epoch": 56,
+      "leaseAcquiredAt": "2026-10-22T19:22:12.196Z",
+      "leaseLostAt": "2026-10-22T19:22:30.612Z",
+      "exitAt": "2026-10-22T19:22:40.643Z",
+      "exitCode": 1,
+      "reason": "platform-unreachable",
+      "effect": "The original review Task remained interrupted / daemon-restart. Its successful remote agent result was retained, but no pending native review gate was present.",
+      "rootCause": "unconfirmed"
     }
   ],
   "sharedMainCi": {
-    "commit": "480be6a4a5835900533e3086a1efb480f6e52e40",
-    "runId": 39829520528,
+    "commit": "027237f52e1f69a321b2a79d90d6efa7a6eecd5c",
+    "runId": 39841052379,
     "status": "completed",
     "conclusion": "failure",
-    "requiredCheckId": 120015778107,
-    "interveningProductionCommit": "9e66d89dfcb16fb6ffe1be39870942ffd0811686",
+    "jobs": {
+      "total": 49,
+      "success": 45,
+      "failure": 4,
+      "pending": 0
+    },
+    "requiredCheckId": 120052157436,
     "ownDelta": [
       "STATE.md",
-      "design/RFC-396-adaptive-graph-development/real-model-acceptance.md",
-      "design/RFC-396-adaptive-graph-development/hosted-acceptance-status.json"
+      "design/RFC-396-adaptive-graph-development/hosted-acceptance-status.json",
+      "design/RFC-396-adaptive-graph-development/real-model-acceptance.md"
     ],
-    "attribution": "The executable delta after the previous green source was RFC-395 native-provider work. Failure logs and exact changed test/dependency paths showed PG transaction handle detection, query-instrumentation and source-inventory mismatches; the broken link was in RFC-395 research and pointed to its deleted providerSchema.ts. No foreign source or assertion was edited here.",
-    "followup": {
-      "commit": "c3506736178806e036860c380286b06298cd6c99",
-      "runId": 39836782229,
-      "lastObservedStatus": "in_progress",
-      "conclusion": null,
-      "scope": "A separate RFC-395 fix was observed on synchronized main. Its existence is not a passing CI receipt."
+    "productionChangedByOwnCommit": false,
+    "functionalAttribution": [
+      {
+        "jobId": 120041847679,
+        "cause": "RFC-395 changed mutation sites P0-5/P0-6; raw PG owner snapshot uses bigint strings, so P0-2 control and witness differ. Original current-before/current-after tests are recorded separately."
+      },
+      {
+        "jobId": 120041848054,
+        "cause": "S14 inventory still expects taskCollab.ts:1 after c35067361 restored tasksTable alias; observed 1111 pass, 1 fail, 7 skip."
+      }
+    ],
+    "mutationEvidence": {
+      "artifactId": 12451719921,
+      "sourceFilesUnchanged": true,
+      "invalid": [
+        {
+          "provider": "sqlite",
+          "mutation": "p0-5"
+        },
+        {
+          "provider": "sqlite",
+          "mutation": "p0-6"
+        },
+        {
+          "provider": "postgresql",
+          "mutation": "p0-5"
+        },
+        {
+          "provider": "postgresql",
+          "mutation": "p0-6"
+        },
+        {
+          "provider": "postgresql",
+          "mutation": "p0-2-owner-snapshot"
+        }
+      ],
+      "current": [
+        {
+          "provider": "sqlite",
+          "phase": "current-before",
+          "valid": true,
+          "summary": {
+            "pass": 26,
+            "fail": 0,
+            "expects": 307
+          }
+        },
+        {
+          "provider": "sqlite",
+          "phase": "current-after",
+          "valid": true,
+          "summary": {
+            "pass": 26,
+            "fail": 0,
+            "expects": 307
+          }
+        },
+        {
+          "provider": "postgresql",
+          "phase": "current-before",
+          "valid": true,
+          "summary": {
+            "pass": 26,
+            "fail": 0,
+            "expects": 307
+          }
+        },
+        {
+          "provider": "postgresql",
+          "phase": "current-after",
+          "valid": true,
+          "summary": {
+            "pass": 26,
+            "fail": 0,
+            "expects": 307
+          }
+        }
+      ]
+    },
+    "boundary": "Only the two functional failures were attributed here; the overall required check remains failed. No foreign source, assertions or CI rules were changed and no jobs were rerun."
+  },
+  "hostedRecoveryInvestigation": {
+    "observedAt": "2026-10-22T19:59:26.934Z",
+    "scope": "Read-only transaction in the owned cs_rfc396_graph_acceptance database; no Task, owner, binding, gate or receipt was edited directly.",
+    "taskId": "01M5JAY3G3WYAFAY0KX986JXG7",
+    "binding": {
+      "executionId": "agent:01M5JAY3G3WYAFAY0KX986JXG7:01M5JBRHH6X77XZC54Y1AKAYCF",
+      "state": "settled",
+      "epoch": 43,
+      "subtaskId": "01a164be-b8b5-7000-bfac-b9e4cda64522",
+      "exitCode": 0,
+      "stdoutBytes": 2176,
+      "cancelRequested": true,
+      "cancelReason": "user",
+      "updatedAt": "2026-10-22T18:17:15.757Z"
+    },
+    "owner": {
+      "state": "released",
+      "recoveryCode": "daemon-restart-recovered",
+      "updatedAt": "2026-10-22T18:02:50.321Z"
+    },
+    "nodeStatus": "interrupted",
+    "recoveryEventCount": 0,
+    "inference": "The persisted Task is excluded by unsettled-binding selection and by the current-boot releasedTaskIds filter. Loss between finalization and targeted resume is consistent with the state and restart timeline, but the exact crash point and origin of the earlier cancel flag were not directly observed.",
+    "implementation": "The relevant bootRecovery/executionSettler behavior already exists in deployed 67795ed462; the later RFC-395 delta in these files changes persistence imports/table resolution, not these selection rules.",
+    "normalCancelAttempt": {
+      "status": 409,
+      "code": "task-not-cancelable",
+      "message": "task '01M5JAY3G3WYAFAY0KX986JXG7' is already terminal (interrupted); nothing to cancel",
+      "taskChanged": false,
+      "newReviewRequested": false
     }
-  }
+  },
+  "bootAutoResumeTrial": {
+    "enabledAt": "2026-10-22T20:07:41.672Z",
+    "restoredAt": "2026-10-22T20:16:01.826Z",
+    "scopeTaskIds": ["01M5JAY3G3WYAFAY0KX986JXG7"],
+    "configuration": {
+      "original": false,
+      "duringTrial": true,
+      "restored": false,
+      "changedKeys": ["autoResumeOnBoot"],
+      "maxPerWindow": 3,
+      "windowMs": 3600000
+    },
+    "instanceReplacement": {
+      "previousPod": "rfc396-graph-acceptance-green-7c579d49cb-9dmcf",
+      "previousUid": "43e4496f-c11d-4a36-aa7a-5f5bbf728122",
+      "replacementPod": "rfc396-graph-acceptance-green-7c579d49cb-9xwpv",
+      "replacementUid": "3fefc1b3-10a2-40bd-9fd8-65df57ec548e",
+      "readyAt": "2026-10-22T20:09:31.412Z",
+      "imageUnchanged": true
+    },
+    "observedAt": "2026-10-22T20:15:54.941Z",
+    "resumed": 1,
+    "skipped": 0,
+    "taskAfter": {
+      "id": "01M5JAY3G3WYAFAY0KX986JXG7",
+      "status": "running",
+      "errorSummary": null,
+      "errorMessage": null
+    },
+    "nodesAfter": [
+      {
+        "id": "01M5JBRH680VEEPJW54WGB8BTQ",
+        "nodeId": "input",
+        "status": "done",
+        "retryIndex": 0,
+        "errorMessage": null,
+        "failureCode": null
+      },
+      {
+        "id": "01M5JBRHH6X77XZC54Y1AKAYCF",
+        "nodeId": "material",
+        "status": "interrupted",
+        "retryIndex": 0,
+        "errorMessage": null,
+        "failureCode": null
+      },
+      {
+        "id": "01M5JM340DMD1AT4XFN45E2GGB",
+        "nodeId": "material",
+        "status": "pending",
+        "retryIndex": 1,
+        "errorMessage": null,
+        "failureCode": null
+      }
+    ],
+    "materialDispatchObservedAt": "2026-10-22T20:18:25.019Z",
+    "defaultTargetedRecoveryAccepted": false,
+    "boundary": "This is operator-enabled normal boot recovery. It does not prove that the default targeted recovery path handles every interruption window."
+  },
+  "sharedMainCiHistory": [
+    {
+      "commit": "480be6a4a5835900533e3086a1efb480f6e52e40",
+      "runId": 39829520528,
+      "status": "completed",
+      "conclusion": "failure",
+      "requiredCheckId": 120015778107,
+      "interveningProductionCommit": "9e66d89dfcb16fb6ffe1be39870942ffd0811686",
+      "ownDelta": [
+        "STATE.md",
+        "design/RFC-396-adaptive-graph-development/real-model-acceptance.md",
+        "design/RFC-396-adaptive-graph-development/hosted-acceptance-status.json"
+      ],
+      "attribution": "The executable delta after the previous green source was RFC-395 native-provider work. Failure logs and exact changed test/dependency paths showed PG transaction handle detection, query-instrumentation and source-inventory mismatches; the broken link was in RFC-395 research and pointed to its deleted providerSchema.ts. No foreign source or assertion was edited here.",
+      "followup": {
+        "commit": "c3506736178806e036860c380286b06298cd6c99",
+        "runId": 39836782229,
+        "lastObservedStatus": "completed",
+        "conclusion": "failure",
+        "scope": "A separate RFC-395 fix was observed on synchronized main. Its existence is not a passing CI receipt.",
+        "jobs": {
+          "total": 49,
+          "success": 44,
+          "failure": 5
+        }
+      }
+    }
+  ]
 }

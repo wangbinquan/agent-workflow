@@ -28,6 +28,8 @@
 
 **19:26 UTC 后续**：同一已验证源码与相同镜像的 v0.1.8 已完成 500m / 512Mi 服务资源试验，平台交接 succeeded；本次 prod / 内部 service 两条路由需按平台批准目标人工调和，此事实单列。500m 实例仍两次重启，epoch 56 再次因 `platform-unreachable` 失去租约；原审核 Task 保持 `interrupted / daemon-restart`，无原生待审门、候选或交付。共享前继文档提交 `480be6a4a` 的 CI `39829520528` failure 已按 RFC-395 的实际数据库/测试缝/源码守卫差异归因；正常同步已取得其修复 `c35067361`，对应 CI `39836782229` 当时仍在运行，不能冒称后继 main 总绿。详细失败、资源与人工调和记录见上方托管证据。
 
+**20:18 UTC 恢复进展**：只读持久化核对确认旧审核 owner 已释放、远端绑定已结算，但节点仍 interrupted；正常取消返回 409，未改 Task。核对隔离项目仅此一个启动恢复候选后，通过正常 API 临时启用 autoResumeOnBoot 并重建同镜像服务实例，20:15:54 取得 resumed=1 / skipped=0，20:16:01 恢复原 false 配置。原 Task 已 running，保留旧材料节点并派发 retry 1；Case、round、冻结 basis 未变。默认 targeted recovery 缺口未修复，原生批准、候选、独立 profile 与交付仍待验。027237f52 的 CI 39841052379 最终 45 success / 4 failure；两项功能失败继续来自 RFC-395 后的 P0 变异夹具和 S14 清单差异，详细日志归因已追加到真实验收记录，未改他人代码。
+
 T03～T13 的完整实现、用例、集中验证、独立功能实现门以及三个确定性浏览器旅程已完成，证据和历史失败见 [validation](design/RFC-396-adaptive-graph-development/validation.md)、[设计门](design/RFC-396-adaptive-graph-development/design-gate.md)、[实现门](design/RFC-396-adaptive-graph-development/implementation-gate.md)。当前浏览器控制没有可用 surface，真实模型案例通过产品 API 操作，和此前实际浏览器证据分列。T14 仍待托管闭环；T15 的代码 exact-SHA CI 已通过，最终文档发布另记，全部退出条件满足后才能 Done。共享 RFC-395 在制代码完整保留，未创建分支或替代 checkout。
 
 ## 2026-10-21 RFC-294 后继 S2c：RFC-393 Done
