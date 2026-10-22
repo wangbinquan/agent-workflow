@@ -176,3 +176,40 @@ M6（切换前的旧 epoch 备份可经转换器在新版本上恢复）此前�
 逐项事实、方案对比与未逐字转录的实施细节（「当前选中运行」77 处计算点的 12 组迁移分组、各项事实表、复现步骤）保存在附录 [ii0-revision.md](./ii0-revision.md)。
 
 至此阶段 II 的其余工作在设计上不再有待决项，只等阶段 I（I-a、I-b）交付；阶段 I 的开工时点仍按 §6.5。
+
+### 6.7 I-a 交付记录（2026-10-22）
+
+I-a 由 Codex 实施、本会话审核，一次提交落地，不改物理 schema、迁移文件、运行时查询与 API。
+
+- **落位**：
+  - `platform/persistence/schema/`：数据类型（`contribution.ts`）、16 个 codec、表达式 AST、简写 DSL（`dsl.ts`）、registry 校验、
+    v3 合同 / SQLite plan / PostgreSQL plan 编译器、drizzle 物化；
+  - 冻结的 legacy v2 投影在 `platform/persistence/migration/legacy/v2Contract.ts`（5f11d1857 的 `ownerFor / codecFor / postgresqlType`
+    与默认值渲染逐字移入）；
+  - 18 个 contribution 文件（19 组 owner），各模块 `composition/schema.ts` 为只含 schema 的入口；`bootstrap/persistenceSchema.ts`
+    是唯一汇集点；`@/db/schema` 改为兼容转出，引用方不改。
+- **规模**：222 张表、2,671 列。217 张按 table-mapping 的目标 owner 落位；RFC-396 新增的 5 张 `development_design*` 表不在
+  table-mapping 中，按实际写入方归 development-automation。contribution 共 9,842 行，原声明 9,171 行。
+- **一次性冻结对比**：基线由改动前的 HEAD 5f11d1857 代码导出，本会话独立复跑：
+  - v2 合同 canonical JSON 逐字节相等，digest `sha256:3f8b275e388697cc6d9f5005dc3c9cf9acd70fe97c1bb00407223dfcf4d39743`；
+  - PostgreSQL plan 977 条逐条相等，生产路径与新编译器各比一次，digest `sha256:f44eb752fa49d7c4736e5ad3be6516b56862c92297f82aac1e88f437e2654815`；
+  - 两套 drizzle 表 222 张逐列相等；
+  - drizzle-kit 视角下 217 张既有表与 `0260_snapshot.json` 相等，其余 5 张与 RFC-396 手写的 0261 SQL 语义一致。
+  冻结基线不入库：此后其他 RFC 仍会新增 epoch-1 表与列，钉死基线的测试会在下一次 schema 变更时失败且无法再生。
+- **长期测试**：
+  - `rfc395-schema-equivalence`：bootstrap 的 v2 合同等于生成器维护的 RFC-349 `schema-contract.json`；owner 等于已审 owner 账本；
+    每表 `migrationPolicy` 等于 v2 处置；编译 PostgreSQL plan 等于生产 plan；两套物化列与 v2 的两侧投影逐列一致；
+  - `rfc395-provider-catalog-equivalence`：SQLite 编译 DDL 与迁移 replay 的差异等于 92 条账本（含 §12.1 第 3 条的各类）；
+    PostgreSQL 编译 plan 建的库与「root baseline + 已发布升级」经生产迁移器建的库 catalog 相等；
+  - 负例（`rfc395-schema-invalid-contributions`）、DSL（`rfc395-schema-dsl`）、结构锁（`rfc395-explicit-schema-contributions`）、
+    迁移历史按二进制头合同校验（`rfc395-head-history-injection`）。
+- **偏离与取舍**：
+  - 306 条 CHECK / 索引表达式保留 epoch-1 原文（`raw`），类型化 AST 自阶段 II 的目标 contribution 起使用；
+  - 40 列保留复用旧 builder 留下的 SQLite `uniqueName` 元数据；
+  - SQLite 账本另记实测的 PRAGMA 默认值拼写与 TEXT 主键可空性差异；
+  - SQLite 逻辑源 Worker 改为接收父进程选定并校验 digest 的合同；
+  - PostgreSQL 迁移历史一律按二进制头合同（`headContract`）校验，目标库、备份源的合同另行传入。
+- **遗留（不属于本 RFC）**：RFC-396 的迁移 0261 未附 drizzle 快照 `0261_snapshot.json`，下一次 `db:generate` 会重复生成这 5 张表，
+  由 RFC-396 处理。
+- **下一步顺序调整**：II-pre 先于 I-b。II-pre 删除的 `startTask` 族、`getTaskNodeRuns`、`systemWorkspaceGc` 库函数含大量 SQLite
+  专属终端与原始执行，先删可免 I-b 改写注定删除的代码；两者改动面重叠，不并行。

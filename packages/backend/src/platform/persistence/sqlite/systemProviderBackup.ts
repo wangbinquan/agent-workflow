@@ -28,7 +28,7 @@ import {
 import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
 import { quickCheckSqlite } from './systemBackupVacuum'
 import { createLogger } from '@/util/log'
@@ -148,6 +148,7 @@ async function vacuumIntoOffThreadInner(
 }
 
 export interface BackupOptions {
+  readonly contract: LogicalSchemaContract
   db: DbClient
   /** RFC-213: what produced this backup. Drives retention (scheduled/auto are
    *  rotated; manual/pre-* are kept). Defaults to 'manual'. */
@@ -169,7 +170,7 @@ export type BackupResult = PortableBackupResult
  */
 export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
   const appHome = opts.appHome ?? Paths.root
-  const contract = buildLogicalSchemaContract()
+  const contract = opts.contract
   const generation = readDatabaseGeneration({
     pointerPath: join(appHome, 'database-generation.json'),
     migrationsDir: join(appHome, 'database-migrations'),

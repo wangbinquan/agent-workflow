@@ -42,7 +42,7 @@ import { hostedDatabaseGeneration } from '@/platform/persistence/generationValid
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
 
@@ -61,7 +61,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       CS_DATABASE_URL: process.env[urlEnv]!,
     }
     const contract = buildLogicalSchemaContract(),
-      history = await loadPostgresqlMigrationHistory()
+      history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
     const generation = hostedDatabaseGeneration({
       ...environment,
       schemaDigest: contract.digest,
@@ -86,7 +86,12 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     try {
       await emptyTarget()
       await migrateForDeployment(env)
-      const serving = await prepareCrewStationDatabase({ environment, schema: 'verify', env })
+      const serving = await prepareCrewStationDatabase({
+        contract: buildLogicalSchemaContract(),
+        environment,
+        schema: 'verify',
+        env,
+      })
       let reference: string
       try {
         const db = serving.openBootstrapClient()
@@ -152,6 +157,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
           instanceId: 'owner',
         })
         const backup = composeCrewStationDatabaseBackups({
+          contract: buildLogicalSchemaContract(),
           db,
           runtime: serving.runtime.runtime,
           fence,
@@ -175,6 +181,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         )
         const attempt = (override: Partial<typeof identity> = {}) =>
           restoreHostedDatabaseInstallation({
+            headContract: buildLogicalSchemaContract(),
             ...identity,
             ...override,
             runtime,
@@ -204,6 +211,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       }
       await emptyTarget()
       const input = {
+        headContract: buildLogicalSchemaContract(),
         ...identity,
         runtime,
         reference: reference!,
@@ -269,7 +277,12 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       } finally {
         verifiedConnection.release()
       }
-      const restored = await prepareCrewStationDatabase({ environment, schema: 'verify', env })
+      const restored = await prepareCrewStationDatabase({
+        contract: buildLogicalSchemaContract(),
+        environment,
+        schema: 'verify',
+        env,
+      })
       try {
         const db = restored.openBootstrapClient()
         expect((await db.select().from(hostedExecutionControl))[0]!).toMatchObject({

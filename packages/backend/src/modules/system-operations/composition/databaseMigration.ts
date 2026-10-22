@@ -1,5 +1,6 @@
 // RFC-349 — bootstrap-only composition for the database migration application.
 
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { Paths } from '@/util/paths'
 import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
 import { createFileDatabaseConfiguration } from '../infrastructure/local/fileDatabaseConfiguration'
@@ -17,6 +18,7 @@ export interface DatabaseMigrationModule {
 
 export function composeDatabaseMigrationModule(
   input: {
+    readonly contract: LogicalSchemaContract
     readonly admission: DatabaseMigrationAdmissionPort
     readonly sqlitePath?: string
     readonly operationsRoot?: string
@@ -34,6 +36,8 @@ export function composeDatabaseMigrationModule(
   const configuration =
     input.configuration ?? createFileDatabaseConfiguration(input.configPath ?? Paths.config)
   const coordinator = createDatabaseMigrationCoordinator({
+    headContract: input.contract,
+    contract: input.contract,
     sqlitePath: input.sqlitePath ?? Paths.db,
     operationsRoot: input.operationsRoot ?? Paths.databaseMigrationsDir,
     generationPointerPath: input.generationPointerPath ?? Paths.databaseGenerationPointer,
@@ -62,8 +66,11 @@ export interface LocalDatabaseMigrationOperations {
  * entire command before calling this application; that lock is the offline
  * implementation of freeze/drain/reopen admission.
  */
-export function composeLocalDatabaseMigrationOperations(): LocalDatabaseMigrationOperations {
+export function composeLocalDatabaseMigrationOperations(
+  contract: LogicalSchemaContract,
+): LocalDatabaseMigrationOperations {
   const module = composeDatabaseMigrationModule({
+    contract,
     admission: {
       async freezeAndDrain() {},
       async reopenSqlite() {},

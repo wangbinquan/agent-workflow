@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { openSqliteLogicalSourceWorker } from '@/platform/persistence/sqliteLogicalSourceWorkerSupervisor'
 

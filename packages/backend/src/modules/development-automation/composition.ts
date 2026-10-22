@@ -541,3 +541,5 @@ export interface SelectedDevelopmentPurposeRoot {
   readonly approval: ApprovalAdapterBinding
   readonly evidenceArtifacts: EvidenceArtifactPort
 }
+
+export { schemaContribution } from './composition/schema'

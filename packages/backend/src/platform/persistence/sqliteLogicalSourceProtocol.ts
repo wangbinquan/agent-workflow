@@ -1,9 +1,10 @@
 // RFC-349 — validated, bounded RPC between the request-serving daemon and the
 // SQLite logical-source Worker. Only table identifiers and canonical logical
-// rows cross the boundary; the Worker rebuilds and verifies the schema contract
-// locally so callers cannot smuggle an alternate table/column projection.
+// rows cross the boundary; bootstrap supplies the selected schema contract
+// along with the source digest (including historical restore contracts).
 
 import { z } from 'zod'
+import type { LogicalSchemaContract } from './schemaContract'
 import { CanonicalLogicalValueSchema, type CanonicalLogicalRow } from './logicalDatabaseArtifact'
 
 export const SQLITE_LOGICAL_SOURCE_PROTOCOL_VERSION = 1 as const
@@ -38,6 +39,7 @@ export const SqliteLogicalSourceWorkerRequestSchema = z.discriminatedUnion('type
       type: z.literal('init'),
       path: z.string().min(1),
       expectedSchemaDigest: DigestSchema,
+      contract: z.custom<LogicalSchemaContract>(),
     })
     .strict(),
   z.object({ ...BaseRequest, type: z.literal('preflight') }).strict(),

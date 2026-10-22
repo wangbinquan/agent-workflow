@@ -165,7 +165,9 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // 判据落在**用户可见契约**那一层（AC-1 的要求）：跑完之后这个库真的实现了应用声明的那份 schema
   // ——每张声明的表、每一列都问各自引擎的目录表（`PRAGMA table_info` / `information_schema.columns`），
   // 少一表或少一列都红。
-  'platform/persistence/Migrator: sqlite + postgresql — verified by rfc359-w8-migrator-conformance.test.ts, rfc374-node-run-seq-migration.test.ts',
+  'platform/persistence/Migrator: sqlite + postgresql — verified by rfc359-w8-migrator-conformance.test.ts, rfc374-node-run-seq-migration.test.ts, rfc395-provider-catalog-equivalence.test.ts',
+  // RFC-395 I-a: DDL syntax is provider-specific; one harness compares both compiled catalogs with immutable history.
+  'platform/persistence/schema/Plan: sqlite + postgresql — verified by rfc395-provider-catalog-equivalence.test.ts',
 ]
 
 /**
@@ -250,7 +252,8 @@ export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = []
 // 触发上下文抄自**父行那一列**，丢掉运行期补上的 `contract` 块（子 agent prompt 里
 // `{{event_type}}` 随之展不开）。见证测试 `rfc359-w8-child-launch-conformance` 留任，
 // 本分从「见证分叉」翻成「锁住合一」。
-export const PROVIDER_PAIR_COUNT = 3
+// RFC-395 adds the explicitly approved pair of provider DDL compilers; both have a shared conformance witness.
+export const PROVIDER_PAIR_COUNT = 4
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const UNVERIFIED_PAIR_COUNT = 0

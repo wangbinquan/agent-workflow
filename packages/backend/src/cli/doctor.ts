@@ -1,4 +1,5 @@
 // Native compatibility facade; all shared Doctor rules have one system-operations owner.
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import type { DoctorResult } from '@/modules/system-operations/domain/doctorDiagnostics'
 import { composeDoctorApplication } from '@/modules/system-operations/composition/doctorDiagnostics'
@@ -26,9 +27,10 @@ export {
 } from '@/modules/system-operations/infrastructure/local/doctorDiagnostics'
 
 export async function doctorCommand(
+  contract: LogicalSchemaContract,
   selected?: ApplicationConfigurationQueries,
 ): Promise<DoctorResult> {
-  return await composeDoctorApplication({ diagnostics: createLocalDoctorDiagnosticsFactory() }).run(
-    selected,
-  )
+  return await composeDoctorApplication({
+    diagnostics: createLocalDoctorDiagnosticsFactory(contract),
+  }).run(selected)
 }

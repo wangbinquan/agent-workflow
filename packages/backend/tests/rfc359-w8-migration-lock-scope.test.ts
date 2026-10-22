@@ -22,6 +22,7 @@
 //   ① **不同库不互斥**——每文件一库这条路线的前提；
 //   ② **同库仍 fail-fast**——那把锁真正要保的东西：两个部署指向同一个库时不能同时 DDL。
 //
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { SQL } from 'bun'
 
@@ -135,8 +136,8 @@ suite('RFC-359 W8 —— schema 准备锁按库隔离', () => {
     const [a, b] = [runtimeFor(DB_A), runtimeFor(DB_B)]
     try {
       const settled = await Promise.allSettled([
-        migratePostgresqlSchema({ runtime: a }),
-        migratePostgresqlSchema({ runtime: b }),
+        migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime: a }),
+        migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime: b }),
       ])
       const rejected = settled.flatMap((entry) =>
         entry.status === 'rejected' ? [entry.reason as Error] : [],
@@ -171,6 +172,7 @@ suite('RFC-359 W8 —— schema 准备锁按库隔离', () => {
         reached = resolve
       })
       const running = migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
         runtime: first,
         afterCommitted: async () => {
           reached?.()
@@ -178,7 +180,10 @@ suite('RFC-359 W8 —— schema 准备锁按库隔离', () => {
         },
       })
       await firstHoldsLock
-      const loser = await migratePostgresqlSchema({ runtime: second }).then(
+      const loser = await migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
+        runtime: second,
+      }).then(
         () => null,
         (error: unknown) => error,
       )

@@ -1,5 +1,6 @@
 // Daemon database activation shares the selected configuration receiver, while
 // installation effects remain independently selectable with their original ACKs.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, DatabaseConfigSchema, type Config } from '@agent-workflow/shared'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -21,7 +22,7 @@ import {
   validateConfigurationPatch,
 } from '@/platform/configuration/configurationValues'
 
-const history = await loadPostgresqlMigrationHistory()
+const history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
 const target = DatabaseConfigSchema.parse({ provider: 'postgresql', poolMax: 3 })
 if (target.provider !== 'postgresql') throw new Error('expected PostgreSQL target')
 

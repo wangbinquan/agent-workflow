@@ -480,7 +480,7 @@
     },
     {
       "auditedBy": "resource-acl-catalog",
-      "claimAudit": "Does NOT hold. resourcePackage/closure.ts:62 exports a byte-identical second isBuiltinRow, and its header claim ('only agents + workflows carry the column today', systemResources.ts:24-27) is factually stale — capabilityTemplates carries the column (db/schema.ts:4621). Four other files hand-copy the same stale two-type claim.",
+      "claimAudit": "Does NOT hold. resourcePackage/closure.ts:62 exports a byte-identical second isBuiltinRow, and its header claim ('only agents + workflows carry the column today', systemResources.ts:24-27) is factually stale — capabilityTemplates carries the column (modules/code-capability/infrastructure/persistence/schema.ts:37). Four other files hand-copy the same stale two-type claim.",
       "core": false,
       "files": [
         "packages/backend/src/services/systemResources.ts"

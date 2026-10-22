@@ -12,6 +12,7 @@
 //   - make applyPendingRestoreIfAny ignore a tarball-missing marker (proceed to
 //     restoreBackup) → the "already consumed" test throws → reds.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
@@ -83,7 +84,12 @@ describe('RFC-213 staged restore', () => {
     // State A: 2 workflows. Back it up.
     let db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
     await addWorkflows(db, 2)
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     sqliteOf(db).close()
     // State B: mutate to 3 workflows.
     db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
@@ -112,7 +118,12 @@ describe('RFC-213 staged restore', () => {
     const dbPath = join(appHome, 'db.sqlite')
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
     await addWorkflows(db, 1)
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     sqliteOf(db).close()
 
     stagePendingRestore(backup.path, { appHome, now: 2 })
@@ -135,7 +146,12 @@ describe('RFC-213 staged restore', () => {
     // State A (1 wf) backed up; State B (2 wf) live.
     let db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
     await addWorkflows(db, 1)
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     sqliteOf(db).close()
     db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
     await addWorkflows(db, 1)
@@ -174,7 +190,12 @@ describe('RFC-213 staged restore', () => {
     const dbPath = join(appHome, 'db.sqlite')
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
     await addWorkflows(db, 1)
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     sqliteOf(db).close()
 
     stagePendingRestore(backup.path, { appHome, now: 2 })
@@ -198,7 +219,12 @@ describe('RFC-213 staged restore', () => {
     const dbPath = join(appHome, 'db.sqlite')
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
     await addWorkflows(db, 1)
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     sqliteOf(db).close()
 
     stagePendingRestore(backup.path, { appHome, now: 2 })
@@ -240,10 +266,18 @@ describe('restore --stage CLI', () => {
     const dbPath = join(appHome, 'db.sqlite')
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
     await addWorkflows(db, 1)
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     sqliteOf(db).close()
 
-    const r = await restoreCommand([backup.path, '--stage'], composeLocalSystemOperations())
+    const r = await restoreCommand(
+      [backup.path, '--stage'],
+      composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
+    )
     expect(r.status).toBe('ok')
     expect(r.output).toContain('STAGED')
     expect(hasPendingRestore(appHome)).toBe(true)
@@ -294,11 +328,16 @@ describe('impl-gate P1-1 — validateBackupForStage refuses at the door', () => 
     const home = tmp()
     const maxWhenNow = readMigrationAxisFromJournal(MIGRATIONS).maxWhen
     const ok = await makeTarball(home, { db: 'valid', manifestLastCreatedAt: maxWhenNow })
-    const plan = await validateBackupForStage(ok, { appHome: home, migrationsFolder: MIGRATIONS })
+    const plan = await validateBackupForStage(ok, {
+      contract: buildLogicalSchemaContract(),
+      appHome: home,
+      migrationsFolder: MIGRATIONS,
+    })
     expect(plan.direction).toBe('same')
     // no manifest = legacy backup → treated as older (forward), still valid
     const legacy = await makeTarball(home, { db: 'valid' })
     const legacyPlan = await validateBackupForStage(legacy, {
+      contract: buildLogicalSchemaContract(),
       appHome: home,
       migrationsFolder: MIGRATIONS,
     })
@@ -306,16 +345,25 @@ describe('impl-gate P1-1 — validateBackupForStage refuses at the door', () => 
 
     const noDb = await makeTarball(home, { db: 'none' })
     await expect(
-      validateBackupForStage(noDb, { appHome: home, migrationsFolder: MIGRATIONS }),
+      validateBackupForStage(noDb, {
+        contract: buildLogicalSchemaContract(),
+        appHome: home,
+        migrationsFolder: MIGRATIONS,
+      }),
     ).rejects.toThrow(/no db\.sqlite/)
 
     const garbage = await makeTarball(home, { db: 'garbage' })
     await expect(
-      validateBackupForStage(garbage, { appHome: home, migrationsFolder: MIGRATIONS }),
+      validateBackupForStage(garbage, {
+        contract: buildLogicalSchemaContract(),
+        appHome: home,
+        migrationsFolder: MIGRATIONS,
+      }),
     ).rejects.toThrow(RestoreIntegrityError)
     // …but the explicit escape hatch lets a quick_check-failing package through
     // (staged with the SAME flag, so the boot apply honours it too).
     const escaped = await validateBackupForStage(garbage, {
+      contract: buildLogicalSchemaContract(),
       appHome: home,
       migrationsFolder: MIGRATIONS,
       skipIntegrityCheck: true,
@@ -325,7 +373,11 @@ describe('impl-gate P1-1 — validateBackupForStage refuses at the door', () => 
     const maxWhen = readMigrationAxisFromJournal(MIGRATIONS).maxWhen
     const newer = await makeTarball(home, { db: 'valid', manifestLastCreatedAt: maxWhen + 1 })
     await expect(
-      validateBackupForStage(newer, { appHome: home, migrationsFolder: MIGRATIONS }),
+      validateBackupForStage(newer, {
+        contract: buildLogicalSchemaContract(),
+        appHome: home,
+        migrationsFolder: MIGRATIONS,
+      }),
     ).rejects.toThrow(RestoreDowngradeError)
   })
 })

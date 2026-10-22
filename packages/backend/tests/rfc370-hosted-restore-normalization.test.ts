@@ -20,7 +20,7 @@ import { HOSTED_BACKUP_OWNER } from '@/modules/system-operations/infrastructure/
 import { createHostedSystemRestoreNormalization } from '@/modules/system-operations/infrastructure/crewstation/hostedRestoreNormalization'
 import { hostedPublicationId } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import { createHostedRestoreTaskNormalization } from '@/modules/task-execution/public/participants'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describeEachProvider } from './helpers/eachProvider'
 import { seedRun, seedTask } from './helpers/questionDispatchFixture'
 

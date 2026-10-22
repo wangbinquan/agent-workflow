@@ -2,9 +2,7 @@
 // 184-table count pass and every bounded chunk query run on this connection,
 // never on the daemon's request-serving event loop.
 
-import { buildLogicalSchemaContract, type LogicalSchemaContract } from './schemaContract'
-import { loadPostgresqlMigrationHistory } from './postgresqlMigrationHistory'
-import { resolvePostgresqlHistoricalContract } from './postgresqlMigrationSequence'
+import { digestSchemaContract, type LogicalSchemaContract } from './schemaContract'
 import { openSqliteLogicalSource, type SqliteLogicalSource } from './sqliteLogicalSource'
 import {
   SQLITE_LOGICAL_SOURCE_PROTOCOL_VERSION,
@@ -60,18 +58,10 @@ self.onmessage = async (event: MessageEvent<unknown>) => {
           throw new Error('SQLite logical-source Worker was initialized twice')
         initializing = true
         try {
-          let workerContract = buildLogicalSchemaContract()
-          if (workerContract.digest !== request.expectedSchemaDigest) {
-            try {
-              workerContract = resolvePostgresqlHistoricalContract(
-                await loadPostgresqlMigrationHistory(),
-                request.expectedSchemaDigest,
-              )
-            } catch {
-              throw new Error(
-                'SQLite logical-source Worker schema digest does not match the daemon',
-              )
-            }
+          const workerContract = request.contract
+          const { digest, ...payload } = workerContract
+          if (digest !== request.expectedSchemaDigest || digestSchemaContract(payload) !== digest) {
+            throw new Error('SQLite logical-source Worker schema digest does not match the daemon')
           }
           contract = workerContract
           source = openSqliteLogicalSource({ path: request.path, contract: workerContract })

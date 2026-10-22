@@ -1,4 +1,5 @@
 // Only the configuration entry points are exercised; other doctor checks are unchanged.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -105,10 +106,12 @@ describe('RFC-370 doctor configuration selection', () => {
     selected.release = release.promise
     selected.error = new Error('selected database configuration offline')
     let finished = false
-    const pending = checkConfiguredDatabase(selected).then((result) => {
-      finished = true
-      return result
-    })
+    const pending = checkConfiguredDatabase(buildLogicalSchemaContract(), selected).then(
+      (result) => {
+        finished = true
+        return result
+      },
+    )
     try {
       await selected.entered.promise
       expect(finished).toBe(false)
@@ -140,7 +143,7 @@ describe('RFC-370 doctor configuration selection', () => {
       ok: false,
       message: 'synchronous selected source failed',
     })
-    expect(await checkConfiguredDatabase(selected)).toEqual([
+    expect(await checkConfiguredDatabase(buildLogicalSchemaContract(), selected)).toEqual([
       {
         name: 'database provider',
         ok: false,
@@ -163,7 +166,7 @@ describe('RFC-370 doctor configuration selection', () => {
         ok: false,
         message: String(reason),
       })
-      expect(await checkConfiguredDatabase(selected)).toEqual([
+      expect(await checkConfiguredDatabase(buildLogicalSchemaContract(), selected)).toEqual([
         {
           name: 'database provider',
           ok: false,
@@ -230,7 +233,7 @@ describe('RFC-370 doctor configuration selection', () => {
     for (const expected of [
       'configuration.read()',
       'checkConfig(configuration,selected===undefined)',
-      'checkConfiguredDatabase(configuration)',
+      'checkConfiguredDatabase(input.contract,configuration)',
     ]) {
       expect(calls.filter((node) => compact(node) === expected)).toHaveLength(1)
     }

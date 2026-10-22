@@ -10,6 +10,7 @@
 // 普通 backend 跑批跳过本文件（无 `RFC357_DATABASE_URL` 即 skip）；CI 的
 // `test-backend-postgresql` lane 起一台 postgres 服务容器后跑它。
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
@@ -47,7 +48,7 @@ describe('RFC-357 shared page scenario — real PostgreSQL', () => {
         const pool = runtime.providerPool()
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
-        await migratePostgresqlSchema({ runtime })
+        await migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime })
         // 业务客户端把每次写都对活跃代际做 fence，所以这两行簿记必须先在。
         await pool.unsafe(
           'INSERT INTO "agent_workflow_meta"."logical_copy_operations" ' +

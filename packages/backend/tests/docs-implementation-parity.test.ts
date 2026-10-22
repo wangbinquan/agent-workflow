@@ -29,6 +29,8 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { getTableConfig } from 'drizzle-orm/sqlite-core'
+import { nodeRunEvents } from '@/db/schema'
 
 const repoRoot = resolve(import.meta.dir, '..', '..', '..')
 const read = (...segments: string[]): string => readFileSync(resolve(repoRoot, ...segments), 'utf8')
@@ -102,14 +104,13 @@ describe('docs ↔ implementation parity', () => {
     // had no index for long after one shipped. Assert the two sides agree: if
     // the schema declares an index leading with node_run_id, the doc must not
     // still be asking for one.
-    const schema = read('packages/backend/src/db/schema.ts')
     const notes = read('docs', 'performance-notes.md')
 
-    const nodeRunEventsTable = schema.slice(
-      schema.indexOf('export const nodeRunEvents = sqliteTable('),
-    )
-    const hasIndex = /index\('idx_events_node'\)\.on\(t\.nodeRunId/.test(
-      nodeRunEventsTable.slice(0, nodeRunEventsTable.indexOf('\n)\n')),
+    const hasIndex = getTableConfig(nodeRunEvents).indexes.some(
+      ({ config }) =>
+        config.name === 'idx_events_node' &&
+        'name' in config.columns[0]! &&
+        config.columns[0].name === 'node_run_id',
     )
     expect(hasIndex).toBe(true)
 

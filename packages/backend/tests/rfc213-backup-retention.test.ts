@@ -10,6 +10,7 @@
 //     days-window scenario deletes backups it should keep → red.
 //   - remove the `running` reentrancy guard → the source lock test reds.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
   mkdirSync,
@@ -144,6 +145,7 @@ describe('startBackupScheduler side-effects (AC-6)', () => {
       mkBackup(backupsDir, `scheduled-s${i}.tar.gz`, NOW - (i + 40) * DAY)
     }
     const handle = startBackupScheduler({
+      contract: buildLogicalSchemaContract(),
       db: {} as never, // the backup tick never fires within this test's window
       intervalMs,
       retentionCount: 1,
@@ -162,6 +164,7 @@ describe('startBackupScheduler side-effects (AC-6)', () => {
   test('intervalMs=0 creates no timer and no backups', async () => {
     const dir = tmp()
     const handle = startBackupScheduler({
+      contract: buildLogicalSchemaContract(),
       db: {} as never, // never used — the ticker never fires
       intervalMs: 0,
       retentionCount: 7,

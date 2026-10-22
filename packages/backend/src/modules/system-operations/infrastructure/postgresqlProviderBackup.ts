@@ -19,10 +19,7 @@ import {
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { resolvePostgresqlAdditiveRowBridge } from '@/platform/persistence/postgresqlMigrationSequence'
-import {
-  buildLogicalSchemaContract,
-  type LogicalSchemaContract,
-} from '@/platform/persistence/schemaContract'
+import { type LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { openVerifiedLogicalDatabaseArtifactSource } from '@/platform/persistence/logicalDatabaseRestore'
 import { createFileDatabaseMigrationStore } from './fileDatabaseMigrationStore'
 
@@ -46,6 +43,7 @@ type PostgresqlLogicalSourceFactory = (input: {
 }) => Promise<PostgresqlLogicalSource>
 
 export interface CreatePostgresqlProviderBackupOptions {
+  readonly headContract: LogicalSchemaContract
   readonly runtime: PostgresqlDatabaseRuntime
   /**
    * RFC-359 W9：workflow / worktree 的行选择没有 provider 差异，由组合根注入的中立实现
@@ -55,7 +53,7 @@ export interface CreatePostgresqlProviderBackupOptions {
   readonly appHome: string
   readonly operationsRoot?: string
   readonly generationPointerPath?: string
-  readonly contract?: LogicalSchemaContract
+  readonly contract: LogicalSchemaContract
   readonly kind?: BackupKind
   readonly includeWorktrees?: boolean
   readonly now?: number
@@ -70,7 +68,7 @@ function targetGenerationId(operationId: string): string {
 export async function createPostgresqlProviderBackup(
   options: CreatePostgresqlProviderBackupOptions,
 ): Promise<PortableBackupResult> {
-  const contract = options.contract ?? buildLogicalSchemaContract()
+  const contract = options.contract
   const operationsRoot = options.operationsRoot ?? join(options.appHome, 'database-migrations')
   const generation = readDatabaseGeneration({
     pointerPath: options.generationPointerPath ?? join(options.appHome, 'database-generation.json'),
@@ -114,7 +112,7 @@ export async function createPostgresqlProviderBackup(
   let archiveContract = contract
   if (migration.payload.source.schemaDigest !== contract.digest) {
     try {
-      const history = await loadPostgresqlMigrationHistory()
+      const history = await loadPostgresqlMigrationHistory({ headContract: options.headContract })
       archiveContract = resolvePostgresqlAdditiveRowBridge(history, {
         fromContractDigest: migration.payload.source.schemaDigest,
         toContractDigest: contract.digest,

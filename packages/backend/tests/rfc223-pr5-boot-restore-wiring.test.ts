@@ -1,3 +1,4 @@
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-223 PR-5 — boot/restore placement and real backup forward-restore proof.
@@ -270,6 +271,7 @@ describe('RFC-223 PR-5 real backup restore modes', () => {
     expect(existsSync(join(targetHome, 'skills', 'live-sentinel', 'SKILL.md'))).toBe(true)
     await expect(
       validateBackupForStage(dbOnly, {
+        contract: buildLogicalSchemaContract(),
         appHome: targetHome,
         migrationsFolder: MIGRATIONS,
       }),

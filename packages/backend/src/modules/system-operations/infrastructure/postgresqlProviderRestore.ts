@@ -19,6 +19,7 @@ import {
 type ProviderRestoreTarget = PostgresqlLogicalTarget
 
 export interface OpenPostgresqlProviderRestoreTargetInput {
+  readonly headContract: LogicalSchemaContract
   readonly runtime: PostgresqlDatabaseRuntime
   readonly operationId: string
   readonly sourceGenerationId: string
@@ -31,6 +32,7 @@ type OpenPostgresqlProviderRestoreTarget = (
 ) => Promise<ProviderRestoreTarget>
 
 export interface RestorePostgresqlProviderBackupOptions {
+  readonly headContract: LogicalSchemaContract
   readonly tarballPath: string
   readonly appHome: string
   readonly restoreOperationId: string
@@ -61,6 +63,7 @@ export async function restorePostgresqlProviderBackup(
     ) => Promise<PostgresqlLogicalTarget>)
 
   return await restorePortableDatabaseBackup({
+    headContract: options.headContract,
     tarballPath: options.tarballPath,
     appHome: options.appHome,
     restoreOperationId: options.restoreOperationId,
@@ -70,6 +73,7 @@ export async function restorePostgresqlProviderBackup(
     ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
     async openTarget({ envelope, contract }) {
       const target = await openTarget({
+        headContract: options.headContract,
         runtime: options.runtime,
         operationId: options.restoreOperationId,
         sourceGenerationId: envelope.payload.sourceGenerationId,

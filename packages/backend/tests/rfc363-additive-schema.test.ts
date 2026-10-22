@@ -1,4 +1,5 @@
 // RFC-363 T2: existing installations, historical backups and both fresh schemas.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import {
@@ -27,7 +28,9 @@ function rehash(step: PostgresqlIndexUpgrade): PostgresqlIndexUpgrade {
 // the complete migration history. Keep all integrity assertions with one bounded
 // budget, matching the existing full-history test rather than skipping history.
 test('RFC-363 expands the published prefix by exactly four empty active tables', async () => {
-  const history = await loadPostgresqlMigrationHistory()
+  const history = await loadPostgresqlMigrationHistory({
+    headContract: buildLogicalSchemaContract(),
+  })
   const index = history.steps.findIndex(
     (step) => step.id === '0003_rfc363_workspace_preparation_journals',
   )

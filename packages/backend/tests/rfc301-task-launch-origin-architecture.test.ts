@@ -9,6 +9,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 
 import ts from 'typescript'
+import { tasks } from '@/db/schema'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const BACKEND_SRC = resolve(REPO_ROOT, 'packages', 'backend', 'src')
@@ -164,7 +165,6 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
 
   test('the persisted fact has one application INSERT owner and no response/request schema seam', () => {
     const taskService = readFileSync(resolve(BACKEND_SRC, 'services', 'task.ts'), 'utf8')
-    const schema = readFileSync(resolve(BACKEND_SRC, 'db', 'schema.ts'), 'utf8')
     const operations = readFileSync(
       resolve(
         BACKEND_SRC,
@@ -189,7 +189,8 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     // 与「不进请求/响应 schema」两条判据都没动。
     expect((taskService.match(/\blaunchOrigin\b/g) ?? []).length).toBe(7)
     expect(taskService).not.toMatch(/\.update\(tasks\)[\s\S]{0,240}\blaunchOrigin\b/)
-    expect(schema).toContain("launchOrigin: text('launch_origin'")
+    expect(tasks.launchOrigin.name).toBe('launch_origin')
+    expect(tasks.launchOrigin.getSQLType()).toBe('text')
     // RFC-311 G1:过滤谓词改成**可换别名**的形式(`col('launch_origin')`),因为
     // 旧穷举管线在已物化的 `base b` 上求值、新快路径直接打 `tasks t`,两条路径
     // 必须共用同一份过滤定义——写死 `b.` 前缀就做不到。棘轮跟着挪到新形态:

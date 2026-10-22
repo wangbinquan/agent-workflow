@@ -1,5 +1,6 @@
 // RFC-370: the complete selected Doctor family preserves the one shared diagnostic policy.
 // These functional fixtures do not constitute CS deployment or runtime acceptance.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { readFileSync } from 'node:fs'
@@ -330,7 +331,7 @@ describe('RFC-370 Doctor native pairing and actual standalone root', () => {
       }
     }
     const queries = new Queries()
-    const factory = createLocalDoctorDiagnosticsFactory()
+    const factory = createLocalDoctorDiagnosticsFactory(buildLogicalSchemaContract())
     const family = factory.create({ configuration: queries })
     expect(queries.count()).toBe(0)
     expect(await family.loadRuntimeConfiguration()).toBe('selected:runtime-configuration')
@@ -381,14 +382,16 @@ describe('RFC-370 Doctor native pairing and actual standalone root', () => {
       ts.forEachChild(node, readCalls)
     }
     readCalls(arms[0]!)
-    expect(calls.filter((value) => value === 'createLocalDoctorDiagnosticsFactory()')).toHaveLength(
-      1,
-    )
+    expect(
+      calls.filter(
+        (value) => value === 'createLocalDoctorDiagnosticsFactory(buildLogicalSchemaContract())',
+      ),
+    ).toHaveLength(1)
     expect(
       calls.filter(
         (value) =>
           value ===
-          'composeDoctorApplication({diagnostics:createLocalDoctorDiagnosticsFactory()}).run()',
+          'composeDoctorApplication({diagnostics:createLocalDoctorDiagnosticsFactory(buildLogicalSchemaContract())}).run()',
       ),
     ).toHaveLength(1)
     expect(calls.filter((value) => value === 'doctorCommand()')).toHaveLength(0)

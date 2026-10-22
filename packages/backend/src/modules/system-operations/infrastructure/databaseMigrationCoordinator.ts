@@ -54,10 +54,7 @@ import {
 import { preflightPostgresqlTarget } from '@/platform/persistence/postgresqlPreflight'
 import { ValidationError } from '@/util/errors'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import {
-  buildLogicalSchemaContract,
-  type LogicalSchemaContract,
-} from '@/platform/persistence/schemaContract'
+import { type LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type {
   SqliteLogicalSource,
   SqliteLogicalSourceSnapshot,
@@ -99,10 +96,11 @@ export class DatabaseMigrationCoordinatorError extends Error {
 }
 
 export interface DatabaseMigrationCoordinatorOptions {
+  readonly headContract: LogicalSchemaContract
   readonly sqlitePath: string
   readonly operationsRoot: string
   readonly generationPointerPath: string
-  readonly contract?: LogicalSchemaContract
+  readonly contract: LogicalSchemaContract
   readonly env?: Readonly<Record<string, string | undefined>>
   readonly admission: DatabaseMigrationAdmissionPort
   readonly safetyBackup?: DatabaseMigrationSafetyBackupPort
@@ -257,7 +255,7 @@ export function readDatabaseSchemaUpgradeGeneration(options: {
 export function createDatabaseMigrationCoordinator(
   options: DatabaseMigrationCoordinatorOptions,
 ): DatabaseMigrationCoordinatorPort {
-  const contract = options.contract ?? buildLogicalSchemaContract()
+  const contract = options.contract
   const plan = buildPostgresqlSchemaPlan(contract)
   const store = createFileDatabaseMigrationStore({ root: options.operationsRoot })
   const controlPlane = createDatabaseMigrationControlPlane({ store })
@@ -276,7 +274,8 @@ export function createDatabaseMigrationCoordinator(
   // let the active runner settle cancellation at a safe phase/chunk boundary.
   const activeRuns = new Map<string, Promise<DatabaseMigrationStatusView>>()
   let historyPromise: Promise<PostgresqlMigrationHistory> | undefined
-  const history = () => (historyPromise ??= loadPostgresqlMigrationHistory())
+  const history = () =>
+    (historyPromise ??= loadPostgresqlMigrationHistory({ headContract: options.headContract }))
   const operationVersion = async (operationId: string) => {
     const manifest = controlPlane.readManifest(operationId)
     if (manifest.payload.source.schemaDigest === contract.digest) return { contract, plan }
@@ -442,6 +441,7 @@ export function createDatabaseMigrationCoordinator(
     let openingTarget: Promise<PostgresqlLogicalTarget> | null = null
     const openTarget = (): Promise<PostgresqlLogicalTarget> => {
       openingTarget ??= openPostgresqlLogicalTarget({
+        headContract: options.headContract,
         runtime,
         operationId,
         sourceGenerationId: manifest.payload.source.generationId,

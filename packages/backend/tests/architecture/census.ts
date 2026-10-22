@@ -71,6 +71,7 @@ export const MODULE_TOP_LEVEL_ENTRIES = [
 
 /** 只有 bootstrap 可以指向模块的 `composition` 入口（RFC-294 §G1）。 */
 export const BOOTSTRAP_FILES = [
+  'packages/backend/src/bootstrap/persistenceSchema.ts',
   'packages/backend/src/bootstrap/daemonModules/adapters.ts',
   'packages/backend/src/bootstrap/daemonModules/providerCore.ts',
   'packages/backend/src/bootstrap/daemonModules/repositoryCredentials.ts',
@@ -1567,30 +1568,10 @@ export function declarationReadsSymbol(input: {
 // development-automation 引用过，按引用推断会得出「它归 development-automation」，
 // 于是最严重的那种越界（另一个 context 独占了你的表）反而不报。
 
-/** `db/schema.ts` 里 `export const X = sqliteTable(...)` 的全部符号名。 */
-export function drizzleTableSymbols(schemaUnit: SourceUnit): string[] {
-  const names: string[] = []
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined &&
-      ts.isCallExpression(node.initializer) &&
-      ts.isIdentifier(node.initializer.expression) &&
-      node.initializer.expression.text === 'sqliteTable'
-    ) {
-      names.push(node.name.text)
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(schemaUnit.source)
-  return names.sort()
-}
-
 export interface TableOwnershipCrossing {
   /** 表符号名。 */
   readonly table: string
-  /** 按前缀声明的归属 context。 */
+  /** 显式声明的归属 context。 */
   readonly owner: string
   /** 引用它的**外来**文件（相对 `modules/`）。 */
   readonly file: string
@@ -1607,19 +1588,15 @@ export interface TableOwnershipCrossing {
 export function tableOwnershipCrossings(input: {
   readonly units: readonly SourceUnit[]
   readonly tables: readonly string[]
-  /** 表名前缀 → 拥有它的 bounded context 目录名。 */
-  readonly ownerPrefixes: Readonly<Record<string, string>>
+  /** 表符号 → registry 声明的 bounded context 目录名。 */
+  readonly owners: Readonly<Record<string, string>>
 }): TableOwnershipCrossing[] {
-  const prefixes = Object.keys(input.ownerPrefixes).sort((a, b) => b.length - a.length)
-  const ownerOf = (table: string): string | null => {
-    const prefix = prefixes.find((candidate) => table.startsWith(candidate))
-    return prefix === undefined ? null : (input.ownerPrefixes[prefix] ?? null)
-  }
-  const owned = new Map<string, string>()
-  for (const table of input.tables) {
-    const owner = ownerOf(table)
-    if (owner !== null) owned.set(table, owner)
-  }
+  const owned = new Map(
+    input.tables.flatMap((table) => {
+      const owner = input.owners[table]
+      return owner === undefined ? [] : [[table, owner] as const]
+    }),
+  )
   const out: TableOwnershipCrossing[] = []
   for (const unit of input.units) {
     const location = /^packages\/backend\/src\/modules\/([^/]+)\//.exec(unit.path)

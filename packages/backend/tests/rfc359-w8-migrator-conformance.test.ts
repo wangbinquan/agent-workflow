@@ -42,7 +42,7 @@ import {
 } from '../src/platform/persistence/postgresqlRuntime'
 import { MIGRATIONS } from './migration-freeze'
 import { resolvePostgresqlTestUrlEnv } from './helpers/eachProvider'
-import { buildLogicalSchemaContract } from '../src/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const CONTRACT = buildLogicalSchemaContract()
@@ -193,7 +193,7 @@ async function migrateFreshPostgresql(): Promise<FreshlyMigrated> {
     generationId: `gen-migconf-${String(process.pid)}`,
     env: { [scratchEnv]: scratch.toString() },
   })
-  await migratePostgresqlSchema({ runtime })
+  await migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime })
   const pool = runtime.providerPool()
   return {
     columnsOf: async (table) => {

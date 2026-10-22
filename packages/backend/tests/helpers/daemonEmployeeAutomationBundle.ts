@@ -1,4 +1,5 @@
 // RFC-383: real session bundles on each provider; no daemon, timers or external services.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
@@ -26,8 +27,14 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
   const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 8))
   const adapters =
     binding.provider === 'sqlite'
-      ? DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({ db: binding.db, appHome, secretBox })
+      ? DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
+          contract: buildLogicalSchemaContract(),
+          db: binding.db,
+          appHome,
+          secretBox,
+        })
       : DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
+          contract: buildLogicalSchemaContract(),
           db: binding.db,
           runtime: binding.runtime,
           databaseConfig: binding.databaseConfig,

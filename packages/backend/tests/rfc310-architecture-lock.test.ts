@@ -13,6 +13,7 @@
 // 变异实证（2026-08-18，开发期手工做过一轮）：在 domain 下临时放一个
 // `import { Hono } from 'hono'` 文件 → 第 3 条红；在 services/ 下临时 import
 // composition.ts → 第 2 条红；public/ 下临时建 misc.ts → 第 1 条红。
+import { isSchemaDeclarationFile } from './architecture/schemaRoles'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
@@ -271,8 +272,8 @@ describe('rfc310 development-automation architecture lock', () => {
     ]
     const offenders: string[] = []
     for (const file of walk(BACKEND_SRC)) {
-      if (file.endsWith(join('db', 'schema.ts'))) continue
       const text = readFileSync(file, 'utf8')
+      if (isSchemaDeclarationFile(rel(file), text)) continue
       for (const table of writerPrivateTables) {
         if (new RegExp(`\\b${table}\\b`).test(text)) {
           offenders.push(`${rel(file)} -> ${table}`)

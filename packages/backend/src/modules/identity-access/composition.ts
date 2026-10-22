@@ -286,3 +286,5 @@ function neutralPersistence(db: ProviderNeutralDatabase): IdentityAccessPersiste
     transactions: createUserAccessTransactionRunner(db, fenceCache),
   }
 }
+
+export { schemaContribution } from './composition/schema'

@@ -2,6 +2,7 @@
 // describe one exact history. These are pure artifact/sequence tests; actual
 // PostgreSQL DDL, transaction rollback and boot resumption have separate coverage.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import {
@@ -124,7 +125,7 @@ function rehash(step: PostgresqlIndexUpgrade): PostgresqlIndexUpgrade {
 }
 
 beforeAll(async () => {
-  committed = await loadPostgresqlMigrationHistory()
+  committed = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
   next = addIndex(committed.head, 'idx_rfc359_history_fixture')
   const sequence = committed.steps.length + 1
   second = createPostgresqlIndexUpgrade({
@@ -482,7 +483,7 @@ describe('RFC-359 T19h exact immutable PostgreSQL history', () => {
       (
         await loadPostgresqlMigrationHistory({
           migrationsFolder: folder,
-          contract: next.contract,
+          headContract: next.contract,
           plan: next.plan,
         })
       ).head,
@@ -541,7 +542,7 @@ describe('RFC-359 T19h exact immutable PostgreSQL history', () => {
       (
         await loadPostgresqlMigrationHistory({
           migrationsFolder: folder,
-          contract: next.contract,
+          headContract: next.contract,
           plan: next.plan,
         })
       ).head,
@@ -563,7 +564,7 @@ describe('RFC-359 T19h exact immutable PostgreSQL history', () => {
     await expect(
       loadPostgresqlMigrationHistory({
         migrationsFolder: committedFolder,
-        contract: next.contract,
+        headContract: next.contract,
         plan: next.plan,
       }),
     ).rejects.toMatchObject({ code: 'postgresql-migration-history-drift' })
@@ -625,8 +626,13 @@ describe('RFC-359 T19h exact immutable PostgreSQL history', () => {
     expect(await extractFilesTo(extracted, files)).toBe(collected.length)
     for (const [path, original] of Object.entries(files))
       expect(readFileSync(join(extracted, path), 'utf8')).toBe(readFileSync(original, 'utf8'))
-    expect((await loadPostgresqlMigrationHistory({ migrationsFolder: extracted })).head).toEqual(
-      committed.head,
-    )
+    expect(
+      (
+        await loadPostgresqlMigrationHistory({
+          headContract: buildLogicalSchemaContract(),
+          migrationsFolder: extracted,
+        })
+      ).head,
+    ).toEqual(committed.head)
   })
 })

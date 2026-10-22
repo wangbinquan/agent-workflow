@@ -2,6 +2,7 @@
 // target. It holds the advisory lock and DDL transaction on the same reserved
 // connection, so poolMax=1 remains valid during boot/migration.
 
+import type { LogicalSchemaContract } from './schemaContract'
 import type { PostgresqlDatabaseRuntime, PostgresqlReservedConnection } from './postgresqlRuntime'
 import {
   buildPostgresqlSchemaPlan,
@@ -379,6 +380,7 @@ export function expandOnlySuccessorOf(
 }
 
 export async function migratePostgresqlSchema(input: {
+  readonly headContract: LogicalSchemaContract
   readonly runtime: PostgresqlDatabaseRuntime
   readonly plan?: PostgresqlSchemaPlan
   readonly history?: PostgresqlMigrationHistory
@@ -388,8 +390,11 @@ export async function migratePostgresqlSchema(input: {
   readonly now?: () => number
 }): Promise<PostgresqlMigrationReceipt> {
   const history =
-    input.history ?? (input.plan === undefined ? await loadPostgresqlMigrationHistory() : undefined)
-  const plan = input.plan ?? history?.head.plan ?? buildPostgresqlSchemaPlan()
+    input.history ??
+    (input.plan === undefined
+      ? await loadPostgresqlMigrationHistory({ headContract: input.headContract })
+      : undefined)
+  const plan = input.plan ?? history?.head.plan ?? buildPostgresqlSchemaPlan(input.headContract)
   if (history !== undefined && JSON.stringify(plan) !== JSON.stringify(history.head.plan)) {
     schemaDrift()
   }

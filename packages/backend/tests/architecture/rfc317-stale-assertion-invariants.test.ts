@@ -17,6 +17,7 @@
 // 变异实证（见 plan.md B11 实施记录）：每条规则都把派生的那一端改一下，
 // 对应用例当场变红；字节级还原后复绿。
 
+import { persistenceSchema } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -221,13 +222,14 @@ describe('RFC-317 T66 —— 过期断言不变量（散文与源码脱钩即红
   })
 
   test('② 注释里写出的「N 张表有 builtin 列」必须等于 schema 里的真实列数', () => {
-    // 派生端：db/schema.ts 里 `builtin` 列的实际张数。RFC-304/309 给
+    // 派生端：compiled registry 里 `builtin` 列的实际张数。RFC-304/309 给
     // capability_templates 加了第三列之后，五处手抄仍说两张（findings ACL-05）。
-    const schema = readFileSync(resolve(REPO_ROOT, 'packages/backend/src/db/schema.ts'), 'utf8')
-    const actual = [...schema.matchAll(/builtin:\s*integer\('builtin'/g)].length
+    const actual = persistenceSchema.tables.filter((table) =>
+      Object.values(table.columns).some((column) => column.name === 'builtin'),
+    ).length
     expect(
       actual,
-      'db/schema.ts 里应当能数到 builtin 列；数不到说明本规则的派生端断了',
+      'compiled registry 里应当能数到 builtin 列；数不到说明本规则的派生端断了',
     ).toBeGreaterThan(0)
 
     const patterns = [

@@ -21,19 +21,19 @@ import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { persistenceSchema } from '@/bootstrap/persistenceSchema'
 
 const srcRoot = resolve(import.meta.dir, '..', 'src')
 
-/** `prop: integer('x', { mode: 'boolean' })` 声明出来的属性名。 */
+/** RFC-395: all explicit boolean column properties, across every contribution. */
 function booleanProperties(): Set<string> {
-  const schema = readFileSync(join(srcRoot, 'db/schema.ts'), 'utf8')
-  const properties = new Set<string>()
-  for (const match of schema.matchAll(
-    /(\w+)\s*:\s*integer\('[a-z_]+',\s*\{\s*mode:\s*'boolean'\s*\}\)/gu,
-  )) {
-    properties.add(match[1]!)
-  }
-  return properties
+  return new Set(
+    persistenceSchema.tables.flatMap((table) =>
+      Object.entries(table.columns)
+        .filter(([, column]) => column.codec === 'bool')
+        .map(([property]) => property),
+    ),
+  )
 }
 
 function sourceFiles(): string[] {

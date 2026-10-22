@@ -7,10 +7,10 @@ import { format, resolveConfig } from 'prettier'
 import { readExpectedMigrationChain, type ExpectedMigration } from '../src/db/schemaAdmission'
 import { buildPostgresqlSchemaPlan } from '../src/platform/persistence/postgresqlSchema'
 import {
-  buildLogicalSchemaContract,
   canonicalSchemaJson,
   type LogicalSchemaContract,
 } from '../src/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '../src/bootstrap/persistenceSchema'
 import {
   POSTGRESQL_MIGRATION_ROOT_FILE,
   readPostgresqlMigrationHistoryPrefix,

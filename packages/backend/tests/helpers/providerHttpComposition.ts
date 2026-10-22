@@ -1,4 +1,5 @@
 // RFC-392: exercise the passive HTTP injection boundary with complete session modules on both engines.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import {
   composeProviderAppComposition,
   type ProviderAppOwnerInput,
@@ -26,6 +27,7 @@ export async function createProviderHttpCompositionFixture(
     throw new Error('HTTP composition fixture does not migrate')
   }
   const databaseMigration = composeDatabaseMigrationModule({
+    contract: buildLogicalSchemaContract(),
     configPath,
     sqlitePath: join(application.appHome, 'db.sqlite'),
     operationsRoot: join(application.appHome, 'database-migrations'),

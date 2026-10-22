@@ -1,4 +1,5 @@
 // Standalone boot mechanisms, including the original per-operation path reads.
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { DatabasePreOpenRecoveryPort } from '../../application/ports/databasePreOpenRecovery'
 import type { SqlitePostRestoreRecovery } from '@/platform/persistence/sqlite/systemProviderRestore'
 import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
@@ -8,12 +9,13 @@ import { readDatabaseSchemaUpgradeGeneration } from '../databaseMigrationCoordin
 import { applyPendingRestoreIfAny } from './filePendingRestore'
 
 export function createFileDatabasePreOpenRecovery(input: {
+  readonly contract: LogicalSchemaContract
   readonly migrationsFolder: string
   readonly postOpenRecovery: () => SqlitePostRestoreRecovery
 }): DatabasePreOpenRecoveryPort<PostgresqlMigrationHistory> {
   const { migrationsFolder, postOpenRecovery } = input
   return {
-    readMigrationHistory: () => loadPostgresqlMigrationHistory(),
+    readMigrationHistory: () => loadPostgresqlMigrationHistory({ headContract: input.contract }),
     readGeneration: ({ contract, history }) =>
       readDatabaseSchemaUpgradeGeneration({
         generationPointerPath: Paths.databaseGenerationPointer,
@@ -23,6 +25,7 @@ export function createFileDatabasePreOpenRecovery(input: {
       }),
     applyStagedRestore: () =>
       applyPendingRestoreIfAny({
+        contract: input.contract,
         appHome: Paths.root,
         dbPath: Paths.db,
         migrationsFolder,

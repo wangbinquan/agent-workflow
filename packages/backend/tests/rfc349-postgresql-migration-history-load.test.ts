@@ -10,6 +10,7 @@
 //
 // Budgets below are wall-clock allowances for a ~2 s replay on a loaded runner,
 // not a tolerance for the replay getting slower.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
@@ -29,15 +30,23 @@ import { canonicalSchemaJson } from '@/platform/persistence/schemaContract'
 import { resolvePostgresqlMigrationsFolder } from '@/util/migrationsFolder'
 
 test('default callers share one checked runtime history; explicit folders read fresh', async () => {
-  const first = await loadPostgresqlMigrationHistory()
-  expect(await loadPostgresqlMigrationHistory()).toBe(first)
-  const receipt = await verifyPostgresqlMigrationHistory({ plan: buildPostgresqlSchemaPlan() })
+  const first = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
+  expect(await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })).toBe(
+    first,
+  )
+  const receipt = await verifyPostgresqlMigrationHistory({
+    headContract: buildLogicalSchemaContract(),
+    plan: buildPostgresqlSchemaPlan(buildLogicalSchemaContract()),
+  })
   expect(receipt.planDigest).toBe(first.head.plan.digest)
 
   const copy = mkdtempSync(join(tmpdir(), 'aw-rfc349-history-'))
   try {
     await cp(await resolvePostgresqlMigrationsFolder(), copy, { recursive: true })
-    const fresh = await loadPostgresqlMigrationHistory({ migrationsFolder: copy })
+    const fresh = await loadPostgresqlMigrationHistory({
+      headContract: buildLogicalSchemaContract(),
+      migrationsFolder: copy,
+    })
     expect(fresh).not.toBe(first)
     expect(canonicalSchemaJson(fresh.head.plan)).toBe(canonicalSchemaJson(first.head.plan))
   } finally {

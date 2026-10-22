@@ -1,7 +1,7 @@
 // Manual recovery chooses the same neutral installation/configuration ports
 // as daemon boot. Local paths remain in the explicit file preparation branch.
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { Paths } from '@/util/paths'
 import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
@@ -34,13 +34,13 @@ export type ManualDatabaseMigrationOptions =
     }
 
 export async function prepareManualDatabaseMigration(
+  contract: LogicalSchemaContract,
   options: ManualDatabaseMigrationOptions = { kind: 'file' },
 ): Promise<PreparedManualDatabaseMigration> {
   const configuration = options.configuration ?? createFileDatabaseConfiguration(Paths.config)
   // Retain the original read-before-contract/preparation ordering. Recovery
   // receives this same instance for its later provider activation/re-read.
   const config = await configuration.read()
-  const contract = buildLogicalSchemaContract()
   if (options.kind === 'selected') {
     return await prepareDatabaseProviderForBoot({
       config,

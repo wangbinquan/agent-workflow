@@ -61,8 +61,8 @@ describe('RFC-371 v2 observation boundaries', () => {
       ...FROZEN_GENERATORS,
       'packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts',
       'packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts',
-      'packages/backend/src/platform/persistence/postgresqlSchema.ts',
-      'packages/backend/src/platform/persistence/schemaContract.ts',
+      'packages/backend/src/platform/persistence/schema/postgresqlPlan.ts',
+      'packages/backend/src/platform/persistence/schema/contractTypes.ts',
     ])
     for (const generator of FROZEN_GENERATORS)
       for (const importer of importers(backend, generator))
@@ -75,6 +75,8 @@ describe('RFC-371 v2 observation boundaries', () => {
       '@/auth/actor',
       '@/db/query',
       '@/db/schema',
+      '@/platform/persistence/schema/dsl',
+      '@/platform/persistence/schema/drizzle',
       '@/platform/persistence/databaseTransaction',
       '@/routes/registry',
       '@/util/errors',

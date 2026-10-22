@@ -2,6 +2,7 @@
 // committed schema-finalize transaction must be safe to observe again after a
 // process crash before the external operation manifest advances.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import {
   openPostgresqlLogicalTarget,
@@ -31,7 +32,9 @@ import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresq
  * retained-revision functions/triggers, so it exercises the same logical-target mechanism.
  */
 async function nativeRevisionPlan(): Promise<PostgresqlSchemaPlan> {
-  const history = await loadPostgresqlMigrationHistory()
+  const history = await loadPostgresqlMigrationHistory({
+    headContract: buildLogicalSchemaContract(),
+  })
   const index = history.steps.findIndex((step) => step.id === '0032_rfc371_observation_v2')
   if (index < 0) throw new Error('published 0032 step missing')
   return history.versions[index]!.plan
@@ -217,6 +220,7 @@ describe('RFC-349 PostgreSQL logical target finalization', () => {
     }
     const table = { ...TABLE, sourceRevisionProjection: OBSERVATION_SOURCE_REVISION }
     const target = await openPostgresqlLogicalTarget({
+      headContract: buildLogicalSchemaContract(),
       runtime: fake.runtime,
       operationId: 'dbm_target_0001',
       sourceGenerationId: 'dbg_source_0001',
@@ -252,6 +256,7 @@ describe('RFC-349 PostgreSQL logical target finalization', () => {
     expect(native.filter((statement) => statement.kind === 'function')).toHaveLength(3)
     expect(native.filter((statement) => statement.kind === 'trigger')).toHaveLength(12)
     const target = await openPostgresqlLogicalTarget({
+      headContract: buildLogicalSchemaContract(),
       runtime: fake.runtime,
       operationId: 'dbm_target_0001',
       sourceGenerationId: 'dbg_source_0001',
@@ -287,6 +292,7 @@ describe('RFC-349 PostgreSQL logical target finalization', () => {
   test('analyzes every active target table once the schema is finalized', async () => {
     const fake = fixture({ rowCount: 2 })
     const target = await openPostgresqlLogicalTarget({
+      headContract: buildLogicalSchemaContract(),
       runtime: fake.runtime,
       operationId: 'dbm_target_0001',
       sourceGenerationId: 'dbg_source_0001',
@@ -309,6 +315,7 @@ describe('RFC-349 PostgreSQL logical target finalization', () => {
   test('re-analyzes on the resume path, where the baseline already exists', async () => {
     const fake = fixture({ rowCount: 2 })
     const target = await openPostgresqlLogicalTarget({
+      headContract: buildLogicalSchemaContract(),
       runtime: fake.runtime,
       operationId: 'dbm_target_0001',
       sourceGenerationId: 'dbg_source_0001',
@@ -337,6 +344,7 @@ describe('RFC-349 PostgreSQL logical target finalization', () => {
   test('blocks schema finalization when final target row coverage differs', async () => {
     const fake = fixture({ rowCount: 3 })
     const target = await openPostgresqlLogicalTarget({
+      headContract: buildLogicalSchemaContract(),
       runtime: fake.runtime,
       operationId: 'dbm_target_0001',
       sourceGenerationId: 'dbg_source_0001',
@@ -364,6 +372,7 @@ describe('RFC-349 PostgreSQL logical target finalization', () => {
   test('blocks finalization when the application schema gains an extra table', async () => {
     const fake = fixture({ rowCount: 2, tableNames: ['fixture_rows_pg', 'legacy_omitted'] })
     const target = await openPostgresqlLogicalTarget({
+      headContract: buildLogicalSchemaContract(),
       runtime: fake.runtime,
       operationId: 'dbm_target_0001',
       sourceGenerationId: 'dbg_source_0001',
@@ -384,6 +393,7 @@ describe('RFC-349 PostgreSQL logical target finalization', () => {
   test('blocks finalization when copy receipts name a non-active table', async () => {
     const fake = fixture({ rowCount: 2, receiptTable: 'legacy_omitted' })
     const target = await openPostgresqlLogicalTarget({
+      headContract: buildLogicalSchemaContract(),
       runtime: fake.runtime,
       operationId: 'dbm_target_0001',
       sourceGenerationId: 'dbg_source_0001',
@@ -403,6 +413,7 @@ describe('RFC-349 PostgreSQL logical target finalization', () => {
   test('observes a committed finalization idempotently without replaying DDL', async () => {
     const fake = fixture({ rowCount: 2 })
     const target = await openPostgresqlLogicalTarget({
+      headContract: buildLogicalSchemaContract(),
       runtime: fake.runtime,
       operationId: 'dbm_target_0001',
       sourceGenerationId: 'dbg_source_0001',
@@ -424,6 +435,7 @@ describe('RFC-349 PostgreSQL logical target finalization', () => {
   test('checks cutover readiness on the advisory-lock session', async () => {
     const fake = fixture({ rowCount: 2 })
     const target = await openPostgresqlLogicalTarget({
+      headContract: buildLogicalSchemaContract(),
       runtime: fake.runtime,
       operationId: 'dbm_target_0001',
       sourceGenerationId: 'dbg_source_0001',

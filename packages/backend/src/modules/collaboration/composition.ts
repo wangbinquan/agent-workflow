@@ -52,3 +52,5 @@ export {
 // `no-circular`。本 barrel 此后**只导出装配用的工厂**，不再转售 domain 纯函数——
 // 想用 domain / application 的函数请直接 import 定义模块。
 export { createCommittedHumanInputQueries } from './infrastructure/committedHumanInputQueries'
+
+export { schemaContribution } from './composition/schema'

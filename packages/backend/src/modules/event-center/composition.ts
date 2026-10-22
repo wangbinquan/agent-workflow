@@ -544,3 +544,5 @@ export async function composeEventCenter(
     },
   })
 }
+
+export { schemaContribution } from './composition/schema'

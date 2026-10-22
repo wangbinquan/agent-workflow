@@ -10,6 +10,7 @@
 //   - packages/backend/tests/api-contract.test.ts          (drives the registry)
 //   - packages/backend/tests/api-contract-coverage.test.ts (scans + matches)
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { registerProviderHttpApplicationLifetime } from '../helpers/providerHttpApplication'
 import { resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -86,6 +87,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
   const sqlite = (db as unknown as { readonly $client: { serialize(): Uint8Array } }).$client
   writeFileSync(sqlitePath, sqlite.serialize())
   const databaseMigration = composeDatabaseMigrationModule({
+    contract: buildLogicalSchemaContract(),
     sqlitePath,
     operationsRoot: join(homePath, 'database-migrations'),
     generationPointerPath: join(homePath, 'database-generation.json'),

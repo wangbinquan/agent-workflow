@@ -64,7 +64,7 @@ import {
   prepareDatabaseProviderForBoot,
 } from './modules/system-operations/composition'
 import { composeLocalDatabaseMigrationOperations } from './modules/system-operations/composition/databaseMigration'
-import { buildLogicalSchemaContract } from './platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from './bootstrap/persistenceSchema'
 import { databaseProviderTraits } from './platform/persistence/providerTraits'
 import { resolveDatabaseProviderRuntime } from './platform/persistence/databaseProviderRuntime'
 import { readDatabaseGenerationForBootstrap } from './platform/persistence/generationStore'
@@ -281,7 +281,9 @@ async function main(): Promise<void> {
     | ReturnType<typeof composeLocalDatabaseMigrationOperations>
     | undefined
   const requireLocalDatabaseMigrationOperations = () =>
-    (localDatabaseMigrationOperations ??= composeLocalDatabaseMigrationOperations())
+    (localDatabaseMigrationOperations ??= composeLocalDatabaseMigrationOperations(
+      buildLogicalSchemaContract(),
+    ))
 
   switch (sub) {
     case '__hosted-git-credential': {
@@ -448,7 +450,7 @@ async function main(): Promise<void> {
         break
       }
       const result = await composeDoctorApplication({
-        diagnostics: createLocalDoctorDiagnosticsFactory(),
+        diagnostics: createLocalDoctorDiagnosticsFactory(buildLogicalSchemaContract()),
       }).run()
       process.stdout.write(formatDoctor(result))
       if (!result.ok) process.exit(1)
@@ -459,7 +461,7 @@ async function main(): Promise<void> {
     // 几 GB 上是分钟级,跑在 daemon 的单条同步连接上等于全站冻结那么久。
     case 'db': {
       if (Bun.argv[3] === 'compact') {
-        const result = dbCompactCommand()
+        const result = dbCompactCommand(buildLogicalSchemaContract())
         process.stdout.write(result.output)
         if (result.status !== 'ok') process.exit(1)
         break
@@ -528,7 +530,10 @@ async function main(): Promise<void> {
       const provider = await resolveCommandProvider()
       const operations = await (async () => {
         try {
-          return composeLocalSystemOperations({ providerRuntime: provider.runtime })
+          return composeLocalSystemOperations({
+            contract: buildLogicalSchemaContract(),
+            providerRuntime: provider.runtime,
+          })
         } catch (error) {
           await provider.runtime.close()
           throw error
@@ -549,7 +554,7 @@ async function main(): Promise<void> {
       // migration. Select a verified old SQLite runtime lazily for this one
       // command; the restore owner keeps its existing backup/swap/open order.
       const contract = buildLogicalSchemaContract()
-      const history = await loadPostgresqlMigrationHistory()
+      const history = await loadPostgresqlMigrationHistory({ headContract: contract })
       const generation = readDatabaseGenerationForBootstrap({
         pointerPath: Paths.databaseGenerationPointer,
         migrationsDir: Paths.databaseMigrationsDir,
@@ -567,7 +572,7 @@ async function main(): Promise<void> {
             ? resolvePostgresqlHistoricalContract(history, generation.payload.schemaDigest)
             : contract,
       })
-      const operations = composeLocalSystemOperations({ providerRuntime })
+      const operations = composeLocalSystemOperations({ contract, providerRuntime })
       try {
         const result = await restoreCommand(Bun.argv.slice(3), operations)
         process.stdout.write(result.output)

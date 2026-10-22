@@ -1,4 +1,5 @@
 // RFC-374 T10: real SQLite logical copying preserves run seq and the pruned allocation high-water row; PostgreSQL identity continues above it.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -49,7 +50,9 @@ describeEachProvider(
           sqlite.close()
           restoreProvider()
         }
-        const history = await loadPostgresqlMigrationHistory(),
+        const history = await loadPostgresqlMigrationHistory({
+            headContract: buildLogicalSchemaContract(),
+          }),
           source = openSqliteLogicalSource({ path, contract: history.head.contract })
         try {
           const snapshot = await source.preflight()
@@ -75,6 +78,7 @@ describeEachProvider(
             await pool.unsafe('DROP SCHEMA agent_workflow CASCADE')
             await pool.unsafe('DROP SCHEMA agent_workflow_meta CASCADE')
             const target = await openPostgresqlLogicalTarget({
+              headContract: buildLogicalSchemaContract(),
               runtime,
               operationId: 'dbm_rfc374_target_copy',
               sourceGenerationId: 'dbg_rfc374_source_copy',
@@ -83,6 +87,7 @@ describeEachProvider(
             })
             try {
               await restoreLogicalDatabaseBackup({
+                headContract: buildLogicalSchemaContract(),
                 artifactRoot,
                 expectedEnvelopeFileDigest: exported.envelopeFileDigest,
                 restoreOperationId: 'dbm_rfc374_target_copy',

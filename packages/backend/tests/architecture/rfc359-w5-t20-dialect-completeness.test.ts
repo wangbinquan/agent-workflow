@@ -16,7 +16,7 @@
 //
 //   ① **能力矩阵** `platform/persistence/capabilities.ts` —— provider 差异的容身处：实现只说
 //      「锁这个聚合根」「NULL 排最后」「大小写不敏感搜索」，矩阵按引擎各渲染一次最优 SQL。
-//   ② **PG 函数 shim** `platform/persistence/postgresqlSchema.ts` 的 bootstrap 语句 —— 给
+//   ② **PG 函数 shim** `platform/persistence/schema/postgresqlPlan.ts` 的 bootstrap 语句 —— 给
 //      PG 装上一组**同名同参**的 SQLite 标量函数（`unixepoch` / `instr` / `hex` / `max(a,b)` /
 //      `json_valid` / `json_type` / `json_extract`），让同一句 SQL 两边都认。
 //      ⚠️ `docs/dev-gotchas.md`：shim **同名同参、返回词汇表可以完全不同**（`json_type` 转发
@@ -72,7 +72,7 @@ import { postgresqlExecutionSurface } from './postgresqlSurface'
 
 const SRC = resolve(import.meta.dir, '..', '..', 'src')
 const MATRIX_FILE = 'platform/persistence/capabilities.ts'
-const SCHEMA_PROJECTOR_FILE = 'platform/persistence/postgresqlSchema.ts'
+const SCHEMA_PROJECTOR_FILE = 'platform/persistence/schema/postgresqlPlan.ts'
 
 /**
  * 允许裸写方言构造的**渲染器**文件：这些地方按引擎各渲染一次，是 provider 差异的容身处

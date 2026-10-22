@@ -29,6 +29,7 @@ import type {
   LogicalSchemaContract,
   LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const roots: string[] = []
 const SCHEMA_DIGEST = `sha256:${'d'.repeat(64)}`
@@ -354,6 +355,7 @@ async function runDirection(input: {
     expectedRows: rows,
   })
   const receipt = await restoreLogicalDatabaseBackup({
+    headContract: buildLogicalSchemaContract(),
     artifactRoot,
     expectedEnvelopeFileDigest: exported.envelopeFileDigest,
     restoreOperationId,

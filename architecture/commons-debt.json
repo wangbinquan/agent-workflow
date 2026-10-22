@@ -3843,7 +3843,7 @@
         "packages/backend/src/services/lifecycle.ts:202",
         "packages/backend/src/services/lifecycle.ts:261",
         "packages/backend/src/services/lifecycle.ts:505-512",
-        "packages/backend/src/db/schema.ts:1050",
+        "packages/backend/src/modules/task-execution/infrastructure/persistence/schema.ts:1378",
         "packages/backend/tests/rfc303-node-revival-fence.test.ts:49-91"
       ],
       "findingId": "LC-08",
@@ -3963,9 +3963,9 @@
     },
     {
       "anchors": [
-        "packages/backend/src/db/schema.ts:89",
-        "packages/backend/src/db/schema.ts:483",
-        "packages/backend/src/db/schema.ts:4621",
+        "packages/backend/src/modules/resource-catalog/infrastructure/persistence/schema.ts:35",
+        "packages/backend/src/modules/resource-catalog/infrastructure/persistence/schema.ts:808",
+        "packages/backend/src/modules/code-capability/infrastructure/persistence/schema.ts:37",
         "packages/backend/src/services/systemResources.ts:24-28",
         "packages/backend/src/services/resourcePackage/closure.ts:55-62",
         "packages/backend/src/services/resourcePackage/commit.ts:621-625",
@@ -3988,8 +3988,8 @@
         "packages/backend/src/services/resourceAcl.ts:664-679",
         "packages/backend/src/services/resourceAcl.ts:709-723",
         "packages/backend/tests/rfc223-owner-transfer.test.ts:27-34",
-        "packages/backend/src/db/schema.ts:4701",
-        "packages/backend/src/db/schema.ts:4982-4985"
+        "packages/backend/src/modules/development-automation/infrastructure/persistence/schema.ts:56-63",
+        "packages/backend/src/modules/digital-employee/infrastructure/persistence/schema.ts:592-599"
       ],
       "findingId": "ACL-06",
       "kind": "missing-guard",
@@ -4515,8 +4515,8 @@
         "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher.ts:36-100",
         "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts:835-915",
         "packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts:973-1032",
-        "packages/backend/src/db/schema.ts:5128-5135",
-        "packages/backend/src/db/schema.ts:5598-5600",
+        "packages/backend/src/modules/digital-employee/infrastructure/persistence/schema.ts:814",
+        "packages/backend/src/modules/event-center/infrastructure/persistence/schema.ts:115",
         "packages/backend/src/platform/persistence/transactionScope.ts:1-9"
       ],
       "findingId": "TP-11",

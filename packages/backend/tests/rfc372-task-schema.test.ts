@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createInMemoryDb } from '@/db/client'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import {
   postgresqlMigrationDigest,
@@ -121,7 +121,9 @@ describe('RFC-372 companion retirement', () => {
     }
   })
   test('PostgreSQL V4 replays the exact removal and concurrent additions, admitting only the verified row bridge', async () => {
-    const history = await loadPostgresqlMigrationHistory()
+    const history = await loadPostgresqlMigrationHistory({
+      headContract: buildLogicalSchemaContract(),
+    })
     const step = history.steps.find((x) => x.id === '0024_rfc372_light_clarify')!
     expect(step.version).toBe(4)
     expect([...step.retiredTables!].sort()).toEqual(retired)
@@ -172,7 +174,9 @@ describe('RFC-372 companion retirement', () => {
     ).toThrow()
   })
   test('a historical backup restores retained rows, skips retired rows and preserves the original artifact', async () => {
-    const history = await loadPostgresqlMigrationHistory()
+    const history = await loadPostgresqlMigrationHistory({
+      headContract: buildLogicalSchemaContract(),
+    })
     const previous =
       history.versions[history.steps.findIndex((step) => step.id === '0024_rfc372_light_clarify')]!
     const prefix = freezeAt(previous.sqliteMigration.last.index)
@@ -215,6 +219,7 @@ describe('RFC-372 companion retirement', () => {
         const copied: string[] = []
         const progress: { chunksRestored: number; chunksTotal: number }[] = []
         const receipt = await restoreLogicalDatabaseBackup({
+          headContract: buildLogicalSchemaContract(),
           artifactRoot,
           expectedEnvelopeFileDigest: exported.envelopeFileDigest,
           restoreOperationId: 'dbm_rfc372_restore',

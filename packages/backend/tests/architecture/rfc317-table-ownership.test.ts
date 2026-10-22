@@ -17,7 +17,7 @@
 // 两条都已在 T41 收口成 public 端口；本文件是让它们不会再长回来的机制。
 //
 // ---------------------------------------------------------------------------
-// 判据为什么按**前缀声明**归属，而不是按引用推断
+// 判据为什么按**registry 声明**归属，而不是按引用推断
 // ---------------------------------------------------------------------------
 //
 // 按引用推断（「只有一个 context 引用它 ⇒ 它归那个 context」）在真实语料上会把最严重
@@ -25,26 +25,21 @@
 // （与其余 13 张 employee* 表同批建、同一个 store 写），却**只**被
 // development-automation 引用过。按引用推断会得出「它归 development-automation」，
 // 于是「另一个 context 独占了你的表」这种最坏情况反而一条都不报。
-// 所以归属必须是**声明**出来的，下面那张前缀表就是那份声明。
+// 所以归属必须是**声明**出来的，编译后的 registry 就是那份声明。
 
+import { persistenceSchema } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
-import { drizzleTableSymbols, packageSrcUnits, sourceUnit, tableOwnershipCrossings } from './census'
+import { packageSrcUnits, sourceUnit, tableOwnershipCrossings } from './census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 
-/**
- * 表名前缀 → 拥有它的 bounded context。
- *
- * 这里**只登记已经模块化、且表名带专属前缀的 context**。没有专属前缀的域
- * （tasks / workflows / memories …）目前散落在 `services/` 横向层，还不是 module，
- * 强行给它们编前缀会让这条规则报出几百条与本 RFC 无关的噪音。RFC-294 的方向是那些
- * 域逐步迁入 module，届时在这里加一行即可把它们纳入同一条判据。
- */
-const TABLE_OWNER_PREFIXES: Readonly<Record<string, string>> = {
-  employee: 'digital-employee',
-  development: 'development-automation',
-}
+// Preserve the existing ledger's employee/development coverage; owners come from the registry.
+const TABLE_OWNERS = Object.fromEntries(
+  persistenceSchema.tables
+    .filter((table) => /^(employee|development)/.test(table.schemaSymbol))
+    .map((table) => [table.schemaSymbol, table.owner]),
+)
 
 interface OwnershipDebt {
   readonly table: string
@@ -145,9 +140,7 @@ const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
 ]
 
 const units = packageSrcUnits(REPO_ROOT, 'backend')
-const schemaUnit = units.find((unit) => unit.path === 'packages/backend/src/db/schema.ts')
-if (schemaUnit === undefined) throw new Error('db/schema.ts 不在语料里——路径判据坏了')
-const TABLES = drizzleTableSymbols(schemaUnit)
+const TABLES = persistenceSchema.tables.map((table) => table.schemaSymbol)
 
 const key = (entry: { readonly table: string; readonly file: string }): string =>
   `${entry.table}|${entry.file}`
@@ -163,7 +156,7 @@ describe('RFC-317 T41 · R5 —— 一张表只属于一个 bounded context', ()
     const actual = tableOwnershipCrossings({
       units,
       tables: TABLES,
-      ownerPrefixes: TABLE_OWNER_PREFIXES,
+      owners: TABLE_OWNERS,
     }).map(key)
     expect(
       actual,
@@ -205,26 +198,30 @@ const ORPHAN_FOREIGN_UNIT = sourceUnit(
 )
 
 describe('RFC-317 T41 · R5 负向 fixture', () => {
-  const prefixes = { alpha: 'alpha-context', beta: 'beta-context' }
+  const owners = {
+    alphaThings: 'alpha-context',
+    alphaOrphan: 'alpha-context',
+    betaThings: 'beta-context',
+  }
 
   test('外来 context 引用别人的表 ⇒ 报出来', () => {
     expect(
       tableOwnershipCrossings({
         units: [OWNER_UNIT, FOREIGN_UNIT],
         tables: ['alphaThings', 'betaThings'],
-        ownerPrefixes: prefixes,
+        owners,
       }).map(key),
     ).toEqual(['alphaThings|beta-context/composition/uses.ts'])
   })
 
   test('**只被外来 context 引用**的表照样报出来（这正是按引用推断会漏掉的那类）', () => {
-    // alphaOrphan 归 alpha-context（前缀声明），但 alpha 自己一次都没引用它。
+    // alphaOrphan 归 alpha-context（registry 声明），但 alpha 自己一次都没引用它。
     // 按引用推断会说「它归 beta-context，合法」；按声明归属，它是越界。
     expect(
       tableOwnershipCrossings({
         units: [OWNER_UNIT, ORPHAN_FOREIGN_UNIT],
         tables: ['alphaThings', 'alphaOrphan'],
-        ownerPrefixes: prefixes,
+        owners,
       }).map(key),
     ).toEqual(['alphaOrphan|beta-context/composition/orphan.ts'])
   })
@@ -234,17 +231,17 @@ describe('RFC-317 T41 · R5 负向 fixture', () => {
       tableOwnershipCrossings({
         units: [OWNER_UNIT],
         tables: ['alphaThings'],
-        ownerPrefixes: prefixes,
+        owners,
       }),
     ).toEqual([])
   })
 
-  test('没有前缀归属的表完全不在判据内（避免把未模块化的域灌进来）', () => {
+  test('不在本账本覆盖范围的表完全不在判据内（避免把未模块化的域灌进来）', () => {
     expect(
       tableOwnershipCrossings({
         units: [FOREIGN_UNIT],
         tables: ['tasks', 'workflows'],
-        ownerPrefixes: prefixes,
+        owners,
       }),
     ).toEqual([])
   })

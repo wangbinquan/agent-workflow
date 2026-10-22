@@ -35,6 +35,7 @@ import type {
 import { writeManifest } from '@/services/backupManifest'
 import { createPortableBackupArchive } from '@/services/portableBackupArchive'
 import { extractTarGz, tarGz } from '@/util/archive'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const roots: string[] = []
 const SCHEMA_DIGEST = `sha256:${'c'.repeat(64)}`
@@ -246,6 +247,7 @@ describe('RFC-349 portable database restore', () => {
     const rows: CanonicalLogicalRow[] = []
     const operationId = 'dbm_restore_sqlite_01'
     const result = await restorePortableDatabaseBackup({
+      headContract: buildLogicalSchemaContract(),
       tarballPath: backup.path,
       appHome: backup.appHome,
       restoreOperationId: operationId,
@@ -305,6 +307,7 @@ describe('RFC-349 portable database restore', () => {
 
     await expect(
       restorePortableDatabaseBackup({
+        headContract: buildLogicalSchemaContract(),
         tarballPath: forged,
         appHome: backup.appHome,
         restoreOperationId: operationId,
@@ -338,6 +341,7 @@ describe('RFC-349 portable database restore', () => {
     const plan = { contractDigest: CONTRACT.digest } as PostgresqlSchemaPlan
 
     const result = await restorePostgresqlProviderBackup({
+      headContract: buildLogicalSchemaContract(),
       tarballPath: backup.path,
       appHome: backup.appHome,
       restoreOperationId: operationId,
@@ -353,6 +357,7 @@ describe('RFC-349 portable database restore', () => {
       async openTarget(input) {
         calls.push('open')
         expect(input).toEqual({
+          headContract: buildLogicalSchemaContract(),
           runtime,
           operationId,
           sourceGenerationId: 'dbg_postgresql_source_01',
@@ -379,6 +384,7 @@ describe('RFC-349 portable database restore', () => {
 
     await expect(
       restorePostgresqlProviderBackup({
+        headContract: buildLogicalSchemaContract(),
         tarballPath: backup.path,
         appHome: backup.appHome,
         restoreOperationId: operationId,

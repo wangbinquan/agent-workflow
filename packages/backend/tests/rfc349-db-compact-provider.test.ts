@@ -12,7 +12,7 @@ import {
   digestDatabaseArtifact,
   writeDatabaseGenerationAtomic,
 } from '@/platform/persistence/generationStore'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const roots: string[] = []
 const savedHome = process.env.AGENT_WORKFLOW_HOME
@@ -29,7 +29,7 @@ describe('RFC-349 db compact provider dispatch', () => {
     roots.push(appHome)
     process.env.AGENT_WORKFLOW_HOME = appHome
 
-    expect(dbCompactCommand()).toEqual({
+    expect(dbCompactCommand(buildLogicalSchemaContract())).toEqual({
       status: 'no-db',
       output: `no database at ${join(appHome, 'db.sqlite')}\n`,
     })
@@ -77,7 +77,7 @@ describe('RFC-349 db compact provider dispatch', () => {
     const retainedBytes = 'not even a SQLite database; compact must not open it\n'
     writeFileSync(retainedSqlite, retainedBytes)
 
-    const result = dbCompactCommand()
+    const result = dbCompactCommand(buildLogicalSchemaContract())
 
     expect(result).toEqual({
       status: 'ok',

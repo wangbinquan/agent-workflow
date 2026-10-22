@@ -1,4 +1,4 @@
-// RFC-349 T2/T8 — locks the exact 217-table source census, the 211-table
+// RFC-349 T2/T8 — locks the exact 222-table source census, the 216-table
 // PostgreSQL parity set, and the only six archive-then-omit tables approved by
 // D9 (RFC-371 v2 retired 81 v1 observation tables and added three; RFC-370 v2
 // retired the host write-context and memory distill receipt tables; RFC-370 M0
@@ -13,13 +13,14 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   assertExactSchemaRoster,
-  buildLogicalSchemaContract,
   canonicalSchemaJson,
   digestSchemaContract,
   RFC349_ARCHIVE_THEN_OMIT_TABLES,
   RFC349_SOURCE_TABLES,
 } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { packageSrcUnits } from './census'
+import { isSchemaDeclarationFile } from './schemaRoles'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 const contract = buildLogicalSchemaContract()
@@ -32,10 +33,23 @@ function sourceMentionsArchiveTable(text: string, schemaSymbol: string, tableId:
 
 describe('RFC-349 canonical schema contract', () => {
   test('locks the source, active parity and archive-only counts', () => {
-    expect(RFC349_SOURCE_TABLES).toHaveLength(217)
-    expect(contract.sourceTableCount).toBe(217)
-    expect(contract.activeTableCount).toBe(211)
+    expect(RFC349_SOURCE_TABLES).toHaveLength(222)
+    expect(contract.sourceTableCount).toBe(222)
+    expect(contract.activeTableCount).toBe(216)
     expect(contract.archiveOnlyTableCount).toBe(6)
+    // RFC-396 retains the source/active parity set and adds exactly five graph tables.
+    expect(
+      contract.tables
+        .filter((table) => table.id.startsWith('development_design'))
+        .map((table) => table.id)
+        .sort(),
+    ).toEqual([
+      'development_design_baselines',
+      'development_design_links',
+      'development_design_proposals',
+      'development_design_revisions',
+      'development_designs',
+    ])
     expect(contract.tables.map((table) => table.id)).toEqual([...RFC349_SOURCE_TABLES])
     // Retired RFC-372 companion tables stay absent.
     expect(contract.tables.filter((t) => /^(clarify_mindmap_|task_clarify_)/.test(t.id))).toEqual(
@@ -126,10 +140,7 @@ describe('RFC-349 canonical schema contract', () => {
 
   test('the six archive-only tables still have zero production consumer', () => {
     const units = packageSrcUnits(REPO_ROOT, 'backend').filter(
-      (unit) =>
-        unit.path !== 'packages/backend/src/db/schema.ts' &&
-        unit.path !== 'packages/backend/src/platform/persistence/schemaContract.ts' &&
-        !unit.path.startsWith('packages/backend/src/platform/persistence/migration/'),
+      (unit) => !isSchemaDeclarationFile(unit.path, unit.text),
     )
     expect(units.length).toBeGreaterThanOrEqual(1000)
     const byId = new Map(contract.tables.map((table) => [table.id, table]))

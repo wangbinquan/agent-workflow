@@ -22,6 +22,7 @@ import {
 } from '@/modules/integration/composition/crewstationEvents'
 import { composeCrewStationReviewArtifacts } from '@/modules/collaboration/composition/crewstationReviewArtifacts'
 import { composeCrewStationCodeReviewArtifacts } from '@/modules/code-capability/composition/crewstationCodeReviewArtifacts'
+import { buildLogicalSchemaContract } from './persistenceSchema'
 import { composeCrewStationMaintenanceDescriptor } from './crewstationMaintenance'
 import { composeCrewStationResourceArtifacts } from '@/modules/resource-catalog/composition/crewstationArtifacts'
 import {
@@ -91,7 +92,12 @@ export async function composeCrewStationProfile(
   const profileKeys = profiles.map((profile) => `${profile.protocol}:${profile.model ?? ''}`)
   if (new Set(profileKeys).size !== profileKeys.length)
     throw new Error('AW_AGENT_PROFILES contains duplicate runtime/model mappings')
-  const prepared = await prepareCrewStationDatabase({ environment, schema: 'verify', env })
+  const prepared = await prepareCrewStationDatabase({
+    contract: buildLogicalSchemaContract(),
+    environment,
+    schema: 'verify',
+    env,
+  })
   const system = await composeCrewStationSystemSelections({ environment, prepared })
   const db = system.database
   const initialized = selectExecutionInitialization(system.executionAuthority)
@@ -223,6 +229,7 @@ export async function composeCrewStationProfile(
     selections: {
       taskInputFiles: composeCrewStationTaskInputFiles({ db, objects, publications }),
       databaseBackup: composeCrewStationDatabaseBackups({
+        contract: buildLogicalSchemaContract(),
         db,
         runtime: prepared.runtime.runtime,
         fence,

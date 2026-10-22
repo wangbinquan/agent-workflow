@@ -407,3 +407,5 @@ export {
 } from './infrastructure/workspaceMaterializer'
 
 export { createGitTaskDeletionRepositoryEffects } from './infrastructure/local/gitTaskDeletionRepositoryEffects'
+
+export { schemaContribution } from './composition/schema'

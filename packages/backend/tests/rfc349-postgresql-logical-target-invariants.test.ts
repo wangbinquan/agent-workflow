@@ -15,11 +15,11 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import {
-  buildLogicalSchemaContract,
   type LogicalColumnContract,
   type LogicalSchemaContract,
   type LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 function rows(values: readonly Record<string, unknown>[]): SqlRows {
   return Object.assign(Promise.resolve(values), {

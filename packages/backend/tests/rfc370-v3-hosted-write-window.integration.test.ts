@@ -26,7 +26,7 @@ import { createDatabaseHostedExecutionControl } from '@/modules/system-operation
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { errorHandler } from '@/util/errors'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
@@ -75,7 +75,12 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     await raw('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
     await raw('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
     await migrateForDeployment(env())
-    const prepared = await prepareCrewStationDatabase({ environment, schema: 'verify', env: env() })
+    const prepared = await prepareCrewStationDatabase({
+      contract: buildLogicalSchemaContract(),
+      environment,
+      schema: 'verify',
+      env: env(),
+    })
     const control = createDatabaseHostedExecutionControl({ db: prepared.openBootstrapClient() })
     return { prepared, control }
   }
@@ -280,7 +285,13 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     await first.prepared.runtime.close()
     const successor = 'sha256:' + 'b'.repeat(64)
     const receipt = `upgrade:9999_rfc370_successor:sha256:${'c'.repeat(64)}`
-    const serve = () => prepareCrewStationDatabase({ environment, schema: 'verify', env: env() })
+    const serve = () =>
+      prepareCrewStationDatabase({
+        contract: buildLogicalSchemaContract(),
+        environment,
+        schema: 'verify',
+        env: env(),
+      })
     // What the next release's migration Job leaves behind: one more recorded
     // upgrade, its contract installed and followed by the active generation,
     // and an additional table this release does not know.

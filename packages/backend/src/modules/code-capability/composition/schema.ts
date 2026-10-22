@@ -1,0 +1,20 @@
+// RFC-395 I-a: schema-only entry; this context's composition root contains only schema exports.
+export {
+  schemaContribution,
+  historySchemaContribution,
+  capabilityTemplates,
+  repoCapabilityConfig,
+  codeAiAttempts,
+  codeArtifacts,
+  codeFindings,
+  codeFixAttempts,
+  codeMrLeases,
+  codeProducedMrs,
+  codePublishIntents,
+  codeRoundStages,
+  codeTriggerDeliveries,
+  codeWorkItems,
+  codeWorkObservations,
+  codeWorkRounds,
+  legacyCodeWorkItemLinks,
+} from '../composition'

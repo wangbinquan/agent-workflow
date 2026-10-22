@@ -124,11 +124,12 @@ function assertExact(actual: unknown, expected: unknown, detail: string): void {
  * retain their original path, including explicit infrastructure fixtures. */
 export async function resolveLogicalDatabaseRestoreSourceContract(input: {
   readonly sourceSchemaDigest: string
+  readonly headContract: LogicalSchemaContract
   readonly targetContract: LogicalSchemaContract
 }): Promise<LogicalSchemaContract> {
   if (input.sourceSchemaDigest === input.targetContract.digest) return input.targetContract
   try {
-    const history = await loadPostgresqlMigrationHistory()
+    const history = await loadPostgresqlMigrationHistory({ headContract: input.headContract })
     assertExact(
       history.head.contract,
       input.targetContract,
@@ -473,6 +474,7 @@ export async function restoreLogicalDatabaseArtifact(input: {
   readonly expectedManifestDigest: string
   readonly expectedLegacyArchiveFileDigest: string
   readonly restoreOperationId: string
+  readonly headContract: LogicalSchemaContract
   readonly contract: LogicalSchemaContract
   /** Source artifacts retain contract; a verified bridge re-encodes only the
    * in-memory target chunks and the new restore receipt for this target. */
@@ -511,6 +513,7 @@ export async function restoreLogicalDatabaseArtifact(input: {
   if (targetContract !== input.contract) {
     const sourceContract = await resolveLogicalDatabaseRestoreSourceContract({
       sourceSchemaDigest: input.contract.digest,
+      headContract: input.headContract,
       targetContract,
     })
     assertExact(
@@ -620,6 +623,7 @@ export async function restoreLogicalDatabaseBackup(input: {
   readonly artifactRoot: string
   readonly expectedEnvelopeFileDigest: string
   readonly restoreOperationId: string
+  readonly headContract: LogicalSchemaContract
   readonly contract: LogicalSchemaContract
   readonly targetContract?: LogicalSchemaContract
   readonly target: LogicalDatabaseRestoreTarget

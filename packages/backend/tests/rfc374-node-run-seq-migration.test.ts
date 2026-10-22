@@ -1,4 +1,5 @@
 // RFC-374 T3/T10: frozen SQLite and PostgreSQL histories upgrade legacy rows before catch-up; fresh schemas preserve nullable uniqueness.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterAll, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { rmSync } from 'node:fs'
@@ -77,7 +78,9 @@ describeEachProvider(
       } else {
         const runtime = harness.applicationBinding.runtime,
           pool = runtime.providerPool()
-        const history = await loadPostgresqlMigrationHistory(),
+        const history = await loadPostgresqlMigrationHistory({
+            headContract: buildLogicalSchemaContract(),
+          }),
           prefix = replayPostgresqlMigrationHistory(
             history.root,
             history.steps.slice(
@@ -88,10 +91,18 @@ describeEachProvider(
         expect(prefix.steps.at(-1)!.id).toBe('0035_rfc370_hosted_deployment')
         await pool.unsafe('DROP SCHEMA agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA agent_workflow_meta CASCADE')
-        await migratePostgresqlSchema({ runtime, history: prefix })
+        await migratePostgresqlSchema({
+          headContract: buildLogicalSchemaContract(),
+          runtime,
+          history: prefix,
+        })
         await pool.unsafe(legacyTask.replace('INTO tasks', 'INTO agent_workflow.tasks'))
         await pool.unsafe(legacyRuns.replace('INTO node_runs', 'INTO agent_workflow.node_runs'))
-        await migratePostgresqlSchema({ runtime, history })
+        await migratePostgresqlSchema({
+          headContract: buildLogicalSchemaContract(),
+          runtime,
+          history,
+        })
         await pool.unsafe(
           `INSERT INTO agent_workflow_meta.logical_copy_operations (operation_id,source_generation_id,contract_digest,plan_digest,stage,created_at,updated_at) VALUES ('dbm_rfc374_upgrade','dbg_rfc374_source','digest','plan','prepared',1,1)`,
         )

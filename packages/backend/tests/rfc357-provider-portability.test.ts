@@ -14,6 +14,7 @@ import { Database } from 'bun:sqlite'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { tasks } from '@/db/schema'
 import { compilePostgresqlSql } from '@/platform/persistence/postgresqlSql'
 
 const PAGE_DIR = resolve(
@@ -40,7 +41,6 @@ const RUNTIME = resolve(
   'persistence',
   'postgresqlRuntime.ts',
 )
-const SCHEMA = resolve(import.meta.dir, '..', 'src', 'db', 'schema.ts')
 const CAPABILITIES = resolve(
   import.meta.dir,
   '..',
@@ -143,8 +143,10 @@ describe('RFC-357 delta 4 — the sort key cannot hit the NULL-ordering reversal
   // SQLite 的 DESC 把 NULL 排最后、PostgreSQL 排最前。排序键是 branch_started_at，
   // 它 NOT NULL DEFAULT 0，所以这条差异在本页不成立——但那是**前提**，钉住它。
   test('branch_started_at is NOT NULL, which is why ORDER BY … DESC is provider-agnostic here', () => {
-    const schema = readFileSync(SCHEMA, 'utf8')
-    expect(schema).toContain("branchStartedAt: integer('branch_started_at').notNull().default(0)")
+    expect(tasks.branchStartedAt.name).toBe('branch_started_at')
+    expect(tasks.branchStartedAt.getSQLType()).toBe('integer')
+    expect(tasks.branchStartedAt.notNull).toBe(true)
+    expect(tasks.branchStartedAt.default).toBe(0)
   })
 })
 

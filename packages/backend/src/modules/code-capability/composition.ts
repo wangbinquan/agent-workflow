@@ -1,0 +1,20 @@
+// RFC-395 I-a: schema-only composition root.
+export {
+  schemaContribution,
+  historySchemaContribution,
+  capabilityTemplates,
+  repoCapabilityConfig,
+  codeAiAttempts,
+  codeArtifacts,
+  codeFindings,
+  codeFixAttempts,
+  codeMrLeases,
+  codeProducedMrs,
+  codePublishIntents,
+  codeRoundStages,
+  codeTriggerDeliveries,
+  codeWorkItems,
+  codeWorkObservations,
+  codeWorkRounds,
+  legacyCodeWorkItemLinks,
+} from './infrastructure/persistence/schema'

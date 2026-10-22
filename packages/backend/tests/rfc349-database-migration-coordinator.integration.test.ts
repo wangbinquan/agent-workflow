@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
 import { createDatabaseMigrationCoordinator } from '@/modules/system-operations/infrastructure/databaseMigrationCoordinator'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
@@ -37,6 +37,8 @@ describe('RFC-349 production database migration coordinator', () => {
     sqlite.close()
 
     const coordinator = createDatabaseMigrationCoordinator({
+      headContract: buildLogicalSchemaContract(),
+      contract: buildLogicalSchemaContract(),
       sqlitePath,
       operationsRoot: join(root, 'database-migrations'),
       generationPointerPath: join(root, 'database-generation.json'),
@@ -79,6 +81,8 @@ describe('RFC-349 production database migration coordinator', () => {
     sqlite.close()
 
     const coordinator = createDatabaseMigrationCoordinator({
+      headContract: buildLogicalSchemaContract(),
+      contract: buildLogicalSchemaContract(),
       sqlitePath,
       operationsRoot: join(root, 'database-migrations'),
       generationPointerPath: join(root, 'database-generation.json'),
@@ -159,6 +163,7 @@ describe('RFC-349 production database migration coordinator', () => {
         failBackground = reject
       })
       const { coordinator } = composeDatabaseMigrationModule({
+        contract: buildLogicalSchemaContract(),
         sqlitePath,
         operationsRoot: join(root, 'database-migrations'),
         generationPointerPath: join(root, 'database-generation.json'),

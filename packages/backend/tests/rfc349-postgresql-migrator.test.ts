@@ -1,6 +1,7 @@
 // RFC-349 T4 — schema admission is durable, idempotent and fail-closed. These
 // tests use the exact external-connection protocol without a SQLite fallback.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import {
   migratePostgresqlSchema,
@@ -121,7 +122,14 @@ function fixture(input: {
 describe('RFC-349 PostgreSQL schema migrator', () => {
   test('atomically prepares an empty target and verifies the committed roster', async () => {
     const fake = fixture({})
-    expect(await migratePostgresqlSchema({ runtime: fake.runtime, plan, now: () => 123 })).toEqual({
+    expect(
+      await migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
+        runtime: fake.runtime,
+        plan,
+        now: () => 123,
+      }),
+    ).toEqual({
       baselineId: POSTGRESQL_BASELINE_ID,
       contractDigest: plan.contractDigest,
       planDigest: plan.digest,
@@ -140,7 +148,12 @@ describe('RFC-349 PostgreSQL schema migrator', () => {
   // 就会被掐掉会话、启动失败。`lock_timeout` 量的是别人挡我们，保持配置值不动。
   test('the boot DDL session drops the online statement/idle budgets, and never touches lock_timeout', async () => {
     const fake = fixture({})
-    await migratePostgresqlSchema({ runtime: fake.runtime, plan, now: () => 123 })
+    await migratePostgresqlSchema({
+      headContract: buildLogicalSchemaContract(),
+      runtime: fake.runtime,
+      plan,
+      now: () => 123,
+    })
 
     const configure = fake.sql[0] ?? ''
     expect(configure).toContain("set_config('statement_timeout', '0', false)")
@@ -158,7 +171,13 @@ describe('RFC-349 PostgreSQL schema migrator', () => {
       "set_config('idle_in_transaction_session_timeout', '0', false)"
     const fake = fixture({ failSql: configure })
 
-    await expect(migratePostgresqlSchema({ runtime: fake.runtime, plan })).rejects.toMatchObject({
+    await expect(
+      migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
+        runtime: fake.runtime,
+        plan,
+      }),
+    ).rejects.toMatchObject({
       code: 'postgresql-schema-prepare-failed',
     })
     // Configured inside the guarded block: no lock was taken, no transaction was
@@ -169,7 +188,13 @@ describe('RFC-349 PostgreSQL schema migrator', () => {
 
   test('accepts only an exact already-applied baseline', async () => {
     const fake = fixture({ initial: 'ready' })
-    expect(await migratePostgresqlSchema({ runtime: fake.runtime, plan })).toMatchObject({
+    expect(
+      await migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
+        runtime: fake.runtime,
+        plan,
+      }),
+    ).toMatchObject({
       applied: false,
     })
     expect(fake.sql).not.toContain('BEGIN')
@@ -178,13 +203,25 @@ describe('RFC-349 PostgreSQL schema migrator', () => {
 
   test('rejects partial, drifted and concurrently owned targets', async () => {
     await expect(
-      migratePostgresqlSchema({ runtime: fixture({ initial: 'partial' }).runtime, plan }),
+      migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
+        runtime: fixture({ initial: 'partial' }).runtime,
+        plan,
+      }),
     ).rejects.toMatchObject({ code: 'postgresql-schema-partial' })
     await expect(
-      migratePostgresqlSchema({ runtime: fixture({ initial: 'drift' }).runtime, plan }),
+      migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
+        runtime: fixture({ initial: 'drift' }).runtime,
+        plan,
+      }),
     ).rejects.toMatchObject({ code: 'postgresql-schema-drift' })
     await expect(
-      migratePostgresqlSchema({ runtime: fixture({ lock: false }).runtime, plan }),
+      migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
+        runtime: fixture({ lock: false }).runtime,
+        plan,
+      }),
     ).rejects.toMatchObject({ code: 'postgresql-schema-lock-held' })
   })
 
@@ -196,7 +233,11 @@ describe('RFC-349 PostgreSQL schema migrator', () => {
     }
     const fake = fixture({ failSql: secretStatement })
     try {
-      await migratePostgresqlSchema({ runtime: fake.runtime, plan: failingPlan })
+      await migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
+        runtime: fake.runtime,
+        plan: failingPlan,
+      })
       throw new Error('expected migration failure')
     } catch (error) {
       expect(error).toBeInstanceOf(PostgresqlMigrationError)

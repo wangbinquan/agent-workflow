@@ -1,5 +1,6 @@
 // RFC-305 architecture lock: additions must flow through the shared catalog,
 // the identity-access public surface, and the sole transactional writer.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -328,6 +329,9 @@ describe('RFC-305 identity-access architecture', () => {
       // owner 身份投影在这里装配后注入任务路由——与另外两个根同形。
       // RFC-370 M0：启动参数携带部署选定的凭据适配器（类型），两个 provider 根按它装配。
       'packages/backend/src/bootstrap/deploymentProfile.ts -> @/modules/identity-access/composition/authentication',
+      // RFC-395: the schema-only composition entry is imported and re-exported at the collection root.
+      'packages/backend/src/bootstrap/persistenceSchema.ts -> @/modules/identity-access/composition/schema',
+      'packages/backend/src/bootstrap/persistenceSchema.ts -> @/modules/identity-access/composition/schema',
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
@@ -545,6 +549,7 @@ describe('RFC-305 permission catalog architecture', () => {
         dbVersion: 162,
         secretBox: createSecretBoxFromKey(Buffer.alloc(32, 30)),
         databaseMigration: composeDatabaseMigrationModule({
+          contract: buildLogicalSchemaContract(),
           sqlitePath: join(home, 'db.sqlite'),
           operationsRoot: join(home, 'database-migrations'),
           generationPointerPath: join(home, 'database-generation.json'),

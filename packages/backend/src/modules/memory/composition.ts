@@ -174,3 +174,5 @@ export {
   composeMemoryOperationsFor as composePostgresqlMemoryOperations,
   composeMemoryOperationsFor as composeSqliteMemoryOperations,
 }
+
+export { schemaContribution } from './composition/schema'

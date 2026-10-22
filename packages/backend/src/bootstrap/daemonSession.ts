@@ -1,4 +1,5 @@
 // RFC-391 — the sole daemon session graph and lifecycle composition.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { deploymentSelectionsOf } from './deploymentSelections'
 import { composeDaemonApplication } from './daemonApplication'
 import { DAEMON_SESSION_ADAPTERS, type DaemonSessionAdapter } from './daemonSessionAdapters'
@@ -220,6 +221,7 @@ export async function composeDaemonSession(
     dbVersion: input.dbVersion,
   })
   const databaseMigration = composeDatabaseMigrationModule({
+    contract: buildLogicalSchemaContract(),
     admission: input.migrationAdmission,
     sqlitePath: Paths.db,
     operationsRoot: Paths.databaseMigrationsDir,

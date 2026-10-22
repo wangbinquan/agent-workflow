@@ -1,6 +1,7 @@
 // RFC-370: installation orchestration must await host metadata and lock effects.
 // Existing RFC-359 generation/PG-upgrade suites exercise the real file adapter,
 // historical databases and interrupted copy recovery through the same application.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { prepareDatabaseInstallation } from '@/modules/system-operations/application/prepareDatabaseInstallation'
 import type { DatabaseInstallationPort } from '@/modules/system-operations/application/ports/databaseInstallation'
@@ -12,7 +13,7 @@ import {
 } from '@/platform/persistence/generationValidation'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 
-const history = await loadPostgresqlMigrationHistory()
+const history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
 
 function deferred() {
   let resolve!: () => void

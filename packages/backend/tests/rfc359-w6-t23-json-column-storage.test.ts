@@ -54,10 +54,8 @@ import {
   createLogicalTableChunk,
   encodeLogicalRow,
 } from '@/platform/persistence/logicalDatabaseArtifact'
-import {
-  buildLogicalSchemaContract,
-  type LogicalTableContract,
-} from '@/platform/persistence/schemaContract'
+import { type LogicalTableContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describeEachProvider } from './helpers/eachProvider'
 
 /**

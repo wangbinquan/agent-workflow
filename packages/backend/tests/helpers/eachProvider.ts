@@ -14,6 +14,7 @@
 // 每个用例前 TRUNCATE 全部业务表并把迁移种下的行原样种回（与 `createInMemoryDb` 的快照语义
 // 对齐，含 auth_login_policy 的 bootstrap 标记）。
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, test } from 'bun:test'
 import { SQL } from 'bun'
 import { randomUUID } from 'node:crypto'
@@ -895,7 +896,7 @@ async function createPostgresqlHarnessDatabase(
       query('drop schema if exists agent_workflow_meta cascade'),
     )
     await runProviderHarnessLifecycleStep(phase, 'schema.migrate', () =>
-      migratePostgresqlSchema({ runtime }),
+      migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime }),
     )
     await query(
       'insert into "agent_workflow_meta"."logical_copy_operations" ' +

@@ -48,6 +48,7 @@ export interface PortableRestoreFilesystemReceipt {
 }
 
 interface RestorePortableDatabaseBackupCommonOptions {
+  readonly headContract: LogicalSchemaContract
   readonly tarballPath: string
   readonly appHome: string
   readonly restoreOperationId: string
@@ -97,6 +98,7 @@ export interface PortableDatabaseRestoreResult {
 }
 
 export interface InspectPortableDatabaseBackupOptions {
+  readonly headContract: LogicalSchemaContract
   readonly tarballPath: string
   readonly appHome: string
   readonly restoreOperationId: string
@@ -142,10 +144,12 @@ function validateEnvelope(
 async function sourceContractForRestore(
   manifest: BackupManifestV2,
   targetContract: LogicalSchemaContract,
+  headContract: LogicalSchemaContract,
 ): Promise<LogicalSchemaContract> {
   try {
     return await resolveLogicalDatabaseRestoreSourceContract({
       sourceSchemaDigest: manifest.database.schemaDigest,
+      headContract,
       targetContract,
     })
   } catch {
@@ -192,7 +196,11 @@ export async function inspectPortableDatabaseBackup(
         'portable database restore logical envelope is corrupt',
       )
     }
-    const sourceContract = await sourceContractForRestore(manifest, options.contract)
+    const sourceContract = await sourceContractForRestore(
+      manifest,
+      options.contract,
+      options.headContract,
+    )
     validateEnvelope(manifest, envelope, sourceContract)
     const verification = verifyLogicalDatabaseArtifactTree({
       artifactRoot: join(stagingDirectory, manifest.database.logicalPath),
@@ -241,7 +249,11 @@ export async function restorePortableDatabaseBackup(
         'portable database restore logical envelope is corrupt',
       )
     }
-    const sourceContract = await sourceContractForRestore(manifest, options.contract)
+    const sourceContract = await sourceContractForRestore(
+      manifest,
+      options.contract,
+      options.headContract,
+    )
     validateEnvelope(manifest, envelope, sourceContract)
 
     const opened =
@@ -262,6 +274,7 @@ export async function restorePortableDatabaseBackup(
     }
     try {
       const receipt = await restoreLogicalDatabaseBackup({
+        headContract: options.headContract,
         artifactRoot: join(stagingDirectory, manifest.database.logicalPath),
         expectedEnvelopeFileDigest: manifest.database.envelopeFileDigest,
         restoreOperationId: options.restoreOperationId,

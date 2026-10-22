@@ -241,3 +241,5 @@ export function createTaskExecutionShutdownController(
   }
 }
 export { createEmployeeExecutionArtifactQueries } from './infrastructure/employeeExecutionArtifacts'
+
+export { schemaContribution } from './composition/schema'

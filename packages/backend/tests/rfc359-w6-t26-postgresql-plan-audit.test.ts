@@ -44,6 +44,7 @@
 // 不存在）。索引补齐后 PG 的计划会变，所以下面每条结论都只对**这个 schema 状态**成立；
 // 下面第一个 describe 用「SQLite 有的具名索引 PG 必须也有」把这个状态本身钉住。
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -734,7 +735,7 @@ if (!postgresqlSelected) {
           : await pool.unsafe(query, [...params])) as Record<string, unknown>[]
       await raw('drop schema if exists agent_workflow cascade')
       await raw('drop schema if exists agent_workflow_meta cascade')
-      await migratePostgresqlSchema({ runtime })
+      await migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime })
       await raw(
         'insert into "agent_workflow_meta"."logical_copy_operations" ' +
           '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +

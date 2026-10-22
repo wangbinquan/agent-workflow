@@ -2187,6 +2187,22 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
     }
     return { ...spec, ownerEntryId: ownerEntryId(spec.file, spec.symbol) }
   }
+  // RFC-395: committed reports select anchors from their own immutable corpus.
+  // A pre-contribution commit still owns its declarations in db/schema.ts.
+  const schemaAnchor = (
+    spec: SourceAnchorSpec,
+    legacySymbol: string,
+    legacyToken: string,
+  ): SourceAnchor =>
+    anchor(
+      byPath.has(spec.file)
+        ? spec
+        : {
+            file: 'packages/backend/src/db/schema.ts',
+            symbol: legacySymbol,
+            sourceToken: legacyToken,
+          },
+    )
   const internalWriters = INTERNAL_CATALOG_VISIBILITY_WRITERS.map(anchor)
   return [
     {
@@ -2201,11 +2217,15 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       }),
       writers: [],
       consumers: [
-        anchor({
-          file: 'packages/backend/src/db/schema.ts',
-          symbol: 'tasks',
-          sourceToken: "catalogVisibility: text('catalog_visibility'",
-        }),
+        schemaAnchor(
+          {
+            file: 'packages/backend/src/modules/task-execution/infrastructure/persistence/schema.ts',
+            symbol: 'tasksDefinition',
+            sourceToken: 'catalogVisibility:',
+          },
+          'tasks',
+          "catalogVisibility: text('catalog_visibility'",
+        ),
         anchor({
           file: 'packages/backend/src/services/task.ts',
           symbol: 'StartTaskDeps',
@@ -2220,11 +2240,15 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       purpose:
         'TaskExecution-owned catalog membership; roots default public and children inherit the persisted parent value.',
       dataClass: 'metadata',
-      owner: anchor({
-        file: 'packages/backend/src/db/schema.ts',
-        symbol: 'tasks',
-        sourceToken: "catalogVisibility: text('catalog_visibility'",
-      }),
+      owner: schemaAnchor(
+        {
+          file: 'packages/backend/src/modules/task-execution/infrastructure/persistence/schema.ts',
+          symbol: 'tasksDefinition',
+          sourceToken: 'catalogVisibility:',
+        },
+        'tasks',
+        "catalogVisibility: text('catalog_visibility'",
+      ),
       writers: [
         anchor({
           file: 'packages/backend/src/services/task.ts',
@@ -2287,11 +2311,15 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       purpose:
         'TaskExecution-owned immutable provenance ref used to locate an actor-filtered DigitalEmployee projection.',
       dataClass: 'confidential',
-      owner: anchor({
-        file: 'packages/backend/src/db/schema.ts',
-        symbol: 'tasks',
-        sourceToken: "digitalEmployeeCaseId: text('digital_employee_case_id')",
-      }),
+      owner: schemaAnchor(
+        {
+          file: 'packages/backend/src/modules/task-execution/infrastructure/persistence/schema.ts',
+          symbol: 'tasksDefinition',
+          sourceToken: 'digitalEmployeeCaseId:',
+        },
+        'tasks',
+        "digitalEmployeeCaseId: text('digital_employee_case_id')",
+      ),
       writers: [
         anchor({
           file: 'packages/backend/src/services/task.ts',
@@ -2324,11 +2352,15 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       fieldPath: 'employee_cases.name',
       purpose: 'DigitalEmployee-owned operator task name projected out as taskName.',
       dataClass: 'confidential',
-      owner: anchor({
-        file: 'packages/backend/src/db/schema.ts',
-        symbol: 'employeeCases',
-        sourceToken: "name: text('name').notNull().default('')",
-      }),
+      owner: schemaAnchor(
+        {
+          file: 'packages/backend/src/modules/digital-employee/infrastructure/persistence/schema.ts',
+          symbol: 'employeeCasesDefinition',
+          sourceToken: 'name:',
+        },
+        'employeeCases',
+        "name: text('name').notNull().default('')",
+      ),
       writers: [
         anchor({
           file: 'packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts',

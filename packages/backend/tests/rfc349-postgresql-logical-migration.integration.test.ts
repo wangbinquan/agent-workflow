@@ -22,7 +22,7 @@ import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrat
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
@@ -95,6 +95,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
         generationId: 'dbg_pg_real_postgresql_01',
       })
       const target = await openPostgresqlLogicalTarget({
+        headContract: buildLogicalSchemaContract(),
         runtime,
         operationId: 'dbm_real_postgresql_01',
         sourceGenerationId: 'dbg_real_sqlite_01',
@@ -207,7 +208,10 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
         await target.close()
         await source.close()
       }
-      expect((await migratePostgresqlSchema({ runtime })).applied).toBe(false)
+      expect(
+        (await migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime }))
+          .applied,
+      ).toBe(false)
       await runtime.close()
     },
     120_000,

@@ -25,7 +25,7 @@ import {
   hostedPublicationId,
 } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import type { PostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
 

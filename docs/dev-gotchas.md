@@ -2371,7 +2371,7 @@ cp <scratch>/headtree/architecture/*.json  <repo>/architecture/       # 只把�
 ## PostgreSQL 的 SQLite 函数 shim：同名同参，**返回词汇表可以完全不同**（RFC-357 实测，2026-09-04）
 
 RFC-349 给 PostgreSQL 装了一组同名 shim（`json_valid` / `json_type` / `json_extract` /
-`instr` / `hex` / `max` / `unixepoch`，见 `platform/persistence/postgresqlSchema.ts` 的
+`instr` / `hex` / `max` / `unixepoch`，见 `platform/persistence/schema/postgresqlPlan.ts` 的
 bootstrap 段），运行时的 `search_path=agent_workflow,public` 让裸函数名就能解析。于是很容易
 默认「同名 = 同语义」——**不成立**。
 
@@ -2388,7 +2388,7 @@ bootstrap 段），运行时的 `search_path=agent_workflow,public` 让裸函数
 恒为 NULL——没有报错、没有告警，只是界面上少了一个名字。RFC-357 的真库 lane 第一次跑就抓到
 （任务列表的工作组名），而它在假 pool 那一层（只断言渲染出的 SQL 文本）是看不见的。
 
-**怎么防**：用到 shim 函数时不要只看名字，去 `postgresqlSchema.ts` 读一眼它转发的是什么；
+**怎么防**：用到 shim 函数时不要只看名字，去 `platform/persistence/schema/postgresqlPlan.ts` 读一眼它转发的是什么；
 判据尽量写成对两种返回都成立的形式，并在守卫里把「shim 现在转发的是什么」一并钉住——
 哪天 shim 被改成 SQLite 词汇，先红在那条前提上（`rfc357-provider-portability.test.ts` 是范例）。
 
@@ -2478,10 +2478,10 @@ run」单独记即可。
 
 ## PG 的表 / 索引 / 约束来自 drizzle 声明，不是 SQLite 迁移 SQL：迁移里手写的索引 PG 没有（2026-09-05 实撞）
 
-`buildLogicalSchemaContract()`（`platform/persistence/schemaContract.ts`）只读 `db/schema.ts` 的 drizzle 声明，PG 基线由它投影。
+`buildLogicalSchemaContract()`（`bootstrap/persistenceSchema.ts`）汇集 owner 的 schema contribution，并经冻结的 legacy v2 规则生成兼容合同；PG plan 的实现位于 `platform/persistence/schema/postgresqlPlan.ts`。`db/schema.ts` 保留表的兼容导出。
 迁移 SQL 里手写、没同步进 drizzle 声明的东西——部分唯一索引、CHECK、触发器——PG 上一律不存在：`webhook_deliveries` 的
 `idx_webhook_deliveries_dedupe` / `idx_webhook_deliveries_mr_fact` 只在迁移 0157 里，PG 上同 uuid 重投不撞唯一键，去重分支
-永远走不到（RFC-359 W4-D2 双引擎用例抓到）。规矩：**迁移里加索引 / 约束，必须同时进 `schema.ts`**（`uniqueIndex(...).on(...).where(sql\`…\`)`逐字同形），然后`cd packages/backend && bun run db:rfc349-postgresql-schema`重采 PG 基线与 journal（否则`rfc349-postgresql-schema`守卫红、PG harness 直接`postgresql-migration-history-drift`）。契约 digest 变了，已部署的 PG 目标要重做
+永远走不到（RFC-359 W4-D2 双引擎用例抓到）。规矩：**迁移里加索引 / 约束，必须同时更新 owner 的 `infrastructure/persistence/schema.ts` contribution**。用 `defineContribution(owner).table(...)` 声明表，索引用 `index(name, [columnName], { unique: true, where: expression })`，外键用 `foreignKey(...)`，CHECK 放入 `checks`；epoch-1 表达式用 `raw(sqliteText, postgresqlText)` 保留既有拼写，目标贡献采用类型化表达式 AST，然后`cd packages/backend && bun run db:rfc349-postgresql-schema`重采 PG 基线与 journal（否则`rfc349-postgresql-schema`守卫红、PG harness 直接`postgresql-migration-history-drift`）。契约 digest 变了，已部署的 PG 目标要重做
 RFC-349 cutover（PG 侧暂无增量迁移）。
 
 ## prettier 只认仓库根的配置：在 `packages/backend` 下跑出来的排版会被 CI 的 format 门打回（2026-09-05 实撞）
@@ -6484,7 +6484,7 @@ schema 名固定、库由 `AW_TEST_POSTGRESQL_URL` 指定。两个 `bun test` �
 
 ## 模块顶层常量捕获 `@/db/schema` 的列会绕过 provider 投影（RFC-359 W4-B4a 实撞）
 
-`@/db/schema` 导出的表是 `providerAwareSqliteTable` 造的 **Proxy 门面**：每次属性访问（`memories.createdAt`）
+`@/db/schema` 导出的表由 `materializeDrizzle` 编译，并经 `providerTableFacade` 包装为 **Proxy 门面**：每次属性访问（`memories.createdAt`）
 都按**当时激活的 provider**（`selectDatabaseSchemaProvider`）解析到 SQLite 或 PG 的那份列对象。所以
 `const COLUMNS = { createdAt: memories.createdAt, … }` 这种**模块加载时**捕获的列，会永久钉在加载那一刻的
 provider 上。PG 进程里只要该文件在切投影之前被 import（测试进程里几乎必然：harness 缺省先激活 sqlite），

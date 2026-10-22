@@ -24,6 +24,7 @@
 // 所以这份文件真正的价值在于**它此前不存在**：全仓没有任何测试 import
 // `checkConfiguredDatabase`，在它之前把这整段删掉都不会有任何测试变红。
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -58,7 +59,7 @@ function writeConfig(database: unknown): void {
 describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
   test('配置读不出来时只报一条，且是 not-ok', async () => {
     writeFileSync(join(process.env.AGENT_WORKFLOW_HOME!, 'config.json'), '{ not json', 'utf8')
-    const checks = await checkConfiguredDatabase()
+    const checks = await checkConfiguredDatabase(buildLogicalSchemaContract())
     expect(checks).toHaveLength(1)
     expect(checks[0]?.name).toBe('database provider')
     expect(checks[0]?.ok).toBe(false)
@@ -67,7 +68,7 @@ describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
 
   test('SQLite 且本地库文件还不存在：报「还没有库」，并带上另外两条检查', async () => {
     writeConfig({ provider: 'sqlite' })
-    const checks = await checkConfiguredDatabase()
+    const checks = await checkConfiguredDatabase(buildLogicalSchemaContract())
     expect(checks).toHaveLength(3)
     expect(checks[0]).toMatchObject({
       name: 'database provider',
@@ -92,7 +93,7 @@ describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
       statementTimeoutMs: 1_000,
       idleTimeoutMs: 1_000,
     })
-    const checks = await checkConfiguredDatabase()
+    const checks = await checkConfiguredDatabase(buildLogicalSchemaContract())
     // 关键断言：**没有**那句 SQLite 专属的回话。改动前这里拿到的就是它。
     expect(checks.map((check) => check.message)).not.toContain('SQLite (no database yet)')
     // 它继续往下走到 provider runtime 解析，并在那里以一条 not-ok 收场

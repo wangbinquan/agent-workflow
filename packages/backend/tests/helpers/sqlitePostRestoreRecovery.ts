@@ -1,3 +1,4 @@
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
 import type { DbClient } from '@/db/client'
 import {
@@ -23,18 +24,20 @@ export const SQLITE_POST_RESTORE_RECOVERY: SqlitePostRestoreRecovery = Object.fr
 
 export function restoreSqliteBackupForTest(
   tarballPath: string,
-  options: Omit<RestoreOptions, 'postOpenRecovery'>,
+  options: Omit<RestoreOptions, 'postOpenRecovery' | 'contract'>,
 ) {
   return restoreSqliteBackup(tarballPath, {
+    contract: buildLogicalSchemaContract(),
     ...options,
     postOpenRecovery: SQLITE_POST_RESTORE_RECOVERY,
   })
 }
 
 export function applyPendingSqliteRestoreForTest(
-  options: Omit<ApplyPendingRestoreOptions, 'postOpenRecovery'>,
+  options: Omit<ApplyPendingRestoreOptions, 'postOpenRecovery' | 'contract'>,
 ) {
   return applyPendingSqliteRestore({
+    contract: buildLogicalSchemaContract(),
     ...options,
     postOpenRecovery: SQLITE_POST_RESTORE_RECOVERY,
   })

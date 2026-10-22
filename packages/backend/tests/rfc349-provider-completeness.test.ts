@@ -65,7 +65,7 @@ function backendSource(suffix: string): BackendSource {
 }
 
 // The single place allowed to spell the union out: it derives from the tuple.
-const CANONICAL_UNION_FILE = 'packages/backend/src/platform/persistence/schemaContract.ts'
+const CANONICAL_UNION_FILE = 'packages/backend/src/platform/persistence/databaseProviders.ts'
 
 // Every remaining place that still branches on a provider LITERAL. A fork is not
 // automatically a bug — three of the shapes below are fenced by something
@@ -207,7 +207,9 @@ describe('RFC-349 provider completeness', () => {
   })
 
   test('the two measured silent-fallthrough forks now read the traits table', () => {
-    const contract = backendSource(CANONICAL_UNION_FILE)
+    const contract = backendSource(
+      'packages/backend/src/platform/persistence/migration/legacy/v2Contract.ts',
+    )
     // literalSql must not branch on a provider literal any more.
     expect(contract.text).not.toContain("if (provider === 'postgresql') return value ? 'TRUE'")
     expect(contract.text).toContain('booleanLiteral')

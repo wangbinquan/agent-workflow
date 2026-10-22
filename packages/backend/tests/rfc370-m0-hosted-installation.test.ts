@@ -28,7 +28,7 @@ import {
   orderSeedTables,
   seedHostedInstallation,
 } from '@/platform/persistence/hostedInstallationSeed'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describeEachProvider } from './helpers/eachProvider'
 import { MIGRATIONS } from './migration-freeze'
 
@@ -174,6 +174,7 @@ describeEachProvider('RFC-370 M0 hosted installation rows and Settings document'
     }
     expect(await countRows()).toEqual({})
     const receipt = await seedHostedInstallation({
+      contract: buildLogicalSchemaContract(),
       target: harness.db,
       migrationsFolder: MIGRATIONS,
       now: 42,
@@ -183,7 +184,12 @@ describeEachProvider('RFC-370 M0 hosted installation rows and Settings document'
     const policy = (await harness.db.select().from(authLoginPolicy))[0]!
     expect(policy.bootstrapCompletedAt).toBe(42)
     expect(
-      await seedHostedInstallation({ target: harness.db, migrationsFolder: MIGRATIONS, now: 99 }),
+      await seedHostedInstallation({
+        contract: buildLogicalSchemaContract(),
+        target: harness.db,
+        migrationsFolder: MIGRATIONS,
+        now: 99,
+      }),
     ).toEqual({ seeded: false, tables: 0, rows: 0 })
   }, 60_000)
 

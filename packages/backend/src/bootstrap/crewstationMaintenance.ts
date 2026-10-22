@@ -1,3 +1,4 @@
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { PostgresqlDatabaseConfigSchema, type DatabaseConfig } from '@agent-workflow/shared'
 import { composeCrewStationDatabaseBackups } from '@/modules/system-operations/composition/crewstationDatabaseBackups'
 import { composeCrewStationObjectPublications } from '@/modules/system-operations/composition/crewstationObjectPublications'
@@ -171,6 +172,7 @@ export const createCrewStationMaintenanceEffects: MaintenanceWorkerEffectsFactor
         composeCrewStationCodeReviewObjectSweep({ db, publications }),
       ]),
       databaseBackups: composeCrewStationDatabaseBackups({
+        contract: buildLogicalSchemaContract(),
         db,
         runtime,
         fence,

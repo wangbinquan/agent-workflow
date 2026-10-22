@@ -39,6 +39,7 @@ import type {
 } from '@/platform/persistence/schemaContract'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import { classifyDatabaseMigrationFailure } from '@/modules/system-operations/application/databaseMigrationRunner'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const CONTRACT_DIGEST = `sha256:${'c'.repeat(64)}`
 const PLAN_DIGEST = `sha256:${'d'.repeat(64)}`
@@ -204,6 +205,7 @@ function fixture(input: { readonly onInvariantQuery?: () => SqlRows } = {}) {
 
 async function openTarget(fake: ReturnType<typeof fixture>) {
   return openPostgresqlLogicalTarget({
+    headContract: buildLogicalSchemaContract(),
     runtime: fake.runtime,
     operationId: 'dbm_target_0001',
     sourceGenerationId: 'dbg_source_0001',

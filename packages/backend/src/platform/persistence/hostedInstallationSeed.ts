@@ -17,7 +17,7 @@ import * as schema from '@/db/schema'
 import { authLoginPolicy } from '@/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import { databaseSessionFor, engineOf } from './databaseTransaction'
-import { buildLogicalSchemaContract } from './schemaContract'
+import type { LogicalSchemaContract } from './schemaContract'
 
 const SEED_MARKER_POLICY_ID = 'global'
 const INSERT_CHUNK = 200
@@ -63,10 +63,13 @@ function readSeedTables(migrationsFolder: string, omitted: ReadonlySet<string>):
 }
 
 /** Source tables the target provider does not hold. */
-function tablesOmittedOn(target: ProviderNeutralDatabase): ReadonlySet<string> {
+function tablesOmittedOn(
+  target: ProviderNeutralDatabase,
+  contract: LogicalSchemaContract,
+): ReadonlySet<string> {
   if (engineOf(target).provider !== 'postgresql') return new Set()
   return new Set(
-    buildLogicalSchemaContract().tables.flatMap((table) =>
+    contract.tables.flatMap((table) =>
       table.providerTables.postgresql === undefined ? [table.sourceTable] : [],
     ),
   )
@@ -113,6 +116,7 @@ export interface HostedInstallationSeedReceipt {
  * come from the platform identity — so the copied policy is marked complete.
  */
 export async function seedHostedInstallation(input: {
+  readonly contract: LogicalSchemaContract
   readonly target: ProviderNeutralDatabase
   readonly migrationsFolder: string
   readonly now: number
@@ -128,7 +132,7 @@ export async function seedHostedInstallation(input: {
   if (await seededAlready(input.target)) return { seeded: false, tables: 0, rows: 0 }
   const provider = engineOf(input.target).provider
   const tables = orderSeedTables(
-    readSeedTables(input.migrationsFolder, tablesOmittedOn(input.target)),
+    readSeedTables(input.migrationsFolder, tablesOmittedOn(input.target, input.contract)),
   )
   return await databaseSessionFor(input.target).transaction(async (tx) => {
     if (await seededAlready(tx)) return { seeded: false, tables: 0, rows: 0 }

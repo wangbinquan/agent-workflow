@@ -30,7 +30,7 @@ import { SQLiteTable } from 'drizzle-orm/sqlite-core'
 
 import * as schema from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
 
 const db = drizzle(async () => ({ rows: [] }), { schema })

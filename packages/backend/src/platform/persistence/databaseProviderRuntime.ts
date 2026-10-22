@@ -438,6 +438,7 @@ export async function prepareDatabaseProviderRuntime(
   })
   try {
     const receipt = await migratePostgresqlSchema({
+      headContract: history.head.contract,
       runtime,
       history,
       activeGeneration:
@@ -518,7 +519,11 @@ export async function prepareHostedPostgresqlProviderRuntime(input: {
   try {
     let receipt: PostgresqlMigrationReceipt
     if (input.schema === 'apply') {
-      receipt = await migratePostgresqlSchema({ runtime, history: input.history })
+      receipt = await migratePostgresqlSchema({
+        runtime,
+        headContract: input.history.head.contract,
+        history: input.history,
+      })
       await activateHostedPostgresqlGeneration({
         runtime,
         generation,

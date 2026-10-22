@@ -8,6 +8,7 @@
 // prior boot consumed it → clear + continue (never fail-closed on it, or a
 // half-consumed restore would brick every boot).
 
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import {
   cpSync,
   existsSync,
@@ -194,6 +195,7 @@ export function stagePendingRestore(tarballPath: string, opts: StagePendingResto
 }
 
 export interface ApplyPendingRestoreOptions {
+  readonly contract: LogicalSchemaContract
   appHome?: string
   dbPath?: string
   migrationsFolder: string
@@ -233,6 +235,7 @@ export async function applyPendingRestoreIfAny(opts: ApplyPendingRestoreOptions)
   log.warn('applying staged restore before openDb', { staged: marker.stagedTarball })
   try {
     await restoreBackup(marker.stagedTarball, {
+      contract: opts.contract,
       appHome,
       dbPath: opts.dbPath,
       migrationsFolder: opts.migrationsFolder,

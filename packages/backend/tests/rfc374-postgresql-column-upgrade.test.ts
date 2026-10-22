@@ -1,4 +1,5 @@
 // RFC-374 T1: V8 appends compatible columns, replays exact SQL and bridges old rows without widening the index-only API.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
@@ -18,7 +19,7 @@ import {
 
 let history: PostgresqlMigrationHistory
 beforeAll(async () => {
-  history = await loadPostgresqlMigrationHistory()
+  history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
 })
 function edge() {
   const index = history.steps.findIndex((step) => step.id === '0036_rfc374_node_run_seq')

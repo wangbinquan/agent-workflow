@@ -40,7 +40,7 @@ import { createLogger } from '@/util/log'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { readLogicalDatabaseBackupEnvelope } from '@/platform/persistence/logicalDatabaseExport'
 import { verifyLogicalDatabaseSourceMatchesArtifact } from '@/platform/persistence/logicalDatabaseRestore'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { resolvePostgresqlAdditiveRowBridge } from '@/platform/persistence/postgresqlMigrationSequence'
 import { Paths } from '@/util/paths'
@@ -91,9 +91,10 @@ async function verifyPortableDatabasePayload(
   staging: string,
   manifest: BackupManifest | null,
   prefix: 'stage refused' | 'restore refused',
+  currentContract: LogicalSchemaContract,
 ): Promise<void> {
   if (manifest?.manifestVersion !== 2) return
-  let contract = buildLogicalSchemaContract()
+  let contract = currentContract
   const database = manifest.database
   if (database.provider !== 'sqlite' || database.rawSqlitePath !== 'db.sqlite') {
     throw new Error(
@@ -102,7 +103,7 @@ async function verifyPortableDatabasePayload(
   }
   if (database.schemaDigest !== contract.digest) {
     try {
-      const history = await loadPostgresqlMigrationHistory()
+      const history = await loadPostgresqlMigrationHistory({ headContract: currentContract })
       contract = resolvePostgresqlAdditiveRowBridge(history, {
         fromContractDigest: database.schemaDigest,
         toContractDigest: contract.digest,
@@ -246,6 +247,7 @@ export function computeRestoreDirection(
 }
 
 export interface RestoreOptions {
+  readonly contract: LogicalSchemaContract
   appHome?: string
   dbPath?: string
   /** Resolved migrations folder (dev: Paths.migrationsDir; embedded: the extracted
@@ -321,7 +323,12 @@ export async function planRestore(
  */
 export async function validateBackupForStage(
   tarballPath: string,
-  opts: { migrationsFolder?: string; appHome?: string; skipIntegrityCheck?: boolean } = {},
+  opts: {
+    contract: LogicalSchemaContract
+    migrationsFolder?: string
+    appHome?: string
+    skipIntegrityCheck?: boolean
+  },
 ): Promise<RestorePlan> {
   const appHome = opts.appHome ?? Paths.root
   const staging = join(appHome, 'backups', `.stage-validate-${Date.now()}-${process.pid}`)
@@ -354,7 +361,7 @@ export async function validateBackupForStage(
       const check = quickCheckDbFile(incomingDb)
       if (!check.ok) throw new RestoreIntegrityError(check.errors)
     }
-    await verifyPortableDatabasePayload(staging, manifest, 'stage refused')
+    await verifyPortableDatabasePayload(staging, manifest, 'stage refused', opts.contract)
     assertBackupSkillsPayload(staging, incomingDb, 'stage refused')
     return { manifest, backupLastCreatedAt, currentMaxWhen, direction }
   } finally {
@@ -525,7 +532,7 @@ export async function restoreBackup(
       const check = quickCheckDbFile(incomingDb)
       if (!check.ok) throw new RestoreIntegrityError(check.errors)
     }
-    await verifyPortableDatabasePayload(staging, manifest, 'restore refused')
+    await verifyPortableDatabasePayload(staging, manifest, 'restore refused', opts.contract)
 
     // RFC-223 PR-5: an old DB and its name-keyed skills tree are one restore
     // generation. After 0116 has renamed live roots to immutable ids, restoring

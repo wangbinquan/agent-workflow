@@ -102,7 +102,6 @@ import type {
   DatabaseSchemaUpgradeOptions,
 } from './infrastructure/databaseSchemaUpgradeCoordinator'
 import {
-  buildLogicalSchemaContract,
   type DatabaseProvider,
   type LogicalSchemaContract,
 } from '@/platform/persistence/schemaContract'
@@ -185,6 +184,7 @@ export async function prepareDatabasePreOpenRecovery<THistory>(input: {
   return await prepareSelectedDatabasePreOpenRecovery({
     contract: input.contract,
     effects: createFileDatabasePreOpenRecovery({
+      contract: input.contract,
       migrationsFolder: input.migrationsFolder,
       postOpenRecovery: composeSqlitePostRestoreRecovery,
     }),
@@ -232,7 +232,8 @@ export async function prepareDatabaseProviderForBoot<TPrepared>(
     configuration ?? createFileDatabaseConfiguration(configPath ?? Paths.config)
   const effects: DatabaseInstallationPort<PreparedFileDatabase> = createFileDatabaseInstallation({
     ...options,
-    history: options.history ?? (await loadPostgresqlMigrationHistory()),
+    history:
+      options.history ?? (await loadPostgresqlMigrationHistory({ headContract: options.contract })),
     readConfig: () => configurationPort.read(),
     writeConfig: (database) => configurationPort.write(database),
   })
@@ -287,6 +288,7 @@ function bindRepositoryBackupPreparation(
 }
 
 export function composeSystemOperations(deps: {
+  readonly contract: LogicalSchemaContract
   readonly db: DbClient
   readonly secretBox: SecretBox | undefined
   /** Bootstrap-bound Source Control backup preparation participant. */
@@ -301,6 +303,7 @@ export function composeSystemOperations(deps: {
     uploadRoot: join(appHome, '.restore-upload'),
   })
   const adapter = createLegacyPlatformRecoveryAdapter({
+    contract: deps.contract,
     artifacts,
     appHome,
     dbPath: deps.dbPath ?? join(appHome, 'db.sqlite'),
@@ -334,6 +337,7 @@ export function composeSystemOperationsWithRecoveryAdapter(deps: {
 /** Compose the full PostgreSQL administration surface against the already
  * verified target runtime. No SQLite handle or fallback enters this path. */
 export function composePostgresqlSystemOperations(deps: {
+  readonly headContract: LogicalSchemaContract
   readonly runtime: PostgresqlDatabaseRuntime
   /**
    * RFC-359 W9：备份 / 还原要读的 workflow 与 worktree 行没有 provider 差异，走中立
@@ -346,11 +350,11 @@ export function composePostgresqlSystemOperations(deps: {
   readonly repositoryBackupPreparation: RepositoryBackupPreparationParticipant
   readonly appHome?: string
   readonly lockPath?: string
-  readonly contract?: LogicalSchemaContract
+  readonly contract: LogicalSchemaContract
   readonly plan?: PostgresqlSchemaPlan
 }): PostgresqlSystemOperationsModule {
   const appHome = deps.appHome ?? Paths.root
-  const contract = deps.contract ?? buildLogicalSchemaContract()
+  const contract = deps.contract
   const plan = deps.plan ?? buildPostgresqlSchemaPlan(contract)
   if (plan.contractDigest !== contract.digest) {
     throw new Error('postgresql-system-operations-schema-plan-mismatch')
@@ -359,6 +363,7 @@ export function composePostgresqlSystemOperations(deps: {
     uploadRoot: join(appHome, '.restore-upload'),
   })
   const restore: PostgresqlAdminRestoreCoordinator = createPostgresqlAdminRestoreCoordinator({
+    headContract: deps.headContract,
     artifacts,
     runtime: deps.runtime,
     targetGenerationId: deps.runtime.generationId,
@@ -378,6 +383,8 @@ export function composePostgresqlSystemOperations(deps: {
       backup:
         deps.backup ??
         createPostgresqlAdminBackupCoordinator({
+          headContract: deps.headContract,
+          contract,
           runtime: deps.runtime,
           db: deps.db,
           appHome,
@@ -420,7 +427,7 @@ interface LocalSystemOperationsComposeInput {
   readonly provider: ResolvedDatabaseProviderRuntime
   readonly databaseConfig: DatabaseConfig
   readonly appHome: string
-  readonly contract: ReturnType<typeof buildLogicalSchemaContract>
+  readonly contract: LogicalSchemaContract
   readonly repositoryBackupPreparation?: RepositoryBackupPreparationParticipant | undefined
 }
 
@@ -449,6 +456,7 @@ function composePostgresqlLocalSystemOperations({
       createSecretBox(Paths.secretKeyFile),
     ).backupPreparation
   const module = composePostgresqlSystemOperations({
+    headContract: contract,
     runtime: runtime.runtime,
     db: database,
     databaseConfig: postgresqlConfig,
@@ -462,6 +470,7 @@ function composePostgresqlLocalSystemOperations({
 }
 
 function composeSqliteLocalSystemOperations({
+  contract,
   provider,
   appHome,
   repositoryBackupPreparation: injectedBackupPreparation,
@@ -497,6 +506,7 @@ function composeSqliteLocalSystemOperations({
       },
     })
   const adapter = createLegacyPlatformRecoveryAdapter({
+    contract,
     artifacts,
     appHome,
     dbPath: Paths.db,
@@ -525,16 +535,15 @@ const LOCAL_SYSTEM_OPERATIONS_COMPOSERS = {
   (input: LocalSystemOperationsComposeInput) => ComposedLocalSystemOperations
 >
 
-export function composeLocalSystemOperations(
-  deps: {
-    readonly repositoryBackupPreparation?: RepositoryBackupPreparationParticipant
-    readonly databaseConfig?: DatabaseConfig
-    readonly providerRuntime?: ResolvedDatabaseProviderRuntime
-  } = {},
-): LocalSystemOperations {
+export function composeLocalSystemOperations(deps: {
+  readonly contract: LogicalSchemaContract
+  readonly repositoryBackupPreparation?: RepositoryBackupPreparationParticipant
+  readonly databaseConfig?: DatabaseConfig
+  readonly providerRuntime?: ResolvedDatabaseProviderRuntime
+}): LocalSystemOperations {
   const appHome = Paths.root
   const databaseConfig = deps.databaseConfig ?? createFileDatabaseConfiguration(Paths.config).read()
-  const contract = buildLogicalSchemaContract()
+  const contract = deps.contract
   const provider =
     deps.providerRuntime ??
     resolveDatabaseProviderRuntime({
@@ -629,3 +638,5 @@ export function composeFileApplicationConfigurationQueries(
   const persistence = createFileApplicationConfiguration(configPath)
   return Object.freeze({ read: () => persistence.load() })
 }
+
+export { schemaContribution } from './composition/schema'

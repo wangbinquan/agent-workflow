@@ -7,7 +7,7 @@ import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/obje
 import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
 import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { HostedObjectPublications } from '../infrastructure/crewstation/objectPublicationContract'
 import { createHostedBackupCatalog } from '../infrastructure/crewstation/databaseBackupCatalog'
 import { readHostedDatabaseBackupProvenance } from '../infrastructure/crewstation/databaseBackupProvenance'
@@ -15,6 +15,7 @@ import { createHostedDatabaseBackups } from '../infrastructure/crewstation/datab
 import { sha256Hex } from '@/util/hash'
 
 export function composeCrewStationDatabaseBackups(input: {
+  readonly contract: LogicalSchemaContract
   readonly db: ProviderNeutralDatabase
   readonly runtime: PostgresqlDatabaseRuntime
   readonly fence: CrewStationMutationFence
@@ -24,7 +25,7 @@ export function composeCrewStationDatabaseBackups(input: {
   readonly objectSpaceId: string
   readonly secretKey: Uint8Array
 }) {
-  const contract = buildLogicalSchemaContract()
+  const contract = input.contract
   const provenance = () => readHostedDatabaseBackupProvenance(input.runtime, contract)
   const selected = createHostedDatabaseBackups({
     ...input,

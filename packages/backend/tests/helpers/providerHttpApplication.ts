@@ -1,4 +1,5 @@
 // RFC-392: every HTTP fixture enters the same application graph and owns its finite lifetime.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach } from 'bun:test'
 import { existsSync, readFileSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -226,6 +227,7 @@ export async function createProviderHttpApplicationFromBinding(
     const databaseMigration =
       input.databaseMigration ??
       composeDatabaseMigrationModule({
+        contract: buildLogicalSchemaContract(),
         admission: {
           freezeAndDrain: unexpectedAdmission,
           reopenSqlite: unexpectedAdmission,

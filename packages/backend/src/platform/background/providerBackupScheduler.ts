@@ -10,6 +10,7 @@
 //   upgrade can be rolled back (rawCopyDb, NOT createBackup — the OLD schema
 //   can't be SELECTed by the NEW binary).
 
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { createBackup } from '@/platform/persistence/sqlite/systemProviderBackup'
@@ -179,7 +180,11 @@ interface BackupSchedulerCommonOptions {
  * manufacturing a SQLite client or allowing a SQLite fallback. */
 export type BackupSchedulerOptions = BackupSchedulerCommonOptions &
   (
-    | Readonly<{ db: SqliteMaintenanceDatabase; createScheduledBackup?: never }>
+    | Readonly<{
+        db: SqliteMaintenanceDatabase
+        contract: LogicalSchemaContract
+        createScheduledBackup?: never
+      }>
     | Readonly<{ db?: never; createScheduledBackup: ScheduledBackupRequester }>
   )
 
@@ -212,7 +217,7 @@ async function requestScheduledBackup(
   if (opts.db === undefined) {
     throw new Error('backup scheduler has no provider backup operation')
   }
-  await createBackup({ db: opts.db, kind: 'scheduled', appHome })
+  await createBackup({ db: opts.db, contract: opts.contract, kind: 'scheduled', appHome })
 }
 
 /** Start the periodic backup ticker. intervalMs <= 0 disables the BACKUP tick

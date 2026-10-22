@@ -2,6 +2,7 @@
 // mechanisms. The adapter is the only System Operations path that imports the
 // legacy services; RFC-294 W9-E replaces its physical restore internals.
 
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { DbClient } from '@/db/client'
 import { createBackup } from '@/platform/persistence/sqlite/systemProviderBackup'
 import {
@@ -59,6 +60,7 @@ export interface LegacyPlatformRecoveryAdapter {
 }
 
 export function createLegacyPlatformRecoveryAdapter(deps: {
+  readonly contract: LogicalSchemaContract
   readonly artifacts: RestoreArtifactPathResolver
   readonly backupResources: () => Promise<BackupResources> | BackupResources
   /** Source Control owns credential sealing and the credential-in-path safety
@@ -84,6 +86,7 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
       const resources = await deps.backupResources()
       await deps.prepareBackup()
       return mechanisms.createBackup({
+        contract: deps.contract,
         db: resources.db,
         includeWorktrees: input.includeWorktrees,
         appHome: deps.appHome,
@@ -108,6 +111,7 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
       const path = deps.artifacts.pathOf(artifactRef)
       const migrationsFolder = await deps.resolveRestoreMigrations()
       const plan = await mechanisms.validateBackupForStage(path, {
+        contract: deps.contract,
         appHome: deps.appHome,
         migrationsFolder,
         skipIntegrityCheck: input.skipIntegrityCheck,
@@ -145,6 +149,7 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
 
       try {
         const result = await mechanisms.restoreBackup(deps.artifacts.pathOf(artifactRef), {
+          contract: deps.contract,
           appHome: deps.appHome,
           dbPath: deps.dbPath,
           migrationsFolder: await deps.resolveRestoreMigrations(),

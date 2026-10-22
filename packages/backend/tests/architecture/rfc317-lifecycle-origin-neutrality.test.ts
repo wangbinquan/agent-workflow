@@ -14,6 +14,9 @@
 // 判据一律走 AST：注释里写 'webhook-terminal'、字符串里提到 webhookTriggerId 都不算违规，
 // 否则守卫会被散文满足（dev-gotchas 已记过这一类）。
 
+import { persistenceSchema } from '@/bootstrap/persistenceSchema'
+import type { TableDefinition } from '@/platform/persistence/schema/contribution'
+import { column as c, defineContribution, retention } from '@/platform/persistence/schema/dsl'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -27,7 +30,6 @@ const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 const unitOf = (rel: string): SourceUnit =>
   sourceUnit(rel, readFileSync(resolve(REPO_ROOT, rel), 'utf8'))
 
-const SCHEMA = 'packages/backend/src/db/schema.ts'
 // RFC-359 AC-1（命名债收尾 §5hj）：**本守卫现在要读两个文件**，因为它钉的是两件事。
 //
 // 策略端口（`TerminalWorkspacePrunePolicy` / 它的中立入参与闭合返回）已从
@@ -42,43 +44,17 @@ const SCHEMA = 'packages/backend/src/db/schema.ts'
 const KERNEL = 'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts'
 const PORT = 'packages/backend/src/platform/persistence/terminalWorkspacePrune.ts'
 
-/**
- * 某个 drizzle 列声明的 `enum` 取值域，从 `schema.ts` 的 AST 里取。
- *
- * 手抄一份 `['webhook-terminal']` 到测试里，等于把词汇表写第三遍：schema 加一个取值时
- * 本守卫不会红，而是安静地放行那个新取值——正是它要防的东西。
- */
-export function columnEnumValues(unit: SourceUnit, column: string): string[] {
-  const values: string[] = []
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && node.arguments.length >= 2) {
-      const first = node.arguments[0]
-      const second = node.arguments[1]
-      if (
-        first !== undefined &&
-        ts.isStringLiteral(first) &&
-        first.text === column &&
-        second !== undefined &&
-        ts.isObjectLiteralExpression(second)
-      ) {
-        for (const property of second.properties) {
-          if (
-            ts.isPropertyAssignment(property) &&
-            ts.isIdentifier(property.name) &&
-            property.name.text === 'enum' &&
-            ts.isArrayLiteralExpression(property.initializer)
-          ) {
-            for (const element of property.initializer.elements) {
-              if (ts.isStringLiteral(element)) values.push(element.text)
-            }
-          }
-        }
-      }
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(unit.source)
-  return [...new Set(values)].sort()
+/** Read the compiled column domain; new values automatically join the kernel vocabulary check. */
+export function columnEnumValues(tables: readonly TableDefinition[], column: string): string[] {
+  return [
+    ...new Set(
+      tables.flatMap((table) =>
+        Object.values(table.columns)
+          .filter((entry) => entry.name === column)
+          .flatMap((entry) => entry.enumValues ?? []),
+      ),
+    ),
+  ].sort()
 }
 
 /** `export type X = (row: { … }, …) => R` 的第一个参数的属性名集合。 */
@@ -121,10 +97,9 @@ export function portReturnTypeName(unit: SourceUnit, typeName: string): string |
   return found
 }
 
-const schemaUnit = unitOf(SCHEMA)
 const kernelUnit = unitOf(KERNEL)
 const portUnit = unitOf(PORT)
-const PRUNE_CAUSES = columnEnumValues(schemaUnit, 'workspace_prune_cause')
+const PRUNE_CAUSES = columnEnumValues(persistenceSchema.tables, 'workspace_prune_cause')
 
 /**
  * port 允许出现的入参属性。**中立**的判据是：这些名字对任何来源都成立——任务 id、
@@ -177,14 +152,32 @@ describe('RFC-317 T28（LC-04）—— 通用状态写点的来源中立性', ()
 
 describe('RFC-317 T28 自变异 —— 三条判据各配正反 fixture', () => {
   test('派生取值域：认得 enum 数组，认不出就是空（空 ⇒ 上面那条自曝零预言力）', () => {
-    const unit = sourceUnit(
-      'probe-schema.ts',
-      `const t = sqliteTable('tasks', {\n` +
-        `  cause: text('workspace_prune_cause', { enum: ['a-terminal', 'b-terminal'] }),\n` +
-        `})\n`,
-    )
-    expect(columnEnumValues(unit, 'workspace_prune_cause')).toEqual(['a-terminal', 'b-terminal'])
-    expect(columnEnumValues(unit, 'other_column')).toEqual([])
+    const fixture = defineContribution('fixture').table({
+      id: 'tasks',
+      schemaSymbol: 'tasks',
+      retention: retention.business,
+      columns: {
+        id: c.id('id', { primary: true }),
+        cause: c.enum('workspace_prune_cause', ['a-terminal', 'b-terminal']),
+      },
+    })
+    expect(columnEnumValues([fixture], 'workspace_prune_cause')).toEqual([
+      'a-terminal',
+      'b-terminal',
+    ])
+    expect(columnEnumValues([fixture], 'other_column')).toEqual([])
+    expect(
+      columnEnumValues(
+        [{ ...fixture, columns: { cause: c.text('workspace_prune_cause') } }],
+        'workspace_prune_cause',
+      ),
+    ).toEqual([])
+    expect(
+      columnEnumValues(
+        [{ ...fixture, columns: { cause: c.enum('workspace_prune_cause', ['c-terminal']) } }],
+        'workspace_prune_cause',
+      ),
+    ).toEqual(['c-terminal'])
   })
 
   test('铸字面量会被抓到；注释 / 无关字符串不会（AST 判据，不被散文满足）', () => {

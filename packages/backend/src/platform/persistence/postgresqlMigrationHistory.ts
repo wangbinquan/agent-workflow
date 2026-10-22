@@ -14,11 +14,7 @@ import {
   renderPostgresqlBaselineSql,
   type PostgresqlSchemaPlan,
 } from './postgresqlSchema'
-import {
-  buildLogicalSchemaContract,
-  canonicalSchemaJson,
-  type LogicalSchemaContract,
-} from './schemaContract'
+import { canonicalSchemaJson, type LogicalSchemaContract } from './schemaContract'
 import {
   assertPostgresqlMigrationHead,
   postgresqlMigrationJournal as expectedJournal,
@@ -656,23 +652,23 @@ export async function readPostgresqlMigrationHistoryPrefix(input: {
  * two seconds of CPU. Migration preparation, schema finalization and the cutover's
  * session composition each replayed it again (RFC-349 evidence 38613687770). One
  * checked history per process serves every default call; a failed load is not kept.
- * Explicit folders, plans or contracts (authoring, tests) are always read fresh.
+ * Explicit folders or plans (authoring, tests) are always read fresh.
+ * The injected head is the binary contract, independent of any historical target.
  */
 let runtimeHistory: Promise<PostgresqlMigrationHistory> | null = null
+let runtimeHeadContract: LogicalSchemaContract | undefined
 
-export async function loadPostgresqlMigrationHistory(
-  input: {
-    readonly plan?: PostgresqlSchemaPlan
-    readonly contract?: LogicalSchemaContract
-    readonly migrationsFolder?: string
-  } = {},
-): Promise<PostgresqlMigrationHistory> {
-  if (
-    input.plan === undefined &&
-    input.contract === undefined &&
-    input.migrationsFolder === undefined
-  ) {
-    runtimeHistory ??= readCheckedPostgresqlMigrationHistory({}).catch((error: unknown) => {
+export async function loadPostgresqlMigrationHistory(input: {
+  readonly plan?: PostgresqlSchemaPlan
+  readonly headContract: LogicalSchemaContract
+  readonly migrationsFolder?: string
+}): Promise<PostgresqlMigrationHistory> {
+  if (input.plan === undefined && input.migrationsFolder === undefined) {
+    if (runtimeHeadContract !== input.headContract) {
+      runtimeHistory = null
+      runtimeHeadContract = input.headContract
+    }
+    runtimeHistory ??= readCheckedPostgresqlMigrationHistory(input).catch((error: unknown) => {
       runtimeHistory = null
       throw error
     })
@@ -683,16 +679,16 @@ export async function loadPostgresqlMigrationHistory(
 
 async function readCheckedPostgresqlMigrationHistory(input: {
   readonly plan?: PostgresqlSchemaPlan
-  readonly contract?: LogicalSchemaContract
+  readonly headContract: LogicalSchemaContract
   readonly migrationsFolder?: string
 }): Promise<PostgresqlMigrationHistory> {
-  const contract = input.contract ?? buildLogicalSchemaContract()
-  const plan = input.plan ?? buildPostgresqlSchemaPlan(contract)
+  const headContract = input.headContract
+  const plan = input.plan ?? buildPostgresqlSchemaPlan(headContract)
   const history = await readPostgresqlMigrationHistoryPrefix({
     migrationsFolder: input.migrationsFolder ?? (await resolvePostgresqlMigrationsFolder()),
   })
   try {
-    assertPostgresqlMigrationHead(history, contract, plan)
+    assertPostgresqlMigrationHead(history, headContract, plan)
   } catch (error) {
     historyDrift(error)
   }
@@ -700,6 +696,7 @@ async function readCheckedPostgresqlMigrationHistory(input: {
 }
 
 export async function verifyPostgresqlMigrationHistory(input: {
+  readonly headContract: LogicalSchemaContract
   readonly plan: PostgresqlSchemaPlan
   readonly migrationsFolder?: string
 }): Promise<PostgresqlMigrationHistoryReceipt> {
@@ -711,9 +708,10 @@ export async function verifyPostgresqlMigrationHistory(input: {
   ) {
     return await verifyFlatPostgresqlMigrationHistory({ ...input, migrationsFolder })
   }
-  const history = await loadPostgresqlMigrationHistory(
-    input.migrationsFolder === undefined ? {} : { migrationsFolder },
-  )
+  const history = await loadPostgresqlMigrationHistory({
+    headContract: input.headContract,
+    ...(input.migrationsFolder === undefined ? {} : { migrationsFolder }),
+  })
   const node = history.versions.find(
     (version) => canonicalSchemaJson(version.plan) === canonicalSchemaJson(input.plan),
   )

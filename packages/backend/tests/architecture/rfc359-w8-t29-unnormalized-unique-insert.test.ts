@@ -52,7 +52,7 @@
 // ---------------------------------------------------------------------------
 // 判据（纯函数，只吃「路径 + 源码文本」；负 fixture 直接喂它）
 // ---------------------------------------------------------------------------
-//   ① **带唯一约束的表**：`db/schema.ts` 里 `sqliteTable(name, cols, extras)` 的 `extras` 声明了
+//   ① **带唯一约束的表**：从编译后的 registry 读取本账本覆盖的唯一索引及复合主键，对应原来声明的
 //      `uniqueIndex(...)` 或复合 `primaryKey(...)`。单列 `.primaryKey()` 不算——那一类的 id 由
 //      ULID 铸出，撞不上。今天 124 张（全部 184 张表）。
 //   ② **事务作用域** = 形参名为 `tx` / `transaction` 的函数体。与 W6-T28 账本同一条，理由也一样：
@@ -79,6 +79,14 @@
 //     根本产生不出这种句柄，那些代码在 PG 上一次都不会执行（`platform/events/committed/sqliteStore.ts`
 //     整份即是）。它们随同步面退役一起消失，账本里等 `rfc359-sync-transaction-highwater` 归零。
 
+import { persistenceSchema } from '@/bootstrap/persistenceSchema'
+import type { TableDefinition } from '@/platform/persistence/schema/contribution'
+import {
+  column as c,
+  defineContribution,
+  index,
+  retention,
+} from '@/platform/persistence/schema/dsl'
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -209,54 +217,13 @@ function tableArgument(call: ts.CallExpression | undefined): string | null {
 // ① 带唯一约束的表
 // ---------------------------------------------------------------------------
 
-/**
- * `db/schema.ts` 里声明了 `uniqueIndex(...)` 或**复合** `primaryKey(...)` 的表名集合。
- * 纯函数（吃 schema 源码文本），负 fixture 直接喂它。
- */
-export function uniqueConstrainedTables(schemaText: string): ReadonlySet<string> {
-  const source = ts.createSourceFile(
-    'schema.ts',
-    schemaText,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
+/** Preserve this ledger's unique-index/composite-key scope using compiled definitions. */
+export function uniqueConstrainedTables(tables: readonly TableDefinition[]): ReadonlySet<string> {
+  return new Set(
+    tables
+      .filter((table) => table.primaryKey.length > 1 || table.indexes.some((index) => index.unique))
+      .map((table) => table.schemaSymbol),
   )
-  const out = new Set<string>()
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined &&
-      ts.isCallExpression(node.initializer) &&
-      ts.isIdentifier(node.initializer.expression) &&
-      node.initializer.expression.text === 'sqliteTable'
-    ) {
-      // 第三个实参是 extras 回调（`(t) => ({ …uniqueIndex / primaryKey… })`）。
-      const extras = node.initializer.arguments[2]
-      if (extras !== undefined) {
-        let declared = false
-        // 局部名字**刻意不叫 `scan`**：RFC-317 T14 的负 fixture 判据按名字解析被调用者，
-        // 与本文件顶层的 `scan()`（它读磁盘）撞名会让这个纯函数被误判成「碰了语料」，
-        // 于是整条负 fixture 一条都认不出来（实测踩过）。
-        const visitExtras = (child: ts.Node): void => {
-          if (declared) return
-          if (ts.isCallExpression(child)) {
-            const name = calleeName(child)
-            if (name === 'uniqueIndex' || name === 'primaryKey') {
-              declared = true
-              return
-            }
-          }
-          ts.forEachChild(child, visitExtras)
-        }
-        visitExtras(extras)
-        if (declared) out.add(node.name.text)
-      }
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
-  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -425,7 +392,7 @@ const CORPUS_FILES: readonly string[] = (() => {
   return out.sort()
 })()
 
-const UNIQUE_TABLES = uniqueConstrainedTables(readFileSync(join(SRC, 'db/schema.ts'), 'utf8'))
+const UNIQUE_TABLES = uniqueConstrainedTables(persistenceSchema.tables)
 
 /**
  * `<相对 src 的路径>: <处数>`，按路径字典序。**只降不升。**
@@ -636,7 +603,7 @@ describe('RFC-359 W8-T29 —— 「先查存在、再插入唯一键表、且不
     '带唯一约束的表数得出来（schema 扫空会让整条判据静默放行）',
     () => {
       expect(UNIQUE_TABLES.size).toBeGreaterThanOrEqual(100)
-      // 三张点名的表：判据认不出它们就说明 extras 的读法坏了。
+      // 三张点名的表：判据认不出它们就说明 registry 的读取断了。
       expect(UNIQUE_TABLES.has('repoGroups')).toBe(true) // uniqueIndex（表达式索引）
       expect(UNIQUE_TABLES.has('taskExecutionIntents')).toBe(true) // 部分唯一索引
       expect(UNIQUE_TABLES.has('committedEventAggregateHeads')).toBe(true) // 复合主键
@@ -681,23 +648,30 @@ describe('RFC-359 W8-T29 —— 「先查存在、再插入唯一键表、且不
 // 语料下限挡的是「扫了个寂寞」；这一节挡的是另一半——语料还在，但 matcher 不咬了。
 // 全部内存字符串，不落磁盘、不依赖仓里某个文件恰好保持某形状。
 
-const FIXTURE_SCHEMA = `
-export const widgets = sqliteTable(
-  'widgets',
-  { id: text('id').primaryKey(), name: text('name').notNull() },
-  (t) => ({ nameUq: uniqueIndex('uq_widgets_name').on(t.name) }),
-)
-export const gadgets = sqliteTable(
-  'gadgets',
-  { a: text('a').notNull(), b: text('b').notNull() },
-  (t) => ({ pk: primaryKey({ columns: [t.a, t.b] }) }),
-)
-export const notes = sqliteTable(
-  'notes',
-  { id: text('id').primaryKey(), body: text('body').notNull() },
-  (t) => ({ bodyIdx: index('idx_notes_body').on(t.body) }),
-)
-`
+const fixtureOwner = defineContribution('fixture')
+const FIXTURE_SCHEMA = [
+  fixtureOwner.table({
+    id: 'widgets',
+    schemaSymbol: 'widgets',
+    retention: retention.business,
+    columns: { id: c.id('id', { primary: true }), name: c.text('name') },
+    indexes: [index('uq_widgets_name', ['name'], { unique: true })],
+  }),
+  fixtureOwner.table({
+    id: 'gadgets',
+    schemaSymbol: 'gadgets',
+    retention: retention.business,
+    columns: { a: c.text('a'), b: c.text('b') },
+    primaryKey: ['a', 'b'],
+  }),
+  fixtureOwner.table({
+    id: 'notes',
+    schemaSymbol: 'notes',
+    retention: retention.business,
+    columns: { id: c.id('id', { primary: true }), body: c.text('body') },
+    indexes: [index('idx_notes_body', ['body'])],
+  }),
+]
 
 /** 真债：读一眼有没有同名的，没有就插——既不 SERIALIZABLE、也不锁、也不归一。 */
 const DEBT_FIXTURE = `
@@ -800,6 +774,21 @@ const FIXTURE_TABLES = uniqueConstrainedTables(FIXTURE_SCHEMA)
 describe('RFC-359 W8-T29 —— 判据自证（负 fixture）', () => {
   test('唯一约束表的识别：uniqueIndex 与复合 primaryKey 都算，普通 index 不算', () => {
     expect([...FIXTURE_TABLES].sort()).toEqual(['gadgets', 'widgets'])
+    const plain = FIXTURE_SCHEMA[2]!
+    expect([
+      ...uniqueConstrainedTables([
+        {
+          ...plain,
+          indexes: [],
+          unique: [{ name: 'uq_body', columns: ['body'], nulls: 'distinct' }],
+        },
+      ]),
+    ]).toEqual([])
+    expect([
+      ...uniqueConstrainedTables([
+        { ...plain, indexes: [], columns: { body: c.text('body', { unique: 'uq_body' }) } },
+      ]),
+    ]).toEqual([])
   })
 
   test('真债被认出来（认不出就说明 matcher 不咬了，账本此刻零预言力）', () => {

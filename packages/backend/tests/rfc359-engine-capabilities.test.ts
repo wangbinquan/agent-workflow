@@ -7,6 +7,7 @@
 // SQLite 侧用内存库；PostgreSQL 侧按环境门控（无 URL 时 skip，与 rfc357-postgresql-page 同一约定；
 // RFC-359 W5-T21 落地后由全量 PG lane 保证「有库时必跑」）。
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
@@ -230,7 +231,7 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
         // 客户端的业务写围栏按 runtime.generationId 核对 database_generations，迁移器不替测试登记它。
         await raw('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
         await raw('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
-        await migratePostgresqlSchema({ runtime })
+        await migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime })
         await raw(
           'INSERT INTO "agent_workflow_meta"."logical_copy_operations" ' +
             '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +

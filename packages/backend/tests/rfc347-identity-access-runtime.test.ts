@@ -275,6 +275,7 @@ describe('RFC-347 exact production source locks', () => {
       // 组合根，列表行的 owner 身份投影在这里装配后注入任务路由——与另外两个根同形
       //（`server.ts` / `postgresqlDaemonApplication.ts` 早就在这张表上）。
       'src/bootstrap/deploymentProfile.ts',
+      'src/bootstrap/persistenceSchema.ts',
       'src/main.ts',
       'src/modules/identity-access/composition/userOperations.ts',
       'src/server.ts',

@@ -300,7 +300,11 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // RFC-370 v3 V7/V11: the hosted expand-only successor verification drives the
   // PostgreSQL migrator (+1/+1); hosted deployments are PostgreSQL-only.
   // RFC-374 adds the same legacy-upgrade assertion on both providers.
-  'platform/persistence/Migrator: sqlite 6/5, postgresql 14/13',
+  // RFC-395 compares compiled DDL with migration replay on both providers (+1/+1 each side).
+  'platform/persistence/Migrator: sqlite 7/6, postgresql 15/14',
+  // RFC-395 relocates the existing PostgreSQL DDL compiler (and its old references)
+  // alongside the new SQLite compiler; equivalence tests drive both explicit plans.
+  'platform/persistence/schema/Plan: sqlite 2/2, postgresql 24/3',
 ]
 
 /** plan §5 T19d 的「阈值」：两侧 ref 差到这个数就算倒挂，要么补测试、要么进下面的观察名单。 */
@@ -347,7 +351,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   //（新基线 `rfc359-w5hn-workflow-route-launch-provider-parity` 归在 SQLite 一侧）。
   'platform/persistence/LogicalSource: 14 vs 10',
   // 同上：原文件落位使这一既有引用差首次进入观察名单，阈值保持不变。
-  'platform/persistence/Migrator: 6 vs 14',
+  'platform/persistence/Migrator: 7 vs 15',
+  'platform/persistence/schema/Plan: 2 vs 24',
 ]
 
 interface Side {

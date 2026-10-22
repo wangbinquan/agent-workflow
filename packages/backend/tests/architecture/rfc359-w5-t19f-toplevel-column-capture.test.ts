@@ -2,7 +2,7 @@
 //
 // 机制：`@/db/schema` 导出的不是表，是**按 provider 投影的 Proxy 门面**
 // -------------------------------------------------------------------------
-// `db/schema.ts` 里的每张表都由 `providerAwareSqliteTable`（`db/providerSchema.ts`）造出来：
+// `db/schema.ts` 导出由 contribution 经 `materializeDrizzle` 编译、`providerTableFacade` 包装的表：
 // 一个 Proxy，`get` 陷阱按**当时激活的 provider**（`selectDatabaseSchemaProvider` /
 // `currentDatabaseSchemaProvider`）把属性解析到 SQLite 或 PostgreSQL 那一份具体列对象上。
 // 也就是说 `tasks` 与 `tasks.id` 的**正确性依赖于「什么时候读它」**，而不是「读到了什么名字」。

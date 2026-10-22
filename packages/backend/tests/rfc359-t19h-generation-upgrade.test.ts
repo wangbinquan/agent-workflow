@@ -2,6 +2,7 @@
 // boundary before an existing generation pointer advances. PostgreSQL's real
 // copy/upgrade/export lane lives in rfc359-t19h-postgresql-upgrade.integration.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterAll, afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import {
@@ -64,7 +65,7 @@ import { createFileDatabaseInstallation } from '@/modules/system-operations/infr
 setDefaultTimeout(60_000)
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
-const history = await loadPostgresqlMigrationHistory()
+const history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
 const templateRoot = mkdtempSync(join(tmpdir(), 'rfc359-old-schema-template-'))
 const oldMigrations = join(templateRoot, 'migrations')
 mkdirSync(join(oldMigrations, 'meta'), { recursive: true })
@@ -590,6 +591,7 @@ describe('RFC-359 T19h actual SQLite generation preparation', () => {
     const originalPointer = readFileSync(paths.generationPointerPath, 'utf8')
     const originalArchive = readFileSync(archive.path)
     const plan = await validateBackupForStage(archive.path, {
+      contract: buildLogicalSchemaContract(),
       appHome: root,
       migrationsFolder: MIGRATIONS,
     })
@@ -600,6 +602,7 @@ describe('RFC-359 T19h actual SQLite generation preparation', () => {
     expect(readFileSync(paths.generationPointerPath, 'utf8')).toBe(originalPointer)
     const events: string[] = []
     const restored = await restoreBackup(archive.path, {
+      contract: buildLogicalSchemaContract(),
       appHome: root,
       dbPath: paths.sqlitePath,
       migrationsFolder: MIGRATIONS,
@@ -705,6 +708,7 @@ describe('RFC-359 T19h actual SQLite generation preparation', () => {
       expect(readFileSync(paths.generationPointerPath, 'utf8')).toBe(originalPointer)
       expect(existsSync(paths.lockPath)).toBe(false)
       const coordinator = createDatabaseMigrationCoordinator({
+        headContract: buildLogicalSchemaContract(),
         ...paths,
         contract: history.head.contract,
         admission: {
@@ -842,6 +846,7 @@ describe('RFC-359 T19h interrupted copy pointer discovery', () => {
         code: 'database-migration-resume-required',
       })
       const coordinator = createDatabaseMigrationCoordinator({
+        headContract: buildLogicalSchemaContract(),
         ...paths,
         contract: history.head.contract,
         env: {},
@@ -884,6 +889,7 @@ describe('RFC-359 T19h interrupted copy pointer discovery', () => {
       const f = completedPointerFixture(version, 'accepting-writes')
       const { paths, store, operationId } = f
       const coordinator = createDatabaseMigrationCoordinator({
+        headContract: buildLogicalSchemaContract(),
         ...paths,
         contract: history.head.contract,
         env: {},
@@ -1055,6 +1061,7 @@ describe('RFC-370 invalid migration target avoids Source Worker startup', () => 
       Object.freeze(env)
       let admissionCalls = 0
       const coordinator = createDatabaseMigrationCoordinator({
+        headContract: buildLogicalSchemaContract(),
         ...paths,
         contract: history.head.contract,
         env,

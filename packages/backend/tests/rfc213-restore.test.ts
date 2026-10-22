@@ -15,6 +15,7 @@
 //   - remove the incoming quick_check → corrupt-incoming test swaps in garbage → red.
 //   - invert computeRestoreDirection → downgrade test accepts a newer backup → red.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
@@ -119,7 +120,7 @@ describe('RFC-213 restore roundtrip (AC-1)', () => {
 
     // Backup the seeded state.
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-    const res = await createBackup({ db, appHome, now: 1 })
+    const res = await createBackup({ contract: buildLogicalSchemaContract(), db, appHome, now: 1 })
     // Mutate the LIVE db AFTER the backup: add a 3rd workflow.
     await db.insert(workflows).values({
       id: ulid(),
@@ -168,7 +169,12 @@ describe('RFC-213 restore — crash-safe swap over a live WAL', () => {
     // 1) A clean 2-workflow backup (VACUUM'd — no WAL).
     await seedWorkflows(dbPath, 2)
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
 
     // 2) Add 5 more rows and FREEZE the on-disk db+wal+shm WHILE the frames are
     //    still only in the WAL (copy before close, which would checkpoint them).
@@ -213,7 +219,12 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     await seedWorkflows(dbPath, 2)
 
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     sqliteOf(db).close()
     const liveBytes = readFileSync(dbPath)
     const liveCounts = allTableCounts(dbPath)
@@ -274,7 +285,12 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
 
     // A real backup, but forge its manifest to a created_at far in the future.
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     sqliteOf(db).close()
     // Repack with a forged newer identity.
     const staging = tmp('rfc213-down-stage-')
@@ -305,7 +321,12 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     const liveBytes = readFileSync(dbPath)
 
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     sqliteOf(db).close()
 
     // Sabotage the safety backup: pre-create its exact output path as a DIRECTORY
@@ -326,7 +347,12 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     const dbPath = join(appHome, 'db.sqlite')
     await seedWorkflows(dbPath, 2)
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     sqliteOf(db).close()
 
     const r = await restoreBackup(backup.path, {
@@ -380,7 +406,12 @@ describe('RFC-213 G4a mismatch-protect: restore suspends auto-recovery for non-t
     }
     const runningId = mkTask('running')
     const doneId = mkTask('done')
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     sqliteOf(db).close()
 
     await restoreBackup(backup.path, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 2 })
@@ -403,13 +434,16 @@ describe('RFC-213 G4a mismatch-protect: restore suspends auto-recovery for non-t
 
 describe('restore CLI wrapper guard rails', () => {
   test('no tarball → usage error; missing file → error (both before touching state)', async () => {
-    const noArg = await restoreCommand([], composeLocalSystemOperations())
+    const noArg = await restoreCommand(
+      [],
+      composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
+    )
     expect(noArg.status).toBe('error')
     expect(noArg.output).toContain('usage:')
 
     const missing = await restoreCommand(
       [join(tmp('rfc213-cli-'), 'nope.tar.gz')],
-      composeLocalSystemOperations(),
+      composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
     )
     expect(missing.status).toBe('error')
     expect(missing.output).toContain('no such file')
@@ -425,7 +459,12 @@ describe('impl-gate P1-4 — restore takes a FILESYSTEM safety copy (config.json
     const appHome = tmp('rfc213-fs-safety-')
     const dbPath = join(appHome, 'db.sqlite')
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     ;(db as unknown as { $client: Database }).$client.close()
 
     // live filesystem state that the restore will destroy
@@ -448,7 +487,12 @@ describe('impl-gate P1-4 — restore takes a FILESYSTEM safety copy (config.json
     const appHome2 = tmp('rfc213-fs-safety2-')
     const dbPath2 = join(appHome2, 'db.sqlite')
     const db2 = openDb({ path: dbPath2, migrationsFolder: MIGRATIONS })
-    const backup2 = await createBackup({ db: db2, appHome: appHome2, now: 1 })
+    const backup2 = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db: db2,
+      appHome: appHome2,
+      now: 1,
+    })
     ;(db2 as unknown as { $client: Database }).$client.close()
     writeFileSync(join(appHome2, 'config.json'), '{}')
     await restoreBackup(backup2.path, {
@@ -543,15 +587,26 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
     process.env.AGENT_WORKFLOW_HOME = appHome
     try {
       const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
-      const backup = await createBackup({ db, appHome, now: 1 })
+      const backup = await createBackup({
+        contract: buildLogicalSchemaContract(),
+        db,
+        appHome,
+        now: 1,
+      })
       ;(db as unknown as { $client: Database }).$client.close()
       // simulate a LIVE daemon: our own pid is alive by definition
       writePidFileForTest(join(appHome, '.daemon.lock'), process.pid)
-      const res = await restoreCommand([backup.path, '--dry-run'], composeLocalSystemOperations())
+      const res = await restoreCommand(
+        [backup.path, '--dry-run'],
+        composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
+      )
       expect(res.status).toBe('ok')
       expect(res.output).toContain('dry-run')
       // …while an actual apply is still refused
-      const apply = await restoreCommand([backup.path, '--yes'], composeLocalSystemOperations())
+      const apply = await restoreCommand(
+        [backup.path, '--yes'],
+        composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
+      )
       expect(apply.status).toBe('error')
       expect(apply.output).toContain('daemon is running')
     } finally {
@@ -567,7 +622,10 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
     try {
       const junk = join(appHome, 'junk.tar.gz')
       writeFileSync(junk, 'not a tarball')
-      const res = await restoreCommand([junk, '--stage'], composeLocalSystemOperations())
+      const res = await restoreCommand(
+        [junk, '--stage'],
+        composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
+      )
       expect(res.status).toBe('error')
       expect(hasPendingRestore(appHome)).toBe(false)
     } finally {

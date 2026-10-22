@@ -20,7 +20,7 @@ import {
 import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
 import { seedHostedInstallation } from '@/platform/persistence/hostedInstallationSeed'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import type { DatabaseInstallationPort } from '../application/ports/databaseInstallation'
 import { createDatabaseApplicationConfiguration } from '../infrastructure/databaseApplicationConfiguration'
@@ -208,11 +208,12 @@ export function crewStationDatabaseConfig(
  * only verifies it (`verify`). Both name the same derived generation.
  */
 export async function prepareCrewStationDatabase(input: {
+  readonly contract: LogicalSchemaContract
   readonly environment: Pick<CrewStationDeploymentEnvironment, 'project' | 'service'>
   readonly schema: 'apply' | 'verify'
   readonly env?: Readonly<Record<string, string | undefined>>
 }): Promise<PreparedPostgresqlProviderSchema> {
-  const contract = buildLogicalSchemaContract()
+  const contract = input.contract
   return await prepareHostedPostgresqlProviderRuntime({
     config: crewStationDatabaseConfig(input.env ?? process.env),
     contract,
@@ -222,7 +223,7 @@ export async function prepareCrewStationDatabase(input: {
       schemaDigest: contract.digest,
       env: input.env ?? process.env,
     }),
-    history: await loadPostgresqlMigrationHistory(),
+    history: await loadPostgresqlMigrationHistory({ headContract: input.contract }),
     schema: input.schema,
     ...(input.env === undefined ? {} : { env: input.env }),
   })
@@ -233,6 +234,7 @@ export async function prepareCrewStationDatabase(input: {
  * database its initial rows once, and report both.
  */
 export function composeCrewStationMigrationInstallation(
+  contract: LogicalSchemaContract,
   environment: Pick<CrewStationDeploymentEnvironment, 'project' | 'service'>,
   env?: Readonly<Record<string, string | undefined>>,
   /** Restore normalization participants of the owning modules (bootstrap). */
@@ -244,17 +246,20 @@ export function composeCrewStationMigrationInstallation(
     env: env ?? process.env,
     async prepare() {
       await restoreCrewStationDatabaseFromEnvironment({
+        contract,
         environment,
         env: env ?? process.env,
         ...(normalization === undefined ? {} : { normalization }),
       })
       const prepared = await prepareCrewStationDatabase({
+        contract,
         environment,
         schema: 'apply',
         ...(env === undefined ? {} : { env }),
       })
       try {
         const seed = await seedHostedInstallation({
+          contract,
           target: prepared.openBootstrapClient(),
           migrationsFolder: await resolveMigrationsFolder(),
           now: Date.now(),

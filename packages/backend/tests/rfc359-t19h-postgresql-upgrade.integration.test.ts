@@ -2,6 +2,7 @@
 // rows with the original runner, then upgrade that live generation. PostgreSQL
 // is selected by the same default provider list as the shared harness; a missing
 // URL fails the selected case. The local SQLite case only checks the tiny source.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { createHash } from 'node:crypto'
@@ -122,7 +123,9 @@ async function historicalSource(history: PostgresqlMigrationHistory) {
 describe('RFC-359 T19h published schema upgrade mechanisms', () => {
   if (providers.includes('sqlite')) {
     test('the original SQLite migration prefix produces real active and archive rows', async () => {
-      const history = await loadPostgresqlMigrationHistory()
+      const history = await loadPostgresqlMigrationHistory({
+        headContract: buildLogicalSchemaContract(),
+      })
       const fixture = await historicalSource(history)
       try {
         expect(fixture.snapshot.tableRows.tasks).toBe(1)
@@ -142,7 +145,9 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
           throw new Error(
             'selected PostgreSQL copy recovery requires the real harness PostgreSQL URL',
           )
-        const history = await loadPostgresqlMigrationHistory()
+        const history = await loadPostgresqlMigrationHistory({
+          headContract: buildLogicalSchemaContract(),
+        })
         const fixture = await historicalSource(history)
         await fixture.source.close()
         const config: Extract<DatabaseConfig, { provider: 'postgresql' }> = {
@@ -305,7 +310,9 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
       const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
       if (urlEnv === undefined)
         throw new Error('selected PostgreSQL upgrade case requires the real harness PostgreSQL URL')
-      const committed = await loadPostgresqlMigrationHistory()
+      const committed = await loadPostgresqlMigrationHistory({
+        headContract: buildLogicalSchemaContract(),
+      })
       // A future index is test data for the multi-edge engine. The published
       // upgrades and immutable root are still the exact committed artifacts.
       const fixtureIndex = {
@@ -378,13 +385,20 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
       })
       try {
         await clean()
-        await migratePostgresqlSchema({ runtime, plan: history.root.plan, now: () => 77 })
+        await migratePostgresqlSchema({
+          headContract: buildLogicalSchemaContract(),
+          runtime,
+          plan: history.root.plan,
+          now: () => 77,
+        })
         await pool.unsafe(`INSERT INTO agent_workflow.tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path, base_branch, branch, status, inputs, started_at)
           VALUES ('multi-task', 'multi', 'old-workflow', '{}', '/tmp/repo', '/tmp/task', 'main', 'task', 'done', ' { "same": true } ', 41)`)
         const originalRows = await pool.unsafe('SELECT * FROM agent_workflow.tasks ORDER BY id')
         const baseline = await pool.unsafe('SELECT * FROM agent_workflow_meta.schema_migrations')
         await pool.unsafe('CREATE INDEX idx_t19h_next ON agent_workflow.tasks(id)')
-        await expect(migratePostgresqlSchema({ runtime, history })).rejects.toMatchObject({
+        await expect(
+          migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime, history }),
+        ).rejects.toMatchObject({
           code: 'postgresql-schema-prepare-failed',
         })
         expect(
@@ -399,10 +413,25 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
           originalRows,
         )
         await pool.unsafe('DROP INDEX agent_workflow.idx_t19h_next')
-        expect((await migratePostgresqlSchema({ runtime, history, now: () => 77 })).applied).toBe(
-          true,
-        )
-        expect((await migratePostgresqlSchema({ runtime, history })).applied).toBe(false)
+        expect(
+          (
+            await migratePostgresqlSchema({
+              headContract: buildLogicalSchemaContract(),
+              runtime,
+              history,
+              now: () => 77,
+            })
+          ).applied,
+        ).toBe(true)
+        expect(
+          (
+            await migratePostgresqlSchema({
+              headContract: buildLogicalSchemaContract(),
+              runtime,
+              history,
+            })
+          ).applied,
+        ).toBe(false)
         expect(await pool.unsafe('SELECT * FROM agent_workflow.tasks ORDER BY id')).toEqual(
           originalRows,
         )
@@ -422,9 +451,25 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
         }
         const upgraded = await catalogs()
         await clean()
-        expect((await migratePostgresqlSchema({ runtime, history })).applied).toBe(true)
+        expect(
+          (
+            await migratePostgresqlSchema({
+              headContract: buildLogicalSchemaContract(),
+              runtime,
+              history,
+            })
+          ).applied,
+        ).toBe(true)
         expect(await catalogs()).toEqual(upgraded)
-        expect((await migratePostgresqlSchema({ runtime, history })).applied).toBe(false)
+        expect(
+          (
+            await migratePostgresqlSchema({
+              headContract: buildLogicalSchemaContract(),
+              runtime,
+              history,
+            })
+          ).applied,
+        ).toBe(false)
       } finally {
         await runtime.close()
       }
@@ -434,7 +479,9 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
       const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
       if (urlEnv === undefined)
         throw new Error('selected PostgreSQL upgrade case requires the real harness PostgreSQL URL')
-      const history = await loadPostgresqlMigrationHistory()
+      const history = await loadPostgresqlMigrationHistory({
+        headContract: buildLogicalSchemaContract(),
+      })
       const fixture = await historicalSource(history)
       const operationsRoot = join(fixture.appHome, 'database-migrations')
       const operationRoot = join(operationsRoot, operationId)
@@ -474,6 +521,7 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
           now: Date.now(),
         })
         target = await openPostgresqlLogicalTarget({
+          headContract: buildLogicalSchemaContract(),
           runtime,
           operationId,
           sourceGenerationId,
@@ -529,7 +577,9 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
           'tasks:index:idx_tasks_overview_counts',
         ])
         await pool.unsafe('CREATE INDEX idx_tasks_overview_counts ON agent_workflow.tasks(id)')
-        await expect(migratePostgresqlSchema({ runtime })).rejects.toMatchObject({
+        await expect(
+          migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime }),
+        ).rejects.toMatchObject({
           code: 'postgresql-schema-prepare-failed',
         })
         expect(
@@ -554,6 +604,7 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
         const pointerFailure = new Error('injected pointer write interruption after real PG COMMIT')
         await expect(
           migratePostgresqlSchema({
+            headContract: buildLogicalSchemaContract(),
             runtime,
             activeGeneration: selected,
             now: () => Number(baselineRows[0]!.applied_at),
@@ -619,6 +670,8 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
         writeFileSync(join(fixture.appHome, 'config.json'), JSON.stringify({ database: config }))
         const client = createPostgresqlDatabaseClient(runtime)
         const backup = await createPostgresqlProviderBackup({
+          headContract: buildLogicalSchemaContract(),
+          contract: buildLogicalSchemaContract(),
           appHome: fixture.appHome,
           operationsRoot,
           runtime,
@@ -663,7 +716,13 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
           }).payload.schemaDigest,
         ).toBe(history.head.contract.digest)
         expect(
-          (await migratePostgresqlSchema({ runtime, activeGeneration: selected })).applied,
+          (
+            await migratePostgresqlSchema({
+              headContract: buildLogicalSchemaContract(),
+              runtime,
+              activeGeneration: selected,
+            })
+          ).applied,
         ).toBe(false)
       } finally {
         try {
@@ -764,7 +823,9 @@ test('the interruption readback compiles through the actual PostgreSQL client wi
 })
 
 test('logical snapshot emits the current receipt join inside its reserved read-only transaction', async () => {
-  const { head } = await loadPostgresqlMigrationHistory()
+  const { head } = await loadPostgresqlMigrationHistory({
+    headContract: buildLogicalSchemaContract(),
+  })
   const controlled = queryRuntime((query) => {
     if (query.includes('information_schema.tables')) {
       return head.contract.tables

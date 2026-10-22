@@ -32,3 +32,5 @@ export function composeRealtimeRuntimeFor(input: {
     channels: createRealtimeChannelAccess(new DrizzleRealtimeStore(input.db), input.policy),
   })
 }
+
+export { schemaContribution } from './composition/schema'

@@ -13,6 +13,7 @@
 // 判据用「目标环境变量根本不存在」当探针：真去开 runtime 就会以
 // `postgresql-url-env-missing` 失败，不去开就安静返回 manifest。
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -32,7 +33,9 @@ const roots: string[] = []
 // A status probe validates its copy's schema before opening the target runtime.
 // Keep this accepting-writes fixture on the real frozen historical contract so
 // the missing-URL sentinel below continues to observe that runtime boundary.
-const HISTORICAL_CONTRACT = (await loadPostgresqlMigrationHistory()).root.contract
+const HISTORICAL_CONTRACT = (
+  await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
+).root.contract
 const ARTIFACT_DIGEST = `sha256:${'b'.repeat(64)}`
 const OPERATION_ID = 'dbm_operation_0001'
 const TARGET = {
@@ -100,6 +103,8 @@ function acceptingWrites(): {
 
 function coordinatorOn(root: string, operationsRoot: string) {
   return createDatabaseMigrationCoordinator({
+    headContract: buildLogicalSchemaContract(),
+    contract: buildLogicalSchemaContract(),
     sqlitePath: join(root, 'db.sqlite'),
     operationsRoot,
     generationPointerPath: join(root, 'database-generation.json'),

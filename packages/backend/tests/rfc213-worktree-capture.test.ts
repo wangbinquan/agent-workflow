@@ -8,6 +8,7 @@
 // MUTATION CHECK (manually verified): widen captureWorktrees' status filter to
 // all statuses → the terminal task gets captured → "terminal not captured" reds.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -242,7 +243,13 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     const { createBackup } = await import('../src/services/backup')
     const { extractTarGz } = await import('../src/util/archive')
     const { readManifest } = await import('../src/services/backupManifest')
-    const res = await createBackup({ db, appHome, includeWorktrees: true, now: 1 })
+    const res = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      includeWorktrees: true,
+      now: 1,
+    })
     ;(db as unknown as { $client: Database }).$client.close()
 
     const out = tmp()

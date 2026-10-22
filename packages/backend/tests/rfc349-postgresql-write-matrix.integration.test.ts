@@ -34,7 +34,7 @@ import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const URL_ENV = 'RFC349_WRITE_MATRIX_DATABASE_URL'
 const realTest = process.env[URL_ENV] === undefined ? test.skip : test
@@ -174,7 +174,7 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
         const pool = runtime.providerPool()
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
-        await migratePostgresqlSchema({ runtime })
+        await migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime })
         // The business client fences every write against the active generation.
         await pool.unsafe(
           'INSERT INTO "agent_workflow_meta"."logical_copy_operations" ' +

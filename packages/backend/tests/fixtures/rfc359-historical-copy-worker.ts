@@ -1,6 +1,7 @@
 // Hosted-only real-process interruption at an old copy's durable boundary.
 // The parent supplies an already-created historical source; no service is
 // launched here. The synchronous latch prevents another phase from advancing.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { readFileSync, writeSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseConfig } from '@agent-workflow/shared'
@@ -28,7 +29,7 @@ function hold(checkpoint: typeof input.checkpoint): void {
   throw new Error('historical copy interruption latch unexpectedly returned')
 }
 
-const history = await loadPostgresqlMigrationHistory()
+const history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
 const operationsRoot = join(input.appHome, 'database-migrations')
 const controlPlane = createDatabaseMigrationControlPlane({
   store: createFileDatabaseMigrationStore({ root: operationsRoot }),
@@ -59,6 +60,7 @@ const runtime = createPostgresqlDatabaseRuntime({
   generationId: `dbg_pg_${input.operationId.slice(4)}`,
 })
 const target = await openPostgresqlLogicalTarget({
+  headContract: buildLogicalSchemaContract(),
   runtime,
   operationId: input.operationId,
   sourceGenerationId: input.sourceGenerationId,

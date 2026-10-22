@@ -3,6 +3,7 @@
 // exists as a recovery / debug fallback when the daemon won't start due to
 // a failed migration that needs inspection.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import {
   prepareManualDatabaseMigration,
@@ -12,7 +13,7 @@ import {
 export async function migrateCommand(
   options?: ManualDatabaseMigrationOptions,
 ): Promise<{ output: string }> {
-  const prepared = await prepareManualDatabaseMigration(options)
+  const prepared = await prepareManualDatabaseMigration(buildLogicalSchemaContract(), options)
   const provider = prepared.runtime
   // Residual fence: a third variant on ResolvedDatabaseProviderRuntime widens
   // this and stops compiling, instead of falling into the SQLite path below.

@@ -82,6 +82,7 @@ async function inspectTarget(
 }
 
 export async function restoreHostedDatabaseInstallation(input: {
+  readonly headContract: LogicalSchemaContract
   readonly runtime: PostgresqlDatabaseRuntime
   readonly reference: string
   readonly installation: string
@@ -122,6 +123,7 @@ export async function restoreHostedDatabaseInstallation(input: {
       return { restored: false, backupId: artifact.sidecar.backupId, normalized: {} }
     if (state === 'empty' || state === 'copying' || state === 'verified') {
       const target = await (input.openTarget ?? openPostgresqlLogicalTarget)({
+        headContract: input.headContract,
         runtime: input.runtime,
         operationId: artifact.copyOperationId,
         sourceGenerationId: artifact.marker,

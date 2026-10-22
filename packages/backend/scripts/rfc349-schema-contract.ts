@@ -5,10 +5,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  buildLogicalSchemaContract,
   canonicalSchemaJson,
   renderLogicalSchemaReport,
 } from '../src/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '../src/bootstrap/persistenceSchema'
 
 const repoRoot = resolve(import.meta.dir, '..', '..', '..')
 const outputDir = resolve(repoRoot, 'design', 'RFC-349-postgresql-provider-one-click-migration')

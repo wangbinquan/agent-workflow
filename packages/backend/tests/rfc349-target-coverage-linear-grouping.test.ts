@@ -45,6 +45,7 @@ import type {
   LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const CONTRACT_DIGEST = `sha256:${'c'.repeat(64)}`
 const CHUNK_ROWS = 1_000
@@ -193,6 +194,7 @@ function runtimeFor(statements: string[], chunkCount: number): PostgresqlDatabas
 async function measureFinalizeMs(chunkCount: number): Promise<number> {
   const statements: string[] = []
   const target = await openPostgresqlLogicalTarget({
+    headContract: buildLogicalSchemaContract(),
     runtime: runtimeFor(statements, chunkCount),
     operationId: 'dbm_linear_0001',
     sourceGenerationId: 'dbg_source_0001',
@@ -249,6 +251,7 @@ describe('RFC-349 target coverage groups copy receipts in linear time', () => {
   test('a receipt for a table outside the roster is still rejected', async () => {
     const statements: string[] = []
     const target = await openPostgresqlLogicalTarget({
+      headContract: buildLogicalSchemaContract(),
       runtime: runtimeFor(statements, 1),
       operationId: 'dbm_linear_0001',
       sourceGenerationId: 'dbg_source_0001',

@@ -35,6 +35,7 @@ import {
   type LogicalSchemaContract,
   type LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const roots: string[] = []
 const SOURCE_OPERATION_ID = 'dbm_source_artifact_01'
@@ -178,6 +179,7 @@ describe('RFC-349 logical database restore', () => {
     const { restoreTarget, calls } = target()
     const progress: number[] = []
     const receipt = await restoreLogicalDatabaseArtifact({
+      headContract: buildLogicalSchemaContract(),
       ...fixture,
       expectedManifestDigest: fixture.manifest.digest,
       expectedLegacyArchiveFileDigest: fixture.legacyArchiveFileDigest,
@@ -241,6 +243,7 @@ describe('RFC-349 logical database restore', () => {
     const { restoreTarget, calls } = target()
 
     const receipt = await restoreLogicalDatabaseBackup({
+      headContract: buildLogicalSchemaContract(),
       artifactRoot,
       expectedEnvelopeFileDigest: exported.envelopeFileDigest,
       restoreOperationId: RESTORE_OPERATION_ID,
@@ -258,6 +261,7 @@ describe('RFC-349 logical database restore', () => {
 
     await expect(
       restoreLogicalDatabaseBackup({
+        headContract: buildLogicalSchemaContract(),
         artifactRoot,
         expectedEnvelopeFileDigest: `sha256:${'f'.repeat(64)}`,
         restoreOperationId: RESTORE_OPERATION_ID,
@@ -276,6 +280,7 @@ describe('RFC-349 logical database restore', () => {
     const { restoreTarget, calls } = target()
     await expect(
       restoreLogicalDatabaseArtifact({
+        headContract: buildLogicalSchemaContract(),
         ...fixture,
         expectedManifestDigest: fixture.manifest.digest,
         expectedLegacyArchiveFileDigest: fixture.legacyArchiveFileDigest,
@@ -302,6 +307,7 @@ describe('RFC-349 logical database restore', () => {
     const { restoreTarget, calls } = target('dbm_another_target_01')
     await expect(
       restoreLogicalDatabaseArtifact({
+        headContract: buildLogicalSchemaContract(),
         ...fixture,
         expectedManifestDigest: fixture.manifest.digest,
         expectedLegacyArchiveFileDigest: fixture.legacyArchiveFileDigest,

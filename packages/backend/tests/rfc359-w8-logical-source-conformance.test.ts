@@ -72,10 +72,8 @@ import {
   type PostgresqlDatabaseRuntime,
 } from '@/platform/persistence/postgresqlRuntime'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
-import {
-  buildLogicalSchemaContract,
-  type LogicalTableContract,
-} from '@/platform/persistence/schemaContract'
+import { type LogicalTableContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import {
   describeEachProvider,
   resolvePostgresqlTestUrlEnv,

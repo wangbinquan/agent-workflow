@@ -39,7 +39,7 @@ import {
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { timeoutSignal } from '@/util/timeoutSignal'
 
 import {

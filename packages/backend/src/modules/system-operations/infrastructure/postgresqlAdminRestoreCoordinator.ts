@@ -46,6 +46,7 @@ export interface PostgresqlAdminRestoreCoordinator extends AdminRestoreCoordinat
 }
 
 export interface CreatePostgresqlAdminRestoreCoordinatorInput {
+  readonly headContract: LogicalSchemaContract
   readonly artifacts: RestoreArtifactPathResolver
   readonly runtime: PostgresqlDatabaseRuntime
   readonly targetGenerationId: string
@@ -85,6 +86,7 @@ export function createPostgresqlAdminRestoreCoordinator(
   const inspectArtifact = async (tarballPath: string) => {
     const provisionalOperationId = `dbm_restore_inspect_${crypto.randomUUID().replaceAll('-', '')}`
     return await inspect({
+      headContract: input.headContract,
       tarballPath,
       appHome: input.appHome,
       restoreOperationId: provisionalOperationId,
@@ -102,6 +104,7 @@ export function createPostgresqlAdminRestoreCoordinator(
 
   const restoreArtifact = async (tarballPath: string, operationId: string) =>
     await restore({
+      headContract: input.headContract,
       tarballPath,
       appHome: input.appHome,
       restoreOperationId: operationId,

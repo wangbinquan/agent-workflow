@@ -3,6 +3,7 @@
 // and composing or shutting down identity presence must not close the outer
 // provider runtime.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -162,6 +163,7 @@ describe('RFC-349 daemon provider core', () => {
       db,
       appHome,
       adapters: DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
+        contract: buildLogicalSchemaContract(),
         db,
         appHome,
         dbPath: join(appHome, 'db.sqlite'),
@@ -201,6 +203,7 @@ describe('RFC-349 daemon provider core', () => {
       daemonToken: 'fixture-daemon',
       db: fake.db,
       adapters: DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
+        contract: buildLogicalSchemaContract(),
         db: fake.db,
         runtime: fake.runtime,
         databaseConfig,

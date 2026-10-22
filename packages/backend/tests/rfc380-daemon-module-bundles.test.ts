@@ -1,4 +1,5 @@
 // RFC-380: construction is passive, session identities are shared, and a replacement gets its own graph.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
 import { createProviderHttpCompositionFixture } from './helpers/providerHttpComposition'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
@@ -33,8 +34,14 @@ function graph(
   const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 8))
   const adapters =
     binding.provider === 'sqlite'
-      ? DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({ db: binding.db, appHome, secretBox })
+      ? DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
+          contract: buildLogicalSchemaContract(),
+          db: binding.db,
+          appHome,
+          secretBox,
+        })
       : DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
+          contract: buildLogicalSchemaContract(),
           db: binding.db,
           runtime: binding.runtime,
           databaseConfig: binding.databaseConfig,

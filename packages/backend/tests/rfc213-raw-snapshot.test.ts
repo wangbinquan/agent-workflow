@@ -12,6 +12,7 @@
 //     throws → the corrupt case reds.
 //   - stop writing the manifest → manifest assertions red.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
@@ -274,7 +275,13 @@ describe('RFC-213 createBackup manifest (PR-0 T2)', () => {
     const identity = readDbMigrationIdentity(dbPath)
 
     const { createBackup } = await import('../src/services/backup')
-    const res = await createBackup({ db, kind: 'scheduled', appHome, now: 1_700_000_000_000 })
+    const res = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      kind: 'scheduled',
+      appHome,
+      now: 1_700_000_000_000,
+    })
     ;(db as unknown as { $client: Database }).$client.close()
 
     const out = tmp('rfc213-cb-out-')

@@ -1,6 +1,7 @@
 // RFC-359 W18: the original count queries keep their rows and statement
 // boundaries when the two additive covering indexes are present. This tiny
 // fixture proves results and plans; the original full HTTP gate owns latency.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
 import { buildActor } from '@/auth/actor'
@@ -219,7 +220,9 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
       [repoIds[1], 5],
     ])
     expect(withIndexes.statements).toHaveLength(7)
-    const history = await loadPostgresqlMigrationHistory()
+    const history = await loadPostgresqlMigrationHistory({
+      headContract: buildLogicalSchemaContract(),
+    })
     const recreate =
       harness.capabilities.provider === 'sqlite'
         ? indexes.map(

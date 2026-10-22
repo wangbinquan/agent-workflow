@@ -21,10 +21,10 @@ import {
 } from '@/platform/persistence/postgresqlRuntime'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import {
-  buildLogicalSchemaContract,
   type LogicalSchemaContract,
   type LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const realTest = process.env.RFC349_TARGET_FAULTS_DATABASE_URL === undefined ? test.skip : test
 const OPERATION_ID = 'dbm_real_target_faults_01'
@@ -205,6 +205,7 @@ async function openTarget(input: {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
       return await openPostgresqlLogicalTarget({
+        headContract: buildLogicalSchemaContract(),
         runtime: input.runtime,
         operationId: OPERATION_ID,
         sourceGenerationId: SOURCE_GENERATION_ID,

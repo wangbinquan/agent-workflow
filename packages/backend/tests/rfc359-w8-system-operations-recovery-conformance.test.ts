@@ -62,6 +62,7 @@
 //     要求目标 schema 为空（非空直接 409 `postgresql-restore-target-not-empty`），
 //     没有东西会被覆盖，因而没有安全备份可拍。两侧都满足「不会在无声中吃掉现有数据」。
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -125,6 +126,7 @@ function sqliteHarness(appHome: string): RecoveryHarness {
     direction: 'same' as const,
   })
   const adapter = createLegacyPlatformRecoveryAdapter({
+    contract: buildLogicalSchemaContract(),
     artifacts,
     appHome,
     dbPath: join(appHome, 'db.sqlite'),
@@ -161,6 +163,7 @@ function postgresqlHarness(appHome: string): RecoveryHarness {
     verification: {},
   } as unknown as PortableDatabaseBackupInspection
   const restore = createPostgresqlAdminRestoreCoordinator({
+    headContract: buildLogicalSchemaContract(),
     artifacts,
     runtime: { provider: 'postgresql' } as PostgresqlDatabaseRuntime,
     targetGenerationId: 'dbg_pg_conformance_0001',
@@ -176,6 +179,8 @@ function postgresqlHarness(appHome: string): RecoveryHarness {
   })
   const adapter: SystemOperationsRecoveryAdapter = {
     backup: createPostgresqlAdminBackupCoordinator({
+      headContract: buildLogicalSchemaContract(),
+      contract: buildLogicalSchemaContract(),
       runtime: { provider: 'postgresql' } as PostgresqlDatabaseRuntime,
       // RFC-359 W9：应用侧资产（workflow / worktree 行）已合成中立实现由组合根注入；
       // 本文件把整条 createBackup 都 stub 掉，客户端一次也不用。

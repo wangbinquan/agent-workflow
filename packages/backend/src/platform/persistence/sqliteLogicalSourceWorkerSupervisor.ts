@@ -165,6 +165,7 @@ export async function openSqliteLogicalSourceWorker(
       type: 'init',
       path: options.path,
       expectedSchemaDigest: options.contract.digest,
+      contract: options.contract,
     },
     'ready',
   )

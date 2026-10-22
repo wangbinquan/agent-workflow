@@ -1,6 +1,7 @@
 // RFC-359 T19h: exercise the reserved-connection protocol around a published
 // baseline. Real PostgreSQL DDL and nonempty-row preservation have a separate
 // hosted suite; these controlled faults pin rollback and pointer repair order.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
@@ -18,7 +19,7 @@ import type {
 
 let history: PostgresqlMigrationHistory
 beforeAll(async () => {
-  history = await loadPostgresqlMigrationHistory()
+  history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
 })
 
 const generation = {
@@ -272,6 +273,7 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
     const original = db.committed()
     let callbacks = 0
     const result = await migratePostgresqlSchema({
+      headContract: buildLogicalSchemaContract(),
       runtime: db.runtime,
       history,
       activeGeneration: db.selected,
@@ -313,6 +315,7 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
     let callbacks = 0
     await expect(
       migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
         runtime: db.runtime,
         history,
         afterCommitted: () => {
@@ -335,6 +338,7 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
       let callbacks = 0
       await expect(
         migratePostgresqlSchema({
+          headContract: buildLogicalSchemaContract(),
           runtime: db.runtime,
           history,
           afterCommitted: () => {
@@ -356,6 +360,7 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
     let callbacks = 0
     await expect(
       migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
         runtime: db.runtime,
         history,
         afterCommitted: () => {
@@ -372,7 +377,13 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
 
   test('a missed current-contract row also rolls back the completed index statements', async () => {
     const db = fixture({ missContractUpdate: true })
-    await expect(migratePostgresqlSchema({ runtime: db.runtime, history })).rejects.toMatchObject({
+    await expect(
+      migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
+        runtime: db.runtime,
+        history,
+      }),
+    ).rejects.toMatchObject({
       code: 'postgresql-schema-drift',
     })
     expect(db.calls.some((call) => call.sql === 'ROLLBACK')).toBe(true)
@@ -384,6 +395,7 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
     const failure = new Error('injected atomic pointer write interruption')
     await expect(
       migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
         runtime: db.runtime,
         history,
         activeGeneration: db.selected,
@@ -397,6 +409,7 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
     expect(db.calls.some((call) => call.sql === 'ROLLBACK')).toBe(false)
     let repairedDigest: string | undefined
     const result = await migratePostgresqlSchema({
+      headContract: buildLogicalSchemaContract(),
       runtime: db.runtime,
       history,
       activeGeneration: db.selected,
@@ -414,7 +427,13 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
 
   test('an absent original baseline receipt does not start a transaction', async () => {
     const db = fixture({ missingBaseline: true })
-    await expect(migratePostgresqlSchema({ runtime: db.runtime, history })).rejects.toMatchObject({
+    await expect(
+      migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
+        runtime: db.runtime,
+        history,
+      }),
+    ).rejects.toMatchObject({
       code: 'postgresql-schema-partial',
     })
     expect(db.calls.some((call) => call.sql === 'BEGIN')).toBe(false)
@@ -424,7 +443,13 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
   test('a held published-version lock releases the stable lock before returning', async () => {
     const stable = 'rfc359-schema-upgrade'
     const db = fixture({ heldKey: `rfc349-schema:${history.root.contract.digest}` })
-    await expect(migratePostgresqlSchema({ runtime: db.runtime, history })).rejects.toMatchObject({
+    await expect(
+      migratePostgresqlSchema({
+        headContract: buildLogicalSchemaContract(),
+        runtime: db.runtime,
+        history,
+      }),
+    ).rejects.toMatchObject({
       code: 'postgresql-schema-lock-held',
     })
     expect(

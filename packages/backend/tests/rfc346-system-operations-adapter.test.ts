@@ -1,6 +1,7 @@
 // RFC-346 — verifies the compatibility adapter preserves the established
 // backup/stage/status/cold-restore effect order without moving RFC-213 mechanics.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -22,9 +23,13 @@ function tmp(): string {
 }
 
 function createTestLegacyPlatformRecoveryAdapter(
-  deps: Omit<Parameters<typeof createLegacyPlatformRecoveryAdapter>[0], 'postOpenRecovery'>,
+  deps: Omit<
+    Parameters<typeof createLegacyPlatformRecoveryAdapter>[0],
+    'postOpenRecovery' | 'contract'
+  >,
 ) {
   return createLegacyPlatformRecoveryAdapter({
+    contract: buildLogicalSchemaContract(),
     ...deps,
     postOpenRecovery: SQLITE_POST_RESTORE_RECOVERY,
   })

@@ -100,6 +100,7 @@ export interface HostedRestoreArtifact {
 }
 
 export async function openHostedDatabaseBackupArchive(input: {
+  readonly headContract: LogicalSchemaContract
   readonly reference: string
   readonly installation: string
   readonly objectSpaceId: string
@@ -182,6 +183,7 @@ export async function openHostedDatabaseBackupArchive(input: {
       async replay(target) {
         if (closed) throw new HostedRestoreArtifactError('hosted-restore-artifact-closed')
         return restoreLogicalDatabaseBackup({
+          headContract: input.headContract,
           artifactRoot,
           expectedEnvelopeFileDigest: manifest.database.envelopeFileDigest,
           restoreOperationId: copyOperationId,

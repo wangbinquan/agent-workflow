@@ -29,7 +29,7 @@ import { checkpointSqliteWal } from '@/platform/persistence/sqlite/systemMainten
 import { createPostgresqlDatabaseOperationalAdapter } from '@/platform/persistence/databaseOperationalAdapter'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createPluginGenerationFilesystemGcPort } from '@/services/pluginGenerationGc'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { createLogger } from '@/util/log'

@@ -4,6 +4,7 @@
 // whichever platform variables happen to be present); standalone is the
 // default. A CrewStation-hosted instance runs the same start and migrate
 // sequences with the hosted adapters selected here.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { composeCrewStationRestoreNormalization, composeCrewStationProfile } from './crewstation'
 import {
   composeCrewStationMigrationInstallation,
@@ -55,7 +56,7 @@ export async function migrateForDeployment(
     return await migrateCommand()
   }
   const environment = readCrewStationDatabaseEnvironment(env)
-  const prepared = await prepareManualDatabaseMigration({
+  const prepared = await prepareManualDatabaseMigration(buildLogicalSchemaContract(), {
     kind: 'selected',
     configuration: {
       read: () => crewStationDatabaseConfig(env),
@@ -64,6 +65,7 @@ export async function migrateForDeployment(
       },
     },
     installation: composeCrewStationMigrationInstallation(
+      buildLogicalSchemaContract(),
       environment,
       env,
       composeCrewStationRestoreNormalization(),
@@ -82,8 +84,17 @@ export async function verifyDatabaseRestoreForDeployment(
   if (readDeploymentMode(env) !== 'crewstation')
     throw new Error('database restore verification requires CrewStation deployment')
   const environment = readCrewStationDatabaseEnvironment(env)
-  const prepared = await prepareCrewStationDatabase({ environment, env, schema: 'verify' })
+  const prepared = await prepareCrewStationDatabase({
+    contract: buildLogicalSchemaContract(),
+    environment,
+    env,
+    schema: 'verify',
+  })
   await prepared.runtime.close()
-  const receipt = await verifyCrewStationDatabaseRestore({ environment, env })
+  const receipt = await verifyCrewStationDatabaseRestore({
+    contract: buildLogicalSchemaContract(),
+    environment,
+    env,
+  })
   return `CS_DATABASE_RESTORE_RECEIPT=${JSON.stringify(receipt)}\n`
 }

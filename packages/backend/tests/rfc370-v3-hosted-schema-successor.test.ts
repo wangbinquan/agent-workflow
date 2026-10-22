@@ -8,6 +8,7 @@
 // still refused. These cases drive the pure classification with the real
 // on-disk history; the real-PostgreSQL cycle is in
 // `rfc370-v3-hosted-write-window.integration.test.ts`.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import {
@@ -17,7 +18,7 @@ import {
 import { postgresqlUpgradeReceipt } from '@/platform/persistence/postgresqlMigrationSequence'
 import { POSTGRESQL_BASELINE_ID } from '@/platform/persistence/postgresqlSchema'
 
-const history = await loadPostgresqlMigrationHistory()
+const history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
 const head = history.head
 const headTables = head.plan.statements
   .filter((statement) => statement.kind === 'table')

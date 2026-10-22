@@ -1,4 +1,5 @@
 // RFC-391 — all provider differences for the two neutral daemon graphs.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import type { Config } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -70,7 +71,11 @@ export interface DaemonSessionAdapter<P extends DatabaseProvider = DatabaseProvi
     db: DaemonApplicationDatabase<P>
     databaseBackup?: DatabaseBackupEffects
   }):
-    | { readonly db: NonNullable<BackupOptions['db']>; readonly createScheduledBackup?: never }
+    | {
+        readonly db: NonNullable<BackupOptions['db']>
+        readonly contract: ReturnType<typeof buildLogicalSchemaContract>
+        readonly createScheduledBackup?: never
+      }
     | {
         readonly db?: never
         readonly createScheduledBackup: NonNullable<BackupOptions['createScheduledBackup']>
@@ -86,6 +91,7 @@ export const DAEMON_SESSION_ADAPTERS: {
       requireDatabaseProviderRuntime(provider, 'sqlite').openClient({ migrationsFolder }),
     core: (input) =>
       DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
+        contract: buildLogicalSchemaContract(),
         db: input.db,
         appHome: input.appHome,
         dbPath: input.dbPath ?? join(input.appHome, 'db.sqlite'),
@@ -116,13 +122,14 @@ export const DAEMON_SESSION_ADAPTERS: {
         },
       }),
     }),
-    scheduledBackup: ({ db }) => ({ db }),
+    scheduledBackup: ({ db }) => ({ db, contract: buildLogicalSchemaContract() }),
     recoveryProofGeneration: () => DAEMON_GENERATION,
   },
   postgresql: {
     open: (provider) => requireDatabaseProviderRuntime(provider, 'postgresql').openClient(),
     core: (input) =>
       DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
+        contract: buildLogicalSchemaContract(),
         db: input.db,
         runtime: input.provider.runtime,
         databaseConfig: requireDatabaseConfig(input.config.database, 'postgresql'),

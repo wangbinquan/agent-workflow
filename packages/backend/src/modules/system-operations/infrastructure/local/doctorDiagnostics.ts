@@ -32,7 +32,7 @@ import {
   type ResolvedDatabaseProviderRuntime,
 } from '@/platform/persistence/databaseProviderRuntime'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
@@ -156,6 +156,7 @@ const ENGINE_HEALTH_CHECKS = {
 >
 
 export async function checkConfiguredDatabase(
+  contract: LogicalSchemaContract,
   configuration?: ApplicationConfigurationQueries,
 ): Promise<CheckResult[]> {
   let config: Config
@@ -189,7 +190,6 @@ export async function checkConfiguredDatabase(
 
   let resolved: ReturnType<typeof resolveDatabaseProviderRuntime>
   try {
-    const contract = buildLogicalSchemaContract()
     resolved = resolveDatabaseProviderRuntime({
       config: config.database,
       sqlitePath: Paths.db,
@@ -535,6 +535,7 @@ function checkMigrations(): CheckResult {
 }
 
 export function createLocalDoctorDiagnostics(input: {
+  readonly contract: LogicalSchemaContract
   readonly configuration?: ApplicationConfigurationQueries
 }): DoctorDiagnosticsFamily {
   const selected = input.configuration
@@ -570,7 +571,7 @@ export function createLocalDoctorDiagnostics(input: {
       return checkMigrations()
     },
     database() {
-      return checkConfiguredDatabase(configuration)
+      return checkConfiguredDatabase(input.contract, configuration)
     },
     backups() {
       return checkBackups()
@@ -578,10 +579,12 @@ export function createLocalDoctorDiagnostics(input: {
   }
 }
 
-export function createLocalDoctorDiagnosticsFactory(): DoctorDiagnosticsFactory {
+export function createLocalDoctorDiagnosticsFactory(
+  contract: LogicalSchemaContract,
+): DoctorDiagnosticsFactory {
   return {
     create(input) {
-      return createLocalDoctorDiagnostics(input)
+      return createLocalDoctorDiagnostics({ ...input, contract })
     },
   }
 }

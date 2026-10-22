@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { configGetCommand, configSetCommand } from '../src/cli/config-cli'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { doctorCommand, formatDoctor } from '../src/cli/doctor'
 import { migrateCommand } from '../src/bootstrap/migrate'
 import { statusCommand, formatStatus } from '../src/cli/status'
@@ -137,7 +138,7 @@ describe('CLI subcommands (P-1-05)', () => {
   // --- doctor ---
 
   test('doctor returns ok when opencode + git present', async () => {
-    const result = await doctorCommand()
+    const result = await doctorCommand(buildLogicalSchemaContract())
     // We trust the dev box has executable OpenCode and Git installations.
     // If a particular check fails, surface its message for easier debugging.
     if (!result.ok) {
@@ -155,7 +156,7 @@ describe('CLI subcommands (P-1-05)', () => {
     // a child process with a custom PATH for `node:fs.readdirSync` — too
     // invasive. Instead, just verify token-file mode check works:
     writeFileSync(join(tmp, 'token'), 'a'.repeat(64), { mode: 0o644 })
-    const result = await doctorCommand()
+    const result = await doctorCommand(buildLogicalSchemaContract())
     // RFC-254 T7/D19: the check now covers every at-rest secret and reports the
     // protection the PLATFORM actually offers. On POSIX that is still mode 600
     // and a 644 token still fails; on Windows the same file is not insecure and

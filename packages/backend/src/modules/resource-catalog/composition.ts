@@ -1,0 +1,23 @@
+// RFC-395 I-a: schema-only composition root.
+export {
+  schemaContribution,
+  agents,
+  mcpProbes,
+  mcpRuntimeTestCreateReceipts,
+  mcpRuntimeTestEvents,
+  mcpRuntimeTestSessionLeases,
+  mcpRuntimeTestSessions,
+  mcpRuntimeTestTurns,
+  mcps,
+  pluginArtifactGenerations,
+  plugins,
+  resourceBundleApplies,
+  skillContentEntries,
+  skillOperationLocks,
+  skillOperations,
+  skillVersions,
+  skills,
+  workflows,
+  workgroupMembers,
+  workgroups,
+} from './infrastructure/persistence/schema'

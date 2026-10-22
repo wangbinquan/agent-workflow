@@ -38,7 +38,7 @@ import {
   persistLogicalTableChunk,
   readLogicalTableChunk,
 } from '@/platform/persistence/logicalDatabaseArtifact'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const contract = buildLogicalSchemaContract()
 const table = contract.tables.find((candidate) => candidate.sourceTable === 'node_run_events')!

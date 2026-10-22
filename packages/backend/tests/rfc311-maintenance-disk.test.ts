@@ -14,6 +14,7 @@
 //      夹具全是可写假数据，于是设置页「删除退役运行时存储」按钮在真机上 100% EACCES
 //      500（2026-09-02 用户实撞：2866MB 的 store 一字节没删）。这条锁的就是它。
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import {
   chmodSync,
@@ -158,13 +159,13 @@ describe('RFC-311 T20 — reclaimable disk report and cleanup', () => {
       writeFileSync(join(home, '.daemon.lock'), String(process.pid))
 
       const { dbCompactCommand } = await import('../src/cli/dbCompact')
-      const blocked = dbCompactCommand()
+      const blocked = dbCompactCommand(buildLogicalSchemaContract())
       expect(blocked.status).toBe('daemon-running')
       expect(blocked.output).toContain('agent-workflow stop')
 
       // 锁清掉之后才允许执行。
       rmSync(join(home, '.daemon.lock'))
-      const ok = dbCompactCommand()
+      const ok = dbCompactCommand(buildLogicalSchemaContract())
       expect(ok.status).toBe('ok')
       expect(ok.output).toContain('compacted')
     } finally {

@@ -407,6 +407,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // Immutable historical SQLite artifacts require native serialization; current
   // retained-row reads now also drive the real PostgreSQL source in this suite.
   'rfc372-task-schema.test.ts: 2',
+  // RFC-395 I-a proof 3 compares the SQLite compiler with SQLite migration replay;
+  // the companion PostgreSQL catalog test builds both PostgreSQL databases in its lane.
+  'rfc395-provider-catalog-equivalence.test.ts: 2',
   'runner-subagent-live-capture.test.ts: 6',
   'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1',
   'scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts: 1',

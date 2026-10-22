@@ -1,6 +1,7 @@
 // RFC-359 W28: the original full task page and facet SQL keeps its complete
 // ordered results when one additive index covers the facet read. Tiny plans
 // prove the access mechanism; hosted full HTTP runs retain the latency gate.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -186,7 +187,9 @@ async function createIndexStatement(harness: ProviderHarness): Promise<string> {
   if (harness.capabilities.provider === 'sqlite') {
     return readFileSync(SQLITE_MIGRATION, 'utf8')
   }
-  const history = await loadPostgresqlMigrationHistory()
+  const history = await loadPostgresqlMigrationHistory({
+    headContract: buildLogicalSchemaContract(),
+  })
   const step = history.steps.find((candidate) => candidate.id === UPGRADE)
   if (step === undefined || step.indexAdditions.length !== 1) {
     throw new Error('missing exact task facet index upgrade')
@@ -223,7 +226,9 @@ async function compareIndexStates<T>(
 }
 
 test('the appended history adds exactly the facet index and retains its preceding receipt', async () => {
-  const history = await loadPostgresqlMigrationHistory()
+  const history = await loadPostgresqlMigrationHistory({
+    headContract: buildLogicalSchemaContract(),
+  })
   const step = history.steps.find((candidate) => candidate.id === UPGRADE)
   expect(step).toBeDefined()
   if (step === undefined) throw new Error('missing facet index history')

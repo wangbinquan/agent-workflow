@@ -1,4 +1,5 @@
 // Pre-open generation reads and restore completion stay in their original phases.
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { DatabasePreOpenRecoveryPort } from '@/modules/system-operations/application/ports/databasePreOpenRecovery'
@@ -9,7 +10,7 @@ import type {
 } from '@/platform/persistence/generationValidation'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 
-const history = await loadPostgresqlMigrationHistory()
+const history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
 const contract = history.head.contract
 
 function deferred() {

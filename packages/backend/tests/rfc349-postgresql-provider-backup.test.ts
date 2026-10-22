@@ -44,6 +44,7 @@ import { readManifest } from '@/services/backupManifest'
 import type { PortableBackupApplicationAssets } from '@/services/portableBackupArchive'
 import { captureWorktreeRows } from '@/services/worktreeBackup'
 import { extractTarGz } from '@/util/archive'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const roots: string[] = []
 const OPERATION_ID = 'dbm_operation_0001'
@@ -322,6 +323,7 @@ describe('RFC-349 PostgreSQL provider backup', () => {
     let closed = 0
 
     const backup = await createPostgresqlProviderBackup({
+      headContract: buildLogicalSchemaContract(),
       appHome: fixture.appHome,
       operationsRoot: fixture.operationsRoot,
       runtime: fixture.runtime,
@@ -375,6 +377,7 @@ describe('RFC-349 PostgreSQL provider backup', () => {
     } as PostgresqlDatabaseRuntime
     await expect(
       createPostgresqlProviderBackup({
+        headContract: buildLogicalSchemaContract(),
         appHome,
         runtime,
         contract: CONTRACT,

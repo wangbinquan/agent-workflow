@@ -20,7 +20,7 @@ import {
   writeDatabaseGenerationAtomic,
 } from '../src/platform/persistence/generationStore'
 import { readLogicalDatabaseBackupEnvelope } from '../src/platform/persistence/logicalDatabaseExport'
-import { buildLogicalSchemaContract } from '../src/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createBackup } from '../src/services/backup'
 import { readManifest } from '../src/services/backupManifest'
 import { createWorkflow } from '../src/services/workflow'
@@ -98,7 +98,11 @@ describe('createBackup', () => {
       'utf-8',
     )
 
-    const r = await createBackup({ db: h.db, appHome: h.appHome })
+    const r = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db: h.db,
+      appHome: h.appHome,
+    })
     expect(r.path.startsWith(join(h.appHome, 'backups', 'agent-workflow-'))).toBe(true)
     expect(r.path.endsWith('.tar.gz')).toBe(true)
     expect(existsSync(r.path)).toBe(true)
@@ -169,9 +173,9 @@ describe('createBackup', () => {
       },
     })
 
-    await expect(createBackup({ db: h.db, appHome: h.appHome })).rejects.toThrow(
-      'cannot snapshot a live PostgreSQL generation',
-    )
+    await expect(
+      createBackup({ contract: buildLogicalSchemaContract(), db: h.db, appHome: h.appHome }),
+    ).rejects.toThrow('cannot snapshot a live PostgreSQL generation')
   })
 
   test('excludes worktrees, runs, logs, token', async () => {
@@ -183,7 +187,11 @@ describe('createBackup', () => {
     writeFileSync(join(h.appHome, 'logs', 'daemon.log'), 'x', 'utf-8')
     writeFileSync(join(h.appHome, 'token'), 'secret', 'utf-8')
 
-    const r = await createBackup({ db: h.db, appHome: h.appHome })
+    const r = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db: h.db,
+      appHome: h.appHome,
+    })
     const members = await listTarMembers(r.path)
     expect(members.some((m) => m.includes('worktrees'))).toBe(false)
     expect(members.some((m) => m.includes('runs/'))).toBe(false)
@@ -210,7 +218,11 @@ describe('createBackup', () => {
     mkdirSync(join(h.appHome, 'credentials'), { recursive: true })
     writeFileSync(join(h.appHome, 'credentials', 'repo.json'), plaintextToken, 'utf-8')
 
-    const r = await createBackup({ db: h.db, appHome: h.appHome })
+    const r = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db: h.db,
+      appHome: h.appHome,
+    })
 
     const members = await listTarMembers(r.path)
     expect(members.some((m) => m.endsWith('secret.key'))).toBe(false)
@@ -244,7 +256,11 @@ describe('createBackup', () => {
       description: '',
       definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
     })
-    const r = await createBackup({ db: h.db, appHome: h.appHome })
+    const r = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db: h.db,
+      appHome: h.appHome,
+    })
     const extracted = join(h.appHome, 'extracted')
     await extractTar(r.path, extracted)
     const dbPath = join(extracted, 'db.sqlite')
@@ -260,7 +276,11 @@ describe('createBackup', () => {
   })
 
   test('first-run state without config.json or skills still produces a tarball', async () => {
-    const r = await createBackup({ db: h.db, appHome: h.appHome })
+    const r = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db: h.db,
+      appHome: h.appHome,
+    })
     expect(r.contents.config).toBe(false)
     expect(r.contents.skills).toBe(0)
     expect(r.contents.workflows).toBe(0)
@@ -270,7 +290,7 @@ describe('createBackup', () => {
   })
 
   test('staging directory is removed after backup completes', async () => {
-    await createBackup({ db: h.db, appHome: h.appHome })
+    await createBackup({ contract: buildLogicalSchemaContract(), db: h.db, appHome: h.appHome })
     const entries = readdirSync(join(h.appHome, 'backups'))
     const stale = entries.filter((e) => e.startsWith('.staging-'))
     expect(stale.length).toBe(0)

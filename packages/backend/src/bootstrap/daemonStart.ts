@@ -32,7 +32,7 @@ import { Paths } from '@/util/paths'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
 import {
   composeDaemonProviderBootstrap,

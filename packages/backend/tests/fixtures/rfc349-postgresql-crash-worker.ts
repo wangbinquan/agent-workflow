@@ -24,7 +24,7 @@ import {
   type PostgresqlLogicalTarget,
 } from '@/platform/persistence/postgresqlLogicalTarget'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
@@ -213,6 +213,7 @@ async function main(): Promise<void> {
   const target = crashAwareTarget(
     input,
     await openPostgresqlLogicalTarget({
+      headContract: buildLogicalSchemaContract(),
       runtime,
       operationId: OPERATION_ID,
       sourceGenerationId: SOURCE_GENERATION_ID,

@@ -1,0 +1,1010 @@
+{
+  "baselineHead": "5f11d1857",
+  "review": "RFC-395 design section 12.1 / research-3-machinery section 2.4 reviewed categories. Compare candidate compiled SQLite DDL with migration replay. Column-order entries identify only the table, so additive columns do not invalidate reviewed ordering differences; all column definitions are still compared independently. Additional raw PRAGMA default and primary-key nullability differences were measured at baselineHead and reported as Deviations.",
+  "differences": [
+    {
+      "table": "action_templates",
+      "kind": "column-order"
+    },
+    {
+      "table": "agents",
+      "kind": "column:builtin",
+      "replay": {
+        "name": "builtin",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "FALSE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "builtin",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "0",
+        "primary": 0
+      }
+    },
+    {
+      "table": "agents",
+      "kind": "column:sync_outputs_on_iterate",
+      "replay": {
+        "name": "sync_outputs_on_iterate",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "TRUE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "sync_outputs_on_iterate",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "1",
+        "primary": 0
+      }
+    },
+    {
+      "table": "agents",
+      "kind": "column-order"
+    },
+    {
+      "table": "auth_login_policy",
+      "kind": "column:password_login_enabled",
+      "replay": {
+        "name": "password_login_enabled",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "TRUE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "password_login_enabled",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "1",
+        "primary": 0
+      }
+    },
+    {
+      "table": "auth_login_policy",
+      "kind": "column-order"
+    },
+    {
+      "table": "cached_repos",
+      "kind": "column-order"
+    },
+    {
+      "table": "cached_repos",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["url_hash"],
+          "origin": "c",
+          "partial": 0
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["url_hash"],
+          "origin": "u",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "capability_templates",
+      "kind": "column-order"
+    },
+    {
+      "table": "clarify_rounds",
+      "kind": "column-order"
+    },
+    {
+      "table": "code_artifacts",
+      "kind": "column:id",
+      "replay": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": true,
+        "default": null,
+        "primary": 1
+      },
+      "declared": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": false,
+        "default": null,
+        "primary": 1
+      }
+    },
+    {
+      "table": "code_findings",
+      "kind": "column-order"
+    },
+    {
+      "table": "code_fix_attempts",
+      "kind": "column:id",
+      "replay": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": true,
+        "default": null,
+        "primary": 1
+      },
+      "declared": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": false,
+        "default": null,
+        "primary": 1
+      }
+    },
+    {
+      "table": "code_produced_mrs",
+      "kind": "column:mr_key",
+      "replay": {
+        "name": "mr_key",
+        "type": "TEXT",
+        "nullable": true,
+        "default": null,
+        "primary": 1
+      },
+      "declared": {
+        "name": "mr_key",
+        "type": "TEXT",
+        "nullable": false,
+        "default": null,
+        "primary": 1
+      }
+    },
+    {
+      "table": "code_trigger_deliveries",
+      "kind": "column:id",
+      "replay": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": true,
+        "default": null,
+        "primary": 1
+      },
+      "declared": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": false,
+        "default": null,
+        "primary": 1
+      }
+    },
+    {
+      "table": "code_work_items",
+      "kind": "column-order"
+    },
+    {
+      "table": "code_work_observations",
+      "kind": "column:id",
+      "replay": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": true,
+        "default": null,
+        "primary": 1
+      },
+      "declared": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": false,
+        "default": null,
+        "primary": 1
+      }
+    },
+    {
+      "table": "code_work_observations",
+      "kind": "protections",
+      "replay": ["UNIQUE(EVENT_ID) WHERE EVENT_ID IS NOT NULL"],
+      "declared": ["UNIQUE(EVENT_ID)"]
+    },
+    {
+      "table": "code_work_observations",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["event_id"],
+          "origin": "c",
+          "partial": 1
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["event_id"],
+          "origin": "c",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "collaboration_gate_operations",
+      "kind": "protections",
+      "replay": ["TRIGGER trg_collaboration_gate_operations_committed_immutable"],
+      "declared": []
+    },
+    {
+      "table": "development_adapter_definitions",
+      "kind": "column-order"
+    },
+    {
+      "table": "development_agent_attempts",
+      "kind": "column-order"
+    },
+    {
+      "table": "development_missions",
+      "kind": "column-order"
+    },
+    {
+      "table": "development_missions",
+      "kind": "foreignKeys",
+      "replay": [
+        {
+          "columns": ["reopened_from_mission_id"],
+          "foreignTable": "development_missions",
+          "foreignColumns": ["id"],
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION"
+        }
+      ],
+      "declared": []
+    },
+    {
+      "table": "doc_versions",
+      "kind": "column-order"
+    },
+    {
+      "table": "employee_cases",
+      "kind": "column-order"
+    },
+    {
+      "table": "employee_job_templates",
+      "kind": "column-order"
+    },
+    {
+      "table": "employee_tool_registrations",
+      "kind": "column-order"
+    },
+    {
+      "table": "event_response_rules",
+      "kind": "column:enabled",
+      "replay": {
+        "name": "enabled",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "TRUE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "enabled",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "1",
+        "primary": 0
+      }
+    },
+    {
+      "table": "event_subscriptions",
+      "kind": "column-order"
+    },
+    {
+      "table": "event_type_catalog",
+      "kind": "column-order"
+    },
+    {
+      "table": "hosted_database_backups",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["active_slot"],
+          "origin": "c",
+          "partial": 0
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["active_slot"],
+          "origin": "u",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "hosted_execution_bindings",
+      "kind": "column:cancel_requested",
+      "replay": {
+        "name": "cancel_requested",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "FALSE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "cancel_requested",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "0",
+        "primary": 0
+      }
+    },
+    {
+      "table": "intent_sessions",
+      "kind": "column-order"
+    },
+    {
+      "table": "intent_turn_events",
+      "kind": "protections",
+      "replay": ["UNIQUE(TURN_ID,SOURCE,EXTERNAL_EVENT_ID) WHERE EXTERNAL_EVENT_ID IS NOT NULL"],
+      "declared": ["UNIQUE(TURN_ID,SOURCE,EXTERNAL_EVENT_ID)"]
+    },
+    {
+      "table": "intent_turn_events",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["turn_id", "source", "external_event_id"],
+          "origin": "c",
+          "partial": 1
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["turn_id", "source", "external_event_id"],
+          "origin": "c",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "intent_turns",
+      "kind": "column:scratch_retained",
+      "replay": {
+        "name": "scratch_retained",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "FALSE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "scratch_retained",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "0",
+        "primary": 0
+      }
+    },
+    {
+      "table": "intent_turns",
+      "kind": "column-order"
+    },
+    {
+      "table": "mcp_probes",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["mcp_id"],
+          "origin": "c",
+          "partial": 0
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["mcp_id"],
+          "origin": "u",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "mcps",
+      "kind": "column:enabled",
+      "replay": {
+        "name": "enabled",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "TRUE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "enabled",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "1",
+        "primary": 0
+      }
+    },
+    {
+      "table": "mcps",
+      "kind": "column-order"
+    },
+    {
+      "table": "memories",
+      "kind": "foreignKeys",
+      "replay": [
+        {
+          "columns": ["superseded_by_id"],
+          "foreignTable": "memories",
+          "foreignColumns": ["id"],
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        },
+        {
+          "columns": ["supersedes_id"],
+          "foreignTable": "memories",
+          "foreignColumns": ["id"],
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        }
+      ],
+      "declared": []
+    },
+    {
+      "table": "node_runs",
+      "kind": "column-order"
+    },
+    {
+      "table": "node_runs",
+      "kind": "foreignKeys",
+      "replay": [
+        {
+          "columns": ["container_run_id"],
+          "foreignTable": "node_runs",
+          "foreignColumns": ["id"],
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION"
+        }
+      ],
+      "declared": []
+    },
+    {
+      "table": "oidc_providers",
+      "kind": "column:trust_email_verified",
+      "replay": {
+        "name": "trust_email_verified",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "FALSE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "trust_email_verified",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "0",
+        "primary": 0
+      }
+    },
+    {
+      "table": "oidc_providers",
+      "kind": "column-order"
+    },
+    {
+      "table": "oidc_providers",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["slug"],
+          "origin": "c",
+          "partial": 0
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["slug"],
+          "origin": "u",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "plugins",
+      "kind": "column:enabled",
+      "replay": {
+        "name": "enabled",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "TRUE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "enabled",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "1",
+        "primary": 0
+      }
+    },
+    {
+      "table": "plugins",
+      "kind": "column-order"
+    },
+    {
+      "table": "repo_group_nodes",
+      "kind": "foreignKeys",
+      "replay": [
+        {
+          "columns": ["child_group_id"],
+          "foreignTable": "repo_groups",
+          "foreignColumns": ["id"],
+          "onUpdate": "NO ACTION",
+          "onDelete": "NO ACTION"
+        }
+      ],
+      "declared": []
+    },
+    {
+      "table": "repository_transport_connections",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["provider", "connection_generation"],
+          "origin": "u",
+          "partial": 0
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["provider", "connection_generation"],
+          "origin": "c",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "review_comments",
+      "kind": "column-order"
+    },
+    {
+      "table": "runtime_session_leases",
+      "kind": "protections",
+      "replay": [
+        "TRIGGER runtime_session_leases_reset_pending_insert",
+        "TRIGGER runtime_session_leases_reset_pending_update"
+      ],
+      "declared": [
+        "CHECK(RESET_PENDING = 0 OR LEASE_NODE_RUN_ID IS NOT NULL)",
+        "CHECK(RESET_PENDING IN(0,1))"
+      ]
+    },
+    {
+      "table": "runtimes",
+      "kind": "column-order"
+    },
+    {
+      "table": "runtimes",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["name"],
+          "origin": "c",
+          "partial": 0
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["name"],
+          "origin": "u",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "scheduled_tasks",
+      "kind": "column:enabled",
+      "replay": {
+        "name": "enabled",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "TRUE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "enabled",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "1",
+        "primary": 0
+      }
+    },
+    {
+      "table": "scheduled_tasks",
+      "kind": "column-order"
+    },
+    {
+      "table": "skills",
+      "kind": "column-order"
+    },
+    {
+      "table": "task_collaborators",
+      "kind": "foreignKeys",
+      "replay": [
+        {
+          "columns": ["added_by"],
+          "foreignTable": "users",
+          "foreignColumns": ["id"],
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        }
+      ],
+      "declared": []
+    },
+    {
+      "table": "task_questions",
+      "kind": "column-order"
+    },
+    {
+      "table": "task_repos",
+      "kind": "column-order"
+    },
+    {
+      "table": "tasks",
+      "kind": "column:name",
+      "replay": {
+        "name": "name",
+        "type": "TEXT",
+        "nullable": true,
+        "default": null,
+        "primary": 0
+      },
+      "declared": {
+        "name": "name",
+        "type": "TEXT",
+        "nullable": false,
+        "default": null,
+        "primary": 0
+      }
+    },
+    {
+      "table": "tasks",
+      "kind": "column-order"
+    },
+    {
+      "table": "tasks",
+      "kind": "foreignKeys",
+      "replay": [
+        {
+          "columns": ["owner_user_id"],
+          "foreignTable": "users",
+          "foreignColumns": ["id"],
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        }
+      ],
+      "declared": []
+    },
+    {
+      "table": "tasks",
+      "kind": "protections",
+      "replay": [
+        "TRIGGER rfc328_tasks_lineage_after_insert",
+        "TRIGGER trg_tasks_launch_origin_inherit_child"
+      ],
+      "declared": []
+    },
+    {
+      "table": "token_audit",
+      "kind": "column:id",
+      "replay": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": true,
+        "default": null,
+        "primary": 1
+      },
+      "declared": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": false,
+        "default": null,
+        "primary": 1
+      }
+    },
+    {
+      "table": "token_audit",
+      "kind": "column-order"
+    },
+    {
+      "table": "token_delete_snapshot",
+      "kind": "column:id",
+      "replay": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": true,
+        "default": null,
+        "primary": 1
+      },
+      "declared": {
+        "name": "id",
+        "type": "TEXT",
+        "nullable": false,
+        "default": null,
+        "primary": 1
+      }
+    },
+    {
+      "table": "user_access_audit",
+      "kind": "protections",
+      "replay": ["TRIGGER user_access_audit_no_delete", "TRIGGER user_access_audit_no_update"],
+      "declared": []
+    },
+    {
+      "table": "user_identities",
+      "kind": "column-order"
+    },
+    {
+      "table": "user_pats",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["token_hash"],
+          "origin": "c",
+          "partial": 0
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["token_hash"],
+          "origin": "u",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "user_sessions",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["token_hash"],
+          "origin": "c",
+          "partial": 0
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["token_hash"],
+          "origin": "u",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "users",
+      "kind": "column-order"
+    },
+    {
+      "table": "users",
+      "kind": "foreignKeys",
+      "replay": [
+        {
+          "columns": ["created_by"],
+          "foreignTable": "users",
+          "foreignColumns": ["id"],
+          "onUpdate": "NO ACTION",
+          "onDelete": "SET NULL"
+        }
+      ],
+      "declared": []
+    },
+    {
+      "table": "users",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["email"],
+          "origin": "c",
+          "partial": 0
+        },
+        {
+          "columns": ["username"],
+          "origin": "c",
+          "partial": 0
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["email"],
+          "origin": "u",
+          "partial": 0
+        },
+        {
+          "columns": ["username"],
+          "origin": "u",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "webhook_deliveries",
+      "kind": "column-order"
+    },
+    {
+      "table": "webhook_mr_control_effects",
+      "kind": "uniqueRepresentations",
+      "replay": [
+        {
+          "columns": ["delivery_id"],
+          "origin": "u",
+          "partial": 0
+        },
+        {
+          "columns": ["endpoint_id", "stream_key", "revision"],
+          "origin": "u",
+          "partial": 0
+        }
+      ],
+      "declared": [
+        {
+          "columns": ["delivery_id"],
+          "origin": "c",
+          "partial": 0
+        },
+        {
+          "columns": ["endpoint_id", "stream_key", "revision"],
+          "origin": "c",
+          "partial": 0
+        }
+      ]
+    },
+    {
+      "table": "webhook_trigger_fires",
+      "kind": "column-order"
+    },
+    {
+      "table": "webhook_triggers",
+      "kind": "column-order"
+    },
+    {
+      "table": "workflows",
+      "kind": "column:builtin",
+      "replay": {
+        "name": "builtin",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "FALSE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "builtin",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "0",
+        "primary": 0
+      }
+    },
+    {
+      "table": "workflows",
+      "kind": "column-order"
+    },
+    {
+      "table": "workgroup_assignments",
+      "kind": "column-order"
+    },
+    {
+      "table": "workgroup_member_cursors",
+      "kind": "column:updated_at",
+      "replay": {
+        "name": "updated_at",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "UNIXEPOCH()* 1000",
+        "primary": 0
+      },
+      "declared": {
+        "name": "updated_at",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": null,
+        "primary": 0
+      }
+    },
+    {
+      "table": "workgroup_members",
+      "kind": "column-order"
+    },
+    {
+      "table": "workgroup_messages",
+      "kind": "column-order"
+    },
+    {
+      "table": "workgroup_task_state",
+      "kind": "column-order"
+    },
+    {
+      "table": "workgroups",
+      "kind": "column:blackboard",
+      "replay": {
+        "name": "blackboard",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "FALSE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "blackboard",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "0",
+        "primary": 0
+      }
+    },
+    {
+      "table": "workgroups",
+      "kind": "column:completion_gate",
+      "replay": {
+        "name": "completion_gate",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "FALSE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "completion_gate",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "0",
+        "primary": 0
+      }
+    },
+    {
+      "table": "workgroups",
+      "kind": "column:direct_messages",
+      "replay": {
+        "name": "direct_messages",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "FALSE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "direct_messages",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "0",
+        "primary": 0
+      }
+    },
+    {
+      "table": "workgroups",
+      "kind": "column:fan_out",
+      "replay": {
+        "name": "fan_out",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "FALSE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "fan_out",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "0",
+        "primary": 0
+      }
+    },
+    {
+      "table": "workgroups",
+      "kind": "column:share_outputs",
+      "replay": {
+        "name": "share_outputs",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "TRUE",
+        "primary": 0
+      },
+      "declared": {
+        "name": "share_outputs",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "1",
+        "primary": 0
+      }
+    },
+    {
+      "table": "workgroups",
+      "kind": "column-order"
+    }
+  ]
+}

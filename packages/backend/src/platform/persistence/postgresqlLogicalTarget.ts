@@ -388,6 +388,8 @@ export async function openPostgresqlLogicalTarget(input: {
   readonly runtime: PostgresqlDatabaseRuntime
   readonly operationId: string
   readonly sourceGenerationId: string
+  /** Binary head used to verify history; contract/plan may identify an older node. */
+  readonly headContract: LogicalSchemaContract
   readonly contract: LogicalSchemaContract
   readonly plan: PostgresqlSchemaPlan
   /** Infrastructure test seam; production verifies the embedded history. */
@@ -400,7 +402,7 @@ export async function openPostgresqlLogicalTarget(input: {
     )
   }
   if (input.verifyMigrationHistory === undefined) {
-    await verifyPostgresqlMigrationHistory({ plan: input.plan })
+    await verifyPostgresqlMigrationHistory({ headContract: input.headContract, plan: input.plan })
   } else {
     await input.verifyMigrationHistory(input.plan)
   }

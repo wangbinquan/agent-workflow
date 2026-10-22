@@ -20,6 +20,7 @@ import {
   composeSessionTaskExecutionBinding,
 } from '@/modules/task-execution/composition/taskExecutionBinding'
 import type { DaemonTaskExecutionAdapters } from './taskExecution'
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 type CoreAdapterInput = {
   readonly sqlite: Omit<
@@ -28,7 +29,7 @@ type CoreAdapterInput = {
   > & { readonly appHome: string }
   readonly postgresql: Omit<
     Parameters<typeof composePostgresqlSystemOperations>[0],
-    'repositoryBackupPreparation'
+    'repositoryBackupPreparation' | 'headContract'
   > & { readonly appHome: string }
 }
 
@@ -43,7 +44,11 @@ export const DAEMON_PROVIDER_CORE_ADAPTERS = {
   postgresql: (input) => ({
     provider: 'postgresql',
     systemOperations: (repositoryBackupPreparation) =>
-      composePostgresqlSystemOperations({ ...input, repositoryBackupPreparation }),
+      composePostgresqlSystemOperations({
+        headContract: buildLogicalSchemaContract(),
+        ...input,
+        repositoryBackupPreparation,
+      }),
     maintenanceDisk: () => composePostgresqlMaintenanceDiskOperations(input.runtime, input.appHome),
   }),
 } satisfies {

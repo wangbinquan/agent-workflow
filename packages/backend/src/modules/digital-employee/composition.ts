@@ -1174,3 +1174,5 @@ export function createEmployeeAutomationWorkStartProvider(
       (await runtime.findCaseByEventDelivery(eventDeliveryId))?.id ?? null,
   })
 }
+
+export { schemaContribution } from './composition/schema'

@@ -2,6 +2,7 @@
 // (never hot-swaps). MUTATION CHECK (manually verified): drop the
 // stagePendingRestore call → no marker written → the hasPendingRestore assertion reds.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { errorHandler } from '../src/util/errors'
@@ -80,6 +81,7 @@ async function appWithRoute(role: 'admin' | 'user' = 'admin'): Promise<Hono> {
   mountRestoreRoutes(
     app,
     composeSystemOperations({
+      contract: buildLogicalSchemaContract(),
       db: {} as DbClient,
       secretBox: undefined,
       repositoryBackupPreparation: {
@@ -106,7 +108,12 @@ describe('POST /api/restore', () => {
     const appHome = tmp()
     process.env.AGENT_WORKFLOW_HOME = appHome
     const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     ;(db as unknown as { $client: Database }).$client.close()
 
     const form = new FormData()
@@ -133,7 +140,12 @@ describe('POST /api/restore', () => {
     const appHome = tmp()
     process.env.AGENT_WORKFLOW_HOME = appHome
     const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     ;(db as unknown as { $client: Database }).$client.close()
     stagePendingRestore(backup.path, { appHome, now: 2 })
 
@@ -196,7 +208,12 @@ describe('impl-gate P1-5 — admin gate + pending visibility + cancel', () => {
 
     // stage something real, then observe + cancel through the API
     const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
-    const backup = await createBackup({ db, appHome, now: 1 })
+    const backup = await createBackup({
+      contract: buildLogicalSchemaContract(),
+      db,
+      appHome,
+      now: 1,
+    })
     ;(db as unknown as { $client: Database }).$client.close()
     stagePendingRestore(backup.path, { appHome, now: 42 })
 

@@ -7,7 +7,7 @@ import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { createCrewStationObjectReader } from '@/platform/crewstation/objectStorage'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import type { HostedRestoreNormalizationParticipant } from '../infrastructure/crewstation/restoreNormalizationContract'
 import { parseHostedBackupReference } from '../infrastructure/crewstation/databaseBackupFormat'
@@ -18,6 +18,7 @@ import { sha256Hex } from '@/util/hash'
 export const HOSTED_RESTORE_REFERENCE_ENV = 'CS_DATABASE_RESTORE_REFERENCE'
 
 interface RestoreEnvironmentInput {
+  readonly contract: LogicalSchemaContract
   readonly environment: { readonly project: string; readonly service: string }
   readonly env: Readonly<Record<string, string | undefined>>
 }
@@ -33,8 +34,9 @@ export async function restoreCrewStationDatabaseFromEnvironment(
   if (!prepared) return
   try {
     if (input.normalization === undefined) throw new Error('hosted-restore-normalization-unwired')
-    const history = await loadPostgresqlMigrationHistory()
+    const history = await loadPostgresqlMigrationHistory({ headContract: input.contract })
     await restoreHostedDatabaseInstallation({
+      headContract: input.contract,
       ...prepared,
       plan: history.head.plan,
       normalization: input.normalization,
@@ -59,7 +61,7 @@ function prepareRestore(input: RestoreEnvironmentInput) {
   const key = Buffer.from(input.env.AW_SECRET_KEY ?? '', 'base64')
   if (!URL.canParse(baseUrl) || !/^[a-f0-9-]{36}$/.test(objectSpaceId) || key.length !== 32)
     throw new Error('hosted-restore-requires-object-space-and-original-secret-key')
-  const contract = buildLogicalSchemaContract()
+  const contract = input.contract
   const generation = hostedDatabaseGeneration({
     ...input.environment,
     schemaDigest: contract.digest,

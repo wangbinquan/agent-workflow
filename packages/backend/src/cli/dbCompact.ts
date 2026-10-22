@@ -16,7 +16,7 @@ import { existsSync, statSync } from 'node:fs'
 
 import { readConfig } from '@/config'
 import { resolveDatabaseProviderSelection } from '@/platform/persistence/databaseProviderRuntime'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { isProcessAlive } from '@/util/process'
 import { readPidFromLock } from '@/util/lock'
 import { Paths } from '@/util/paths'
@@ -30,7 +30,7 @@ function mib(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`
 }
 
-export function dbCompactCommand(): DbCompactResult {
+export function dbCompactCommand(contract: LogicalSchemaContract): DbCompactResult {
   const pid = readPidFromLock(Paths.lock)
   if (pid !== null && isProcessAlive(pid)) {
     return {
@@ -48,7 +48,7 @@ export function dbCompactCommand(): DbCompactResult {
     config: (readConfig(Paths.config) ?? DEFAULT_CONFIG).database,
     generationPointerPath: Paths.databaseGenerationPointer,
     operationsRoot: Paths.databaseMigrationsDir,
-    contract: buildLogicalSchemaContract(),
+    contract,
   })
   // RFC-359 AC-10 —— 问「这个引擎能不能离线压缩」，答案（连同说给用户的话）由引擎自己声明。
   // 原来问的是 `storage !== 'embedded-file'`：比品牌名好一档，但仍是两值枚举，

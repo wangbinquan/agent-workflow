@@ -61,3 +61,5 @@ export function createCodeHostWebhookDeliveryConsumerWithPersistence(
     continuation,
   )
 }
+
+export { schemaContribution } from './composition/schema'

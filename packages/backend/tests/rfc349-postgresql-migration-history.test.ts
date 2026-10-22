@@ -2,6 +2,7 @@
 // not a source-tree ornament. These checks cover the same verifier used by
 // logical target preparation and by the standalone schema migrator.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -37,21 +38,31 @@ describe('RFC-349 PostgreSQL migration history admission', () => {
   // a rejected historical plan. macOS recorded 5772.89ms against Bun's 5s default;
   // give only this integrity test a bounded budget, preserving every assertion.
   test('accepts an exact historical plan only after the complete current history is verified', async () => {
-    const history = await loadPostgresqlMigrationHistory()
+    const history = await loadPostgresqlMigrationHistory({
+      headContract: buildLogicalSchemaContract(),
+    })
     await expect(
-      verifyPostgresqlMigrationHistory({ plan: history.root.plan }),
+      verifyPostgresqlMigrationHistory({
+        headContract: buildLogicalSchemaContract(),
+        plan: history.root.plan,
+      }),
     ).resolves.toMatchObject({
       contractDigest: history.root.contract.digest,
       planDigest: history.root.plan.digest,
       statementCount: history.root.plan.statements.length,
     })
     await expect(
-      verifyPostgresqlMigrationHistory({ plan: { ...history.root.plan, statements: [] } }),
+      verifyPostgresqlMigrationHistory({
+        headContract: buildLogicalSchemaContract(),
+        plan: { ...history.root.plan, statements: [] },
+      }),
     ).rejects.toMatchObject({ code: 'postgresql-migration-history-drift' })
   }, 20_000)
 
   test('retains the exact explicit flat custom-baseline contract', async () => {
-    const history = await loadPostgresqlMigrationHistory()
+    const history = await loadPostgresqlMigrationHistory({
+      headContract: buildLogicalSchemaContract(),
+    })
     const folder = mkdtempSync(join(tmpdir(), 'rfc349-custom-pg-history-'))
     roots.push(folder)
     mkdirSync(join(folder, 'meta'))
@@ -64,7 +75,11 @@ describe('RFC-349 PostgreSQL migration history admission', () => {
       canonicalSchemaJson(postgresqlMigrationJournal(history.root.plan)),
     )
     await expect(
-      verifyPostgresqlMigrationHistory({ plan: history.root.plan, migrationsFolder: folder }),
+      verifyPostgresqlMigrationHistory({
+        headContract: buildLogicalSchemaContract(),
+        plan: history.root.plan,
+        migrationsFolder: folder,
+      }),
     ).resolves.toEqual({
       migrationsFolder: folder,
       baselineId: history.root.plan.baselineId,
@@ -73,14 +88,21 @@ describe('RFC-349 PostgreSQL migration history admission', () => {
       statementCount: history.root.plan.statements.length,
     })
     await expect(
-      loadPostgresqlMigrationHistory({ migrationsFolder: folder }),
+      loadPostgresqlMigrationHistory({
+        headContract: buildLogicalSchemaContract(),
+        migrationsFolder: folder,
+      }),
     ).rejects.toMatchObject({ code: 'postgresql-migration-history-missing' })
   })
 
   test('accepts the committed baseline and exact statement journal', async () => {
-    const plan = buildPostgresqlSchemaPlan()
+    const plan = buildPostgresqlSchemaPlan(buildLogicalSchemaContract())
     await expect(
-      verifyPostgresqlMigrationHistory({ plan, migrationsFolder: committedHistory }),
+      verifyPostgresqlMigrationHistory({
+        headContract: buildLogicalSchemaContract(),
+        plan,
+        migrationsFolder: committedHistory,
+      }),
     ).resolves.toEqual({
       migrationsFolder: committedHistory,
       baselineId: plan.baselineId,
@@ -95,7 +117,8 @@ describe('RFC-349 PostgreSQL migration history admission', () => {
     rmSync(join(history, '0000_rfc349_baseline.sql'))
     await expect(
       verifyPostgresqlMigrationHistory({
-        plan: buildPostgresqlSchemaPlan(),
+        headContract: buildLogicalSchemaContract(),
+        plan: buildPostgresqlSchemaPlan(buildLogicalSchemaContract()),
         migrationsFolder: history,
       }),
     ).rejects.toMatchObject({
@@ -108,7 +131,8 @@ describe('RFC-349 PostgreSQL migration history admission', () => {
     writeFileSync(join(history, 'meta', '_journal.json'), '{broken')
     await expect(
       verifyPostgresqlMigrationHistory({
-        plan: buildPostgresqlSchemaPlan(),
+        headContract: buildLogicalSchemaContract(),
+        plan: buildPostgresqlSchemaPlan(buildLogicalSchemaContract()),
         migrationsFolder: history,
       }),
     ).rejects.toMatchObject({
@@ -117,12 +141,16 @@ describe('RFC-349 PostgreSQL migration history admission', () => {
   })
 
   test('rejects baseline bytes or journal digests that drift from the projector', async () => {
-    const plan = buildPostgresqlSchemaPlan()
+    const plan = buildPostgresqlSchemaPlan(buildLogicalSchemaContract())
     const baselineHistory = copyHistory()
     const baselinePath = join(baselineHistory, '0000_rfc349_baseline.sql')
     writeFileSync(baselinePath, `${readFileSync(baselinePath, 'utf8')}-- drift\n`)
     await expect(
-      verifyPostgresqlMigrationHistory({ plan, migrationsFolder: baselineHistory }),
+      verifyPostgresqlMigrationHistory({
+        headContract: buildLogicalSchemaContract(),
+        plan,
+        migrationsFolder: baselineHistory,
+      }),
     ).rejects.toMatchObject({
       code: 'postgresql-migration-history-drift',
     })
@@ -133,7 +161,11 @@ describe('RFC-349 PostgreSQL migration history admission', () => {
     journal.planDigest = `sha256:${'0'.repeat(64)}`
     writeFileSync(journalPath, JSON.stringify(journal))
     await expect(
-      verifyPostgresqlMigrationHistory({ plan, migrationsFolder: journalHistory }),
+      verifyPostgresqlMigrationHistory({
+        headContract: buildLogicalSchemaContract(),
+        plan,
+        migrationsFolder: journalHistory,
+      }),
     ).rejects.toMatchObject({
       code: 'postgresql-migration-history-drift',
     })
@@ -144,12 +176,13 @@ describe('RFC-349 PostgreSQL migration history admission', () => {
   // 一次 `db/schema.ts` 改动没同步基线，几个并发作业各自排查了很久才定位。消息因此必须
   // 自解释——说清哪一半漂了、以及重生成的命令。
   test('drift message names which half drifted and how to regenerate', async () => {
-    const plan = buildPostgresqlSchemaPlan()
+    const plan = buildPostgresqlSchemaPlan(buildLogicalSchemaContract())
 
     const baselineHistory = copyHistory()
     const baselinePath = join(baselineHistory, '0000_rfc349_baseline.sql')
     writeFileSync(baselinePath, `${readFileSync(baselinePath, 'utf8')}-- drift\n`)
     const baselineError = await verifyPostgresqlMigrationHistory({
+      headContract: buildLogicalSchemaContract(),
       plan,
       migrationsFolder: baselineHistory,
     }).then(
@@ -169,6 +202,7 @@ describe('RFC-349 PostgreSQL migration history admission', () => {
     journal.planDigest = `sha256:${'0'.repeat(64)}`
     writeFileSync(journalPath, JSON.stringify(journal))
     const journalError = await verifyPostgresqlMigrationHistory({
+      headContract: buildLogicalSchemaContract(),
       plan,
       migrationsFolder: journalHistory,
     }).then(

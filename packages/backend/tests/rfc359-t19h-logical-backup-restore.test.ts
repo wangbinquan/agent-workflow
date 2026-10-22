@@ -3,6 +3,7 @@
 // explicitly control the target port. The selected PostgreSQL mechanism below
 // uses the real source, export, reserved target and provider restore composition.
 
+import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { createHash } from 'node:crypto'
@@ -64,7 +65,7 @@ const opaqueInputs = ' { "old" : true, "empty": null } '
 let history: PostgresqlMigrationHistory
 
 beforeAll(async () => {
-  history = await loadPostgresqlMigrationHistory()
+  history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
 })
 
 afterEach(() => {
@@ -248,6 +249,7 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     const oldFiles = fileTree(fixture.artifactRoot)
     const backupDigest = digest(fixture.backup.path)
     const inspection = await inspectPortableDatabaseBackup({
+      headContract: buildLogicalSchemaContract(),
       tarballPath: fixture.backup.path,
       appHome: fixture.appHome,
       restoreOperationId: restoreOperation,
@@ -257,6 +259,7 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     expect(inspection.verification.archiveRows).toBe(1)
     const receiver = protocolTarget()
     const result = await restorePortableDatabaseBackup({
+      headContract: buildLogicalSchemaContract(),
       tarballPath: fixture.backup.path,
       appHome: fixture.appHome,
       restoreOperationId: restoreOperation,
@@ -316,6 +319,7 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     }
     await expect(
       restoreLogicalDatabaseBackup({
+        headContract: buildLogicalSchemaContract(),
         artifactRoot: fixture.artifactRoot,
         expectedEnvelopeFileDigest: fixture.exported.envelopeFileDigest,
         restoreOperationId: restoreOperation,
@@ -333,6 +337,7 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     }
     await expect(
       restoreLogicalDatabaseBackup({
+        headContract: buildLogicalSchemaContract(),
         artifactRoot: fixture.artifactRoot,
         expectedEnvelopeFileDigest: fixture.exported.envelopeFileDigest,
         restoreOperationId: restoreOperation,
@@ -346,6 +351,7 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     const failed = protocolTarget(failure)
     await expect(
       restorePortableDatabaseBackup({
+        headContract: buildLogicalSchemaContract(),
         tarballPath: fixture.backup.path,
         appHome: fixture.appHome,
         restoreOperationId: restoreOperation,
@@ -376,6 +382,7 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     let opened = false
     await expect(
       restorePortableDatabaseBackup({
+        headContract: buildLogicalSchemaContract(),
         tarballPath: fixture.backup.path,
         appHome: fixture.appHome,
         restoreOperationId: restoreOperation,
@@ -429,6 +436,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
         const originalTarget = await openPostgresqlLogicalTarget({
+          headContract: buildLogicalSchemaContract(),
           runtime,
           operationId: oldOperation,
           sourceGenerationId: oldGeneration,
@@ -437,6 +445,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         })
         try {
           await restoreLogicalDatabaseBackup({
+            headContract: buildLogicalSchemaContract(),
             artifactRoot: fixture.artifactRoot,
             expectedEnvelopeFileDigest: fixture.exported.envelopeFileDigest,
             restoreOperationId: oldOperation,
@@ -478,6 +487,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         await pool.unsafe('DROP SCHEMA agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA agent_workflow_meta CASCADE')
         const restored = await restorePostgresqlProviderBackup({
+          headContract: buildLogicalSchemaContract(),
           tarballPath: backup.path,
           appHome: fixture.appHome,
           restoreOperationId: restoreOperation,
