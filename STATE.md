@@ -1,3 +1,11 @@
+## 2026-10-21 RFC-395 In Progress：阶段 I-a 开工
+
+**进行中 RFC**：[RFC-395](design/RFC-395-database-target-schema-rebuild/proposal.md)（数据库阶段目标模型与一次迁移）。用户 2026-10-21 交本会话做任务分解并指挥 Codex 实施（按本会话惯例免设计门与实现门，可推翻）。落地顺序见 RFC plan §6：I-a（各领域显式 schema contribution 等价重述今日 schema，四项等价证明，零物理变更）→ I-b（原生 SQLite / PostgreSQL provider，方案 B）→ II-pre（死代码删除与测试改接线）→ II（领域重建与转换器，一次激活交付）→ III（每个真实实例单独批准迁移）。已提交：任务分解 `ab4fee188`、用户决定 `02f0ff213`、阶段 I 技术方案 `865944979`、II-0 设计修订 `461e8bc6c`（20 项缺口逐项裁决与 Q1～Q5）。RFC-396 的持久化改动已于 `5f11d1857` 提交，I-a 交 Codex 实施中。
+
+**独立缺陷修复**（II-0 第 12 项，用户 Q5 决定按 bug 直接修，不属于 RFC-395）：仓库组展平后只剩一个挂在非根路径的成员时 `repo_count=1`，各处把它当成单根仓库。`9956ce39d` 修隔离检查点写入与崩溃重放；`ab9dcc36e` 修其余站点（任务 diff、结构化 diff、工作区回收、恢复预检、节点回滚、代码智能、变更叙述、路径产物读取），统一改用共享判据 `isSingleRootRepository`（`packages/shared/src/repoGroupLayout.ts`）。
+
+**对其他会话的影响**：判断「任务工作区是否恰好一个挂在根的仓库」一律用 `isSingleRootRepository`，不要再用 `repoCount === 1` / `> 1`。I-a 落地后表只能经各领域 contribution 声明（`src/db/schema.ts` 改为导出编译出的表，结构锁禁止新增 `sqliteTable(`），新增表须同时提供 contribution；`platform/persistence/sqlite/systemWorkspaceGc.ts` 的 GC 库函数、`startTask` 族、`getTaskNodeRuns` 将在 II-pre 删除，勿新增调用。
+
 ## 2026-10-21 RFC-294 后继 S2c：RFC-394 Done；S2c 暂停，本会话接手 RFC-395
 
 **RFC-394 Done**：`b84ff545e`（Codex 实施、本会话审核并补正）。部署选择点 `selectDeploymentProfile` 返回类型化 `DeploymentProfile`（`kind`、`requiredProvider`、`probeHost`、`listen`、`selections`），单机 `bootstrap/standalone.ts` 与托管 `composeCrewStationProfile` 各一个工厂；`StartOptions` 退役，71 个选择槽在 `bootstrap/deploymentProfile.ts` 单一声明，会话输入与应用图输入继承复用，会话图经类型锁定键表（`bootstrap/deploymentSelections.ts`）一次展开；启动序列的 `executionHost` 分支改由 profile 宿主探测承担（G9 6 → 5）；`admitSelections` / `HOSTED_ONLY_SELECTIONS` 换成 `requiredProvider` 判定；`main.ts` 只解析参数、选择一次 profile。无生产行为变化。CI `39698884341`、windows-platform、maintenance-soak、integration-opencode 全绿。**对其他会话的影响**：启动入口是 `startCommand(profile, launch, development?)`；新部署选择项加进 `DeploymentSelections` 并同步键表（缺键 / 多键编译失败）；`rfc394-deployment-profile` 结构锁禁止恢复 `StartOptions`、按部署分支或逐字段复制。
