@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-099 B2 — five-resource route enforcement, end to end over the HTTP
 // surface: list filtering, identical-404 for missing vs invisible (D1),
 // owner-or-admin writes, creator-becomes-owner (D4/D18), ACL endpoints
@@ -16,7 +17,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'

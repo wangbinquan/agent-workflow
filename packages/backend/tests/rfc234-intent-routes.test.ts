@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-234 §6 (T7) — intent-session route locks:
 //  end-to-end stubbed flow (create → generated draft with server-issued slots
 //  → commit → resources land), creator-only 404 shape (stranger AND manager),
@@ -17,7 +18,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { agents, intentSessions } from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {

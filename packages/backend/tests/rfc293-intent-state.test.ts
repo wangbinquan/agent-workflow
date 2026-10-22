@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -33,7 +34,7 @@ import {
   retryIntentWorkingSetChange,
   submitIntentWorkingSetChange,
 } from '@/modules/intent/application/workingSet'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeIntentPersistence } from '../src/modules/intent/composition/persistence'

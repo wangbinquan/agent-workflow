@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-097 — pending 孤儿任务的 boot 收割 + 恢复（design/RFC-097-task-status-cas/
 // design.md §3「崩溃窗口补偿」）。
 //
@@ -6,13 +7,13 @@
 // 任务。补偿：reapOrphanRuns增加pending→interrupted任务收割分支，并在同一transaction
 // 终止active intent——
 // boot 在 HTTP listen 之前运行（src/cli/start.ts:138，步骤 5b 早于 token/serve），
-// 彼刻一切 pending 任务必为孤儿：startTask 是 insert 后同进程立即 kick，不存在
+// 彼刻一切 pending 任务必为孤儿：launchTestTask 是 insert 后同进程立即 kick，不存在
 // 「boot 时合法存活的 pending 任务」窗口，零误伤（design §3）。
 //
 // 锁定的合同：
 //   1. pending 残留 → reap 翻 interrupted（errorSummary='daemon-restart'）→
 //      resumeTask 从 interrupted 合法恢复并跑到终态——崩溃自愈闭环。
-//   2. 对照：boot 收割之后经 startTask 正常发起的任务完全不受影响（其 pending
+//   2. 对照：boot 收割之后经 launchTestTask 正常发起的任务完全不受影响（其 pending
 //      窗口在 boot 之后、同进程内，收割摸不到它），照常跑到 done。
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
@@ -27,7 +28,7 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 import { createResumeEngine } from './helpers/resumeEngine'
 import { agents, nodeRuns, taskExecutionIntents, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
-import { startTaskWithLocalRepo } from '../src/services/task'
+import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -219,7 +220,7 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
         .schedulerDriver,
       runConfig: {
         binaryOverride: ['bun', 'run', h.doneMock],
-        // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
+        // RFC-115: retry budget via TaskContinuationDependencies (was node.retries: 0).
         defaultNodeRetries: 0,
       },
     }).resume(taskId)
@@ -228,14 +229,14 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
   }, 30000)
 
-  test('对照：boot 收割之后 startTask 的正常路径不受影响（pending 窗口在 boot 后、同进程内）', async () => {
+  test('对照：boot 收割之后 launchTestTask 的正常路径不受影响（pending 窗口在 boot 后、同进程内）', async () => {
     // boot 时库里没有任何任务 → 收割零命中（design §3：boot 在 HTTP listen 之前，
-    // 彼刻不可能存在合法 pending 任务；startTask 的 pending 窗口只出现在 boot 之后
+    // 彼刻不可能存在合法 pending 任务；launchTestTask 的 pending 窗口只出现在 boot 之后
     // 且 insert 后同进程立即 kick，收割永远摸不到它）。
     const boot = await reapOrphanRuns(taskRecoveryOperations(h.db))
     expect(boot).toEqual({ tasks: 0, runs: 0 })
 
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: h.workflowId,
         name: 'rfc097-normal-launch',
@@ -250,7 +251,7 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', h.doneMock],
         awaitScheduler: true,
-        // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
+        // RFC-115: retry budget via TaskContinuationDependencies (was node.retries: 0).
         defaultNodeRetries: 0,
       },
     )

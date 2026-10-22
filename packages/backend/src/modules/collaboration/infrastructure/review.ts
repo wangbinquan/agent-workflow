@@ -2068,7 +2068,7 @@ export async function getReviewDetail(
   // document list and default the rendered "current" document to the first
   // item; the frontend lazy-loads other items via the versions endpoint.
   // RFC-158: ONE current-round selector, shared with the task-detail canvas nav
-  // oracle (getTaskNodeRuns), so "the node is clickable" and "the bare route
+  // oracle (taskNodeRunsProjection), so "the node is clickable" and "the bare route
   // renders this version" can never diverge. `allRows.length > 0` was just
   // asserted, so the selector is non-null.
   const isMulti = resolveReviewRoundMode(allRows) !== 'single'

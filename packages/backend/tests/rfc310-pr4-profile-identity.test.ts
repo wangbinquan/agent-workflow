@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-310 PR-4 T44 —— 数字员工 profile 的零 Git identity / 零凭据（真子进程双向证）。
 //
 // 正向锁在 rfc310-pr4-execution-host.test.ts（DE 启动 → 子进程 env 四键缺席）。
@@ -15,8 +16,9 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { users } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { startTaskWithLocalRepo } from '../src/services/task'
+import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { createWorkflow } from '../src/services/workflow'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -114,6 +116,17 @@ describe('rfc310 pr4 — identity injection stays alive for RFC-067, absent for 
       },
     })
 
+    // RFC-395 II-pre：生产根启动从真实用户档案冻结身份；系统任务保持空身份。
+    await db.insert(users).values({
+      id: 'identity-control',
+      username: 'identity-control',
+      displayName: 'Control',
+      gitName: 'DE Control',
+      email: 'control@example.test',
+      role: 'admin',
+      createdAt: 1,
+      updatedAt: 1,
+    })
     const envLog = join(tmp, 'env.log')
     await withEnv(
       {
@@ -121,7 +134,7 @@ describe('rfc310 pr4 — identity injection stays alive for RFC-067, absent for 
         MOCK_OPENCODE_CAPTURE_ENV_TO: envLog,
       },
       () =>
-        startTaskWithLocalRepo(
+        launchTestTaskWithLocalRepo(
           {
             workflowId: wf.id,
             name: 'ident-control',
@@ -134,7 +147,7 @@ describe('rfc310 pr4 — identity injection stays alive for RFC-067, absent for 
             schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
               .schedulerDriver,
             appHome,
-            gitCommitIdentity: { name: 'DE Control', email: 'control@example.test' },
+            actorUserId: 'identity-control',
             binaryOverride: ['bun', 'run', MOCK_OPENCODE],
             awaitScheduler: true,
           },

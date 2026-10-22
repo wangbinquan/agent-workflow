@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-324 —— 任务的第三档：观察者。
 //
 // RFC-099 之后，把人加进任务只有一个含义：他与 owner 同权——能 cancel / resume /
@@ -20,7 +21,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskCollaborators, tasks, workflows } from '../src/db/schema'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   canViewTask,
   getTaskMembers,

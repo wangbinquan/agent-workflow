@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -10,7 +11,7 @@ import {
   employeeTypePackages,
 } from '../src/db/schema'
 import { assertWebhookTriggerSaveable } from '../src/modules/integration/composition/webhookAdmission'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { ValidationError } from '../src/util/errors'
 import {
   integrationTriggerResourceAuthority,

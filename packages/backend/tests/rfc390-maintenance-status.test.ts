@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-390: both production-shaped HTTP lanes expose database telemetry; the former SQLite wiring did not.
 import { expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
@@ -5,7 +6,7 @@ import { join } from 'node:path'
 import { buildActor } from '@/auth/actor'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { mountMaintenanceRoutes } from '@/routes/maintenance'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createRouteOperationDispatcher } from './helpers/routeOperationDispatcher'
 

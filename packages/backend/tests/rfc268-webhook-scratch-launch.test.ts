@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-268 T5 — 走 webhook dispatcher 的真实 startExecution 收口，证明三种目标
 // 都落成 RFC-165 scratch task：main 空根提交、空 tree、无 remote。这里不注入
 // launch fake；若 dispatcher 只“长得像” scratch 而未接进物化层，本测试会红。
@@ -36,7 +37,7 @@ import {
 } from './helpers/integrationTriggerResourceBinding'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 import { createWorkflow } from '../src/services/workflow'
 import { createWorkgroup } from '../src/services/workgroups'

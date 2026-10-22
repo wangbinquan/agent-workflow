@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-251 — the product boundaries no longer reject plugins or `dependsOn` on
 // an OpenCode runtime.
 //
@@ -28,7 +29,7 @@ import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTask } from './helpers/integrationTriggerResourceBinding'
 import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
 import { createWorkflow } from '../src/services/workflow'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const

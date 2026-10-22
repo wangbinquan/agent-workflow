@@ -1,6 +1,7 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Test-only binding to the real SC mechanisms; no production service facade.
 import type { StartTask } from '@agent-workflow/shared'
-import type { StartTaskDeps } from '@/services/task'
+import type { TestTaskLaunchOptions } from './productionTaskLaunch'
 import { Paths } from '@/util/paths'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { loadFrozenSpaceLayout } from '@/modules/task-execution/infrastructure/frozenWorkspaceLayout'
@@ -11,14 +12,14 @@ import {
   type RepoSourceSpec,
   type ResolvedRepoSource,
 } from '@/modules/source-control/infrastructure/workspaceMaterializer'
-function repositoryWorkspaceFor(deps: Pick<StartTaskDeps, 'db' | 'repositoryWorkspace'>) {
+function repositoryWorkspaceFor(deps: Pick<TestTaskLaunchOptions, 'db' | 'repositoryWorkspace'>) {
   return deps.repositoryWorkspace ?? composeSqliteRepositoryWorkspaceStore(deps.db)
 }
 
 export async function resolveRepoSourceSingle(
   spec: RepoSourceSpec,
   input: StartTask,
-  deps: StartTaskDeps,
+  deps: TestTaskLaunchOptions,
 ): Promise<ResolvedRepoSource> {
   const appHome = deps.appHome ?? Paths.root
   return await resolveRepoSourceSingleWithProvider(spec, input, {
@@ -42,7 +43,7 @@ export async function resolveRepoSourceSingle(
 
 export async function materializeSpace(
   input: StartTask,
-  deps: StartTaskDeps,
+  deps: TestTaskLaunchOptions,
   appHome: string,
   presetTaskId?: string,
 ): Promise<MaterializedSpace> {

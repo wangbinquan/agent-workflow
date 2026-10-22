@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-321 — only absence may fall through from personal to global. Storage
 // tests also prove personal secrets are sealed and isolated per user.
 
@@ -15,7 +16,7 @@ import {
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { selectRepositoryTransportCredential } from '../src/modules/source-control/domain/repositoryTransportCredential'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DIGEST = 'a'.repeat(64)
 const PERSONAL_TOKEN = 'aw-personal-fixture-token-9999'

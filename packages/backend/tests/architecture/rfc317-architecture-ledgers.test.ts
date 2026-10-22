@@ -1,3 +1,4 @@
+// RFC-395 II-pre：GC 旧债以真实计划阶段销账，保留 finding ID 与原有双向守卫。
 // RFC-317 B0 — 三份机器账本的闭合守卫。
 //
 // 这一批只落账本与闭合断言，**不落 R1/R2 的边相等断言**（那是 B3，连同它的
@@ -189,19 +190,28 @@ describe('RFC-317 — 精确债务账本（architecture/commons-debt.json）', (
       resolve(REPO_ROOT, 'design/RFC-392-unified-test-entry/plan.md'),
       'utf8',
     )
+    const databaseRebuild = readFileSync(
+      resolve(REPO_ROOT, 'design/RFC-395-database-target-schema-rebuild/plan.md'),
+      'utf8',
+    )
     const knownByRfc = new Map([
       ['RFC-317', known],
+      [
+        'RFC-395',
+        new Set([...databaseRebuild.matchAll(/\b(?:T\d{1,3}|II-pre)\b/g)].map((match) => match[0])),
+      ],
       [
         'RFC-392',
         new Set([...successor.matchAll(/\bT(\d{1,3})\b/g)].map((match) => `T${match[1]!}`)),
       ],
     ])
     expect(knownByRfc.get('RFC-392')!.size).toBe(8)
+    expect(knownByRfc.get('RFC-395')!.has('II-pre')).toBe(true)
     const bad: string[] = []
     for (const finding of debt.registeredFindings) {
       const resolvedIn = finding.resolvedIn
       if (resolvedIn === undefined) continue
-      const tasks = [...resolvedIn.matchAll(/\bT(\d{1,3})\b/g)].map((match) => `T${match[1]!}`)
+      const tasks = [...resolvedIn.matchAll(/\b(?:T\d{1,3}|II-pre)\b/g)].map((match) => match[0])
       const rfc = resolvedIn.match(/RFC-\d+/)?.[0]
       const declared = rfc === undefined ? undefined : knownByRfc.get(rfc)
       if (
@@ -212,7 +222,7 @@ describe('RFC-317 — 精确债务账本（architecture/commons-debt.json）', (
         bad.push(`${finding.findingId}: resolvedIn='${resolvedIn}'`)
       }
     }
-    expect(bad, 'resolvedIn 必须点名已登记的 RFC 与其 plan.md 中真实存在的 T<n>').toEqual([])
+    expect(bad, 'resolvedIn 必须点名已登记的 RFC 与其 plan.md 中真实存在的任务或阶段').toEqual([])
   })
 })
 

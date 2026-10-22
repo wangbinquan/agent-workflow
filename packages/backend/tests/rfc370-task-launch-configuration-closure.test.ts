@@ -1,9 +1,16 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
+
+import { createFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
+import {
+  createFileFusionWorkspaceEffects,
+  fusionWorkDirectory,
+} from '@/modules/source-control/infrastructure/local/fileFusionWorkspaceEffects'
 import { composeTestRoomContinuation } from './helpers/legacyTaskDrive'
 // RFC-370 H1/A-T7: real caller closure keeps local sync semantics and carries the
 // selected async source through short-lived drive, preparation and continuation.
 import { afterEach, expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
-import { mkdtempSync, rmSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
@@ -11,7 +18,7 @@ import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composi
 import { resolveTaskStartLaunchConfiguration } from '@/modules/task-execution/application/launchConfiguration'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { createTestTaskDriveCoordinator } from './helpers/legacyTaskDrive'
-import { startTask, type StartTaskDeps } from '@/services/task'
+import { type TaskContinuationDependencies } from '@/services/task'
 import { tasks, workflows, taskExecutionIntents } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -182,58 +189,59 @@ test('default file binding exposes the same sync source; explicit overrides and 
 })
 
 describeEachProvider('RFC-370 selected task caller and repository budget closure', (harness) => {
-  test('a transferred workspace remains owned while configuration waits and a later launch error waits for cleanup ACK', async () => {
+  // RFC-395 II-pre：配置 ACK 由上方 start policy 用例锁定；所有权 ACK 改接生产 fusion 预物化启动。
+  // 生产在工作流读取之前不运行旧启动器的四次配置读取，两段时序分别验证。
+  test('a production fusion workspace remains owned until failed launch cleanup ACK', async () => {
     const appHome = home(),
-      worktreePath = join(appHome, 'transferred-workspace'),
-      configPath = join(appHome, 'absent-transferred.json')
-    mkdirSync(worktreePath)
-    writeFileSync(join(worktreePath, 'owned.txt'), 'transferred launch material')
-    const entered = Promise.withResolvers<void>(),
-      release = Promise.withResolvers<void>(),
-      cleanupEntered = Promise.withResolvers<void>(),
+      fusionId = ulid(),
+      taskId = ulid()
+    const worktreePath = fusionWorkDirectory(appHome, fusionId, 1)
+    const cleanupEntered = Promise.withResolvers<void>(),
       cleanupRelease = Promise.withResolvers<void>()
-    let reads = 0,
-      drives = 0,
+    let drives = 0,
       settled = false
-    const query: TaskLaunchConfigurationQueries = {
-      async read() {
-        expect(this).toBe(query)
-        if (reads++ === 0) {
-          entered.resolve()
-          await release.promise
-        }
-        return { ...DEFAULT_CONFIG, defaultNodeRetries: 0 }
-      },
-    }
-    const pending = startTask(
-      { workflowId: `missing-${ulid()}`, name: 'transferred configuration wait', inputs: {} },
-      {
-        db: harness.db,
-        appHome,
-        configPath,
-        gitCommitIdentity: null,
-        launchProvenance: { kind: 'direct-multipart', initiator: 'manual' },
-        launchConfiguration: query,
-        schedulerDriver: {
-          async drive() {
-            drives++
-          },
-        },
-        preCreatedWorktree: {
-          taskId: ulid(),
-          worktreePath,
-          branch: 'transferred',
-          baseCommit: 'transferred-base',
-          cleanup: { kind: 'owned-root', path: worktreePath },
-        },
-        async workspaceCleanupHook(event) {
-          expect(event.stage).toBe('owned-root-remove')
-          expect(event.path).toBe(worktreePath)
+    const effects = createFileFusionWorkspaceEffects({ appHome })
+    const launch = createFusionEngineTaskOperations({
+      db: harness.db,
+      workspaces: {
+        ...effects,
+        async release(request) {
+          expect(request).toEqual({ taskId, worktreePath, mode: 'abandon' })
           cleanupEntered.resolve()
           await cleanupRelease.promise
+          await effects.release(request)
         },
       },
-    )
+      coordinator: {
+        async submit() {
+          drives++
+          throw new Error('missing workflow must not drive')
+        },
+      },
+      cancellation: {
+        async cancel() {
+          throw new Error('unexpected cancellation')
+        },
+      },
+    })
+    const pending = launch
+      .launch({
+        fusionId,
+        taskId,
+        iteration: 1,
+        workflowId: `missing-${ulid()}`,
+        ownerUserId: '__system__',
+        name: 'transferred cleanup wait',
+        inputs: {},
+        initiator: 'manual',
+        platformInputPaths: [],
+        seed: {
+          base: [
+            { path: 'owned.txt', content: new TextEncoder().encode('transferred launch material') },
+          ],
+          overlay: null,
+        },
+      })
       .then(
         () => {
           throw new Error('missing workflow unexpectedly launched')
@@ -245,33 +253,21 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       })
     try {
       await Promise.race([
-        entered.promise,
-        pending.then(() => {
-          throw new Error('launch missed configuration ACK')
-        }),
-      ])
-      expect(settled).toBe(false)
-      expect(existsSync(worktreePath)).toBe(true)
-      expect(drives).toBe(0)
-      expect(await harness.db.select().from(tasks)).toEqual([])
-      release.resolve()
-      await Promise.race([
         cleanupEntered.promise,
         pending.then(() => {
           throw new Error('launch missed cleanup ACK')
         }),
       ])
-      expect(reads).toBe(4)
       expect(settled).toBe(false)
-      expect(existsSync(worktreePath)).toBe(true)
+      expect(existsSync(join(worktreePath, 'owned.txt'))).toBe(true)
+      expect(drives).toBe(0)
+      expect(await harness.db.select().from(tasks)).toEqual([])
       cleanupRelease.resolve()
       expect(await pending).toMatchObject({ code: 'workflow-not-found' })
       expect(existsSync(worktreePath)).toBe(false)
-      expect(existsSync(configPath)).toBe(false)
       expect(drives).toBe(0)
       expect(await harness.db.select().from(tasks)).toEqual([])
     } finally {
-      release.resolve()
       cleanupRelease.resolve()
       await pending
     }
@@ -289,7 +285,10 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
         return current
       },
     }
-    const deps: Pick<StartTaskDeps, 'launchConfiguration' | 'launchConfigurationOverrides'> = {
+    const deps: Pick<
+      TaskContinuationDependencies,
+      'launchConfiguration' | 'launchConfigurationOverrides'
+    > = {
       launchConfiguration: query,
       launchConfigurationOverrides: { defaultNodeRetries: 0 },
     }

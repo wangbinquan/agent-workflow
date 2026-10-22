@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // LOCKS: RFC-066 PR-B T12 — getTaskDiff multi-repo concatenation.
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
 // now (the wire is URL-only) — bodies are cast through the internal
@@ -22,7 +23,7 @@ import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { startTask, startTaskWithLocalRepo } from '../src/services/task'
+import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { taskDiffProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
@@ -81,7 +82,7 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
 
   test('B16 single-repo task: baseline diff shape (baseCommit non-null, no `# === Repo:` header)', async () => {
     h = await buildHarness(1)
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: 'wf-diff',
         name: 't',
@@ -108,7 +109,7 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
 
   test('B17 two repos both with changes: concat with `# === Repo:` headers per repo in repoIndex order, baseCommit null', async () => {
     h = await buildHarness(2)
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: 'wf-diff',
         name: 't',
@@ -145,7 +146,7 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
 
   test('B18 one of two repos has zero changes → its header + section is silently dropped', async () => {
     h = await buildHarness(2)
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: 'wf-diff',
         name: 't',

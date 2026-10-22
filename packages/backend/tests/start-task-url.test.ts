@@ -1,4 +1,5 @@
-// RFC-024 T4 — locks the URL-mode branch of startTask:
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
+// RFC-024 T4 — locks the URL-mode branch of launchTestTask:
 //   1. Cold path: clones the URL into the cache, materializes a worktree
 //      under appHome/worktrees/, persists tasks.repoUrl, does NOT touch
 //      recent_repos.
@@ -28,7 +29,8 @@ import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { createWorkflow } from '../src/services/workflow'
-import { abortAllActiveTasks, isTaskActive, startTask as startTaskBase } from '../src/services/task'
+import { abortAllActiveTasks, isTaskActive } from '@/services/task'
+import { launchTestTask as launchTestTaskBase } from './helpers/productionTaskLaunch'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
@@ -75,11 +77,11 @@ function git(...args: string[]): void {
   })
 }
 
-function startTask(
-  input: Parameters<typeof startTaskBase>[0],
-  deps: Parameters<typeof startTaskBase>[1],
+function launchTestTask(
+  input: Parameters<typeof launchTestTaskBase>[0],
+  deps: Parameters<typeof launchTestTaskBase>[1],
 ) {
-  return startTaskBase(input, {
+  return launchTestTaskBase(input, {
     launchProvenance: { kind: 'direct-json', initiator: 'manual' },
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
@@ -164,10 +166,10 @@ beforeAll(async () => {
   await startGitHttpRemote()
 })
 
-describe('startTask URL mode (RFC-024)', () => {
+describe('launchTestTask URL mode (RFC-024)', () => {
   test('cold launch clones URL, persists repoUrl, does not write recent_repos', async () => {
     const { appHome, db, stubOpencode, wf, remoteUrl } = await setup()
-    const task = await startTask(
+    const task = await launchTestTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'orders' } },
       {
         db,
@@ -193,7 +195,7 @@ describe('startTask URL mode (RFC-024)', () => {
     // a relaunch that normalized inputs against version N cannot silently store
     // them into a concurrently-PUT N+1 snapshot. No repo/scheduler is reached.
     await expect(
-      startTask(
+      launchTestTask(
         {
           workflowId: wf.id,
           name: 'stale-relaunch',
@@ -215,7 +217,7 @@ describe('startTask URL mode (RFC-024)', () => {
 
   test('warm launch (second task same URL) reuses cache', async () => {
     const { appHome, db, stubOpencode, wf, remoteUrl } = await setup()
-    const t1 = await startTask(
+    const t1 = await launchTestTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'a' } },
       {
         db,
@@ -226,7 +228,7 @@ describe('startTask URL mode (RFC-024)', () => {
         awaitScheduler: true,
       },
     )
-    const t2 = await startTask(
+    const t2 = await launchTestTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'b' } },
       {
         db,
@@ -245,7 +247,7 @@ describe('startTask URL mode (RFC-024)', () => {
     const { appHome, db, stubOpencode, wf, remoteUrl } = await setup()
     let err: unknown
     try {
-      await startTask(
+      await launchTestTask(
         {
           workflowId: wf.id,
           name: 'fixture-task',

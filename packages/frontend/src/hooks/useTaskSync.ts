@@ -140,7 +140,7 @@ export function buildTaskSyncRules(taskId: string | null): WsInvalidationRules<T
     ],
     // RFC-161: cross-clarify events also invalidate node-runs so the task-detail
     // canvas's clarify-node click target (clarifyNavKind, stamped in
-    // getTaskNodeRuns) stays fresh — cross-clarify parity with the self
+    // taskNodeRunsProjection) stays fresh — cross-clarify parity with the self
     // `clarify.created`/`clarify.answered` refresh above. Keeps the RFC-123
     // directive invalidation (the single-source canvas toggle still needs it on
     // 'stop'). All three carry the intermediary node_run id (ws.ts).

@@ -1,7 +1,4 @@
-import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
-import type { Hono } from 'hono'
-import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
-import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // LOCKS: RFC-165 §9b (D11) — scheduled-task three-subject support
 // (design §11.16/.17/.19).
 //
@@ -51,7 +48,11 @@ import {
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
   withIntegrationTriggerResources,
 } from './helpers/integrationTriggerResourceBinding'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
+import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
+import type { Hono } from 'hono'
+import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createWorkflow } from '../src/services/workflow'
 import { createWorkgroup } from '../src/services/workgroups'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'

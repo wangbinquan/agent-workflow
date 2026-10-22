@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-359 W12 — the compatibility inputs retained in production now accept
 // either database client. Exercise their real queries and runtime delegation
 // through the same harness before retiring their misleading SQLite names.
@@ -9,8 +10,8 @@ import { createAuthRuntimeFor } from '@/auth/composition'
 import { compatibleAuthRuntimeOf } from '@/auth/infrastructure/compatibleAuthRuntime'
 import { users, workflows } from '@/db/schema'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
-import { legacyUserService } from '@/modules/identity-access/composition/legacyUserService'
-import type { SearchInput } from '@/modules/identity-access/infrastructure/legacyUserService'
+import * as userFixture from './helpers/userFixture'
+import type { SearchInput } from './helpers/userFixture'
 import { ownerScopedNameCondition } from '@/modules/identity-access/infrastructure/ownerScopedName'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -28,27 +29,25 @@ describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) =>
   })
 
   test('compatibility user creation and profile updates round-trip through the shared runtime', async () => {
-    const baseline = await legacyUserService.countNonSystemUsers(harness.db)
-    const created = await legacyUserService.createUser(harness.db, {
+    const baseline = await userFixture.countNonSystemUsers(harness.db)
+    const created = await userFixture.createUser(harness.db, {
       username: 'compat_profile',
       displayName: 'Original Name',
       role: 'user',
       now: 100,
     })
     expect(created).toMatchObject({ username: 'compat_profile', displayName: 'Original Name' })
-    const updated = await legacyUserService.patchUser(
+    const updated = await userFixture.patchUser(
       harness.db,
       created.id,
       { displayName: 'Updated Name' },
       200,
     )
     expect(updated.displayName).toBe('Updated Name')
-    expect(await legacyUserService.findById(harness.db, created.id)).toEqual(updated)
-    expect(await legacyUserService.findByUsername(harness.db, 'compat_profile')).toEqual(updated)
-    expect(await legacyUserService.countNonSystemUsers(harness.db)).toBe(baseline + 1)
-    expect((await legacyUserService.listAllUsers(harness.db)).map((row) => row.id)).toContain(
-      created.id,
-    )
+    expect(await userFixture.findById(harness.db, created.id)).toEqual(updated)
+    expect(await userFixture.findByUsername(harness.db, 'compat_profile')).toEqual(updated)
+    expect(await userFixture.countNonSystemUsers(harness.db)).toBe(baseline + 1)
+    expect((await userFixture.listAllUsers(harness.db)).map((row) => row.id)).toContain(created.id)
   })
 
   test('directory search and Git identity preserve the same user projection on either client', async () => {
@@ -64,9 +63,7 @@ describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) =>
       updatedAt: 10,
     })
 
-    expect(
-      await legacyUserService.searchUsersPublic(harness.db, { q: '  MIXED ', limit: 1 }),
-    ).toEqual([
+    expect(await userFixture.searchUsersPublic(harness.db, { q: '  MIXED ', limit: 1 })).toEqual([
       {
         id: 'compat_search_user',
         username: 'compat_search',
@@ -76,15 +73,16 @@ describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) =>
       },
     ])
     expect(
-      await legacyUserService.lookupUsersPublic(harness.db, [
+      await userFixture.lookupUsersPublic(harness.db, [
         'compat_search_user',
         'compat_search_user',
         'missing_user',
       ]),
     ).toHaveLength(1)
-    expect(
-      await legacyUserService.getUserGitCommitIdentity(harness.db, 'compat_search_user'),
-    ).toEqual({ name: 'Commit Author', email: 'author@example.test' })
+    expect(await userFixture.getUserGitCommitIdentity(harness.db, 'compat_search_user')).toEqual({
+      name: 'Commit Author',
+      email: 'author@example.test',
+    })
   })
 
   test('compatibility searches share the canonical directory ordering before filtering and limiting', async () => {
@@ -133,7 +131,7 @@ describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) =>
     const runtime = createIdentityAccessRuntime({ db: harness.db })
     try {
       for (const { input, ids } of cases) {
-        const actual = await legacyUserService.searchUsersPublic(harness.db, input)
+        const actual = await userFixture.searchUsersPublic(harness.db, input)
         const canonical = await runtime.userDirectory.search({
           ...input,
           limit: input.limit ?? 20,
@@ -163,7 +161,7 @@ describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) =>
         [0, 1],
         [500, 100],
       ] as const) {
-        const actual = await legacyUserService.searchUsersPublic(harness.db, {
+        const actual = await userFixture.searchUsersPublic(harness.db, {
           q: 'compat_limit_',
           limit: requested,
         })

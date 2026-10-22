@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // Hosted backup reads use the same authenticated operation boundary as backup
 // creation, while verification never invokes the live database restore path.
 // RFC-370 v3 V5: the hosted refusal of workspace capture (C10) surfaces with its
@@ -12,7 +13,7 @@ import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeSystemOperationsWithRecoveryAdapter } from '@/modules/system-operations/composition'
 import { createStandbyExecutionAuthority } from '@/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority'
 import { HostedBackupWorktreesUnsupportedError } from '@/modules/system-operations/infrastructure/crewstation/databaseBackups'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()

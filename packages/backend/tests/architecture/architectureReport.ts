@@ -1,3 +1,5 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-376 T6: on-demand inventory. Source comes only from immutable Git objects.
 // Inventory builders are copied from RFC-294, without projection/provenance governance.
 import { createHash } from 'node:crypto'
@@ -403,7 +405,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/execution/types.ts': 'task-execution',
   'packages/backend/src/services/execution/workspaceBoundary.ts': 'task-execution',
   'packages/backend/src/services/freshness.ts': 'task-execution',
-  'packages/backend/src/services/gc.ts': 'system-operations',
   'packages/backend/src/services/gitRepoCache.ts': 'source-control',
   'packages/backend/src/services/gitSubmodule.ts': 'source-control',
   'packages/backend/src/services/gitVersion.ts': 'source-control',
@@ -590,7 +591,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/tokenRedaction.ts': 'identity-access',
   'packages/backend/src/services/upload.ts': 'task-execution',
   'packages/backend/src/services/userIdentities.ts': 'identity-access',
-  'packages/backend/src/services/users.ts': 'identity-access',
   'packages/backend/src/services/webhook/codeHostAdapter.ts': 'integration',
   'packages/backend/src/services/webhook/deliveryStore.ts': 'integration',
   'packages/backend/src/services/webhook/dispatcherTypes.ts': 'integration',
@@ -2227,9 +2227,9 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
           "catalogVisibility: text('catalog_visibility'",
         ),
         anchor({
-          file: 'packages/backend/src/services/task.ts',
-          symbol: 'StartTaskDeps',
-          sourceToken: 'catalogVisibility?: TaskCatalogVisibility',
+          file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+          symbol: 'RootTaskLaunchRequest',
+          sourceToken: 'readonly catalogVisibility?: TaskCatalogVisibility',
         }),
       ],
       rollback: 'Keep the closed vocabulary and persisted values; disable only new readers.',
@@ -2251,9 +2251,9 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       ),
       writers: [
         anchor({
-          file: 'packages/backend/src/services/task.ts',
-          symbol: 'startTaskImpl',
-          sourceToken: 'catalogVisibility = parent.catalogVisibility',
+          file: 'packages/backend/src/modules/task-execution/infrastructure/childExecutionLaunchOperations.ts',
+          symbol: 'launchPreparedChild',
+          sourceToken: 'catalogVisibility: parent.catalogVisibility',
         }),
         ...internalWriters,
       ],
@@ -2285,21 +2285,21 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       rollback: 'Stop new internal callers; retain the column, root default and child inheritance.',
     },
     {
-      id: 'field:StartTaskDeps.catalogVisibility',
-      fieldPath: 'StartTaskDeps.catalogVisibility',
+      id: 'field:RootTaskLaunchRequest.internal.catalogVisibility',
+      fieldPath: 'RootTaskLaunchRequest.internal.catalogVisibility',
       purpose: 'Trusted internal launch projection into the TaskExecution-owned membership field.',
       dataClass: 'metadata',
       owner: anchor({
-        file: 'packages/backend/src/services/task.ts',
-        symbol: 'StartTaskDeps',
-        sourceToken: 'catalogVisibility?: TaskCatalogVisibility',
+        file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+        symbol: 'RootTaskLaunchRequest',
+        sourceToken: 'readonly catalogVisibility?: TaskCatalogVisibility',
       }),
       writers: internalWriters,
       consumers: [
         anchor({
-          file: 'packages/backend/src/services/task.ts',
-          symbol: 'startTaskImpl',
-          sourceToken: "deps.catalogVisibility ?? 'public'",
+          file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+          symbol: 'createRootLaunch',
+          sourceToken: "catalogVisibility: input.internal?.catalogVisibility ?? 'public'",
         }),
       ],
       rollback:
@@ -2322,9 +2322,10 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       ),
       writers: [
         anchor({
-          file: 'packages/backend/src/services/task.ts',
-          symbol: 'startTaskImpl',
-          sourceToken: 'digitalEmployeeCaseId: deps.digitalEmployeeLaunch?.caseId ?? null',
+          file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+          symbol: 'createRootLaunch',
+          sourceToken:
+            'digitalEmployeeCaseId: input.internal?.digitalEmployeeLaunch?.caseId ?? null',
         }),
       ],
       consumers: [

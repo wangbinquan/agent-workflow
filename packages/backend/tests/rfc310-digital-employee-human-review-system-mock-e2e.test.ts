@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-310 design §22.5 requires this branch as independent executable evidence:
 // implementation must never start before review approval, iterate reruns only
 // the planning Agent, and the implementation Agent consumes the exact approved
@@ -268,7 +269,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       })
       const processMock = makeAgentProcessMock(root)
       // `wakeHumanGateContinuation`（人审放行的继续驱动）仍是 legacy 启动面的 API，
-      // 还吃 `StartTaskDeps`——退役它是 plan §5hn 的活，不在本刀范围内。
+      // 还吃 `TaskContinuationDependencies`——退役它是 plan §5hn 的活，不在本刀范围内。
       const startDeps = {
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,

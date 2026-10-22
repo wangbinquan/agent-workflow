@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-317 T22–T24 / T26 —— 模块边界三条规则（R1 inbound / R2 outbound / R3 模块形状）。
 //
 // 为什么要有这三条
@@ -322,7 +323,7 @@ describe('RFC-317 T26 —— R2 正反 fixture', () => {
   test('composition 层指向 legacy 不算 R2（composition 就是装配胶水，允许两边都碰）', () => {
     const unit = fixtureUnit(
       'packages/backend/src/modules/task-execution/composition/wire.ts',
-      "import { startTask } from '@/services/task'\n",
+      "import { getTask } from '@/services/task'\n",
     )
     expect(outboundBoundaryEdges([unit]).length).toBe(0)
   })

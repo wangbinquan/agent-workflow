@@ -7,7 +7,6 @@ import type { IntentWorkflowGraphValidationPort } from '../application/ports/int
 import { formatChangesetIssues } from '@agent-workflow/shared'
 import { intentResourcePlanOf } from '../application/intentResourcePlan'
 import { decodeStoredChangeset } from '../domain/storedChangeset'
-import { decodeIntentJournalArtifacts } from '../domain/journalArtifacts'
 import {
   INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
   INTENT_APPLY_DIAGNOSTICS,
@@ -105,10 +104,6 @@ export interface IntentApplyEngineRequest {
 
 export interface IntentApplyEngine extends IntentApplyOperations {
   apply(request: IntentApplyEngineRequest): Promise<IntentApplyReceipt>
-  converge(
-    log?: Logger,
-    options?: { readonly activeJournalIds?: readonly string[] },
-  ): Promise<{ failed: number; rolledForward: number }>
   activeJournalIds(): readonly string[]
 }
 
@@ -121,8 +116,6 @@ export interface IntentApplyEngineDependencies {
   readonly id?: () => string
   readonly now?: () => number
 }
-
-const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
 
 /**
  * RFC-359 W11 —— 两笔大事务已改走中立事务原语（`databaseSessionFor(db).transaction(...)`），
@@ -143,42 +136,6 @@ type IntentApplyCatalogTransaction = Parameters<
 
 function catalogTransaction(transaction: DatabaseTransaction): IntentApplyCatalogTransaction {
   return transaction as unknown as IntentApplyCatalogTransaction
-}
-
-/**
- * RFC-359（plan §5dz）—— 收敛期读回 journal 的恢复凭据。
- *
- * **必须同时认得两种容器**：这台引擎自己写的是裸数组，而**合一之前**由 SQLite 那台
- * intent apply 引擎写下的行是带版本号的信封 `{ version: 1, artifacts: [...] }`
- * （`domain/intentJournalArtifacts.ts` 的 codec）。只认裸数组的话，一台在合一之前起过的
- * SQLite daemon 留下的未结 journal 行会被判成 `intent-journal-artifact-corrupt` 而**永不终态化**
- * ——收敛器每小时看它一次、每次都拒绝，行与半成品一起永久卡住。
- *
- * 同一条道理、同一种处置，资源包那边是 `composeResourcePackageApplyArtifactRecoveryChain`
- * （plan §5dw）；这里因为 codec 本来就在 domain 层，直接回落一次即可。
- * 工件生命周期那一侧早就这么做了（`intentApplyArtifactLifecycle.ts:95`），
- * 收敛这一侧此前漏了。
- */
-function decodeRecoveryArtifacts(json: string): IntentApplyRecoveryArtifact[] {
-  const parsed: unknown = JSON.parse(json)
-  if (!Array.isArray(parsed)) {
-    return [...decodeIntentJournalArtifacts(json)] as IntentApplyRecoveryArtifact[]
-  }
-  return parsed.map((value) => {
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-      throw new Error('intent journal artifact must be an object')
-    }
-    const kind = (value as { readonly kind?: unknown }).kind
-    if (
-      kind !== 'legacy-plugin-install-untracked' &&
-      kind !== 'plugin-install' &&
-      kind !== 'skill-stage' &&
-      kind !== 'skill-version-stage'
-    ) {
-      throw new Error(`unknown intent journal artifact kind '${String(kind)}'`)
-    }
-    return value as IntentApplyRecoveryArtifact
-  })
 }
 
 /**
@@ -550,105 +507,10 @@ export function createIntentApplyEngine(
     }
   }
 
-  async function converge(
-    log: Logger = createLogger('intentApply'),
-    options: { readonly activeJournalIds?: readonly string[] } = {},
-  ): Promise<{ failed: number; rolledForward: number }> {
-    let failed = 0
-    let rolledForward = 0
-    const rows = await dependencies.db.select().from(intentApplyJournal)
-    const reapBefore = now() - CONVERGE_MIN_AGE_MS
-    for (const row of rows) {
-      if (row.state === 'failed') continue
-      let artifacts: IntentApplyRecoveryArtifact[]
-      try {
-        artifacts = decodeRecoveryArtifacts(row.preparedArtifactsJson)
-      } catch (error) {
-        log.warn(INTENT_APPLY_DIAGNOSTICS.journalArtifactCorrupt, {
-          journalId: row.id,
-          state: row.state,
-          err: error instanceof Error ? error.message : String(error),
-        })
-        await dependencies.db
-          .update(intentApplyJournal)
-          .set({
-            error: `retryable: artifact decode failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          })
-          .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
-        continue
-      }
-      if (row.state === 'prepared' || row.state === 'applying') {
-        if (
-          active.has(row.id) ||
-          options.activeJournalIds?.includes(row.id) === true ||
-          row.updatedAt > reapBefore
-        ) {
-          continue
-        }
-        const errors: unknown[] = []
-        for (const artifact of [...artifacts].reverse()) {
-          try {
-            await dependencies.artifacts.compensate(artifact)
-          } catch (error) {
-            errors.push(error)
-            log.warn(INTENT_APPLY_DIAGNOSTICS.convergeCompensationFailed, {
-              journalId: row.id,
-              kind: artifact.kind,
-              err: error instanceof Error ? error.message : String(error),
-            })
-          }
-        }
-        if (errors.length > 0) {
-          await dependencies.db
-            .update(intentApplyJournal)
-            .set({
-              error: `retryable: compensation incomplete: ${errors
-                .map((error) => (error instanceof Error ? error.message : String(error)))
-                .join('; ')}`,
-            })
-            .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
-          continue
-        }
-        const cas = await dependencies.db
-          .update(intentApplyJournal)
-          .set({ state: 'failed', error: 'daemon-restart before commit', updatedAt: now() })
-          .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
-          .returning({ id: intentApplyJournal.id })
-          .get()
-        if (cas !== undefined) failed += 1
-        continue
-      }
-      const complete = await dependencies.artifacts.rollForward(artifacts, log)
-      if (complete) {
-        rolledForward += 1
-        if (row.error !== null) {
-          await dependencies.db
-            .update(intentApplyJournal)
-            .set({ error: null, updatedAt: now() })
-            .where(
-              and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, 'committed')),
-            )
-        }
-      } else {
-        await dependencies.db
-          .update(intentApplyJournal)
-          .set({
-            error: INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
-            updatedAt: now(),
-          })
-          .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, 'committed')))
-      }
-    }
-    return { failed, rolledForward }
-  }
-
   return Object.freeze({
     apply(request: IntentApplyEngineRequest) {
       return applyLock.run(request.command.sessionId, () => applyUnlocked(request))
     },
-    converge,
     activeJournalIds: () => [...active],
   })
 }

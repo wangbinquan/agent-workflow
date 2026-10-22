@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-167 PR-2③④ — dynamic-workflow engine wiring + confirm gate. Locks:
 //
 //   launch    — startWorkgroupTask(dynamic) synthesizes the single-orchestrator
@@ -75,7 +76,7 @@ import {
   ORCHESTRATOR_AGENT_NAME,
   ORCHESTRATOR_WORKFLOW_PORT,
 } from '../src/services/orchestratorAgent'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createWorkgroup } from '../src/services/workgroups'
 import {
   createTestTaskExecutionLaunchParticipant,

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-159 T3 (PR-3a) — tasks.scheduled_task_id link plumbing.
 //
 // Locks: the column round-trips through getTask / listTasks summaries, and
@@ -65,11 +66,18 @@ describe('RFC-159 — tasks.scheduled_task_id link', () => {
     })
   })
 
-  test('startTask stamps deps.scheduledTaskId onto the row (source lock)', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8')
+  test('production root launch stamps invoker schedule metadata in the task INSERT (source lock)', () => {
+    const src = readFileSync(
+      resolve(
+        import.meta.dir,
+        '../src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+      ),
+      'utf-8',
+    )
     // The stamp lives in the single task INSERT so it is atomic with row creation.
-    expect(src).toContain('scheduledTaskId: deps.scheduledTaskId ?? null')
-    // StartTaskDeps declares the field so the scheduler can pass it.
-    expect(src).toContain('scheduledTaskId?: string')
+    expect(src).toContain('scheduledTaskId: metadata.scheduledTaskId')
+    expect(src).toContain(
+      "scheduledTaskId: invoker.type === 'scheduled' ? invoker.scheduledTaskId : null",
+    )
   })
 })

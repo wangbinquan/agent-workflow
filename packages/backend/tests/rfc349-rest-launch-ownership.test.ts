@@ -1,9 +1,11 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-349 回归防护 —— REST 直接启动必须把**发起人**记成任务 owner。
 //
 // 为什么这条测试存在：RFC-349 把 `/api/agents/:id/tasks` 与
 // `/api/workgroups/:id/tasks` 的启动依赖从「路由每次请求现建
 // `buildStartTaskDeps(…, actor.user.id, …)`」改成了 bootstrap 冻结的一份
-// `routeLaunch.execution = taskStartDepsFor(SYSTEM_USER_ID)`。`StartTaskDeps
+// `routeLaunch.execution = taskStartDepsFor(SYSTEM_USER_ID)`。`TaskContinuationDependencies
 // .actorUserId` 正是 `startTask` 写进 `tasks.owner_user_id` 的值（也是 RFC-320
 // 取创建者 Git 身份的入口），于是每一条经 REST 启动的代理 / 工作组任务都变成
 // **无主**：发起人自己 `GET /api/tasks/:id` 吃 404 `task-not-found`，
@@ -22,7 +24,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 

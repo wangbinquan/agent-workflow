@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-380: every owned-type ACL PUT emits the same post-commit revalidation on both providers.
 import { afterEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -9,7 +10,7 @@ import {
   digitalEmployees,
   automationPolicies,
 } from '@/db/schema'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import { registerRevalidationTrigger, type RevocationReason } from '@/ws/revalidationHook'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-330 T6～T8 —— 工具注册（第 14 类）与岗位模版（第 15 类）的行级判据矩阵。
 //
 // 事故形态（proposal §1）：两张表自 RFC-310 起只有一列 `owner_user_id` 做记录，
@@ -33,7 +34,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const ROUTE_FILE = resolve(import.meta.dir, '..', 'src', 'routes', 'digitalEmployees.ts')

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-376 T2: RFC-328 inventory builders copied from RFC-294 for direct contract assertions.
 // All source-dependent data is supplied by the caller; this module imports no production code.
 import ts from 'typescript'
@@ -358,7 +359,7 @@ export function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /sqliteTaskExecutionIntent|taskContinuationAdmission|submitTaskContinuation|submitContinuationIntentTx|services\/task\.ts#startTaskImpl|modules\/task-execution\/infrastructure\/repositoryPreparationRetryCommand\.ts#admitRetry/.test(
+    /sqliteTaskExecutionIntent|taskContinuationAdmission|submitTaskContinuation|submitContinuationIntentTx|modules\/task-execution\/infrastructure\/repositoryPreparationRetryCommand\.ts#admitRetry/.test(
       value,
     )
   ) {
@@ -471,7 +472,7 @@ export function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /platform\/persistence\/(?:eventsArchiveStore|postgresqlEventsArchive|sqlite\/(?:systemEventsArchive|systemWorkspaceGc|taskLifecycleRepair\/))/.test(
+    /platform\/persistence\/(?:eventsArchiveStore|postgresqlEventsArchive|sqlite\/(?:systemEventsArchive|taskLifecycleRepair\/))/.test(
       value,
     )
   ) {

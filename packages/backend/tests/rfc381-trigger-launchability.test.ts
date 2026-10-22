@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-381: both provider roots reject invalid saved triggers with the full 422 contract; dispatch classifies the same failure as launch-failed.
 import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -13,7 +14,7 @@ import {
   webhookDeliveries,
   webhookTriggerFires,
 } from '@/db/schema'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { integrationBundleFixture } from './helpers/daemonIntegrationBundles'

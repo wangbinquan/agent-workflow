@@ -1,8 +1,11 @@
+import { launchTestTask } from './productionTaskLaunch'
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
+import { workspaceMaintenanceForTest } from './workspaceMaintenance'
 import {
   composeProcessTaskExecutionBinding,
   composeSessionTaskExecutionBinding,
 } from '@/modules/task-execution/composition/taskExecutionBinding'
-import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
+
 import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
@@ -73,7 +76,7 @@ import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/in
 import { composeRuntimeRegistryOperations } from './runtimeRegistryComposition'
 import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
-import { startTask } from '@/services/task'
+
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createLogger } from '@/util/log'
 import { admitTestDirectAuthority } from './identityAccessAuthority'
@@ -206,7 +209,7 @@ export async function createEachProviderTaskExecution(
   /**
    * RFC-359 AC-1（plan §5hh）—— **用启动内核启动一次，两个引擎都走这一条**。
    *
-   * 为什么要有它：下面按引擎分叉的 `launch` 各走各的机制（SQLite = `startTask` +
+   * 为什么要有它：下面按引擎分叉的 `launch` 各走各的机制（SQLite = `launchTestTask` +
    * `preCreatedWorktree`，PostgreSQL = 启动内核 + 借用工作区租约），于是
    * 「内核 + SQLite 库」这个组合**全仓没有任何地方在跑**（plan §5hg 的表）。
    * 而把两份 action 执行装配面合一时取的正是内核那半——合并之后**生产 SQLite 就会走它**。
@@ -262,7 +265,7 @@ export async function createEachProviderTaskExecution(
       execution: composeProcessTaskExecutionBinding(sqlite),
       log: createLogger('task'),
       finalizeWorkspace: async (taskId) => {
-        await finishClaimedWebhookWorkspacePrune(sqlite, taskId)
+        await workspaceMaintenanceForTest(sqlite).finalizeClaimedWorkspace(taskId)
       },
       workgroupTaskRoom: { collaboration: workgroupClarify },
       coordinatorFactory: testDriveFactory(
@@ -317,7 +320,7 @@ export async function createEachProviderTaskExecution(
         repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
       },
       // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
-      // 最后一个要 legacy `StartTaskDeps` 的路由动词，合一之后路由层不再持有它。
+      // 最后一个要 legacy `TaskContinuationDependencies` 的路由动词，合一之后路由层不再持有它。
       routes: () => ({
         collaboration: unusedCapability('collaboration route'),
         multipart: unusedCapability('multipart upload'),
@@ -378,7 +381,7 @@ export async function createEachProviderTaskExecution(
         task: StartTask,
         workspace: { readonly workspacePath: string; readonly baselineSha: string },
       ) {
-        return await startTask(task, {
+        return await launchTestTask(task, {
           db: sqlite,
           ...runConfig,
           schedulerDriver: provider.runtime.schedulerDriver,

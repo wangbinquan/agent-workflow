@@ -1,3 +1,10 @@
+import { createWorkspaceMaintenanceCommand } from '@/modules/source-control/application/workspaceMaintenance'
+import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
+import {
+  workspaceMaintenanceForTest,
+  workspaceMaintenanceFilesystemForTest,
+} from './helpers/workspaceMaintenance'
 // LOCKS: RFC-165 T2b — two-phase workspace tombstone + revive gate (design
 // §1/§3 F8/R3-1/R3-2/D1/D3/R3-4/F9; tests §11.5).
 //
@@ -9,7 +16,7 @@
 //   G3  a finalized tombstone blocks revive with 410 workspace-pruned.
 //   G4  revive wins the race: once the task left the terminal set, GC's claim
 //       (conditional UPDATE requires terminal) loses and the dir survives.
-//   G5  delete failure keeps the claim; re-claim only past PRUNING_LEASE_MS
+//   G5  delete failure keeps the claim; re-claim only past WORKSPACE_PRUNING_LEASE_MS
 //       (crashed delete retries, no permanent limbo — R3-1).
 //   G6  revive against a missing dir (legacy pre-tombstone GC) heals forward:
 //       pruned_at stamped atomically + 410 (R3-2-r4).
@@ -38,15 +45,8 @@ import {
   workflows,
 } from '../src/db/schema'
 import { DrizzleTerminalMaintenancePersistence } from '../src/modules/task-execution/infrastructure/terminalMaintenancePersistence'
-import {
-  PRUNING_LEASE_MS,
-  materializingSpaces,
-  reconcileLegacyPrunedWorkspaces,
-  recoverInterruptedWorkspaceGc,
-  runIsoWorktreeGc,
-  runScratchOrphanGc,
-  runWorktreeGc,
-} from '../src/services/gc'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
+import { WORKSPACE_PRUNING_LEASE_MS } from '@/modules/source-control/application/workspaceMaintenance'
 import { setTaskStatus } from '../src/services/lifecycle'
 import { runGit } from '../src/util/git'
 
@@ -138,8 +138,14 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       writeFileSync(join(dir, 'out.md'), 'x')
       const id = await seedTask(h, { spaceKind: 'scratch', worktreePath: dir, repoPath: dir })
 
-      const r = await runWorktreeGc(h.db, GC_ON)
-      expect(r.removed).toEqual([id])
+      const r = await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...GC_ON,
+      })
+      expect(r.removed).toBe(1)
       expect(existsSync(dir)).toBe(false)
       const row = await taskRow(h, id)
       expect(row.workspacePruningAt).not.toBe(null)
@@ -207,8 +213,14 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       })
       expect(flip.to).toBe('pending')
 
-      const r = await runWorktreeGc(h.db, GC_ON)
-      expect(r.removed).toEqual([])
+      const r = await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...GC_ON,
+      })
+      expect(r.removed).toBe(0)
       expect(existsSync(dir)).toBe(true)
       const row = await taskRow(h, id)
       expect(row.workspacePruningAt).toBe(null)
@@ -224,21 +236,20 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
         repoPath: dir,
       })
 
-      const r = await runWorktreeGc(h.db, GC_ON, Date.now(), (taskId) => taskId === id)
-      expect(r.removed).toEqual([])
+      const r = await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [id],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...GC_ON,
+      })
+      expect(r.removed).toBe(0)
       expect(existsSync(dir)).toBe(true)
       expect((await taskRow(h, id)).workspacePruningAt).toBeNull()
     })
 
     test('G4c a task revived after candidate scan still wins the durable pre-delete CAS', async () => {
-      // 只在 SQLite 上跑，理由是**注入点的形状**而不是被测逻辑：`runWorktreeGc` 的
-      // `isTaskActive` 形参是同步谓词 `(taskId: string) => boolean`，而这条用例要求那笔
-      // 「候选扫描之后、删除 CAS 之前」的复活写入**已经提交**。只有 bun:sqlite 能在同步
-      // 回调里落一笔已提交的写；PostgreSQL 上任何写都得 await，在回调里发出去就与紧随
-      // 其后的 CAS 变成两条连接上的竞态——那不是判据，是掷骰子（本仓禁止「重跑就过了」）。
-      // 被锁的生产逻辑本身是引擎中立的：`claimWorkspacePrune` 的 UPDATE 带
-      // `status IN (终态集合)` 谓词，两个引擎共用同一条语句。
-      if (harness.capabilities.provider !== 'sqlite') return
+      // RFC-395 II-pre：在生产候选读取返回后复活，两个 provider 都等待写入提交。
       const dir = mkDir(h, 'ws-revived-after-scan')
       const id = await seedTask(h, {
         status: 'done',
@@ -247,18 +258,28 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
         repoPath: dir,
       })
       let injected = false
-      const result = await runWorktreeGc(h.db, GC_ON, Date.now(), (taskId) => {
-        if (taskId === id && !injected) {
-          injected = true
-          h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, id)).run()
-        }
-        // Simulate an admission-time advisory snapshot that did not contain the
-        // newly revived task. The durable terminal-status CAS must still win.
-        return false
+      const store = new DrizzleWorkspaceMaintenanceStore(h.db)
+      const scan = store.listGcCandidates.bind(store)
+      store.listGcCandidates = async () => {
+        const candidates = await scan()
+        await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, id))
+        injected = true
+        return candidates
+      }
+      const command = createWorkspaceMaintenanceCommand({
+        store,
+        terminalMaintenance: new DrizzleTerminalMaintenancePersistence(h.db),
+        filesystem: workspaceMaintenanceFilesystemForTest(h.appHome),
+      })
+      const result = await command.runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        ...GC_ON,
       })
 
       expect(injected).toBe(true)
-      expect(result.removed).toEqual([])
+      expect(result.removed).toBe(0)
       expect(existsSync(dir)).toBe(true)
       expect(await taskRow(h, id)).toMatchObject({ status: 'pending', workspacePruningAt: null })
     })
@@ -271,21 +292,39 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       const id = await seedTask(h, { status: 'done', worktreePath: dir, repoCount: 1 })
 
       const t0 = Date.now()
-      const r1 = await runWorktreeGc(h.db, GC_ON, t0)
-      expect(r1.removed).toEqual([])
+      const r1 = await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: t0,
+        ...GC_ON,
+      })
+      expect(r1.removed).toBe(0)
       let row = await taskRow(h, id)
       expect(row.workspacePruningAt).toBe(t0)
       expect(row.workspacePrunedAt).toBe(null)
 
       // Within the lease: nobody re-claims.
       const t1 = t0 + 60_000
-      await runWorktreeGc(h.db, GC_ON, t1)
+      await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: t1,
+        ...GC_ON,
+      })
       row = await taskRow(h, id)
       expect(row.workspacePruningAt).toBe(t0)
 
       // Past the lease: the stale claim is taken over (crashed delete retries).
-      const t2 = t0 + PRUNING_LEASE_MS + 60_000
-      await runWorktreeGc(h.db, GC_ON, t2)
+      const t2 = t0 + WORKSPACE_PRUNING_LEASE_MS + 60_000
+      await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: t2,
+        ...GC_ON,
+      })
       row = await taskRow(h, id)
       expect(row.workspacePruningAt).toBe(t2)
       expect(row.workspacePrunedAt).toBe(null)
@@ -319,7 +358,9 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
         worktreePath: join(h.appHome, 'ws-gone'),
       })
 
-      const healed = await reconcileLegacyPrunedWorkspaces(h.db)
+      const healed = await (
+        await workspaceMaintenanceForTest(h.db).recover({ activeTaskIds: [], webhookClaims: 'all' })
+      ).healed
       expect(healed).toBe(1)
       expect((await taskRow(h, goneId)).workspacePrunedAt).not.toBe(null)
       expect((await taskRow(h, liveId)).workspacePrunedAt).toBe(null)
@@ -336,8 +377,14 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
         workspacePruningAt: Date.now() - 60_000, // claimed a minute ago; dir gone
       })
 
-      const r = await runWorktreeGc(h.db, GC_ON)
-      expect(r.removed).toEqual([])
+      const r = await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...GC_ON,
+      })
+      expect(r.removed).toBe(0)
       const row = await taskRow(h, id)
       expect(row.workspacePrunedAt).not.toBe(null)
     })
@@ -352,8 +399,14 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       const past = new Date(Date.now() - 25 * 60 * 60 * 1000)
       utimesSync(old, past, past)
 
-      const r = await runScratchOrphanGc(h.db, h.appHome)
-      expect(r.removed).toEqual(['OLD0000000000000000000000'])
+      const r = await workspaceMaintenanceForTest(h.db, h.appHome).runGcPhase({
+        phase: 'scratch',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...{ worktreeAutoGc: { enabled: true } },
+      })
+      expect(r.removed).toBe(1)
       expect(existsSync(anchored)).toBe(true)
       expect(existsSync(leased)).toBe(true)
       expect(existsSync(young)).toBe(true)
@@ -364,8 +417,14 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       // (a) plain terminal task: claim taken transiently and released after.
       const idA = await seedTask(h, { status: 'done', worktreePath: '' })
       mkDir(h, 'iso', idA)
-      let r = await runIsoWorktreeGc(h.db, h.appHome)
-      expect(r.removed).toEqual([idA])
+      let r = await workspaceMaintenanceForTest(h.db, h.appHome).runGcPhase({
+        phase: 'iso',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...{ worktreeAutoGc: { enabled: true } },
+      })
+      expect(r.removed).toBe(1)
       const rowA = await taskRow(h, idA)
       expect(rowA.workspacePruningAt).toBe(null) // released
       expect(rowA.workspacePrunedAt).toBe(null) // workspace untouched
@@ -374,8 +433,14 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       const idB = await seedTask(h, { status: 'done', worktreePath: '' })
       const isoB = mkDir(h, 'iso', idB)
       await h.db.update(tasks).set({ workspacePruningAt: Date.now() }).where(eq(tasks.id, idB))
-      r = await runIsoWorktreeGc(h.db, h.appHome)
-      expect(r.removed).toEqual([])
+      r = await workspaceMaintenanceForTest(h.db, h.appHome).runGcPhase({
+        phase: 'iso',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...{ worktreeAutoGc: { enabled: true } },
+      })
+      expect(r.removed).toBe(0)
       expect(existsSync(isoB)).toBe(true)
 
       // (c) tombstoned workspace → no revival possible → delete without claim.
@@ -383,8 +448,14 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       const idC = await seedTask(h, { status: 'failed', worktreePath: '' })
       const isoC = mkDir(h, 'iso', idC)
       await h.db.update(tasks).set({ workspacePrunedAt: Date.now() }).where(eq(tasks.id, idC))
-      r = await runIsoWorktreeGc(h.db, h.appHome)
-      expect(r.removed).toEqual([idC])
+      r = await workspaceMaintenanceForTest(h.db, h.appHome).runGcPhase({
+        phase: 'iso',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...{ worktreeAutoGc: { enabled: true } },
+      })
+      expect(r.removed).toBe(1)
       expect(existsSync(isoC)).toBe(false)
     })
 
@@ -414,10 +485,17 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
         now: now + 1,
       })
 
-      expect(await recoverInterruptedWorkspaceGc(h.db, now + 2)).toEqual({
-        completed: [id],
-        failed: [],
+      expect(
+        await workspaceMaintenanceForTest(h.db).recover({
+          activeTaskIds: [],
+          now: now + 2,
+          webhookClaims: 'all',
+        }),
+      ).toEqual({
+        completed: 1,
+        failed: 0,
         skipped: 0,
+        healed: 0,
       })
       expect((await taskRow(h, id)).workspacePrunedAt).toBe(now + 2)
       expect(
@@ -434,9 +512,15 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
       const dir = mkDir(h, 'fusion-ws')
       await seedTask(h, { status: 'done', spaceKind: 'internal', worktreePath: dir })
 
-      const r = await runWorktreeGc(h.db, GC_ON)
+      const r = await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...GC_ON,
+      })
       expect(r.scanned).toBe(0)
-      expect(r.removed).toEqual([])
+      expect(r.removed).toBe(0)
       expect(existsSync(dir)).toBe(true)
     })
 
@@ -507,11 +591,17 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
         },
       ])
 
-      const r = await runWorktreeGc(h.db, {
-        worktreeAutoGc: { enabled: true, olderThanDays: 1, onlyMerged: true },
+      const r = await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...{
+          worktreeAutoGc: { enabled: true, olderThanDays: 1, onlyMerged: true },
+        },
       })
       // repo1's feat is unmerged → the WHOLE task is skipped; nothing deleted.
-      expect(r.removed).toEqual([])
+      expect(r.removed).toBe(0)
       expect(existsSync(container)).toBe(true)
       const row = await taskRow(h, id)
       expect(row.workspacePruningAt).toBe(null)

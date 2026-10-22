@@ -1,3 +1,4 @@
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // User regression 2026-08-23: an internal TaskEngine execution launched for a
 // digital employee round must retain the owning Case, so direct/reloaded task
 // details can render the same stable backlink without a cross-context join.
@@ -71,8 +72,13 @@ describe('RFC-310 digital employee task source link', () => {
       ),
       'utf8',
     )
-    const taskService = readFileSync(
-      resolve(import.meta.dirname, '..', 'src', 'services', 'task.ts'),
+    const launchKernel = readFileSync(
+      resolve(
+        import.meta.dirname,
+        '..',
+        'src',
+        'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+      ),
       'utf8',
     )
 
@@ -84,8 +90,8 @@ describe('RFC-310 digital employee task source link', () => {
     // 那一处必须确实挂在启动内核的 `internal` 上，而不是飘在别处。
     expect(execution).toContain('digitalEmployeeLaunch: {')
     expect(execution).toContain('actionRunId: plan.roundRef,')
-    expect(taskService).toContain(
-      'digitalEmployeeCaseId: deps.digitalEmployeeLaunch?.caseId ?? null',
+    expect(launchKernel).toContain(
+      'digitalEmployeeCaseId: input.internal?.digitalEmployeeLaunch?.caseId ?? null',
     )
   })
 })

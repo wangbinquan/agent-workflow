@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { tasks } from '@/db/schema'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
-import { materializingSpaces } from '@/services/gc'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import type {
   MaterializedSpace,
   WorkspaceCleanupReport,

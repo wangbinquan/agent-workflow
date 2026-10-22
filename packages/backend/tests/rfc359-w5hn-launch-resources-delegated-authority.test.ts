@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-359 AC-1（plan §5hn 批次二 ①）—— 启动资源面**必须接受委派 actor**，两个引擎都要。
 //
 // 为什么这条测试存在（先红后绿，红的是生产缺陷不是测试）：
@@ -31,7 +32,7 @@ import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/c
 import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { admitDaemonIdentity } from '@/auth/session'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 
 describeEachProvider('RFC-359 AC-1 —— 启动资源面接受委派 actor', (harness) => {
   let db: ProviderNeutralDatabase

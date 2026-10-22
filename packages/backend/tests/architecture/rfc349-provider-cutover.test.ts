@@ -1,3 +1,4 @@
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-349 T2/T5/T6 — provider cutover is a production architecture contract,
 // not a collection of PostgreSQL adapter unit tests.  The migration is not
 // source-complete while business/application/transport code still imports the
@@ -42,7 +43,7 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/runtime/opencode/sessionWalk.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase',
   'packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除，这条债随之销账。
-  // RFC-359 AC-6：`StartTaskDeps.db` 放宽到中立句柄（被测的 `buildStartTaskDeps` 只把它原样
+  // RFC-359 AC-6：`TaskContinuationDependencies.db` 放宽到中立句柄（被测的 `buildStartTaskDeps` 只把它原样
   // 透传，用例自己就断言 `expect(withCmd.db).toBe(db)`），类型来源随之换成同目录的
   // `legacySqliteTransportMechanisms`。这条债仍在——它随 legacy 启动面一起消失。
   'packages/backend/src/services/task.ts -> @/modules/source-control/composition :: composeSqliteRepositoryWorkspaceStore',
@@ -52,7 +53,7 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   // 一起从这条债里消失（债只降不升，这是连着两次收敛）。
   // RFC-359 AC-1（第 11 刀）：cancel 合一，`taskExecutionOwners` 随取消实现一起离开这条债
   //（回收任务持有者那一步现在只在共用的 `cancelTaskProjection` 里做）。债只降不升。
-  'packages/backend/src/services/task.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,LegacySqliteTaskDatabase,agents,and,asc,cachedRepos,clarifyRounds,desc,docVersions,eq,inArray,isNotNull,nodeRunOutputs,nodeRuns,runtimeSessionLeases,sql,taskCollaborators,taskExecutionIntents,taskRepos,taskSpaceNodes,tasks,users,workflows,workgroupTaskState',
+  'packages/backend/src/services/task.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,LegacySqliteTaskDatabase,and,asc,cachedRepos,desc,eq,inArray,isNotNull,nodeRunOutputs,nodeRuns,runtimeSessionLeases,taskRepos,taskSpaceNodes,tasks,workflows',
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: export:LegacySqliteTaskAuthorizationRef,export:LegacyTaskOwnershipScope',
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: legacySqliteDefaultTaskAuthorizationRef,legacySqliteTaskAuthorizationCondition,legacySqliteTaskOwnershipScopeCondition,legacySqliteVisibleTaskIdsOf',
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀的前置）：`taskDelete.ts` 的库句柄从

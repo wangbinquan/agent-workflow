@@ -1,5 +1,4 @@
-import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
-import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-359 AC-1（plan §5hn 批次二 ⑧）—— 测试侧的**启动参与者**装配，和生产同形。
 //
 // 为什么需要它：`startAgentTask` / `startWorkgroupTask` 这两个 legacy 启动服务在门面退役后
@@ -28,7 +27,9 @@ import type { TaskExecutionResourceAuthority } from '../../src/services/executio
 import { createTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '../../src/services/execution/taskExecutionResourceDependencies'
 import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
-import { type StartTaskDeps } from '../../src/services/task'
+import { type TaskContinuationDependencies } from '../../src/services/task'
+import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 
 /**
  * 给一个**普通构造的 actor**（`buildActor({...})`）配一份任务执行鉴权句柄。
@@ -69,7 +70,10 @@ export interface TestLaunchParticipantInput {
    */
   readonly completionMode?: TaskDriveCompletionMode
   /** `binaryOverride` 等运行期旋钮，原样进协调器的依赖束。 */
-  readonly runConfig?: Omit<Partial<StartTaskDeps>, 'db' | 'schedulerDriver' | 'configPath'>
+  readonly runConfig?: Omit<
+    Partial<TaskContinuationDependencies>,
+    'db' | 'schedulerDriver' | 'configPath'
+  >
 }
 
 export function createTestTaskExecutionLaunchParticipant(

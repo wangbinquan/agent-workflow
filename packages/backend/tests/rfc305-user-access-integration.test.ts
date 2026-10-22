@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-305 integration lock: role/grants/revision/audit are one transaction;
 // current session/PAT authority is rebuilt from that state on every request.
 
@@ -23,7 +24,7 @@ import {
   AuthorityFenceCache,
   createUserAccessTransactionRunner,
 } from '../src/modules/identity-access/infrastructure/userAccessPersistence'
-import { createUser, patchUser } from '../src/services/users'
+import { createUser, patchUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
 import { resolveActor } from '../src/auth/session'

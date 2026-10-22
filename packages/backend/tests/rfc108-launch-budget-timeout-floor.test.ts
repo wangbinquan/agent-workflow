@@ -1,4 +1,4 @@
-import { readDaemonGraphSource } from './helpers/daemonGraphSource'
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-108 PR-B (AR-01) — per-node hard-timeout floor launch-path wiring lock.
 //
 // 为什么这条测试存在：`defaultPerNodeTimeoutMs`（config 默认 30min）在 RFC-108 之前
@@ -9,13 +9,14 @@ import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 //   ② 该 resolver 已上移到共享模块 @/services/launchRuntimeConfig，被**所有**
 //      scheduler-kicking 路由复用——tasks（start/resume/retry/repair）、fusions、
 //      parked clarify/review resume（Codex 实现 gate P2：floor 须到达全部
-//      StartTaskDeps 构造点，不止 task 路由）。
+//      TaskContinuationDependencies 构造点，不止 task 路由）。
 //
 // 注：per-task 预算（defaultPerTaskMaxDurationMs/Tokens）的自动接线在实现期被移出
 // PR-B——存量 config 文件已持久化旧的 1h 默认值（loadConfig 无版本迁移），一旦消费
 // 会把它当硬上限、limits ticker 取消任务，而 canceled 非 resumable（Codex 实现 gate
 // P1）。per-node floor 已兜住 hung 子进程的成本/挂死，per-task 预算自动默认推后。
 
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -55,7 +56,7 @@ describe('RFC-108 T4 resolveLaunchRuntimeConfig — 接线 per-node timeout floo
   })
 })
 
-describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps 站点）', () => {
+describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 TaskContinuationDependencies 站点）', () => {
   const src = (rel: string): string =>
     rel === 'bootstrap/daemonStart.ts'
       ? readDaemonGraphSource()
@@ -102,9 +103,9 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
     )
   })
 
-  test('startTask 不再用 per-task 预算 fallback（自动接线已移出）', () => {
-    const taskSrc = src('services/task.ts')
-    expect(taskSrc).toContain('maxDurationMs: input.maxDurationMs ?? null')
+  test('生产根启动不再用 per-task 预算 fallback（自动接线已移出）', () => {
+    const taskSrc = src('modules/task-execution/infrastructure/taskRouteLaunchOperations.ts')
+    expect(taskSrc).toContain('maxDurationMs: input.task.maxDurationMs ?? null')
     expect(taskSrc).not.toContain('deps.defaultPerTaskMaxDurationMs')
   })
 })

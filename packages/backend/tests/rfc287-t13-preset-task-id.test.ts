@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-287 T13（G7 第一刀）—— `materializeSpace` 接受调用方预定的 taskId。
 //
 // 为什么需要它：G7 要把仓库准备挪到任务行落库**之后**（启动接口不再同步阻塞到
@@ -38,18 +39,19 @@ describe('RFC-287 T13 — materializeSpace 的 taskId 可由调用方预定', ()
     expect(SRC).toContain('?? ulid()')
   })
 
-  test('现存调用路径都还在，且都没被迫改签名', () => {
+  test('生产物化保留预置 ID，旧测试启动包装器已删除', () => {
     // `materializeSpace` 原本有三个调用点：JSON 启动（task.ts 自身）、multipart、agent 启动。
     // **RFC-359 AC-1（plan §5hn 批次二 ⑥⑦⑧）：后两个都没有了。**
     //   · multipart 那条路由改走与 PostgreSQL 共用的启动参与者 → 根启动内核，工作区物化由内核的
     //     `workspace.prepare(...)` 做，`services/multipartTaskStart.ts` 整份删除；
     //   · agent 启动同理——`startAgentTask` 整份删除，单代理臂走的也是那台内核。
-    // 本刀（预置 taskId）是纯增量这件事没变：`task.ts` 自己那个调用点原样在。
+    // RFC-395 II-pre：最后一条测试专用包装器删除，生产工作区适配器保留同一预置 ID 合同。
     const taskService = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
       'utf8',
     )
-    expect(taskService).toContain('materializeSpace(')
+    expect(taskService).not.toContain('materializeSpace(')
+    expect(SRC).toContain('export async function materializeSpaceWithProvider(')
     // 内核那条路的等价物：一次 `workspace.prepare(...)`，成功与 earlyError 两支共用它。
     const kernel = readFileSync(
       resolve(

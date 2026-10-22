@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-036 — admin-only endpoint gate. Seeds a regular-user session token and
 // verifies every admin-only path returns 403, while public-fields endpoints
 // (users:search) + homepage-runtime probe stay 200 for the same user.
@@ -12,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSession } from './helpers/auth/sessionStore'
 import type { ProviderNeutralDatabase } from '../src/db/query'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -332,7 +333,7 @@ describeEachProvider('PAT-bearing actor cannot escape role limits', (provider) =
   test('PAT carrying users:read but issued for a regular user is still 403', async () => {
     const { db, app } = h
     const { createPat } = await import('./helpers/auth/patStore')
-    const { findByUsername } = await import('../src/services/users')
+    const { findByUsername } = await import('./helpers/userFixture')
     const bob = await findByUsername(db, 'bob')
     const { token } = await createPat({
       db,
@@ -354,7 +355,7 @@ describeEachProvider('PAT-bearing actor cannot escape role limits', (provider) =
   test('admin PAT scoped without backup:run is still 403 on the restore subtree', async () => {
     const { db, app } = h
     const { createPat } = await import('./helpers/auth/patStore')
-    const { createUser } = await import('../src/services/users')
+    const { createUser } = await import('./helpers/userFixture')
     const admin = await createUser(db, {
       username: 'adm',
       displayName: 'Adm',

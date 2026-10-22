@@ -1,9 +1,11 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-305 architecture lock: additions must flow through the shared catalog,
 // the identity-access public surface, and the sole transactional writer.
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 import { PERMISSIONS, SYSTEM_DOMAIN_POINTS } from '@agent-workflow/shared'
 import ts from 'typescript'
@@ -434,13 +436,9 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/services/ownerScopedName.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/services/resourcePackage/executionAdapter.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/services/scheduledTasks.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/services/task.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/services/task.ts -> @/modules/identity-access/public/queries',
-      'packages/backend/src/services/task.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/types',
-      'packages/backend/src/services/users.ts -> @/modules/identity-access/composition/legacyUserService',
       'packages/backend/src/services/webhook/webhookDispatch.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/services/webhook/webhookDispatch.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/ws/connections.ts -> @/modules/identity-access/public/participants',
@@ -494,8 +492,9 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/identity-access/infrastructure/userAccessPersistence.ts',
     ])
 
-    const facade = readFileSync(resolve(BACKEND_SRC, 'services', 'users.ts'), 'utf8')
-    expect(facade).not.toMatch(/ROLE_PERMISSIONS|user_permission_grants|\.update\(users\)/)
+    expect(existsSync(resolve(BACKEND_SRC, 'services', 'users.ts'))).toBe(false)
+    const fixture = readFileSync(resolve(BACKEND_SRC, '..', 'tests/helpers/userFixture.ts'), 'utf8')
+    expect(fixture).not.toMatch(/ROLE_PERMISSIONS|user_permission_grants|\.update\(users\)/)
     expect(filesContainingIdentifier(BACKEND_SRC, 'ROLE_PERMISSIONS')).toEqual([])
   }, 20_000)
 

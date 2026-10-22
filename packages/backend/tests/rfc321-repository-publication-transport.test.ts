@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-321 — publication composition locks the end-to-end security boundary:
 // personal > global selection, deterministic SSH -> HTTP(S), one fixed
 // exact-target lease per publication attempt, and no fallback after selection.
@@ -38,7 +39,7 @@ import {
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import type { GitCredentialLeasePayloadV1 } from '../src/util/gitCredentialLease'
 import { runGit as executeGit } from '../src/util/git'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DIGEST = 'a'.repeat(64)
 const PERSONAL_TOKEN = 'aw-rfc321-personal-push-token-9876' // gitleaks:allow

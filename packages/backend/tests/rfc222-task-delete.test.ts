@@ -1,4 +1,4 @@
-import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-222 (B 线) — admin-only hard delete of a terminal task.
 //
 //   D-1  admin deletes a terminal task → 200; row + cascade gone; task_feedback
@@ -38,7 +38,8 @@ import {
   resetBroadcastersForTests,
   tasksListBroadcaster,
 } from '../src/ws/broadcaster'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
+import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { attachTestTaskRuntime } from './helpers/taskRuntimeRegistry'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

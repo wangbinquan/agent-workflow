@@ -1,3 +1,4 @@
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // RFC-359 AC-1（第 10 刀）—— `resume` 的**唯一**测试装配点。
 //
 // 为什么存在：`resume` 曾经有两份实现（`services/task.ts` 的 `resumeTask` 与
@@ -6,7 +7,7 @@
 //（同 `retry` 那一刀留下的 `tests/helpers/retryEngine.ts`）。
 //
 // 它把共用实现包成既有套件熟悉的调用形状（`resume(taskId) => Task`），并把两处
-// 「退役那份用 `StartTaskDeps` 表达、共用那份不认识」的东西显式化：
+// 「退役那份用 `TaskContinuationDependencies` 表达、共用那份不认识」的东西显式化：
 //   · **收尾模式**：`awaitScheduler: true` → `completionMode: 'await-settle'`；
 //   · **活跃度**：缺省就是生产那一份（进程级注册表），要造「已经有人在跑」的判据自己传。
 import { testDriveFactory } from './taskDriveCoordinatorFactory'
@@ -24,7 +25,7 @@ import {
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { resumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
-import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
+import { workspaceMaintenanceForTest } from './workspaceMaintenance'
 import { getTask } from '@/services/task'
 import { createLogger } from '@/util/log'
 import { NotFoundError } from '@/util/errors'
@@ -83,10 +84,7 @@ export function createResumeEngine(
               db,
               log,
               finalizeWorkspace: async (id: string) => {
-                await finishClaimedWebhookWorkspacePrune(
-                  db as unknown as Parameters<typeof finishClaimedWebhookWorkspacePrune>[0],
-                  id,
-                )
+                await workspaceMaintenanceForTest(db).finalizeClaimedWorkspace(id)
               },
             }),
             () => ({ appHome, ...options.runConfig }),

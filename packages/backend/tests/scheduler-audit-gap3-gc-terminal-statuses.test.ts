@@ -1,3 +1,4 @@
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md §⑥ 缺口3 (GC 把可恢复任务的 worktree 当垃圾)
 //
 // 当前缺陷行为（已对照 src/services/gc.ts:23-28 核实）：
@@ -27,6 +28,7 @@
 // worktree"的另一半由 setTaskStatus 的 revival 门保护（pruned→410 / pruning→409 /
 // 目录缺失→补墓碑+410，services/lifecycle.ts），专项锁见 rfc165-workspace-gc.test.ts。
 
+import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -35,8 +37,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { tasks, workflows } from '../src/db/schema'
-import { runWorktreeGc } from '../src/services/gc'
+import { tasks, taskRepos, workflows } from '../src/db/schema'
+
 import { createWorktree, runGit } from '../src/util/git'
 
 const ulid = monotonicFactory()
@@ -112,9 +114,15 @@ describeEachProvider(
       for (const status of ['pending', 'running', 'awaiting_review', 'awaiting_human'] as const) {
         await seedTask(h, { status })
       }
-      const r1 = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true } })
+      const r1 = await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...{ worktreeAutoGc: { enabled: true } },
+      })
       expect(r1.scanned).toBe(0)
-      expect(r1.removed).toEqual([])
+      expect(r1.removed).toBe(0)
 
       // Phase 2 — add one task per TERMINAL_STATUSES member (worktreePath ''
       // keeps this DB-only: each is counted scanned, then skipped at gc.ts:54).
@@ -125,10 +133,16 @@ describeEachProvider(
       for (const status of ['done', 'failed', 'canceled', 'interrupted'] as const) {
         await seedTask(h, { status })
       }
-      const r2 = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true } })
+      const r2 = await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...{ worktreeAutoGc: { enabled: true } },
+      })
       expect(r2.scanned).toBe(4)
       expect(r2.skipped).toBe(4)
-      expect(r2.removed).toEqual([])
+      expect(r2.removed).toBe(0)
     })
 
     test('an old interrupted/failed task loses its real worktree to GC — exactly what a later resumeTask would need', async () => {
@@ -167,14 +181,20 @@ describeEachProvider(
         seeded.push({ taskId, worktreePath: wt.worktreePath })
       }
 
-      const r = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true, olderThanDays: 1 } })
+      const r = await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...{ worktreeAutoGc: { enabled: true, olderThanDays: 1 } },
+      })
 
       // DEFECT LOCK: both resumable tasks' worktrees are removed from disk.
       // resumeTask performs no existence check before rollback + runTask
       // (task.ts:969ff), so a subsequent resume operates on a missing
       // directory. After a fix this should leave (at least) the interrupted
       // task's worktree alone — flip to expect it survives.
-      expect(r.removed.sort()).toEqual(seeded.map((s) => s.taskId).sort())
+      expect(r.removed).toBe(seeded.length)
       for (const s of seeded) {
         expect(existsSync(s.worktreePath)).toBe(false)
       }
@@ -189,18 +209,44 @@ describeEachProvider(
       // RFC-165 tears down per task_repos row first, then removes the container
       // itself and finalizes the workspace tombstone.
       const container = join(h.appHome, 'multi-container')
-      mkdirSync(join(container, 'repo-a'), { recursive: true })
-      await seedTask(h, {
+      mkdirSync(container, { recursive: true })
+      const taskId = await seedTask(h, {
         status: 'interrupted',
         worktreePath: container,
         repoCount: 2,
         finishedAt: Date.now() - 10 * DAY_MS,
       })
 
-      const r = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: true, olderThanDays: 1 } })
+      // 生产维护按真实挂载投影逐仓回收；镜像计数不能替代 task_repos 行。
+      for (const [repoIndex, mountPath] of ['repo-a', 'repo-b'].entries()) {
+        const worktreePath = join(container, mountPath)
+        const branch = `gc-multi-${taskId}-${repoIndex}`
+        expect(
+          (await runGit(h.repoPath, ['worktree', 'add', '-q', '-b', branch, worktreePath, 'HEAD']))
+            .exitCode,
+        ).toBe(0)
+        await h.db.insert(taskRepos).values({
+          taskId,
+          repoIndex,
+          repoPath: h.repoPath,
+          worktreePath,
+          branch,
+          baseBranch: 'main',
+          mountPath,
+          worktreeDirName: mountPath,
+        })
+      }
+
+      const r = await workspaceMaintenanceForTest(h.db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...{ worktreeAutoGc: { enabled: true, olderThanDays: 1 } },
+      })
 
       expect(r.scanned).toBe(1)
-      expect(r.removed.length).toBe(1)
+      expect(r.removed).toBe(1)
       expect(r.skipped).toBe(0)
       expect(existsSync(container)).toBe(false)
       expect(existsSync(join(container, 'repo-a'))).toBe(false)

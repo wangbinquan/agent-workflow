@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // LOCKS: RFC-066 PR-A T6 — multi-repo + wrapper-git / upload gates.
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
 // now (the wire is URL-only) — bodies are cast through the internal
@@ -22,7 +23,7 @@ import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { startTask, startTaskWithLocalRepo } from '../src/services/task'
+import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
@@ -85,7 +86,7 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
 
   // RFC-248 D9/D12 —— B13 / B14 **翻转**。
   //
-  // RFC-066 当年在 startTask 里拦掉「多仓 + wrapper-git」与「多仓 + 上传」，理由是
+  // RFC-066 当年在 launchTestTask 里拦掉「多仓 + wrapper-git」与「多仓 + 上传」，理由是
   // 包裹器只对单一 worktree 取快照、上传物不知道该落到哪个仓。两条禁令都已解除：
   //   - wrapper-git 现在逐仓快照、逐仓 diff，路径按挂载路径前缀化后合并成
   //     `list<path>`（task-execution GitStrategy / diffableRepos）。不解除的话
@@ -106,7 +107,7 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
       ],
       edges: [],
     })
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: wfId,
         name: 't',
@@ -142,7 +143,7 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
       ],
       edges: [],
     })
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: wfId,
         name: 't',
@@ -172,7 +173,7 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
       ],
       edges: [],
     })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wfId,
         name: 't',
@@ -189,7 +190,7 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
     )
     // Single-repo path keeps RFC-040 / wrapper-git behavior — no 422.
     // Task may or may not run to completion (scheduler is async and may emit
-    // its own errors for an empty-inner wrapper-git), but startTask itself
+    // its own errors for an empty-inner wrapper-git), but launchTestTask itself
     // does not throw.
     expect(task.id).toBeDefined()
     expect(task.repoCount).toBe(1)

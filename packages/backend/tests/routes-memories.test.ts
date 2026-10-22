@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-041 — HTTP layer for memory routes.
 //
 // Covers permission gating (daemon-admin vs regular user vs admin user vs
@@ -12,7 +13,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Memory, MemorySummary } from '@agent-workflow/shared'
 

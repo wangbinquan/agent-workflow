@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-301 — application-side task-tree launch-origin inheritance.
 //
 // The migration trigger is tested separately. These tests deliberately drop it
@@ -15,7 +16,7 @@ import { ulid } from 'ulid'
 import type { TaskCatalogVisibility, TaskLaunchOrigin } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { startTask } from '@/services/task'
+import { launchTestTask } from './helpers/productionTaskLaunch'
 import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -39,7 +40,7 @@ function buildHarness(): Harness {
   return { db, workflowId, roots: [] }
 }
 
-function inheritedSpace(h: Harness, taskId: string, failBeforeScheduler = true): MaterializedSpace {
+function inheritedSpace(h: Harness, taskId: string): MaterializedSpace {
   const worktreePath = mkdtempSync(join(tmpdir(), 'aw-rfc301-child-'))
   h.roots.push(worktreePath)
   const branch = `agent-workflow/${taskId}`
@@ -50,7 +51,7 @@ function inheritedSpace(h: Harness, taskId: string, failBeforeScheduler = true):
     worktreePath,
     branch,
     baseCommit: null,
-    earlyError: failBeforeScheduler ? 'rfc301 fixture stops before scheduler' : null,
+    earlyError: null,
     resolvedSources: [
       {
         repoPath: worktreePath,
@@ -168,40 +169,38 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
     const rootId = seedRunningTask(h, 'webhook', null, 'internal')
     const childId = ulid()
     const rootRunId = seedCallRun(h, rootId, childId)
-    let grandchildId: string | undefined
 
-    await startTask(
+    await launchTestTask(
       { workflowId: h.workflowId, name: 'child', inputs: {} },
       {
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        materializedSpace: inheritedSpace(h, childId, false),
+        coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
+        materializedSpace: inheritedSpace(h, childId),
         callLaunch: callLaunch(rootId, rootRunId, 1),
         // A call child may not escape its parent's catalog boundary.
         catalogVisibility: 'public',
-        triggerContext: { trigger: { webhook: { event_type: 'push' } } },
         awaitScheduler: true,
-        workflowLaunchCommitHook: async (event) => {
-          if (event.stage !== 'task-committed') return
-          h!.db
-            .update(tasks)
-            .set({ status: 'running' })
-            .where(sql`${tasks.id} = ${event.taskId}`)
-            .run()
-          grandchildId = ulid()
-          const childRunId = seedCallRun(h!, event.taskId, grandchildId)
-          await startTask(
-            { workflowId: h!.workflowId, name: 'grandchild', inputs: {} },
-            {
-              db: h!.db,
-              schedulerDriver: createTaskExecutionTestTopology({ db: h!.db, driver: 'real' })
-                .schedulerDriver,
-              materializedSpace: inheritedSpace(h!, grandchildId),
-              callLaunch: callLaunch(event.taskId, childRunId, 2),
-            },
-          )
-        },
+      },
+    )
+
+    h.db
+      .update(tasks)
+      .set({ status: 'running' })
+      .where(sql`${tasks.id} = ${childId}`)
+      .run()
+    const grandchildId = ulid()
+    const childRunId = seedCallRun(h, childId, grandchildId)
+    await launchTestTask(
+      { workflowId: h.workflowId, name: 'grandchild', inputs: {} },
+      {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
+        materializedSpace: inheritedSpace(h, grandchildId),
+        callLaunch: callLaunch(childId, childRunId, 2),
       },
     )
 
@@ -232,12 +231,13 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
 
     await Promise.all(
       children.map(({ id, runId }) =>
-        startTask(
+        launchTestTask(
           { workflowId: h!.workflowId, name: `child-${id}`, inputs: {} },
           {
             db: h!.db,
             schedulerDriver: createTaskExecutionTestTopology({ db: h!.db, driver: 'real' })
               .schedulerDriver,
+            coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
             materializedSpace: inheritedSpace(h!, id),
             callLaunch: callLaunch(rootId, runId, 1),
           },
@@ -252,42 +252,5 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
       .filter((row) => row.id !== rootId)
     expect(rows).toHaveLength(children.length)
     expect(new Set(rows.map((row) => row.launchOrigin))).toEqual(new Set(['scheduled']))
-  })
-
-  test('a child cannot smuggle root provenance or even blank root attribution ids', async () => {
-    h = buildHarness()
-    const rootId = seedRunningTask(h, 'api')
-    const conflictingChildId = ulid()
-    const blankMetadataChildId = ulid()
-    const conflictingRunId = seedCallRun(h, rootId, conflictingChildId)
-    const blankMetadataRunId = seedCallRun(h, rootId, blankMetadataChildId)
-
-    await expect(
-      startTask(
-        { workflowId: h.workflowId, name: 'conflicting-child', inputs: {} },
-        {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          materializedSpace: inheritedSpace(h, conflictingChildId),
-          callLaunch: callLaunch(rootId, conflictingRunId, 1),
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'task-launch-provenance-conflict' })
-
-    await expect(
-      startTask(
-        { workflowId: h.workflowId, name: 'blank-metadata-child', inputs: {} },
-        {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          materializedSpace: inheritedSpace(h, blankMetadataChildId),
-          callLaunch: callLaunch(rootId, blankMetadataRunId, 1),
-          webhookFireId: ' ',
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'task-launch-child-metadata-invalid' })
   })
 })

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: the actual Intent and Memory algorithms must consume the selected
 // System family and opaque runtime/content references on both database engines.
 import { afterEach, expect, test } from 'bun:test'
@@ -35,7 +36,7 @@ import type {
   SystemAgentWorkspaceScope,
 } from '@/modules/runtime-management/public/participants'
 import { emptySystemAgentOutputEvidence } from '@/services/systemAgentRun'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import { errorHandler } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

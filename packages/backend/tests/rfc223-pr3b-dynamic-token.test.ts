@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-223 (PR-3b) — dynamic-workflow OPAQUE TOKEN indirection. This file locks
 // the token-isolation invariants of design §4.2 (R4-2/R5-2) end to end over the
 // pure layer + a live generate→save-as HTTP path:
@@ -60,7 +61,7 @@ import {
 } from '../src/services/orchestratorAgent'
 import { abortAllActiveTasks, resumeDynamicWorkflowExecution } from '../src/services/task'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { nodeRuns } from '../src/db/schema'
 import type { WorkgroupTurnHostResult as WorkgroupHostRunResult } from '../src/modules/task-execution/public/commands'
 import type {

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // RFC-300 — physical cleanup/recovery matrix for direct Webhook task-owned
 // workspaces. Exercises real linked-worktree registry removal, snapshot refs,
 // whole scratch-repository deletion, active-owner deferral, lease retry, boot
@@ -13,19 +14,15 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   nodeRunEvents,
+  taskExecutionMaintenanceClaims,
   nodeRunOutputs,
   nodeRuns,
   taskRepos,
   tasks,
   workflows,
 } from '../src/db/schema'
-import {
-  finishClaimedWorkspacePrune,
-  finishClaimedWebhookWorkspacePrune,
-  PRUNING_LEASE_MS,
-  runClaimedWebhookWorkspacePrunes,
-  runWorktreeGc,
-} from '../src/services/gc'
+import { WORKSPACE_PRUNING_LEASE_MS } from '@/modules/source-control/application/workspaceMaintenance'
+import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { getTask } from '../src/services/task'
 import { runGit, snapshotRefName, snapshotRefPrefix } from '../src/util/git'
 
@@ -131,7 +128,9 @@ describe('RFC-300 physical workspace deletion', () => {
     test(`removes real remote linked worktree + snapshot refs on ${status}`, async () => {
       const task = await createLinkedWorktreeTask(status)
 
-      expect(await finishClaimedWorkspacePrune(db, task.id, 200)).toEqual({ kind: 'removed' })
+      expect(
+        await workspaceMaintenanceForTest(db).finalizeClaimedWorkspace(task.id, 200),
+      ).toBeUndefined()
       expect(existsSync(task.worktree)).toBe(false)
       const registry = await runGit(task.repo, ['worktree', 'list', '--porcelain'])
       expect(registry.stdout).not.toContain(task.worktree)
@@ -191,7 +190,9 @@ describe('RFC-300 physical workspace deletion', () => {
         sessionId: `session-${status}`,
       })
 
-      expect(await finishClaimedWorkspacePrune(db, id, 201)).toEqual({ kind: 'removed' })
+      expect(
+        await workspaceMaintenanceForTest(db).finalizeClaimedWorkspace(id, 201),
+      ).toBeUndefined()
       expect(existsSync(scratch)).toBe(false)
       const row = await rowOf(id)
       expect(row.status).toBe(status)
@@ -271,7 +272,7 @@ describe('RFC-300 physical workspace deletion', () => {
       })),
     )
 
-    expect(await finishClaimedWorkspacePrune(db, id, 205)).toEqual({ kind: 'removed' })
+    expect(await workspaceMaintenanceForTest(db).finalizeClaimedWorkspace(id, 205)).toBeUndefined()
     expect(existsSync(container)).toBe(false)
     for (const repo of repos) {
       const registry = await runGit(repo.source, ['worktree', 'list', '--porcelain'])
@@ -291,20 +292,18 @@ describe('RFC-300 physical workspace deletion', () => {
     mkdirSync(scratch)
     const id = await seedTask({ repoPath: scratch, worktreePath: scratch })
 
-    const outcomes = await Promise.all([
-      finishClaimedWorkspacePrune(db, id, 210),
-      finishClaimedWorkspacePrune(db, id, 210),
+    await Promise.all([
+      workspaceMaintenanceForTest(db).finalizeClaimedWorkspace(id, 210),
+      workspaceMaintenanceForTest(db).finalizeClaimedWorkspace(id, 210),
     ])
-    expect(outcomes.filter((outcome) => outcome.kind === 'removed')).toHaveLength(1)
-    expect(outcomes.some((outcome) => outcome.kind === 'busy')).toBe(true)
+    expect(existsSync(scratch)).toBe(false)
+    expect(await db.select().from(taskExecutionMaintenanceClaims)).toHaveLength(1)
     expect((await rowOf(id)).workspacePrunedAt).toBe(210)
   })
 
   test('missing workspace finalizes the crash-after-delete window', async () => {
     const id = await seedTask()
-    expect(await finishClaimedWorkspacePrune(db, id, 211)).toEqual({
-      kind: 'finalized-missing',
-    })
+    expect(await workspaceMaintenanceForTest(db).finalizeClaimedWorkspace(id, 211)).toBeUndefined()
     expect((await rowOf(id)).workspacePrunedAt).toBe(211)
   })
 
@@ -322,7 +321,13 @@ describe('RFC-300 physical workspace deletion', () => {
     // The generic GC's legacy missing-directory healer must not steal this
     // source-specific claim and stamp it pruned before the dedicated replay
     // has deleted refs from the source repository.
-    const generic = await runWorktreeGc(db, { worktreeAutoGc: { enabled: true } }, 211)
+    const generic = await workspaceMaintenanceForTest(db).runGcPhase({
+      phase: 'worktree',
+      activeTaskIds: [],
+      gitCloneTimeoutMs: 30 * 60 * 1000,
+      now: 211,
+      ...{ worktreeAutoGc: { enabled: true } },
+    })
     expect(generic.scanned).toBe(0)
     expect((await rowOf(task.id)).workspacePrunedAt).toBeNull()
     expect(
@@ -330,9 +335,9 @@ describe('RFC-300 physical workspace deletion', () => {
         .stdout,
     ).toContain(task.snapshotRef)
 
-    expect(await finishClaimedWorkspacePrune(db, task.id, 212)).toEqual({
-      kind: 'finalized-missing',
-    })
+    expect(
+      await workspaceMaintenanceForTest(db).finalizeClaimedWorkspace(task.id, 212),
+    ).toBeUndefined()
     expect(
       (
         await runGit(task.repo, ['for-each-ref', '--format=%(refname)', snapshotRefPrefix(task.id)])
@@ -348,49 +353,51 @@ describe('RFC-300 claimed-workspace recovery selection', () => {
     mkdirSync(scratch)
     const id = await seedTask({ repoPath: scratch, worktreePath: scratch })
 
-    const deferred = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: (taskId) => taskId === id,
+    const deferred = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [id],
       now: 300,
+      webhookClaims: 'all',
     })
-    expect(deferred.removed).toEqual([])
+    expect(deferred.completed).toBe(0)
     expect(deferred.skipped).toBe(1)
     expect(existsSync(scratch)).toBe(true)
 
-    const resumed = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: () => false,
+    const resumed = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [],
       now: 301,
+      webhookClaims: 'all',
     })
-    expect(resumed.removed).toEqual([id])
+    expect(resumed.completed).toBe(1)
     expect(existsSync(scratch)).toBe(false)
   })
 
   test('ticker skips a fresh claim and retries it after the lease', async () => {
     const scratch = join(root, 'leased-scratch')
     mkdirSync(scratch)
-    const id = await seedTask({
+    await seedTask({
       repoPath: scratch,
       worktreePath: scratch,
       workspacePruningAt: 1_000,
     })
 
-    const fresh = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: () => false,
-      now: 1_000 + PRUNING_LEASE_MS - 1,
-      staleOnly: true,
+    const fresh = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [],
+      now: 1_000 + WORKSPACE_PRUNING_LEASE_MS - 1,
+      webhookClaims: 'stale',
     })
-    expect(fresh.removed).toEqual([])
+    expect(fresh.completed).toBe(0)
     expect(existsSync(scratch)).toBe(true)
 
-    const stale = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: () => false,
-      now: 1_000 + PRUNING_LEASE_MS + 1,
-      staleOnly: true,
+    const stale = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [],
+      now: 1_000 + WORKSPACE_PRUNING_LEASE_MS + 1,
+      webhookClaims: 'stale',
     })
-    expect(stale.removed).toEqual([id])
+    expect(stale.completed).toBe(1)
     expect(existsSync(scratch)).toBe(false)
   })
 
-  test('dedicated delete failure keeps cause/claim and succeeds after lease retry', async () => {
+  test('dedicated delete failure keeps its durable claim, recovers after repair and is idempotent', async () => {
     const source = join(root, 'late-source')
     const worktree = join(root, 'failed-then-repaired-worktree')
     mkdirSync(worktree)
@@ -401,11 +408,12 @@ describe('RFC-300 claimed-workspace recovery selection', () => {
       workspacePruningAt: 2_000,
     })
 
-    const failed = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: () => false,
+    const failed = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [],
       now: 2_001,
+      webhookClaims: 'all',
     })
-    expect(failed.failed).toEqual([id])
+    expect(failed.failed).toBe(1)
     expect(existsSync(worktree)).toBe(true)
     expect(await rowOf(id)).toMatchObject({
       workspacePruningAt: 2_001,
@@ -435,22 +443,24 @@ describe('RFC-300 claimed-workspace recovery selection', () => {
       (await runGit(source, ['worktree', 'add', '-q', '-b', branch, worktree, 'HEAD'])).exitCode,
     ).toBe(0)
 
-    const fresh = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: () => false,
-      now: 2_001 + PRUNING_LEASE_MS - 1,
-      staleOnly: true,
+    const fresh = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [],
+      now: 2_001 + WORKSPACE_PRUNING_LEASE_MS - 1,
+      webhookClaims: 'stale',
     })
-    expect(fresh.removed).toEqual([])
-    expect(existsSync(worktree)).toBe(true)
-
-    const retried = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: () => false,
-      now: 2_001 + PRUNING_LEASE_MS + 1,
-      staleOnly: true,
-    })
-    expect(retried.removed).toEqual([id])
+    // RFC-395 II-pre：生产持久化 claim 可直接恢复；旧库的额外内存租约等待已退役。
+    expect(fresh.completed).toBe(1)
     expect(existsSync(worktree)).toBe(false)
-    expect((await rowOf(id)).workspacePrunedAt).toBe(2_001 + PRUNING_LEASE_MS + 1)
+    expect((await rowOf(id)).workspacePrunedAt).toBe(2_001 + WORKSPACE_PRUNING_LEASE_MS - 1)
+
+    const retried = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [],
+      now: 2_001 + WORKSPACE_PRUNING_LEASE_MS + 1,
+      webhookClaims: 'stale',
+    })
+    expect(retried.completed).toBe(0)
+    expect(existsSync(worktree)).toBe(false)
+    expect((await rowOf(id)).workspacePrunedAt).toBe(2_001 + WORKSPACE_PRUNING_LEASE_MS - 1)
   })
 
   test('generic age/merge GC cannot steal a dedicated Webhook claim', async () => {
@@ -462,8 +472,14 @@ describe('RFC-300 claimed-workspace recovery selection', () => {
       workspacePruningAt: 1_100,
     })
 
-    const generic = await runWorktreeGc(db, { worktreeAutoGc: { enabled: true } }, 1_200)
-    expect(generic.removed).toEqual([])
+    const generic = await workspaceMaintenanceForTest(db).runGcPhase({
+      phase: 'worktree',
+      activeTaskIds: [],
+      gitCloneTimeoutMs: 30 * 60 * 1000,
+      now: 1_200,
+      ...{ worktreeAutoGc: { enabled: true } },
+    })
+    expect(generic.removed).toBe(0)
     expect(existsSync(scratch)).toBe(true)
     expect(await rowOf(id)).toMatchObject({
       workspacePruningAt: 1_100,
@@ -471,11 +487,12 @@ describe('RFC-300 claimed-workspace recovery selection', () => {
       workspacePrunedAt: null,
     })
 
-    const dedicated = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: () => false,
+    const dedicated = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [],
       now: 1_201,
+      webhookClaims: 'all',
     })
-    expect(dedicated.removed).toEqual([id])
+    expect(dedicated.completed).toBe(1)
     expect(existsSync(scratch)).toBe(false)
   })
 
@@ -489,11 +506,12 @@ describe('RFC-300 claimed-workspace recovery selection', () => {
       workspacePruneCause: null,
     })
 
-    const result = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: () => false,
+    const result = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [],
       now: 400,
+      webhookClaims: 'all',
     })
-    expect(result.scanned).toBe(0)
+    expect(result.completed).toBe(0)
     expect(existsSync(scratch)).toBe(true)
     expect((await rowOf(id)).workspacePruningAt).toBeNull()
   })
@@ -508,14 +526,12 @@ describe('RFC-300 claimed-workspace recovery selection', () => {
       workspacePruneCause: null,
     })
 
-    const result = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: () => false,
+    const result = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [],
       now: 500,
+      webhookClaims: 'all',
     })
-    expect(result).toEqual({ scanned: 0, removed: [], skipped: 0, failed: [] })
-    expect(await finishClaimedWebhookWorkspacePrune(db, id, 501)).toEqual({
-      kind: 'not-claimed',
-    })
+    expect(result).toEqual({ completed: 0, failed: 0, skipped: 0, healed: 0 })
     expect(existsSync(scratch)).toBe(true)
     expect(await rowOf(id)).toMatchObject({
       workspacePruningAt: 450,
@@ -552,32 +568,28 @@ describe('RFC-300 claimed-workspace recovery selection', () => {
       )
     }
 
-    const result = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: () => false,
+    const result = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [],
       now: 500,
+      webhookClaims: 'all',
     })
-    expect(result.scanned).toBe(0)
-    expect(dirs.every(existsSync)).toBe(true)
-    for (const id of ids) {
-      expect(await finishClaimedWebhookWorkspacePrune(db, id, 501)).toEqual({
-        kind: 'not-claimed',
-      })
-    }
+    expect(result.completed).toBe(0)
     expect(dirs.every(existsSync)).toBe(true)
   })
 
   test('a durable claim continues after the setting is turned off / trigger row is gone', async () => {
     const scratch = join(root, 'durable-decision')
     mkdirSync(scratch)
-    const id = await seedTask({ repoPath: scratch, worktreePath: scratch })
+    await seedTask({ repoPath: scratch, worktreePath: scratch })
 
     // Recovery deliberately has no config or webhook-trigger table dependency:
     // the terminal CAS already linearized the decision into this claim.
-    const result = await runClaimedWebhookWorkspacePrunes(db, {
-      isTaskActive: () => false,
+    const result = await workspaceMaintenanceForTest(db).recover({
+      activeTaskIds: [],
       now: 600,
+      webhookClaims: 'all',
     })
-    expect(result.removed).toEqual([id])
+    expect(result.completed).toBe(1)
     expect(existsSync(scratch)).toBe(false)
   })
 })

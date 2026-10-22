@@ -1,3 +1,13 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+// RFC-349 / RFC-392: HTTP and WorkStart consume the application graph's single platform-tool catalog on both engines.
+
+import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import ts from 'typescript'
+import { createSession } from './helpers/auth/sessionStore'
+import { createUser } from './helpers/userFixture'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
@@ -7,15 +17,6 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import type { Hono } from 'hono'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { bootImplementation, expectBootOrder } from './helpers/daemonProgramSource'
-// RFC-349 / RFC-392: HTTP and WorkStart consume the application graph's single platform-tool catalog on both engines.
-
-import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import ts from 'typescript'
-import { createSession } from './helpers/auth/sessionStore'
-import { createUser } from '../src/services/users'
 import type { DigitalEmployeeWorkStartPort } from '../src/modules/integration/public/participants'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '../src/modules/digital-employee/composition'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '../src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'

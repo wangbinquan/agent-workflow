@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-097 — cancel 赢家语义 + limits 不污染终态（design/RFC-097-task-status-cas/
 // design.md §2 写点 4/6/10、§6 失败模式「done-vs-cancel」「limits 文案污染」）。
 //
@@ -190,7 +191,7 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
         .schedulerDriver,
       runConfig: {
         binaryOverride: ['bun', 'run', h.slowMock],
-        // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
+        // RFC-115: retry budget via TaskContinuationDependencies (was node.retries: 0).
         defaultNodeRetries: 0,
       },
     }).resume(h.taskId)

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：保留生产规划器断言，删除无生产调用的动作分类与 pending seams 用例。
 // RFC-271 T12b —— 依赖规划器与 pending seams（承重不变量 I4 / I5）。
 //
 // I4 的类型序**照抄** `resolveChangeset.ts:651-665`，不是自己重排：
@@ -18,9 +19,7 @@ import type { BundleOp } from '@agent-workflow/shared'
 import {
   BundleCycleError,
   localSlugOf,
-  opAction,
   opSlug,
-  pendingSeamsFor,
   planBundleOps,
   resourceTypeOfOp,
 } from '../src/services/bundle/provider'
@@ -43,8 +42,6 @@ describe('op 的三个投影', () => {
   test('kind → 资源类型 / 动作 / slug', () => {
     expect(resourceTypeOfOp(create('agent-create', 'a'))).toBe('agent')
     expect(resourceTypeOfOp(update('workgroup-update', 'g'))).toBe('workgroup')
-    expect(opAction(create('skill-create', 's'))).toBe('create')
-    expect(opAction(update('mcp-update', 'm'))).toBe('update')
     // update op 没有 slug —— 它的目标已经在库里。
     expect(opSlug(update('mcp-update', 'm'))).toBeNull()
   })
@@ -153,30 +150,5 @@ describe('I4 · agent 组内的 dependsOn 拓扑', () => {
     const ops = ['s3', 's1', 's2'].map((s) => create('skill-create', s))
     expect(slugsOf(planBundleOps(ops))).toEqual(['s3', 's1', 's2'])
     expect(planBundleOps([])).toEqual([])
-  })
-})
-
-describe('I5 · pending seams', () => {
-  const idOf = (slug: string) => `01ID-${slug}`
-
-  test('元素是**预铸 id**，不是名字', () => {
-    const ops = [create('agent-create', 'auditor', { name: 'Auditor' })]
-    const seams = pendingSeamsFor(ops, idOf)
-    expect([...seams.pendingBundleIds]).toEqual(['01ID-auditor'])
-    // 名字单独走 agent 那张表（工作组成员按名字挂载）。
-    expect(seams.pendingAgentNames.get('01ID-auditor')).toBe('Auditor')
-  })
-
-  test('update op 不进 pending —— 它的目标已经在库里', () => {
-    const seams = pendingSeamsFor([update('agent-update', 'A')], idOf)
-    expect(seams.pendingBundleIds.size).toBe(0)
-    expect(seams.pendingAgentNames.size).toBe(0)
-  })
-
-  test('只有 agent 进名字表；其余类型只进 id 集合', () => {
-    const ops = [create('skill-create', 's'), create('agent-create', 'a')]
-    const seams = pendingSeamsFor(ops, idOf)
-    expect(seams.pendingBundleIds.size).toBe(2)
-    expect([...seams.pendingAgentNames.keys()]).toEqual(['01ID-a'])
   })
 })

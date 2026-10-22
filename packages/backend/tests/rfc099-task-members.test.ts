@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-099 B3 — task members endpoints + launch-time gates over HTTP:
 //   - POST /api/tasks rejects the removed `assignments` field with 422
 //     `assignments-removed` (Breaking for automation, called out in release notes)
@@ -17,7 +18,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

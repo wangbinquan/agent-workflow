@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-221 — linked identity means provider-managed at the account level.
 // Self-service unlink and both self/admin password mutation paths must be
 // denied server-side even when a mixed account still has a historical hash.
@@ -12,7 +13,7 @@ import { userIdentities, users } from '../src/db/schema'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { createIdentity } from '../src/services/userIdentities'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'c'.repeat(64)
 

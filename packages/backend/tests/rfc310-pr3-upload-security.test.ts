@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-310 PR-3 T39 —— upload 链的对抗面与 HTTP 防护。
 //
 // 锁：①传输上限/空体/未授权的 typed 拒绝（upload-too-large / upload-empty /
@@ -33,7 +34,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { runGit } from '../src/util/git'
 import { MISSION_UPLOAD_MAX_BYTES } from '../src/routes/missionInputUploads'
 import {

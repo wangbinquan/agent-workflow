@@ -1,10 +1,11 @@
-import { readDaemonGraphSource } from './helpers/daemonGraphSource'
-import { bootImplementation, bootDeclaration } from './helpers/daemonProgramSource'
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-321 T19 — repository publication boundary ratchet.
 //
 // The ledger closes over real call sites: persisted ownership, single-session
 // transport, session-only administration, legacy extinction, and bypass detection.
 
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
+import { bootImplementation, bootDeclaration } from './helpers/daemonProgramSource'
 import { describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
@@ -319,7 +320,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
   test('task auto-push keeps bootstrap provider discovery instead of dropping to URL rules', () => {
     // Regression: the HTTP and digital-employee publication paths received the
     // bootstrap transport, but ordinary task auto-push rebuilt a key-file-only
-    // transport after StartTaskDeps. That transport had no GitHub/GitLab metadata
+    // transport after TaskContinuationDependencies. That transport had no GitHub/GitLab metadata
     // participant, so SSH publication skipped provider API discovery and went
     // straight to mapping/SaaS URL rules even though RFC-321 requires API first.
     const startTaskDeps = read('packages/backend/tests/helpers/startTaskDeps.ts')

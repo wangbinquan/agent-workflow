@@ -180,7 +180,7 @@ import { ulid } from 'ulid'
  * 防「看起来像可继承」的字段被顺手漏配或顺手多配。
  *
  * 实施偏差（相对 design 草稿的「拆 inheritable 嵌套子对象」）：字面嵌套会让
- * RunTaskOptions/StartTaskDeps 的全部构造点与测试夹具连坐改形，而两型 15 个
+ * RunTaskOptions/TaskContinuationDependencies 的全部构造点与测试夹具连坐改形，而两型 15 个
  * 同名字段的注释各自承载调度语义/路由接线两套契约、不宜合并——注册表 + Pick
  * 派生型给出同等单源与更强的双向锁，类型面零搬迁。
  */

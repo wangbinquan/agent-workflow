@@ -1,9 +1,10 @@
-import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
-import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-359 AC-1（plan §5hi）—— 测试侧的「宿主任务启动内核」装配，和生产同形。
 //
 // RFC-382 后生产从会话模块组取得 routeLaunch.workflow；这份既有 fixture 保留
 // 调用方指定的完成模式，仍驱动相同的根启动内核与工作区参与者。
+import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   TaskDriveCompletionMode,
@@ -20,6 +21,8 @@ import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
 import { type TaskDriveCoordinatorDependencies } from '@/services/task'
 
 export function createTestHostTaskLaunchKernel(input: {
+  readonly workspace?: RootTaskLaunchDependencies['workspace']
+  readonly coordinator?: TaskDriveCoordinator
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly gitCommitIdentity: RootTaskLaunchDependencies['gitCommitIdentity']
@@ -58,12 +61,17 @@ export function createTestHostTaskLaunchKernel(input: {
   return createRootTaskLaunchKernel({
     db: input.db,
     gitCommitIdentity: input.gitCommitIdentity,
-    coordinator,
-    workspace: createTaskRouteWorkspaceParticipant({
-      db: input.db,
-      appHome: input.appHome,
-      sourceContexts: createIdentityAccessRuntime({ db: input.db }).taskPreparationContext,
-      repositoryPreparation: composeRepositoryPreparation({ db: input.db, appHome: input.appHome }),
-    }),
+    coordinator: input.coordinator ?? coordinator,
+    workspace:
+      input.workspace ??
+      createTaskRouteWorkspaceParticipant({
+        db: input.db,
+        appHome: input.appHome,
+        sourceContexts: createIdentityAccessRuntime({ db: input.db }).taskPreparationContext,
+        repositoryPreparation: composeRepositoryPreparation({
+          db: input.db,
+          appHome: input.appHome,
+        }),
+      }),
   })
 }

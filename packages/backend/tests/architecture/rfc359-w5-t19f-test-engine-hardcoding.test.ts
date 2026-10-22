@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-359 W5-T19f —— 测试面「不得写死引擎」的高水位账本（只降不升）。
 //
 // **为什么单引擎测试是本 RFC 的核心风险。** `describeEachProvider`（`tests/helpers/eachProvider.ts`）
@@ -849,7 +850,7 @@ function sanctionOf(rel: string): string | null {
  */
 export const OPEN_MIGRATION_DEBT: readonly string[] = [
   // RFC-359 AC-6（命名债清完后的一刀）**销四条**：
-  //   · `start-task-deps` —— **真迁**。它被卡住的唯一原因是 `StartTaskDeps.db` 钉着
+  //   · `start-task-deps` —— **真迁**。它被卡住的唯一原因是 `TaskContinuationDependencies.db` 钉着
   //     `LegacySqliteTaskDatabase`，而被测的 `buildStartTaskDeps` 只是把句柄原样透传
   //     （用例自己就断言 `expect(withCmd.db).toBe(db)`）。放宽那个字段后连带中立化了
   //     `loadFrozenSpaceLayout` 与启动前的 `file://` 预筛（两处同步 `.all()` 转 await）。

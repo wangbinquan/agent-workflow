@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-164 PR-4 — workgroup room endpoints + human @-dispatch semantics.
 //
 // Locks:
@@ -39,7 +40,7 @@ import {
 } from '../src/services/workgroup/state'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createAgent } from '../src/services/agent'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { resolveMentions } from '../src/routes/workgroupTasks'
 import { createLogger } from '../src/util/log'
 

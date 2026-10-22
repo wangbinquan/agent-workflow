@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-332 — TaskEngine contracts, single-consumer cutover and architecture locks.
 
 import { describe, expect, test } from 'bun:test'
@@ -158,14 +159,16 @@ describe('RFC-332 T3-T4 — additive drive and engine contracts', () => {
     const ports = source(
       'packages/backend/src/modules/task-execution/application/ports/taskEngine.ts',
     )
-    expect(contract).not.toMatch(/\b(?:DbClient|AbortController|StartTaskDeps|SchedulerState)\b/)
-    expect(ports).not.toMatch(/\b(?:DbClient|StartTaskDeps|SchedulerState)\b/)
+    expect(contract).not.toMatch(
+      /\b(?:DbClient|AbortController|TaskContinuationDependencies|SchedulerState)\b/,
+    )
+    expect(ports).not.toMatch(/\b(?:DbClient|TaskContinuationDependencies|SchedulerState)\b/)
     expect(ports).not.toContain('Record<string, (...args:')
   })
 })
 
 describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
-  test('four admissions and the exact human-gate wake converge on one TaskEngine adapter', () => {
+  test('three continuations and the exact human-gate wake converge on one TaskEngine adapter', () => {
     const task = source('packages/backend/src/services/task.ts')
     expect(taskDriveRequests('kick')).toHaveLength(0)
     expect(taskDriveRequests('drive')).toHaveLength(0)
@@ -174,7 +177,8 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
     // transaction already inserted its exact durable intent.
     // RFC-359 AC-1（第 9 刀）：5 → 4。`retryNode` 整份删除（`retry` 两份实现合一），
     // 它那台 coordinator 随之出账；重试的驱动改由紧随其后的 `resumeTask` 那一台负责。
-    expect(task.match(/composeTestTaskDriveFactory\(\{/g)).toHaveLength(4)
+    // RFC-395 II-pre：旧 admission 删除，三台存续 continuation 与 wake 继续共用配置。
+    expect(task.match(/composeTestTaskDriveFactory\(\{/g)).toHaveLength(3)
     // RFC-387: only the four test-only admissions retain a factory wrapper; production uses the session.
     const factory = source(
       'packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts',

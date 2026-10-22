@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-247 §4 / AC-10 / AC-13 / AC-16 — the MCP channel.
 //
 // The claim this file has to defend is that MCP is a SUBSET of REST, not a
@@ -45,7 +46,7 @@ import {
 } from './helpers/mcpOperationRecording'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 /** Keep this test independent of the operator's locally configured runtimes. */
 const TEST_RUNTIME = 'rfc247-test-opencode'

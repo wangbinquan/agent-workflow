@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-036 PR4 launch-context test, rewritten for RFC-099 (D6/D10/D13):
 // the node-level assignment mechanism is gone — task membership (owner +
 // collaborators) is the answer-rights boundary. This file now locks:
@@ -12,7 +13,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   getTaskMembers,
   recordLaunchContext,

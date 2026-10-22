@@ -1,3 +1,4 @@
+// RFC-395 II-pre：崩溃收敛改走生产维护装配，保留补偿与前滚断言。
 // RFC-234 §9 (T6) — apply pipeline behavior locks:
 //  happy multi-type bundle (skill+mcp+agent+workflow+workgroup+plugin) lands
 //  atomically with correct cross-wiring/provenance/epoch close; duplicate
@@ -5,6 +6,7 @@
 //  a stale fence or an in-tx crash yields ZERO visible resources with staged
 //  side effects compensated (P0-5); a post-commit crash converges forward.
 
+import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createHash } from 'node:crypto'
@@ -35,11 +37,7 @@ import {
   workgroups,
 } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import {
-  applyIntentChangeset,
-  convergeIntentApplyJournal,
-  type ApplyIntentDeps,
-} from '../src/modules/intent/composition/apply'
+import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import { createIntentSessionForTest as createIntentSession } from './helpers/intentResourceCatalogBinding'
 import type { IntentContextManifest } from '@/modules/intent/application/manifest'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
@@ -653,7 +651,13 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         .update(intentApplyJournal)
         .set({ updatedAt: Date.now() - 11 * 60 * 1000 })
         .where(eq(intentApplyJournal.id, pending.id))
-      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+      expect(
+        await composeIntentApplyConvergence({
+          db,
+          appHome,
+          pluginsDir: join(appHome, 'plugins'),
+        }).converge({ activeJournalIds: [] }),
+      ).toEqual({
         failed: 1,
         rolledForward: 0,
       })
@@ -684,11 +688,19 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       expect((await db.select().from(intentApplyJournal).get())?.state).toBe('committed')
       expect((await db.select().from(skills)).length).toBe(1)
       // …and convergence replays the idempotent tail.
-      const converged = await convergeIntentApplyJournal(db, appHome)
+      const converged = await composeIntentApplyConvergence({
+        db,
+        appHome,
+        pluginsDir: join(appHome, 'plugins'),
+      }).converge({ activeJournalIds: [] })
       expect(converged.rolledForward).toBe(1)
       expect(converged.failed).toBe(0)
       // Second convergence is a no-op replay, not an error.
-      const again = await convergeIntentApplyJournal(db, appHome)
+      const again = await composeIntentApplyConvergence({
+        db,
+        appHome,
+        pluginsDir: join(appHome, 'plugins'),
+      }).converge({ activeJournalIds: [] })
       expect(again.rolledForward).toBe(1)
     })
 

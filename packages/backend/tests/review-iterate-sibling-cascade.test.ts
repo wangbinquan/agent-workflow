@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-014 §2.1 #1 + #3 + C1 — multi-markdown upstream + iterate path locks.
 //
 // Reverses the RFC-005 §2.1 #8 "single-port partial merge" behavior for any
@@ -23,6 +24,7 @@
 //   - check the cascadeSiblingReviews call in submitReviewDecision iterate branch
 //   - check buildSiblingOutputsBlock for the `__sibling_outputs__` payload
 
+import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -40,11 +42,7 @@ import {
   buildSiblingOutputsBlock,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import {
-  abortAllActiveTasks,
-  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
-  wakeHumanGateContinuation,
-} from '../src/services/task'
+import { abortAllActiveTasks, wakeHumanGateContinuation } from '@/services/task'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
@@ -59,11 +57,11 @@ async function git(...args: string[]): Promise<void> {
   await runTestGit(args, GIT_TIMEOUT_MS)
 }
 
-function startTaskWithLocalRepo(
-  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
-  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+function launchTestTaskWithLocalRepo(
+  input: Parameters<typeof launchTestTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof launchTestTaskWithLocalRepoBase>[1],
 ) {
-  return startTaskWithLocalRepoBase(input, {
+  return launchTestTaskWithLocalRepoBase(input, {
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -207,7 +205,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
 
   process.env.AGENT_WORKFLOW_HOME = appHome
 
-  const task = await startTaskWithLocalRepo(
+  const task = await launchTestTaskWithLocalRepo(
     {
       workflowId: wf.id,
       name: 'fixture-task',

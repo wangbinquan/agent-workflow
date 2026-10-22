@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-294 W1/W2/P0-D refactor compatibility oracles.
 //
 // These tests intentionally enter through today's public backend seams rather
@@ -35,12 +36,8 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import {
-  abortAllActiveTasks,
-  isTaskActive,
-  startTask,
-  startTaskWithLocalRepo,
-} from '@/services/task'
+import { abortAllActiveTasks, isTaskActive } from '@/services/task'
+import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { cancelViaEngine } from './helpers/cancelEngine'
@@ -328,7 +325,7 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
 
   test('daemon shutdown settles node and task as interrupted; resume owns a fresh generation and reaches done', async () => {
     h = await buildHarness()
-    const started = await startTaskWithLocalRepo(
+    const started = await launchTestTaskWithLocalRepo(
       {
         workflowId: h.workflowId,
         name: 'rfc294-daemon-resume',
@@ -422,7 +419,7 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
       },
     }
 
-    const result = await startTask(
+    const result = await launchTestTask(
       {
         workflowId: h.workflowId,
         name: 'rfc294-materialized-handoff',

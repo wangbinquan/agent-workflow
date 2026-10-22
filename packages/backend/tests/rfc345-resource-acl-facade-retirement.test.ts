@@ -1,3 +1,4 @@
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-345 T9 — compatibility facades are temporary, source-backed edges.
 //
 // This gate derives the live consumer ledger from the TypeScript AST instead
@@ -465,13 +466,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflow.ts',
-    'services/task.ts',
-    ['getWorkflow'],
-    'task service Workflow lookup',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/workflow.ts',
     'services/taskLaunchGate.ts',
     ['getWorkflow'],
     'task launch Workflow lookup',
@@ -535,13 +529,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     'services/scheduledTasks.ts',
     ['assertWorkflowLaunchInputs'],
     'scheduled task launch input validation',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/workflowLaunchInputs.ts',
-    'services/task.ts',
-    ['assertWorkflowLaunchInputs'],
-    'task launch input validation',
     REMOVE_OWNERS.taskExecutionResources,
   ),
   edge(

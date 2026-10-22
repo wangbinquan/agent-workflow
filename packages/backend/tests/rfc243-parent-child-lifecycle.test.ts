@@ -1,3 +1,6 @@
+import { launchTestTask } from './helpers/productionTaskLaunch'
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
+import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 // RFC-243 PR-2 — parent/child lifecycle cross-cutting locks.
 //
 // Locks in (design §4.1–§4.5, design-gate P0-2 / P1-1 / P2-6 fixes):
@@ -31,14 +34,14 @@ import { eq } from 'drizzle-orm'
 import type { StartTask } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { selectResumeRollbackTargets, startTask } from '../src/services/task'
+import { selectResumeRollbackTargets } from '@/services/task'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { deleteTask } from '../src/services/taskDelete'
 import { enforceLimits, parseCallHumanWait } from '../src/services/limits'
-import { runIsoWorktreeGc } from '../src/services/gc'
+
 import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { resolveRunLiveness } from '../src/services/runLiveness'
-import type { StartTaskDeps } from '@/services/task'
+import type { TaskContinuationDependencies } from '@/services/task'
 import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -204,7 +207,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
     }
     try {
       await expect(
-        startTask({ workflowId: wf, name: 'late child', inputs: {} } as StartTask, {
+        launchTestTask({ workflowId: wf, name: 'late child', inputs: {} } as StartTask, {
           db,
           schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
             .schedulerDriver,
@@ -308,7 +311,7 @@ describe('RFC-243 §4.2 — resume/rollback carve-outs', () => {
       parentNodeRunId: callRow,
     })
     await db.update(nodeRuns).set({ childTaskId: child }).where(eq(nodeRuns.id, callRow))
-    const deps = {} as unknown as StartTaskDeps
+    const deps = {} as unknown as TaskContinuationDependencies
     // RFC-359 AC-1（第 10 刀）：`resume` 与 PostgreSQL 共用同一份实现。这一格验的是
     // **准入门早于任何驱动**——门在 `schedulerDriver` 被用到之前就拒，所以这里连驱动面
     // 都不必造（`null as never` 一旦被碰到就当场炸，反过来证明门确实更早）。
@@ -526,10 +529,16 @@ describe('RFC-243 §4.4 — iso GC revivability carve-outs (design-gate P0-2)', 
     await seedRun(db, settled, 'call1', { status: 'done', childTaskId: childDone })
     const dirSettled = mkIso(settled)
 
-    const result = await runIsoWorktreeGc(db, appHome)
+    const result = await workspaceMaintenanceForTest(db, appHome).runGcPhase({
+      phase: 'iso',
+      activeTaskIds: [],
+      gitCloneTimeoutMs: 30 * 60 * 1000,
+      now: Date.now(),
+      ...{ worktreeAutoGc: { enabled: true } },
+    })
     expect(existsSync(dirInterrupted)).toBe(true)
     expect(existsSync(dirDoneWithChild)).toBe(true)
     expect(existsSync(dirSettled)).toBe(false)
-    expect(result.removed).toContain(settled)
+    expect(result.removed).toBe(1)
   })
 })

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-089 P3 — getTaskStructuralDiff node scope must work for multi-repo tasks.
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
 // now (the wire is URL-only) — bodies are cast through the internal
@@ -21,7 +22,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/services/structuralDiff/service'
 import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
-import { startTask } from '../src/services/task'
+import { launchTestTask } from './helpers/productionTaskLaunch'
 import { nodeRuns, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
@@ -77,7 +78,7 @@ async function buildHarness(repoCount: number): Promise<Harness> {
 }
 
 async function twoRepoTask(h: Harness) {
-  return startTask(
+  return launchTestTask(
     {
       workflowId: 'wf-node',
       name: 't',

@@ -1,10 +1,11 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-269 接线回归 —— 2026-08-10 本机全能力验收发现的 P0。
 //
 // 事故形状：`code-host-call` 节点在**任何**真实任务里都以
 // `code-host-not-configured` 收场，即便管理员已经配好 gitlab 且设置页的
 // 「测试连接」返回 ok。根因不是凭据、不是网络，而是**没有任何生产路径**把
 // `CodeHostConnectionsService` 注进 scheduler：它只在 `mountCodeHostRoutes`
-// 里就地构造，`buildStartTaskDeps` / `StartTaskDeps` / 子任务 opts 透传里
+// 里就地构造，`buildStartTaskDeps` / `TaskContinuationDependencies` / 子任务 opts 透传里
 // 全都没有它。兄弟参数 `maxConcurrentCodeHostCalls` / `codeHostRequestTimeoutMs`
 // 都从 config 一路穿到了 scheduler，唯独凭据服务漏了。
 //

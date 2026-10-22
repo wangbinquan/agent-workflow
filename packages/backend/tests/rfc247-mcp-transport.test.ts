@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-247 §4.1 / AC-10 / AC-18 / F4 / F6 — the `/api/mcp` endpoint itself.
 //
 // Everything here is about who gets to open the pipe at all, before any tool
@@ -22,7 +23,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

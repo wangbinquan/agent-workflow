@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Regression — live incident 01KWDKBS9K22KB6HH4KNR3XMX6 (2026-07-09 会话):
 //
 //   agent(带反问通道) → review。agent 多轮反问：第 1 轮问 qa，用户答（继续）后 agent
@@ -29,7 +30,8 @@ import { clarifyRounds, nodeRuns, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { abortAllActiveTasks, startTaskWithLocalRepo } from '../src/services/task'
+import { abortAllActiveTasks } from '@/services/task'
+import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { listTaskQuestions } from '../src/services/taskQuestions'
 import { reenterScheduler } from './reenter-scheduler'
 import { runTestGit } from './helpers/testCommand'
@@ -261,7 +263,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
   })
   const wf = await setupClarifyReviewWorkflow('strand')
   const task = await withActiveTaskDeadline(() =>
-    startTaskWithLocalRepo(
+    launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 'strand',

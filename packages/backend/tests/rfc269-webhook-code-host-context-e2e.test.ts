@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-269 regression — exact production chain for the reported race:
 // webhook dispatcher -> startExecution -> initial task INSERT -> scheduler ->
 // code-host-call. The HTTP peer is local, but no launch/scheduler seam is
@@ -53,7 +54,7 @@ import {
 } from './helpers/integrationTriggerResourceBinding'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 import { createWorkflow } from '../src/services/workflow'
 import { Paths } from '../src/util/paths'

@@ -1,4 +1,4 @@
-import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-257/RFC-310 全链路端到端：HTTP POST → EventRecord → per-rule Delivery
 // → source-neutral WorkStart → 真 dispatcher，只在最终 launch 处注入 fake。
 //
@@ -14,7 +14,8 @@ import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
+import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import {
   eventDeliveries,
   eventRecords,

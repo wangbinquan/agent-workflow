@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-089 P4 — supplementary coverage for multi-repo call-chain re-prefixing.
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
 // now (the wire is URL-only) — bodies are cast through the internal
@@ -33,7 +34,7 @@ import {
   invalidateCallGraphIndex,
 } from '../src/services/structuralDiff/callGraph/expandService'
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
-import { startTask } from '../src/services/task'
+import { launchTestTask } from './helpers/productionTaskLaunch'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
@@ -109,7 +110,7 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function twoRepoTask(h: Harness) {
-  return startTask(
+  return launchTestTask(
     {
       workflowId: 'wf-ccx',
       name: 't',

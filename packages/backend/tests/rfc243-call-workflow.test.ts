@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-243 PR-3 — call-workflow 节点端到端（design §6.2 D→L→W→F→M 全链）。
 //
 // Locks in:
@@ -29,7 +30,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
-import type { StartTaskDeps } from '../src/services/task'
+import type { TaskContinuationDependencies } from '../src/services/task'
 import { freezeCallClosure } from '../src/services/execution/closure'
 import { buildActor } from '../src/auth/actor'
 
@@ -527,7 +528,7 @@ describe('RFC-243 e2e — 生命周期', () => {
           .schedulerDriver,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', h.mockPath],
-      } as unknown as StartTaskDeps,
+      } as unknown as TaskContinuationDependencies,
     }).retry({
       taskId: parentTaskId,
       nodeRunId: failedCall.id,

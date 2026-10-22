@@ -1,3 +1,4 @@
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-204 — the P0-a red anchor plus the reuse contract that replaces it.
 //
 // The vulnerability (permission audit 2026-07-15, P0-3): `cached_repos` is a
@@ -145,7 +146,15 @@ describe('RFC-204 — reuse travels as an id, never as a URL', () => {
     // 通道是 `deps.internalSource`。源码级锁住那条分支原样构造路径规格——
     // 一旦有人把它也改成 url-or-id 形态，materializeSpace 会拿到
     // `{repoUrl: undefined}` 而炸。
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
+    const src = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules/source-control/infrastructure/workspaceMaterializer.ts',
+      ),
+      'utf8',
+    )
     expect(src).toContain(
       '[{ repoPath: deps.internalSource.repoPath, baseBranch: deps.internalSource.baseBranch }]',
     )

@@ -4,7 +4,7 @@
 // clarify page (`/clarify/$nodeRunId`) instead of the (near-empty)
 // NodeDetailDrawer. This pure helper picks WHICH node_run to route to — and
 // whether the node is clickable at all — from the backend-stamped
-// `clarifyNavKind` (services/task.ts getTaskNodeRuns).
+// `clarifyNavKind` (taskRouteOperations.ts taskNodeRunsProjection).
 //
 // All clarify semantics — "has a resolvable round" (never route to a 404),
 // awaiting-vs-answered, orphaned-awaiting suppression on a dead task — live in

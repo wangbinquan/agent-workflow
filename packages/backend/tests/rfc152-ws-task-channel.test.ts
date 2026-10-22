@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-152 PR-4 — task channel migration locks.
 //
 // 1. Explicit stranger-403 upgrade cell for /ws/tasks/{taskId} (前置格).
@@ -26,7 +27,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { buildWebSocketAdapter } from '../src/ws/server'
 import { WS_CHANNEL_KINDS } from '../src/ws/registry'

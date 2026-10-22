@@ -255,15 +255,15 @@
     },
     {
       "auditedBy": "critic",
-      "claimAudit": "No explicit single-source claim, and none is warranted: the predicate 'which space kinds own disk and are prunable' is hand-written three times as an include list (gc.ts:215, gc.ts:267, packages/backend/src/services/webhook/terminalWorkspaceCleanup.ts:32) and once as an exclude list (gc.ts:365-366), with no `satisfies Record<SpaceKind, …>` anywhere. The three currently agree — verified — but nothing holds them together. AUDITED BY NOBODY.",
+      "claimAudit": "RFC-395 II-pre 删除 services/gc.ts 兼容门面与 SQLite GC 副本；本条改指既有生产 workspaceMaintenance 命令，其空间类型判据维持原状。",
       "core": false,
       "files": [
-        "packages/backend/src/services/gc.ts"
+        "packages/backend/src/modules/source-control/application/workspaceMaintenance.ts"
       ],
       "guards": [],
       "id": "workspace-gc-prune-eligibility-kernel",
       "layer": "application",
-      "owner": "task-execution",
+      "owner": "source-control",
       "singleSourceOf": "Hourly two-phase tombstone prune of task workspaces (claim → delete → finalize), plus the scratch-orphan reaper.",
       "title": "Workspace GC / prune-eligibility kernel"
     },

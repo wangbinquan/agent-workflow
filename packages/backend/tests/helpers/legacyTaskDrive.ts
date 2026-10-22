@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-387: retained fixture admission composes the same application factory; W4 removes this adapter.
 import { composeTestTaskDriveFactory } from '@/services/task'
 import type {
@@ -14,7 +15,7 @@ import type { TaskRecoveryOperations } from '@/modules/task-execution/applicatio
 import type { TaskLaunchConfigurationQueries } from '@/modules/task-execution/public/queries'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
-import { getTask, type StartTaskDeps } from '@/services/task'
+import { getTask, type TaskContinuationDependencies } from '@/services/task'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 
@@ -31,9 +32,9 @@ export function createTestTaskDriveCoordinator(
 }
 
 export function composeTestRoomContinuation(input: {
-  readonly db: StartTaskDeps['db']
+  readonly db: TaskContinuationDependencies['db']
   readonly configPath: string
-  readonly schedulerDriver: StartTaskDeps['schedulerDriver']
+  readonly schedulerDriver: TaskContinuationDependencies['schedulerDriver']
   readonly taskRecoveryOperations: TaskRecoveryOperations
   readonly workspacePresence?: WorkspacePresenceQueries
   readonly launchConfiguration?: TaskLaunchConfigurationQueries

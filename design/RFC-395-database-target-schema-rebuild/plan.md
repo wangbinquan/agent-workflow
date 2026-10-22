@@ -213,3 +213,58 @@ I-a 由 Codex 实施、本会话审核，一次提交落地，不改物理 schem
   由 RFC-396 处理。
 - **下一步顺序调整**：II-pre 先于 I-b。II-pre 删除的 `startTask` 族、`getTaskNodeRuns`、`systemWorkspaceGc` 库函数含大量 SQLite
   专属终端与原始执行，先删可免 I-b 改写注定删除的代码；两者改动面重叠，不并行。
+
+### 6.8 II-pre 交付记录（2026-10-22）
+
+II-pre 由 Codex 实施、本会话审核，一次提交落地，不改产品行为、API、schema 与迁移。`packages/backend/src` 共 18 个文件，净删 3,637 行。
+
+- **删除**：
+  - `services/task.ts` 的 `startTask` / `startTaskWithLocalRepo` / `startTaskImpl` 及其私有依赖；`StartTaskDeps` 收窄为续跑所需的
+    `TaskContinuationDependencies`，code-round 写槽 `codeRoundLaunch` 随之删除；
+  - `getTaskNodeRuns`；
+  - `platform/persistence/sqlite/systemWorkspaceGc.ts` 整份 GC 库与兼容转出 `services/gc.ts`；
+  - intent 引擎内的 `converge` 与其测试 facade；`decideIntentApplyConverge` 保留给 T10；
+  - `services/bundle/provider.ts` 的 RFC-271 旧合同段，生产规划器与回执类型保留；
+  - 连带删除：旧启动入口删除后，`services/users.ts` 与 identity-access 的 `legacyUserService`（composition / infrastructure）
+    已无生产引用，一并删除。
+- **迁移**：进程内物化租约 `materializingSpaces` 迁到无依赖的 `platform/workspace/materializingSpaces.ts`，7 个生产导入方改址。
+- **测试改接**：
+  - 原用旧启动入口的测试改走生产根启动内核与子启动（`tests/helpers/productionTaskLaunch.ts`）；
+  - `getTaskNodeRuns` 的测试改用生产读投影 `taskNodeRunsProjection`；
+  - GC 测试改走生产工作区维护命令（`tests/helpers/workspaceMaintenance.ts`）；
+  - intent 收敛测试改走生产收敛；
+  - 140 个测试文件的造用户夹具改为 `tests/helpers/userFixture.ts`，底层是生产 identity-access 的命令与查询（建用户走
+    `createManagedUser`，改用户 / 停用 / 启用走 `updateUser`，重置密码走 `resetPassword`，目录查询走运行时 `userDirectory`），
+    夹具不重写密码算法与账户规则。
+- **RFC-199 竞态回归**：`rfc199-start-task-workflow-race` 的 11 个用例原先挂在旧启动器的提交钩子上，现全部改接生产路径：
+  - 物化后版本变更 / 删除先赢（URL、scratch、多仓三例）分别锁定两件事：生产启动拒绝，以及持有物化租约的调用方经生产清理
+    只删任务自有产物；
+  - 分支只在 ref 未变时删除、被 base merge 推进的既有分支 CAS 恢复、结构化清理失败保留注册、并发 CAS 推进不被强制重置，
+    改由 source-control 物化器的生产清理（`cleanupMaterializedSpace` / `createMaterializedSpaceCleanup` /
+    `cleanupMaterializedSpaceLease`）驱动；
+  - fusion 自有根目录在启动失败后删除，改走生产 fusion 启动；
+  - 任务行先提交时 fenced 删除工作流报 `workflow-in-use`，改为生产启动内核提交后执行真实 `deleteWorkflow`。
+- **其他改接或恢复的用例**：
+  - `rfc165-agent-launch` A5：在生产 `loadVisibleAgent` 的两次读取之间删除 agent，锁定 `agent-id-mismatch` 与零副作用；
+  - `rfc287-t13` file:// 缓存仓：改锁生产的延后准备拒绝；旧的「同步拒绝且不留任务行」不是生产行为（同步段只保存缓存仓 ID）；
+  - `rfc370-task-launch-configuration-closure`：旧启动器把配置读取与预创建工作区接管绑在同一时序，生产中两者分开，拆成两例；
+  - `rfc158` reopened-empty-review：恢复用例，期望改为生产读投影实际返回的 `decided`（旧读入口返回 `null`，该入口无生产调用方）。
+- **删除的用例**（生产没有对应行为）：
+  - `rfc271-bundle-planner` 的 `pendingSeamsFor` 3 例与 `opAction` 2 条断言，随 BundleApply 死合同删除；
+  - `rfc359-w7-intent-apply-operations-conformance` 中只凭 `kind` 接受不完整 `skill-version-stage` 的宽松解码；生产解码器
+    `modules/intent/infrastructure/intentApplyArtifactLifecycle.ts:412` 不接受；
+  - `rfc301-task-launch-origin-inheritance` 中子启动夹带根来源与平铺来源 ID；生产请求
+    `modules/task-execution/application/ports/childExecutionLaunchOperations.ts:17` 没有这组字段；
+  - `rfc269-webhook-trigger-context-atomicity` 中 direct 来源同时夹带平铺 `scheduledTaskId`；生产 `ExecutionInvoker`
+    （`modules/task-execution/public/commands.ts:24`）无法表达这种组合；
+  - `rfc165-scratch-space` S6：旧启动器拒绝预创建 scratch 的分支；生产 multipart 启动支持 scratch。
+- **守卫与账本**：新增删除锁 `rfc395-ii-pre-architecture-lock`（含 users 三个模块）；`counts.json` 的 legacy-horizontal-files
+  397 → 395、legacy-thin-facades 48 → 47，unreachable-production-files 保持 27；commons-debt 入边 252 → 247，CC-12 以 II-pre 销账。
+- **验证**：本地 SQLite 复跑全部 241 个改动测试文件，失败的 2 例为机器负载下的超时（RFC-321 系统模拟 e2e 超过 30 秒，
+  RFC-075 续跑用例超过 5 秒；后者在 CI 上原本耗时 0.46 秒）。本地 PostgreSQL 复跑时本机负载过高，大量用例因 5 秒钩子超时失败，
+  不作为证据；PostgreSQL 结果以 CI 为准。
+- **观察（不改行为）**：生产根启动在准备工作区之前比较工作流版本
+  （`modules/task-execution/infrastructure/taskRouteLaunchOperations.ts:1439`），任务行插入事务内不再复查；旧启动器的
+  「物化后在插入事务内复查版本 / 存在性」没有生产对应物。阶段 II 重建 Task 写协议（design §3.3）时一并考虑。
+- **遗留（不属于本 RFC）**：手动性能脚本 `packages/backend/scripts/perf-sweep.ts` 不在 typecheck 范围，2026-09-17 起已因
+  `listTasks` / `getNodeRunEvents` 导出移除而无法运行，本次删除的 `startTask` 也是它的引用之一；需要按生产启动路径重写。

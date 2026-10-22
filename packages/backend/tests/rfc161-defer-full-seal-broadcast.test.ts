@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-161 — the defer control channel (centralized answer pane) seals a clarify
 // round WITHOUT the quick channel's emitAutoAnswered WS event. On a FULL seal the
 // intermediary clarify node_run flips awaiting_human → done, so the route emits a
@@ -19,7 +20,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { createSession } from './helpers/auth/sessionStore'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'

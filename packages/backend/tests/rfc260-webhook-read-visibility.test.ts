@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-260 — webhook 面「读全员、写 admin」+ hook URL 响应分层的权限矩阵锁
 // （proposal AC-1..4）。核心不变量：**urlToken/ingressUrl 明文只出现在 admin 的
 // session 响应里**——非 admin 与一切 PAT（含 admin 自己的 PAT）拿 null + 尾 4
@@ -12,7 +13,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
 import {

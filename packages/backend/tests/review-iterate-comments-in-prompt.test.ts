@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Regression for "markdown 提了检视意见以后，检视意见没有进入迭代提示词"
 // (review comments left on a markdown doc never made it into the iterate
 // re-run prompt). Wiring chain at the time of the bug:
@@ -20,6 +21,7 @@
 //   packages/backend/src/services/scheduler.ts (buildReviewPromptContext
 //     call before runNode in BOTH the agent-single and agent-multi paths).
 
+import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -37,10 +39,7 @@ import {
   addReviewComment,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import {
-  abortAllActiveTasks,
-  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
-} from '../src/services/task'
+import { abortAllActiveTasks } from '@/services/task'
 import { runTestGit } from './helpers/testCommand'
 import { reenterScheduler } from './reenter-scheduler'
 import {
@@ -67,11 +66,11 @@ function runTask(options: Parameters<typeof runTaskBase>[0]) {
   })
 }
 
-function startTaskWithLocalRepo(
-  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
-  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+function launchTestTaskWithLocalRepo(
+  input: Parameters<typeof launchTestTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof launchTestTaskWithLocalRepoBase>[1],
 ) {
-  return startTaskWithLocalRepoBase(input, {
+  return launchTestTaskWithLocalRepoBase(input, {
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -175,7 +174,7 @@ async function buildHarness(): Promise<Harness> {
 
   process.env.AGENT_WORKFLOW_HOME = appHome
 
-  const task = await startTaskWithLocalRepo(
+  const task = await launchTestTaskWithLocalRepo(
     {
       workflowId: wf.id,
       name: 'fixture-task',

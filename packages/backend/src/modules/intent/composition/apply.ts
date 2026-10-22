@@ -198,15 +198,6 @@ export function applyIntentChangeset(
   })
 }
 
-export function convergeIntentApplyJournal(
-  db: ProviderNeutralDatabase,
-  appHome: string,
-  log?: Logger,
-  options?: { readonly activeJournalIds?: readonly string[] },
-) {
-  return composeIntentApplyOperations({ db, appHome }).converge(log, options)
-}
-
 /**
  * RFC-355 T4b：会话事件的投递实现（进程内 WS）。三个 bootstrap 根共用这一个装配出口，
  * 免得各自 import 广播器再各拼一份。

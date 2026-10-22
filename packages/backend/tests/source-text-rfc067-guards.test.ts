@@ -1,4 +1,4 @@
-import { readTaskAgentSources } from './helpers/taskAgentSource'
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-067 — source-layer guards locking the runner / service / schema
 // wiring against silent regressions. Targets:
 //   (a) the opencode spawn env (RFC-111 PR-A: runtime/opencode/spawn.ts) must
@@ -13,6 +13,7 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 //       error codes `git-identity-incomplete` / `git-identity-email-invalid`
 //       so the frontend can localize them when the server 422s.
 
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
@@ -35,6 +36,13 @@ const TASK_SRC =
     ),
     'utf8',
   )
+const ROOT_LAUNCH_SRC = readFileSync(
+  resolve(
+    import.meta.dir,
+    '../src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+  ),
+  'utf8',
+)
 const SCHEMA_SRC = readFileSync(
   resolve(import.meta.dir, '..', '..', 'shared', 'src', 'schemas', 'task.ts'),
   'utf-8',
@@ -91,13 +99,10 @@ describe('RFC-067 source-text guards', () => {
     expect(RUNNER_SRC).toMatch(/gitUserEmail\?:\s*string\s*\|\s*null/)
   })
 
-  test('task.ts persists the server-resolved identity into the tasks INSERT', () => {
-    expect(TASK_SRC).toContain('resolveTaskGitCommitIdentity')
-    expect(TASK_SRC).toContain('getUserGitCommitIdentity')
-    expect(TASK_SRC).toContain('persistedGitUserName')
-    expect(TASK_SRC).toContain('persistedGitUserEmail')
-    expect(TASK_SRC).toMatch(/gitUserName:\s*persistedGitUserName/)
-    expect(TASK_SRC).toMatch(/gitUserEmail:\s*persistedGitUserEmail/)
+  test('production root launch persists the server-resolved identity into the tasks INSERT', () => {
+    expect(ROOT_LAUNCH_SRC).toContain('dependencies.gitCommitIdentity.execute(input.actor.user.id)')
+    expect(ROOT_LAUNCH_SRC).toContain('gitUserName: gitCommitIdentity?.name ?? null')
+    expect(ROOT_LAUNCH_SRC).toContain('gitUserEmail: gitCommitIdentity?.email ?? null')
   })
 
   test('task.ts does NOT call runGit user.name / user.email on the worktree', () => {

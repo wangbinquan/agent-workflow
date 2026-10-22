@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-355 T4b（实现门 r2 findings）—— **确实有人在调 port**。
 //
 // 为什么这条测试存在：`rfc355-intent-session-events-port.test.ts` 只锁了
@@ -27,7 +28,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import type { Hono } from 'hono'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '../src/ws/broadcaster'

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-310 PR-6 T67 —— pipeline evidence 的 bounded/ranged 读。
 //
 // 锁：①区间读精确（offset/limit/尾部/超尾/clamp），截断返回可定位 receipt
@@ -21,7 +22,7 @@ import type { Hono } from 'hono'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createSession } from './helpers/auth/sessionStore'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   EVIDENCE_READ_MAX_BYTES,
   readEvidenceRange,

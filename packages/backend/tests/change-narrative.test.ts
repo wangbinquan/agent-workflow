@@ -1,15 +1,4 @@
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
-import { createLogger } from '@/util/log'
-import { triggerChangeNarrative as triggerSelectedNarrative } from '@/services/changeNarrative'
-import type {
-  SystemAgentRunFamily,
-  SystemAgentRunRequest,
-} from '@/modules/task-execution/public/participants'
-import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
-import {
-  triggerChangeNarrative,
-  type NativeChangeNarrativeDeps as ChangeNarrativeDeps,
-} from './helpers/changeNarrativeSystemAgents'
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-239 §3.2 — the change-narrative service. Locks:
 //  - member gate: owner / collaborator / non-member ADMIN may trigger; a plain
 //    non-member gets 403 (requireTaskMember's exact semantics, design P1-5)
@@ -40,7 +29,19 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { runtimes, taskCollaborators, tasks, workflows } from '../src/db/schema'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
+import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { createLogger } from '@/util/log'
+import { triggerChangeNarrative as triggerSelectedNarrative } from '@/services/changeNarrative'
+import type {
+  SystemAgentRunFamily,
+  SystemAgentRunRequest,
+} from '@/modules/task-execution/public/participants'
+import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
+import {
+  triggerChangeNarrative,
+  type NativeChangeNarrativeDeps as ChangeNarrativeDeps,
+} from './helpers/changeNarrativeSystemAgents'
 import { getTask } from '../src/services/task'
 import { parseNumstatZ, runGit } from '../src/util/git'
 import { computeContentDigest } from '../src/services/structuralDiff/digest'

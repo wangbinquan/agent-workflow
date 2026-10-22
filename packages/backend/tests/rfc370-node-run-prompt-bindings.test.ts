@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
@@ -25,7 +26,6 @@ import {
   loadSourceEvents,
   rowToDistillJob,
 } from '@/modules/memory/application/distill/memoryDistiller'
-import { getTaskNodeRuns } from '@/services/task'
 import { getSessionTree } from '@/services/sessionView'
 import { describeEachProvider } from './helpers/eachProvider'
 import { DESIGNER, CL, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
@@ -157,8 +157,6 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       prompts = composeNodeRunPromptOperations(content)
     const detail = await taskNodeRunsProjection({ db, nodeRunPrompts: prompts }, taskId)
     expect(detail.runs.map((run) => run.promptText)).toEqual([...bodies.values()])
-    const legacy = await getTaskNodeRuns(db, taskId, prompts)
-    expect(legacy.runs.map((run) => run.promptText)).toEqual([...bodies.values()])
     const session = await getSessionTree(
       createTaskExecutionReadModels(db).sessions,
       taskId,
@@ -171,7 +169,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
         .filter((message) => message.kind === 'user')
         .map((message) => message.text),
     ).toEqual([...bodies.values()])
-    expect(content.calls).toEqual([...bodies.keys(), ...bodies.keys(), ...bodies.keys()])
+    expect(content.calls).toEqual([...bodies.keys(), ...bodies.keys()])
   })
 
   test('clarify-only transcript waits for the selected opaque prompt reader ACK', async () => {

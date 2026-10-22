@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: exercise both real provider roots, not a stand-in coordinator. Capture
 // the real Task run binding request after live settings ACK and keep original files.
 import { expect, test } from 'bun:test'
@@ -8,7 +9,7 @@ import { join } from 'node:path'
 import { eq, and } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { tasks, nodeRuns, memories, fusions } from '@/db/schema'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,

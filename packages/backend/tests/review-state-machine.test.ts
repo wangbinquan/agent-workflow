@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Locks in RFC-005 PR-B T6 + T7 + T11 review state machine.
 //
 // If this goes red, scheduler.runOneNode review-branch + services/review.ts
@@ -8,6 +9,7 @@
 // the e2e tests) + a tiny workflow: input → designer (agent producing
 // kind=markdown 'design' port) → reviewDesign (review node) → output.
 
+import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
@@ -29,12 +31,7 @@ import {
   listReviewSummaries,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import {
-  abortAllActiveTasks,
-  isTaskActive,
-  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
-  wakeHumanGateContinuation,
-} from '../src/services/task'
+import { abortAllActiveTasks, isTaskActive, wakeHumanGateContinuation } from '@/services/task'
 import { runTestGit } from './helpers/testCommand'
 import { reenterScheduler } from './reenter-scheduler'
 import {
@@ -63,11 +60,11 @@ function runTask(options: Parameters<typeof runTaskBase>[0]) {
   })
 }
 
-function startTaskWithLocalRepo(
-  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
-  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+function launchTestTaskWithLocalRepo(
+  input: Parameters<typeof launchTestTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof launchTestTaskWithLocalRepoBase>[1],
 ) {
-  return startTaskWithLocalRepoBase(input, {
+  return launchTestTaskWithLocalRepoBase(input, {
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -204,7 +201,7 @@ async function buildHarness(): Promise<Harness> {
   // Override Paths.root via env so the doc_version files land under our temp.
   process.env.AGENT_WORKFLOW_HOME = appHome
 
-  const task = await startTaskWithLocalRepo(
+  const task = await launchTestTaskWithLocalRepo(
     {
       workflowId: wf.id,
       name: 'fixture-task',
@@ -270,7 +267,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
   })
 
   test('scheduler parks review at awaiting_review + creates doc_version v1', async () => {
-    // After startTask runs synchronously, task should be awaiting_review.
+    // After launchTestTask runs synchronously, task should be awaiting_review.
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)).limit(1))[0]
     expect(t?.status).toBe('awaiting_review')
 

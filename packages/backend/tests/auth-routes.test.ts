@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-036 — /api/auth/login + /me + /change-password + sessions + PATs + identities.
 
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -13,7 +14,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { createIdentity } from '../src/services/userIdentities'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

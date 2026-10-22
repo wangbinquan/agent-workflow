@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-294 W4/P0-C pre-refactor oracle.
 //
 // This file deliberately crosses the real HTTP -> route policy -> review
@@ -25,7 +26,7 @@ import {
   tasks,
   workflows,
 } from '@/db/schema'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'd'.repeat(64)
 

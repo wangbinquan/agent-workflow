@@ -1,8 +1,9 @@
-import { readDaemonGraphSource } from './helpers/daemonGraphSource'
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-331 — topology cut behavior and architecture ratchets.
 // Functionality only: these tests lock request shape, status/call-graph parity,
 // explicit fixture topology and the three dependency cuts.
 
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -48,7 +49,6 @@ const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
   'packages/backend/src/routes/tasks.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
   'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand',
   'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
-  'packages/backend/src/services/task.ts:@/modules/task-execution/application/branchTrace',
   // RFC-359 AC-1（第 10 刀）：resume 的回滚目标选择器原本有两份**逐字相同**的副本
   //（`services/task.ts` 与 PostgreSQL 的 resume 参与者各一份）。去重之后唯一那份落在
   // `application/`——它是纯函数、零 provider 依赖，那里是它在目标架构里的家。
@@ -59,11 +59,10 @@ const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/runtimeSessionLeaseOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms',
-  // RFC-359 AC-6：`StartTaskDeps.db` 从 `LegacySqliteTaskDatabase` 放宽到
+  // RFC-359 AC-6：`TaskContinuationDependencies.db` 从 `LegacySqliteTaskDatabase` 放宽到
   // `LegacyProviderNeutralDatabase`（被测的 `buildStartTaskDeps` 只把句柄原样透传），
   // 类型来源随之换到同目录的 `legacySqliteTransportMechanisms`。边还是那条边，随 legacy
   // 启动面一起消失；只是目标模块换了，本判据逐条相等所以要同步改。
-  'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/branchTraceSnapshotReader',
   // RFC-359 W8：`assertFrozenTaskTriggerPreflight` 的两份 provider 副本合一后落在 owner 的
   // infrastructure（`services/execution/triggerPreflight.ts` 那个更省边的落位被
   // `rfc349-provider-cutover` 的 databaseMechanismDependencies 判据按住：`services/` 面禁持

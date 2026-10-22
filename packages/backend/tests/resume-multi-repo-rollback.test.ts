@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // LOCKS: RFC-066 PR-B T13 — resume per-repo rollback. The single-repo path
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
 // now (the wire is URL-only) — bodies are cast through the internal
@@ -24,7 +25,8 @@ import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { getTask, startTask, startTaskWithLocalRepo } from '../src/services/task'
+import { getTask } from '@/services/task'
+import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { nodeRuns, tasks as tasksTbl, workflows } from '../src/db/schema'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
@@ -83,7 +85,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
 
   test('B19 single-repo: rollback uses pre_snapshot single sha; pre_snapshot_repos_json stays NULL', async () => {
     h = await buildHarness(1)
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: 'wf-rb',
         name: 't',
@@ -134,7 +136,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
 
   test('B20 multi-repo: rollback honors pre_snapshot_repos_json map; each sub-worktree restored independently', async () => {
     h = await buildHarness(2)
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: 'wf-rb',
         name: 't',
@@ -187,7 +189,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
 
   test('B21 multi-repo: malformed pre_snapshot_repos_json → defensive fallback to legacy pre_snapshot single sha path', async () => {
     h = await buildHarness(2)
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: 'wf-rb',
         name: 't',

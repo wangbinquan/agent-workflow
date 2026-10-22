@@ -56,7 +56,6 @@ import type {
   ScheduledTaskRecord,
 } from '@/modules/integration/application/ports/scheduledTaskPersistence'
 
-/** Injected launch — `(body) => startTask(body, deps)`, closed over owner + scheduledTaskId. */
 /**
  * RFC-165 §9b: the launch closure now dispatches by launch kind. `payload` is
  * the kind-enveloped body ALREADY validated via scheduledPayloadSchemaFor;

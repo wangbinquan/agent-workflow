@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // ALLOWLIST RATCHET — RFC-097 (audit S-14 / WP-4): tasks.status 直写禁令。
 //
 // 本文件前身是 CURRENT-BEHAVIOR LOCK（27 处 / 15 文件的盲写普查清单 +
@@ -97,9 +98,8 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // 与「别人取消了我的子任务」。只写 `error_message`，且写入门是 `status='canceled'`——
   // 不翻状态，抢不到就是空操作，与上面 taskIdleTimeoutPersistence 那条同形。
   'modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts': 1,
-  'platform/persistence/sqlite/systemWorkspaceGc.ts': 8,
   'platform/persistence/sqlite/taskLifecycle.ts': 1,
-  'services/task.ts': 2,
+  'services/task.ts': 1,
   'services/taskDelete.ts': 1,
 }
 

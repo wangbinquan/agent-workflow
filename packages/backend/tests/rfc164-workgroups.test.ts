@@ -1,6 +1,4 @@
-import type { ProviderNeutralDatabase } from '../src/db/query'
-import { describeEachProvider } from './helpers/eachProvider'
-import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-164 PR-1 — workgroups resource: service CRUD + zod shape + route ACL.
 //
 // Locks:
@@ -32,7 +30,10 @@ import {
 import { createSession } from './helpers/auth/sessionStore'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { agents, users } from '../src/db/schema'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
+import type { ProviderNeutralDatabase } from '../src/db/query'
+import { describeEachProvider } from './helpers/eachProvider'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import {
   createWorkgroup,
   deleteWorkgroup,

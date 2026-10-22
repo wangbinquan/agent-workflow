@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-223 (PR-2) — workflow / workgroup / scheduled agent+workgroup references
 // carried from NAMES to canonical IDS. Runtime-side locks (the migration itself
 // is locked by migration-0112-rfc223-pr2.test.ts):
@@ -36,7 +37,7 @@ import {
   launchWorkgroupTaskViaParticipant,
 } from './helpers/participantLaunch'
 import { extractWorkflowAgentRefs, stripWorkflowNodeAgentIds } from '../src/services/resourceRefs'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // Locks in the RFC-099 permission audit (2026-07-15) fixes for
 // packages/backend/src/routes/worktree-files.ts. Two holes this route had:
 //   - P0: NO task visibility gate. The markdown image-proxy route only checked
@@ -28,7 +29,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

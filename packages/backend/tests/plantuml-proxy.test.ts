@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-105 WP-B — PlantUML render proxy.
 //
 // Encoders round-trip through DEFLATE (pako-byte-equality is NOT required —
@@ -18,7 +19,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   encodeForGet,
   encodeForPlantuml,

@@ -1521,7 +1521,7 @@ export async function discardIsolationWorkspace(
       partialFailures += 1
       onProgress?.(partialFailures)
       // 文案不再承诺 GC：iso GC **明确跳过活跃 / 非终态任务**
-      // （`systemWorkspaceGc.ts` / `workspaceMaintenance.ts`），任务还活着的时候
+      // （`workspaceMaintenance.ts`），任务还活着的时候
       // 没有任何代码会来收这个残留——旧文案「leaving for GC」对活任务从不成立。
       log?.warn('iso worktree reclaim blocked (will retry with a new generation)', {
         isoWorktreePath: reclaimed.residualPath,

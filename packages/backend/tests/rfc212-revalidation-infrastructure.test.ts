@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-212 PR-1 — revalidation infrastructure (behaviour-neutral).
 //
 // PR-1 ships only the parts that let a later pass re-check a live socket:
@@ -20,7 +21,7 @@ import { createPat, lookupActivePatByHash } from './helpers/auth/patStore'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { userPats, users, userSessions } from '../src/db/schema'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   currentRevalidationEpoch,
   liveConnectionCount,

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：崩溃收敛改走生产维护装配，保留补偿与前滚断言。
 // RFC-343 / RFC-294 P0-B — Intent apply must not be weaker than BundleApply:
 // bounded lock cardinality, durable/retryable compensation, a versioned and
 // complete artifact oracle, corruption fail-closed, and committed roll-forward.
@@ -11,6 +12,7 @@
 // 会话串行锁那两格是**进程内**的（模块级 Map），与库无关；留在双引擎里跑两遍无害，
 // 而且顺带证明了锁的计数不会被并发的另一条引擎腿污染。
 
+import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
@@ -26,7 +28,6 @@ import { intentApplyJournal, intentSessions, skillOperations, users } from '../s
 import {
   __intentApplyLockCountForTests,
   __withSessionApplyLockForTests,
-  convergeIntentApplyJournal,
 } from '../src/modules/intent/composition/apply'
 import {
   decodeIntentJournalArtifacts,
@@ -218,7 +219,13 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
         JSON.stringify({ version: 1, artifacts: [{ kind: 'unknown' }] }),
       )
 
-      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+      expect(
+        await composeIntentApplyConvergence({
+          db,
+          appHome,
+          pluginsDir: join(appHome, 'plugins'),
+        }).converge({ activeJournalIds: [] }),
+      ).toEqual({
         failed: 0,
         rolledForward: 0,
       })
@@ -287,7 +294,13 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
         readFileSync(join(appHome, 'skills', skill.id, 'files', 'SKILL.md'), 'utf8'),
       ).toContain('body v1')
       rmSync(staged.stagingDir, { recursive: true, force: true })
-      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+      expect(
+        await composeIntentApplyConvergence({
+          db,
+          appHome,
+          pluginsDir: join(appHome, 'plugins'),
+        }).converge({ activeJournalIds: [] }),
+      ).toEqual({
         failed: 0,
         rolledForward: 0,
       })
@@ -309,7 +322,13 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
       ).toEqual({ active: 1 })
 
       cpSync(staged.versionDir, staged.stagingDir, { recursive: true })
-      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+      expect(
+        await composeIntentApplyConvergence({
+          db,
+          appHome,
+          pluginsDir: join(appHome, 'plugins'),
+        }).converge({ activeJournalIds: [] }),
+      ).toEqual({
         failed: 0,
         rolledForward: 1,
       })
@@ -332,7 +351,13 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
 
       // The retained audit row is seen again, but the completed exact op is not
       // republished or unmarked as if it were still pending.
-      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+      expect(
+        await composeIntentApplyConvergence({
+          db,
+          appHome,
+          pluginsDir: join(appHome, 'plugins'),
+        }).converge({ activeJournalIds: [] }),
+      ).toEqual({
         failed: 0,
         rolledForward: 1,
       })

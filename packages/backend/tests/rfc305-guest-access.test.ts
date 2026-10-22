@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-305 guest journey: a role is only a permission preset. The default guest
 // can read public ACL resources, cannot observe private owner/grant rows, and
 // cannot create resources or use the task surface. Granting the private range
@@ -13,7 +14,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import { agents, resourceGrants } from '../src/db/schema'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = '7'.repeat(64)
 

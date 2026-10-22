@@ -1,3 +1,4 @@
+// RFC-395 II-pre：扫描生产根 / 子启动事务；旧入口终止调用归零后以真实事务与反例保持扫描预言力。
 // RFC-359 W10 —— task-execution 剩余同步事务面（`dbTxSync` / `withOwnedTaskTx`）中立化之后的行为锁。
 //
 // # 本波转掉了什么
@@ -737,11 +738,18 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
 // 写在事务体里、恰好被 ESLint 的 no-floating-promises 放过的形态（表达式语句以外的位置）。
 // ─────────────────────────────────────────────────────────────────────────────
 
-const NEUTRAL_TX_OPENERS = new Set(['withTaskExecutionWrite', 'transaction', 'serializable'])
+const NEUTRAL_TX_OPENERS = new Set([
+  'withTaskExecutionWrite',
+  'withSerializableTaskExecution',
+  'transaction',
+  'serializable',
+])
 const TERMINALS = new Set(['run', 'get', 'all'])
 
 const AUDITED = [
   'services/task.ts',
+  'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+  'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts',
   'modules/task-execution/infrastructure/sourceTerminationParticipant.ts',
 ] as const
 
@@ -751,9 +759,22 @@ interface Unawaited {
   readonly text: string
 }
 
-function auditFile(rel: string): { readonly terminals: number; readonly unawaited: Unawaited[] } {
-  const path = resolve(import.meta.dir, '..', 'src', rel)
-  const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.ES2022, true)
+function auditSource(
+  rel: string,
+  text: string,
+): {
+  readonly transactions: number
+  readonly terminals: number
+  readonly unawaited: Unawaited[]
+} {
+  const source = ts.createSourceFile(rel, text, ts.ScriptTarget.ES2022, true)
+  let transactions = 0
+  const openerName = (call: ts.CallExpression): string | null =>
+    ts.isIdentifier(call.expression)
+      ? call.expression.text
+      : ts.isPropertyAccessExpression(call.expression)
+        ? call.expression.name.text
+        : null
   const unawaited: Unawaited[] = []
   let terminals = 0
 
@@ -769,18 +790,17 @@ function auditFile(rel: string): { readonly terminals: number; readonly unawaite
   const inNeutralTransaction = (node: ts.Node): boolean => {
     for (let cur: ts.Node | undefined = node.parent; cur !== undefined; cur = cur.parent) {
       if (!ts.isCallExpression(cur)) continue
-      const callee = cur.expression
-      const name = ts.isIdentifier(callee)
-        ? callee.text
-        : ts.isPropertyAccessExpression(callee)
-          ? callee.name.text
-          : null
+      const name = openerName(cur)
       if (name !== null && NEUTRAL_TX_OPENERS.has(name)) return true
     }
     return false
   }
 
   const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const name = openerName(node)
+      if (name !== null && NEUTRAL_TX_OPENERS.has(name)) transactions += 1
+    }
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
@@ -800,16 +820,46 @@ function auditFile(rel: string): { readonly terminals: number; readonly unawaite
     ts.forEachChild(node, visit)
   }
   visit(source)
-  return { terminals, unawaited }
+  return { transactions, terminals, unawaited }
+}
+
+function auditFile(rel: string) {
+  return auditSource(rel, readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8'))
 }
 
 describe('RFC-359 W10 —— 中立事务体内没有漏 await 的语句', () => {
-  test('语料非空：确实扫到了中立事务体内的终止调用（扫成 0 就是零预言力）', () => {
-    const total = AUDITED.reduce((sum, rel) => sum + auditFile(rel).terminals, 0)
-    expect(
-      total,
-      '扫描根失效：中立事务体里一条 `.run()`/`.get()`/`.all()` 都没扫到',
-    ).toBeGreaterThanOrEqual(12)
+  test('语料非空：生产 continuation、根启动和子启动保留真实中立事务', () => {
+    const total = AUDITED.reduce((sum, rel) => sum + auditFile(rel).transactions, 0)
+    expect(total, '扫描根失效：生产事务入口不应消失').toBeGreaterThanOrEqual(4)
+  })
+
+  test('终止调用反例仍能抓住三种漏 await，正确 await 不报错', () => {
+    const negative = auditSource(
+      'negative.ts',
+      `
+      withTaskExecutionWrite(db, async (tx) => {
+        tx.insert(rows).values(value).run()
+        const row = tx.select().from(rows).get()
+        return tx.select().from(rows).all()
+      })
+    `,
+    )
+    expect(negative.transactions).toBe(1)
+    expect(negative.terminals).toBe(3)
+    expect(negative.unawaited).toHaveLength(3)
+    const positive = auditSource(
+      'positive.ts',
+      `
+      withSerializableTaskExecution(db, async (tx) => {
+        await tx.insert(rows).values(value).run()
+        const row = await tx.select().from(rows).get()
+        return await tx.select().from(rows).all()
+      })
+    `,
+    )
+    expect(positive.transactions).toBe(1)
+    expect(positive.terminals).toBe(3)
+    expect(positive.unawaited).toEqual([])
   })
 
   for (const rel of AUDITED) {

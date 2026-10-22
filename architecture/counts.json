@@ -43,16 +43,16 @@
       "reason": "max=25: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "legacy-horizontal-files": {
-      "max": 397,
-      "reason": "max=397: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 395,
+      "reason": "max=395: RFC-395 II-pre 删除 services/gc.ts 与 services/users.ts 兼容门面；其余存量不增加"
     },
     "legacy-service-implementations": {
       "max": 224,
       "reason": "max=224: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "legacy-thin-facades": {
-      "max": 48,
-      "reason": "max=48: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 47,
+      "reason": "max=47: RFC-395 II-pre 删除 services/gc.ts 兼容门面；其余存量不增加"
     },
     "module-layer-violations": {
       "max": 2,

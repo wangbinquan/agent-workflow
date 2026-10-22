@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-103 T9 (调研报告 10-ACL MISSED, Codex) — 登录 constant-time（防账号枚举）。
 //
 // 为什么这条测试存在：/api/auth/login 注释自称 constant-time，但「未知用户 /
@@ -15,7 +16,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

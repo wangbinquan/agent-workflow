@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-349 回归防护 —— 冻结闭包里的工作组载荷与 call-workgroup 子启动的校验必须
 // 是同一份合同。
 //
@@ -22,7 +23,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import type { Hono } from 'hono'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { tasks } from '../src/db/schema'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { FrozenWorkgroupGroupSchema } from '../src/modules/task-execution/infrastructure/legacyCallClosure'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'

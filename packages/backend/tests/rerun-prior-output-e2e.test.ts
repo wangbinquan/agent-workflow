@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-119 END-TO-END verification — prior-output injection in a REAL task.
 //
 // Unlike the unit tests (which exercise freshestPriorRunWithOutput /
@@ -35,6 +36,7 @@
 //     (!effectiveHasClarifyChannel / !suppressPriorOutput must stay gone), and
 //     the hasClarifyChannel threading is locked by clarify-prompt-wire-up.test.ts.
 
+import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -52,10 +54,7 @@ import {
   addReviewComment,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import {
-  abortAllActiveTasks,
-  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
-} from '../src/services/task'
+import { abortAllActiveTasks } from '@/services/task'
 import { runTestGit } from './helpers/testCommand'
 import { reenterScheduler } from './reenter-scheduler'
 import {
@@ -82,11 +81,11 @@ function runTask(options: Parameters<typeof runTaskBase>[0]) {
   })
 }
 
-function startTaskWithLocalRepo(
-  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
-  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+function launchTestTaskWithLocalRepo(
+  input: Parameters<typeof launchTestTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof launchTestTaskWithLocalRepoBase>[1],
 ) {
-  return startTaskWithLocalRepoBase(input, {
+  return launchTestTaskWithLocalRepoBase(input, {
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -184,7 +183,7 @@ async function buildHarness(): Promise<Harness> {
 
   process.env.AGENT_WORKFLOW_HOME = appHome
 
-  const task = await startTaskWithLocalRepo(
+  const task = await launchTestTaskWithLocalRepo(
     {
       workflowId: wf.id,
       name: 'fixture-task',

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-109 — HTTP layer for workflow re-sync: GET workflow-sync-preview + POST
 // sync-workflow. Service logic is locked in rfc109-sync-task-workflow.test.ts;
 // this file pins the route-layer concerns:
@@ -19,7 +20,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import type { WorkflowSyncPreview } from '@agent-workflow/shared'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

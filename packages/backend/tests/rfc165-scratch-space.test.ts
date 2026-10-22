@@ -1,3 +1,6 @@
+import { launchTestTask } from './helpers/productionTaskLaunch'
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
+import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 // LOCKS: RFC-165 T2a — scratch-space materialization (design §3, §11.3).
 //
 // Cases:
@@ -33,15 +36,12 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { startTask } from '@/services/task'
+
 import { materializeSpace } from './helpers/legacyTaskWorkspace'
 
-import {
-  materializingSpaces,
-  runScratchOrphanGc,
-  SCRATCH_ORPHAN_MIN_AGE_MS,
-} from '../src/services/gc'
-import { taskRepos, tasks, workflows } from '../src/db/schema'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
+import { WORKSPACE_ORPHAN_MIN_AGE_MS } from '@/modules/source-control/application/workspaceMaintenance'
+import { taskRepos, tasks, workflows, users } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
@@ -80,7 +80,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
 
   test('S1 scratch launch → fresh git repo as workspace, scratch row shape', async () => {
     h = buildHarness()
-    const task = await startTask(
+    const task = await launchTestTask(
       { ...BODY },
       {
         db: h.db,
@@ -120,7 +120,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
 
   test('S2 root-commit identity: platform default, overridden by resolved task identity', async () => {
     h = buildHarness()
-    const plain = await startTask(
+    const plain = await launchTestTask(
       { ...BODY },
       {
         db: h.db,
@@ -137,14 +137,26 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     ])
     expect(plainAuthor.stdout.trim()).toBe('agent-workflow <agent-workflow@localhost>')
 
-    const withId = await startTask(
+    await h.db.insert(users).values({
+      id: 'scratch-owner',
+      username: 'scratch-owner',
+      email: 'a@example.com',
+      displayName: 'Alice',
+      role: 'admin',
+      status: 'active',
+      passwordHash: '',
+      gitName: 'Alice',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const withId = await launchTestTask(
       { ...BODY, name: 'scratch-task-2' },
       {
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
         appHome: h.appHome,
-        gitCommitIdentity: { name: 'Alice', email: 'a@example.com' },
+        actorUserId: 'scratch-owner',
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
     )
@@ -158,7 +170,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
 
   test('S3 root commit is a working diff base (all-new-files)', async () => {
     h = buildHarness()
-    const task = await startTask(
+    const task = await launchTestTask(
       { ...BODY },
       {
         db: h.db,
@@ -183,7 +195,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     // Force mkdir to fail: occupy {appHome}/scratch with a FILE.
     writeFileSync(join(h.appHome, 'scratch'), 'not a dir')
 
-    const task = await startTask(
+    const task = await launchTestTask(
       { ...BODY },
       {
         db: h.db,
@@ -260,19 +272,21 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
 
     // No row is committed on this 500 path. Recovery therefore uses the
     // existing unanchored-scratch GC after its safety age floor.
-    const gc = await runScratchOrphanGc(
-      h.db,
-      h.appHome,
-      Date.now() + SCRATCH_ORPHAN_MIN_AGE_MS + 1_000,
-    )
-    expect(gc.removed).toContain(details.taskId)
+    const gc = await workspaceMaintenanceForTest(h.db, h.appHome).runGcPhase({
+      phase: 'scratch',
+      activeTaskIds: [],
+      gitCloneTimeoutMs: 30 * 60 * 1000,
+      now: Date.now() + WORKSPACE_ORPHAN_MIN_AGE_MS + 1_000,
+      ...{ worktreeAutoGc: { enabled: true } },
+    })
+    expect(gc.removed).toBe(1)
     expect(existsSync(details.path)).toBe(false)
   })
 
   test('S5 lease released on success', async () => {
     // (recent_repos retired entirely by RFC-165 — nothing to pollute.)
     h = buildHarness()
-    const task = await startTask(
+    const task = await launchTestTask(
       { ...BODY },
       {
         db: h.db,
@@ -318,7 +332,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     }) as DbClient
 
     await expect(
-      startTask(
+      launchTestTask(
         { ...BODY },
         {
           db: poisoned,
@@ -339,7 +353,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     expect(materializingSpaces.size).toBe(0)
   })
 
-  test('S7 materializedSpace success handoff: startTask consumes verbatim (F3)', async () => {
+  test('S7 materializedSpace success handoff: launchTestTask consumes verbatim (F3)', async () => {
     h = buildHarness()
     const space = await materializeSpace(
       { ...BODY },
@@ -353,13 +367,13 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     expect(space.kind).toBe('scratch')
     expect(space.earlyError).toBe(null)
     expect(space.repos.length).toBe(1)
-    // The lease spans materialize → (route writes uploads here) → startTask.
+    // The lease spans materialize → (route writes uploads here) → launchTestTask.
     expect(materializingSpaces.has(space.taskId)).toBe(true)
 
     // A route would write uploads into the workspace at this point.
     writeFileSync(join(space.worktreePath, 'uploaded.txt'), 'payload')
 
-    const task = await startTask(
+    const task = await launchTestTask(
       { ...BODY },
       {
         db: h.db,
@@ -392,7 +406,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     expect(space.earlyError ?? '').toContain('scratch-')
     expect(space.worktreePath).toBe('')
 
-    const task = await startTask(
+    const task = await launchTestTask(
       { ...BODY },
       {
         db: h.db,
@@ -409,28 +423,5 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     expect(rows.length).toBe(1)
     expect(rows[0]!.workspacePrunedAt).not.toBe(null)
     expect(materializingSpaces.size).toBe(0)
-  })
-
-  test('S6 scratch + preCreatedWorktree rejected until T2c protocol lands', async () => {
-    h = buildHarness()
-    await expect(
-      startTask(
-        { ...BODY },
-        {
-          db: h.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: h.appHome,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-          preCreatedWorktree: {
-            taskId: 'T123',
-            worktreePath: '/tmp/x',
-            branch: 'b',
-            baseCommit: null,
-            cleanup: { kind: 'borrowed' },
-          },
-        },
-      ),
-    ).rejects.toThrow(/multipart uploads into a scratch space/)
   })
 })

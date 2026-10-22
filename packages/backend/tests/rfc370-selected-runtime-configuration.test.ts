@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: runtime management in both real HTTP roots reads the selected live
 // configuration and waits for its ACK before projecting profiles or probing.
 // Only diagnostic execution is injected; all registry/HTTP behavior is real.
@@ -10,7 +11,7 @@ import {
   mergeValidatedConfigurationPatch,
   validateConfigurationPatch,
 } from '@/platform/configuration/configurationValues'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'

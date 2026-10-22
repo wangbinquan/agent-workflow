@@ -1,4 +1,4 @@
-import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // LOCKS: RFC-359 W7 —— 终态维护的三条消费路径迁离 `dbTxSync` 之后的行为（两个引擎各跑一遍）。
 //
 // 为什么这份用例存在
@@ -45,10 +45,8 @@ import {
   workflows,
 } from '@/db/schema'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
-import {
-  finishClaimedWorkspacePrune,
-  recoverInterruptedWorkspaceGc,
-} from '@/platform/persistence/sqlite/systemWorkspaceGc'
+import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
+import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { deleteTask } from '@/services/taskDelete'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -361,9 +359,9 @@ describeEachProvider('RFC-359 W7 —— workspace GC 终结事务迁离 dbTxSync
       workspacePruningAt: NOW,
     })
 
-    expect(await finishClaimedWorkspacePrune(legacy(db), taskId, NOW + 1)).toEqual({
-      kind: 'removed',
-    })
+    expect(
+      await workspaceMaintenanceForTest(legacy(db)).finalizeClaimedWorkspace(taskId, NOW + 1),
+    ).toBeUndefined()
     expect(existsSync(dir)).toBe(false)
     const row = (
       await db
@@ -406,10 +404,17 @@ describeEachProvider('RFC-359 W7 —— workspace GC 终结事务迁离 dbTxSync
     // 并发的 lifecycle 修复抹掉了墓碑：终结事务的 CAS 必须落空。
     await db.update(tasks).set({ workspacePruningAt: null }).where(eq(tasks.id, taskId))
 
-    expect(await recoverInterruptedWorkspaceGc(legacy(db), NOW + 2)).toEqual({
-      completed: [],
-      failed: [taskId],
+    expect(
+      await workspaceMaintenanceForTest(legacy(db)).recover({
+        activeTaskIds: [],
+        now: NOW + 2,
+        webhookClaims: 'all',
+      }),
+    ).toEqual({
+      completed: 0,
+      failed: 1,
       skipped: 0,
+      healed: 0,
     })
 
     const row = (

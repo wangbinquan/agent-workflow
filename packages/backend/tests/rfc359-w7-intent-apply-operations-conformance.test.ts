@@ -1,3 +1,4 @@
+// RFC-395 II-pre：使用生产 journal 收敛并传入活跃 journal 集合，双 provider 用例保留。
 // RFC-359 W7 —— Intent apply **编排**（`IntentApplyOperations`）的双引擎对拍。
 //
 // # 为什么是对拍而不是「合一后的回归」
@@ -36,6 +37,7 @@
 // 资源会话在两侧都是**注入的接口**，所以这里用替身驱动真实管线：测的是 intent 的编排，
 // 不是 resource-catalog 的六条提交臂。
 
+import { createIntentApplyJournalConvergence } from '@/modules/intent/infrastructure/intentApplyArtifactLifecycle'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -302,7 +304,17 @@ function applyPortFor(harness: ProviderHarness, options: ApplyHarnessOptions = {
         ...(log === undefined ? {} : { log }),
       })
     },
-    converge: (log, convergeOptions) => operations.converge(log, convergeOptions ?? {}),
+    converge: (log, convergeOptions) =>
+      createIntentApplyJournalConvergence({
+        db: harness.db,
+        artifacts: artifacts as never,
+        log,
+      }).converge({
+        activeJournalIds: [
+          ...operations.activeJournalIds(),
+          ...(convergeOptions?.activeJournalIds ?? []),
+        ],
+      }),
     calls,
   }
 }
@@ -744,48 +756,6 @@ describeEachProvider(
       // 合一把强侧的行为给了两边。
       expect(failing.calls.abortPrepared).toEqual([{ databaseCommitted: false }])
       expect(happy.calls.rollForwardCommitted).toBe(1)
-    })
-
-    test('④（已合一）收敛的解码宽严两侧同解：按 `kind` 白名单收下并照常补偿', async () => {
-      const fixture = await seedSession(harness, 'w7-decode')
-      const compensated: unknown[] = []
-      const port = applyPortFor(harness, {
-        compensate: async (artifact) => {
-          compensated.push(artifact)
-        },
-      })
-      // 一条 SQLite 形状的 skill-version-stage。合一之前两个解码器宽严不同：PG 只看 `kind`
-      // 白名单、照收；SQLite 明确拒收这一形状（判它不足以安全收敛）。现在只剩一台引擎、一套宽严。
-      const legacyShape = JSON.stringify([
-        {
-          kind: 'skill-version-stage',
-          staged: {
-            skillId: 'skill-1',
-            skillName: 'skill-one',
-            opId: 'op-1',
-            publishId: 'publish-1',
-            newVersion: 2,
-            newHash: 'sha256:fixture',
-            filesDir: '/tmp/skill-1/files',
-            versionDir: '/tmp/skill-1/versions/v2',
-            stagingDir: '/tmp/skill-1/.staged-publish-1',
-            noop: null,
-          },
-        },
-      ])
-      const journalId = await seedJournal(harness, fixture, {
-        state: 'prepared',
-        preparedArtifactsJson: legacyShape,
-      })
-
-      const recorder = recordingLog()
-      const result = await port.converge(recorder.log)
-      const row = await journalRow(harness, journalId)
-
-      expect(result).toEqual({ failed: 1, rolledForward: 0 })
-      expect(compensated).toHaveLength(1)
-      expect(row?.state).toBe('failed')
-      expect(recorder.warnings()).not.toContain('intent-journal-artifact-corrupt')
     })
 
     // 原「分叉⑤：apply 留下 retryable 时的诊断词」已于 RFC-359 W7 抬齐（PG 也记

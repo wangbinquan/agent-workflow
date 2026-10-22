@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 import { afterEach, expect, test } from 'bun:test'
 import { rmSync } from 'node:fs'
 
@@ -9,7 +10,7 @@ import {
 
 import { createSession } from './helpers/auth/sessionStore'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const roots: string[] = []

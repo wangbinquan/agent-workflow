@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -18,7 +19,7 @@ import {
   invalidateInheritedRuntimeProbeReceipts,
   updateRuntime,
 } from './helpers/runtimeRegistryApplication'
-import { disableUser } from '../src/services/users'
+import { disableUser } from './helpers/userFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HASH = 'a'.repeat(64)

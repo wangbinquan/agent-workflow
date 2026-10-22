@@ -1,7 +1,7 @@
-import { readDaemonGraphSource } from './helpers/daemonGraphSource'
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // 为什么有这条测试（2026-08-26 起草 RFC-319 B97 时撞到）：
 //
-// 「重试仓库准备」与 boot 自动恢复两处**手搓** StartTaskDeps，都漏了 `secretBox`，
+// 「重试仓库准备」与 boot 自动恢复两处**手搓** TaskContinuationDependencies，都漏了 `secretBox`，
 // 而启动路径老老实实走 `buildStartTaskDeps(db, configPath, userId, secretBox)`。
 // 后果：凡是配了 `secret.key` 的部署（仓库 URL 封存在 `cached_repos.url_enc`），
 // `unsealRepoUrl(row, undefined, db)` 对「已封存但没有密钥箱」这一档直接返回 null
@@ -16,6 +16,7 @@ import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // 这是**同一个 bug 类的第二次复发**：`rfc103-launch-config-passthrough.test.ts` 的
 // 文件头记着上一次——「commitPush 只在 JSON start 传，resume/repair/retry/
 // multipart-start 均不传」。手搓 deps 就会漏字段，所以这里按同样的方式上锁。
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
@@ -40,7 +41,7 @@ describe('仓库准备重试 / boot 恢复必须带上 secretBox', () => {
     expect(route).toContain("path: '/api/tasks/:id/nodes/:nodeRunId/retry'")
     expect(route).toContain('await operations.retry({')
     expect(route).not.toMatch(/\bsecretBox\b|\bDbClient\b/)
-    // RFC-359 AC-1（第 13 刀下）改锚：`syncWorkflow` 合一之后路由层不再持有 `StartTaskDeps`
+    // RFC-359 AC-1（第 13 刀下）改锚：`syncWorkflow` 合一之后路由层不再持有 `TaskContinuationDependencies`
     //（`startDepsFor` / `recovery` 两格整个消失）。本条要锁的是「重试这条路拿得到完整启动
     // 依赖」——它现在经注入的 `repositoryPreparationRetry` 与 `resumeTaskAs` 进去，两者都由
     // 组合根用同一句 `buildStartTaskDeps`（带 secretBox）绑成，下面那条 bootstrap 用例锁着它。
@@ -48,7 +49,9 @@ describe('仓库准备重试 / boot 恢复必须带上 secretBox', () => {
       'repositoryPreparationRetry: dependencies.repositoryPreparationRetry',
     )
     expect(routeOperations).toContain('await dependencies.children.resume(')
-    expect(routeOperations, '路由层不得再长回 legacy 启动依赖').not.toContain('StartTaskDeps')
+    expect(routeOperations, '路由层不得再长回 legacy 启动依赖').not.toContain(
+      'TaskContinuationDependencies',
+    )
   })
 
   test('bootstrap 只构造一次带 secretBox 的 start deps，重试与 boot 恢复复用 closed command', () => {

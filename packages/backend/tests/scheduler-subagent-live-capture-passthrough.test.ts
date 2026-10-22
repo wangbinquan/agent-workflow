@@ -1,13 +1,14 @@
-import { readTaskAgentSources } from './helpers/taskAgentSource'
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-048 — scheduler/runner passthrough source-level guard.
 //
 // Locks the data path that carries `config.subagentLiveCapture` from the
-// HTTP / multipart route → StartTaskDeps → RunTaskOptions →
+// HTTP / multipart route → TaskContinuationDependencies → RunTaskOptions →
 // runNode(opts.subagentLiveCapture). A runtime end-to-end already runs in
 // runner-subagent-live-capture.test.ts; this file pins down the wire so a
 // future refactor can't silently drop the field somewhere in the middle of
 // the chain.
 
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -67,7 +68,7 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     expect(factory).toContain('...context.runtime.runtime,')
   })
 
-  test('StartTaskDeps declares the field and the coordinator freezes it once for every drive path', () => {
+  test('TaskContinuationDependencies declares the field and the coordinator freezes it once for every drive path', () => {
     const src = read('packages/backend/src/services/task.ts')
     expect(src).toContain(
       'subagentLiveCapture?: { pollMs: number; consecutiveFailureLimit: number }',
@@ -94,7 +95,7 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // RFC-159 T2: resolveSubagentLiveCapture + buildStartTaskDeps moved to
     // @/services/startTaskDeps (shared with the scheduled-task scheduler). The wire
     // is unchanged — buildStartTaskDeps resolves the value and conditionally spreads
-    // it into StartTaskDeps.
+    // it into TaskContinuationDependencies.
     const deps = read('packages/backend/tests/helpers/startTaskDeps.ts')
     expect(deps).toContain('function resolveSubagentLiveCapture(')
     expect(deps).toContain('...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {})')

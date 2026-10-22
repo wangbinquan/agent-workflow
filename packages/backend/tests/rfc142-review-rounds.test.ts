@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-142 — 评审历史信息全量回显：多文档分轮（rounds）+ G4 混代修复。
 //
 // WHY THIS FILE EXISTS (regression intent):
@@ -44,7 +45,7 @@ import {
   submitReviewDecision,
   type RoundGroupRow,
 } from '@/modules/collaboration/infrastructure/review'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { wakeHumanGateContinuation } from '../src/services/task'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-043 T4 — admin detail / session routes for distill jobs.
 //
 // Locks:
@@ -14,7 +15,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { memoryDistillEvents, memoryDistillJobs } from '../src/db/schema'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DISTILL_CAPTURE_FAILED_KIND } from '../src/services/runtime'

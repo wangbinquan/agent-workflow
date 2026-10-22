@@ -1,7 +1,4 @@
-import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
-import { createLocalEvidenceStagingNamespace } from '../src/modules/development-automation/composition/evidenceStaging'
-import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
-import { exampleProgramFixture } from './helpers/executionContractFixture'
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-310 Digital Employee OS system-mock journey.
 //
 // Issue ingress is normalized by the real webhook/Event Center path. Pipeline
@@ -98,7 +95,11 @@ import {
   bindEmployeeCaseWorkspaceParticipant,
 } from '@/modules/source-control/composition'
 import { mountWebhookIngressRoutes } from '@/routes/webhooks'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
+import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
+import { createLocalEvidenceStagingNamespace } from '../src/modules/development-automation/composition/evidenceStaging'
+import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
+import { exampleProgramFixture } from './helpers/executionContractFixture'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 
 setDefaultTimeout(180_000)

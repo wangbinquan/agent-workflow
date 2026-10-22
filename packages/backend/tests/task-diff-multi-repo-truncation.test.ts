@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // LOCKS: RFC-066 PR-B — getTaskDiff multi-repo byte-budget + all-clean fall-through.
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
 // now (the wire is URL-only) — bodies are cast through the internal
@@ -30,7 +31,7 @@ import { tmpdir } from 'node:os'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { startTask } from '../src/services/task'
+import { launchTestTask } from './helpers/productionTaskLaunch'
 import { taskDiffProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
@@ -99,7 +100,7 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
 
   test('T-A two repos overflow TASK_DIFF_MAX_BYTES → truncated, repo[0] header present, body cut in repo[1]', async () => {
     h = await buildHarness(2)
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: 'wf-trunc',
         name: 't',
@@ -133,7 +134,7 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
 
   test('T-B two repos both clean (valid baseCommit, no changes) → empty diff, no 409, no header', async () => {
     h = await buildHarness(2)
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: 'wf-trunc',
         name: 't',

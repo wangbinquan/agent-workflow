@@ -1,4 +1,5 @@
-// RFC-078 — locks the getTaskNodeRuns serialization of a review node's
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
+// RFC-078 — locks the taskNodeRunsProjection serialization of a review node's
 // content-anchored display timing (reviewRoundStartedAt / reviewDecidedAt) and
 // the timeline re-sort, end to end against the DB.
 //
@@ -7,12 +8,12 @@
 // current pending doc_version's created_at, keep its raw startedAt untouched,
 // and sort AFTER the reviewed agent run — not at the misleading early position.
 
+import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { getTaskNodeRuns } from '../src/services/task'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
@@ -109,7 +110,7 @@ async function seedDocVersion(
     .run()
 }
 
-describeEachProvider('RFC-078 — getTaskNodeRuns surfaces review round timing', (harness) => {
+describeEachProvider('RFC-078 — taskNodeRunsProjection surfaces review round timing', (harness) => {
   let db: ProviderNeutralDatabase
   beforeEach(() => {
     resetBroadcastersForTests()
@@ -142,7 +143,7 @@ describeEachProvider('RFC-078 — getTaskNodeRuns surfaces review round timing',
       decision: 'pending',
     })
 
-    const res = await getTaskNodeRuns(db, taskId)
+    const res = await taskNodeRunsProjection({ db: db }, taskId)
     const rev = res.runs.find((r) => r.id === revId)!
     const agent = res.runs.find((r) => r.id === 'AGENT0')!
 
@@ -180,7 +181,7 @@ describeEachProvider('RFC-078 — getTaskNodeRuns surfaces review round timing',
       decidedAt: 9600,
     })
 
-    const res = await getTaskNodeRuns(db, taskId)
+    const res = await taskNodeRunsProjection({ db: db }, taskId)
     const rev = res.runs.find((r) => r.id === revId)!
     expect(rev.reviewRoundStartedAt).toBe(9000)
     expect(rev.reviewDecidedAt).toBe(9600)
@@ -191,7 +192,7 @@ describeEachProvider('RFC-078 — getTaskNodeRuns surfaces review round timing',
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, { id: 'A', nodeId: 'a', startedAt: 1000 })
     await seedRun(db, taskId, { id: 'B', nodeId: 'b', startedAt: 2000 })
-    const res = await getTaskNodeRuns(db, taskId)
+    const res = await taskNodeRunsProjection({ db: db }, taskId)
     expect(res.runs.every((r) => (r.reviewRoundStartedAt ?? null) === null)).toBe(true)
     expect(res.runs.map((r) => r.id)).toEqual(['A', 'B'])
   })

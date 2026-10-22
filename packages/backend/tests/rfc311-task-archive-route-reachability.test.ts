@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-311 T19 —— `POST /api/tasks/archive` 必须真的到得了它自己的权限门。
 //
 // 由来：`e2e-full-nightly` / `e2e-webkit-nightly` 的 OPS-038 自 2026-09-06 起连红十三晚，
@@ -24,7 +25,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'

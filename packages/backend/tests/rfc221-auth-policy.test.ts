@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-221 — locks the one-way bootstrap handoff and the password/OIDC
 // anti-lockout policy. A fresh migrated DB is token-only; the first admin row
 // and completion marker commit together, and login-policy writes are
@@ -19,7 +20,7 @@ import {
   setOidcDefaultRole,
   setPasswordLoginEnabled,
 } from './helpers/auth/loginPolicy'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createAuthRuntimeFor } from '../src/auth/composition'
 import { DomainError } from '../src/util/errors'
 import { freezeAt } from './migration-freeze'

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-159 T3 (PR-3c) — background scheduler loop.
 //
 // Drives runDueSchedulesOnce (poll+claim+fire, awaiting fires) with an injected
@@ -19,7 +20,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { scheduledTasks, users, workflows } from '../src/db/schema'
 import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
 import { runDueSchedulesOnce } from './helpers/scheduledTaskScheduler'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createWorkflow } from '../src/services/workflow'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { withIntegrationTriggerResources } from './helpers/integrationTriggerResourceBinding'

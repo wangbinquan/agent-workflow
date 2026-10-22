@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: both real provider roots must share the selected asynchronous live
 // configuration query. Scheduled writes/launch wait for it; read failure does
 // not silently switch to the file query. No worker or real task is started.
@@ -6,7 +7,7 @@ import { eq } from 'drizzle-orm'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { createSession } from './helpers/auth/sessionStore'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import { createWorkflow } from '@/services/workflow'
 import { scheduledTasks } from '@/db/schema'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'

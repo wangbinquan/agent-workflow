@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-112 PR-B — runtime registry HTTP routes: GET open to any authed user;
 // all writes + /probe admin-only (D3). Built-in read-only + in-use delete guards
 // surface as 403 / 409. The deep-smoke /probe is exercised once with a mock
@@ -14,7 +15,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { applyConfigPatch } from '../src/config'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   createRuntime,
   deleteRuntime,

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动留下的准备日志由同一生产 repositoryPreparation 装配继续重试。
 // RFC-359 AC-1（第 9 刀）—— `retry` 的**唯一**测试装配点。
 //
 // 为什么存在：`retry` 曾经有两份实现（`services/task.ts` 的 `retryNode` 与
@@ -14,10 +15,11 @@ import { join } from 'node:path'
 
 import { buildActor, type Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { retryNodeProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
-import { retryRepositoryPreparation, type StartTaskDeps } from '@/services/task'
+import { retryRepositoryPreparation, type TaskContinuationDependencies } from '@/services/task'
 import { runTaskWithRealTestTopology } from './taskExecutionTestTopology'
 import type { Task } from '@agent-workflow/shared'
 
@@ -47,7 +49,7 @@ export interface RetryEngineOptions {
    */
   readonly resume?: (taskId: string) => Promise<void>
   /**
-   * 端到端套件用这个：给一份 `StartTaskDeps`，复活就把任务真的**驱动起来**。
+   * 端到端套件用这个：给一份 `TaskContinuationDependencies`，复活就把任务真的**驱动起来**。
    *
    * 做两件事：把任务从 `interrupted` 推回 `pending`，再**后台**驱动引擎（不等它跑完）。
    *
@@ -60,7 +62,7 @@ export interface RetryEngineOptions {
    *     `task-execution-owner-conflict`。裸引擎入口没有这个前置。
    * 与 `resume` 二选一；两个都给时 `resume` 优先。
    */
-  readonly resumeWith?: StartTaskDeps
+  readonly resumeWith?: TaskContinuationDependencies
   /** 级联取消一个子任务。缺省是空操作；并发用例在这里注入搅动。 */
   readonly cancelChildTaskForCascade?: (childTaskId: string, parentTaskId: string) => Promise<void>
   /**
@@ -87,7 +89,7 @@ export interface RetryEngine {
 async function driveInBackground(
   db: ProviderNeutralDatabase,
   taskId: string,
-  deps: StartTaskDeps,
+  deps: TaskContinuationDependencies,
   now?: () => number,
 ): Promise<void> {
   const persistence = createTaskExecutionPersistence(db)
@@ -157,7 +159,17 @@ export function createRetryEngine(
                 await retryRepositoryPreparation(
                   db as unknown as Parameters<typeof retryRepositoryPreparation>[0],
                   taskId,
-                  options.resumeWith,
+                  {
+                    ...options.resumeWith,
+                    repositoryPreparation:
+                      options.resumeWith.repositoryPreparation ??
+                      composeRepositoryPreparation({
+                        db,
+                        appHome: options.resumeWith.appHome ?? appHome,
+                        secretBox: options.resumeWith.secretBox,
+                        cloneTimeoutMs: options.resumeWith.cloneTimeoutMs,
+                      }),
+                  },
                 )
               }
             },

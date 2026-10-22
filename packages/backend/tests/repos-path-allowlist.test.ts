@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // Locks the RFC-099 audit (2026-07-15) fix for the repos refs/files path hole.
 // GET /api/repos/refs|files?path=... ran git against ANY host path the caller
 // named — repos:read is in the user baseline, so any logged-in user could
@@ -12,7 +13,7 @@ import type { ProviderNeutralDatabase } from '../src/db/query'
 import { cachedRepos } from '../src/db/schema'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { isKnownRepoPath } from '../src/services/repo'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 describe('isKnownRepoPath', () => {
   test('accepts an exact cached localPath', () => {

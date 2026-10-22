@@ -1,4 +1,5 @@
-// RFC-161 — locks getTaskNodeRuns' per-clarify-run `clarifyNavKind` stamping, the
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
+// RFC-161 — locks taskNodeRunsProjection' per-clarify-run `clarifyNavKind` stamping, the
 // backend oracle the task-detail canvas uses to decide whether a clarify /
 // cross-clarify node is clickable (and to what). End-to-end against the DB.
 //
@@ -11,6 +12,7 @@
 //   - a clarify run with no round → null (would 404)
 //   - the safety property: clarifyNavKind != null ⟹ getClarifyRoundDetail resolves.
 
+import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import {
@@ -21,7 +23,6 @@ import {
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { getTaskNodeRuns } from '../src/services/task'
 import { getClarifyRoundDetail } from '../src/services/clarifyRounds'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
@@ -151,11 +152,11 @@ async function navKindOf(
       createdAt: Date.now(),
     })
   }
-  const { runs } = await getTaskNodeRuns(db, taskId)
+  const { runs } = await taskNodeRunsProjection({ db: db }, taskId)
   return runs.find((r) => r.id === runId)?.clarifyNavKind
 }
 
-describeEachProvider('RFC-161 getTaskNodeRuns clarifyNavKind stamping', (harness) => {
+describeEachProvider('RFC-161 taskNodeRunsProjection clarifyNavKind stamping', (harness) => {
   let db: ProviderNeutralDatabase
   beforeEach(() => {
     resetBroadcastersForTests()
@@ -199,7 +200,7 @@ describeEachProvider('RFC-161 getTaskNodeRuns clarifyNavKind stamping', (harness
   test('non-clarify run (agent, no round) → null', async () => {
     const taskId = await seedTask(db, 'running')
     await seedRun(db, taskId, { nodeId: 'agent', status: 'done' })
-    const { runs } = await getTaskNodeRuns(db, taskId)
+    const { runs } = await taskNodeRunsProjection({ db: db }, taskId)
     expect(runs[0]?.clarifyNavKind).toBe(null)
   })
 
@@ -220,7 +221,7 @@ describeEachProvider('RFC-161 getTaskNodeRuns clarifyNavKind stamping', (harness
       status: 'awaiting_human',
       createdAt: t0 + 5000,
     })
-    const { runs } = await getTaskNodeRuns(db, taskId)
+    const { runs } = await taskNodeRunsProjection({ db: db }, taskId)
     expect(runs.find((r) => r.id === runId)?.clarifyNavKind).toBe('awaiting')
   })
 
@@ -272,7 +273,7 @@ describeEachProvider('RFC-161 stamp ↔ getClarifyRoundDetail (safety property)'
       status: 'answered',
       createdAt: Date.now(),
     })
-    const { runs } = await getTaskNodeRuns(db, taskId)
+    const { runs } = await taskNodeRunsProjection({ db: db }, taskId)
     const stamp = runs.find((r) => r.id === runId)?.clarifyNavKind
     expect(stamp).not.toBe(null)
     // The safety property: a non-null stamp implies the bare /clarify/{run} route resolves.

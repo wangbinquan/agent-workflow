@@ -1,3 +1,6 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
+import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 // RFC-300 T14 — real Webhook dispatcher -> executor -> task driver -> terminal
 // CAS -> owner release -> physical cleanup. No launch/cancel fake is injected.
 
@@ -41,10 +44,10 @@ import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopo
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 import { createProviderHttpApplicationFromBinding } from './helpers/providerHttpApplication'
 import { cancelViaEngine } from './helpers/cancelEngine'
-import { finishClaimedWebhookWorkspacePrune } from '../src/services/gc'
+
 import { registerTerminalWorkspacePrunePolicy, setTaskStatus } from '../src/services/lifecycle'
 import { getTask, isTaskActive } from '../src/services/task'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
 import { createWorkflow } from '../src/services/workflow'
@@ -263,7 +266,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
   uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onWorkspacePrune(effectDb, taskId) {
       if (isTaskActive(taskId)) return
-      void finishClaimedWebhookWorkspacePrune(effectDb, taskId)
+      void workspaceMaintenanceForTest(effectDb).finalizeClaimedWorkspace(taskId)
     },
   })
 
@@ -516,7 +519,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
   uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onWorkspacePrune(effectDb, taskId) {
       if (isTaskActive(taskId)) return
-      void finishClaimedWebhookWorkspacePrune(effectDb, taskId)
+      void workspaceMaintenanceForTest(effectDb).finalizeClaimedWorkspace(taskId)
     },
   })
 

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-099 — per-frame ACL filtering on the /ws/workflows and /ws/memories
 // channels (mirrors the RFC-054 W2-4 tasks-list pattern). A private
 // workflow's frames must never reach a non-granted user's socket; granting
@@ -15,7 +16,7 @@ import {
   type ProviderWebSocketScope,
 } from './helpers/providerWebSocketScope'
 import { agents, memories, resourceGrants, workflows } from '../src/db/schema'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   MEMORY_CHANNEL,
   memoryBroadcaster,

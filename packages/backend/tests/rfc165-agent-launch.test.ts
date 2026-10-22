@@ -1,3 +1,5 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+// RFC-395 II-pre：A5 改接生产 agent 启动臂的两次资源读取；保留并发删除不铸任务的断言。
 // LOCKS: RFC-165 §4 — single-agent launch path (design §11.8/.9/.11/.12).
 //
 //   A1  buildAgentHostSnapshot shape: input→agent edge; allowClarify wires an
@@ -70,10 +72,14 @@ import {
 import {
   createTestTaskExecutionLaunchParticipant,
   launchAgentTaskViaParticipant,
+  testTaskExecutionResourceAuthority,
 } from './helpers/participantLaunch'
+import { composeDatabaseAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
+import { createAgentRouteLaunch } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   buildWorkflowValidationContext,
   validateWorkflowDef,
@@ -425,35 +431,62 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     ).rejects.toMatchObject({ code: 'agent-launch-invalid' })
   })
 
-  test('A5 F17: agent deleted between gate and insert → launch fails atomically', async () => {
-    await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    await composeAgentLaunchResourceOperations({ db: db }).ensureHostWorkflow()
-    // Simulate the race by handing startTask an agentLaunch whose agent no
-    // longer exists at transaction time (the outer service gate already
-    // passed in the real interleaving; here we call startTask directly the
-    // way startAgentTask does, after removing the row).
-    const { startTask } = await import('../src/services/task')
-    await db.delete(agents).where(eq(agents.name, 'solo'))
-    await expect(
-      startTask(
-        {
-          workflowId: AGENT_HOST_WORKFLOW_ID,
-          name: 'ghost run',
-          inputs: { description: 'x' },
-          scratch: true,
-        } as never,
-        {
-          db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-            .schedulerDriver,
-          appHome,
-          launchProvenance: { kind: 'direct-json', initiator: 'api' },
-          agentLaunch: { agentName: 'solo', agentId: 'solo-id', snapshotJson: '{}' },
+  test('A5 F17: agent deleted between production reads fails atomically before preparation', async () => {
+    const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
+    const resources = composeAgentLaunchResourceOperations({ db })
+    let reads = 0,
+      preparations = 0,
+      drives = 0
+    const launch = createAgentRouteLaunch({
+      db,
+      configPath: join(appHome, 'config.json'),
+      agent: {
+        resources: {
+          ...resources,
+          async loadVisibleAgent(actor, id) {
+            const row = await resources.loadVisibleAgent(actor, id)
+            reads++
+            if (reads === 1) await db.delete(agents).where(eq(agents.id, solo.id))
+            return row
+          },
         },
-      ),
-    ).rejects.toMatchObject({ code: 'agent-not-found' })
-    // Transaction rolled back — no ghost task row.
-    expect((await db.select().from(tasks)).length).toBe(0)
+        integrity: composeDatabaseAgentResourceIntegrity({
+          db,
+          authorization: composeResourceCatalogFor({ db }).authorization,
+        }).launch,
+      },
+      gitCommitIdentity: {
+        async execute() {
+          throw new Error('deleted agent must not reach Git identity')
+        },
+      },
+      workspace: {
+        async prepare() {
+          preparations++
+          throw new Error('deleted agent must not prepare')
+        },
+      },
+      coordinator: {
+        async submit() {
+          drives++
+          throw new Error('deleted agent must not drive')
+        },
+      },
+    })
+    const actor = daemonActor()
+    await expect(
+      launch({
+        actor,
+        command: { agentId: solo.id, payload: BODY() },
+        resources: testTaskExecutionResourceAuthority(db, actor),
+        invoker: { type: 'user', launchKind: 'direct-json' },
+      }),
+    ).rejects.toMatchObject({ code: 'agent-id-mismatch', status: 409 })
+    expect(reads).toBe(2)
+    expect(preparations).toBe(0)
+    expect(drives).toBe(0)
+    expect(await db.select().from(tasks)).toHaveLength(0)
+    expect(isAgentLaunching(solo.id)).toBe(false)
   })
 
   test('A8 delete: live task 409s; display rename is id-stable; terminal delete proceeds', async () => {

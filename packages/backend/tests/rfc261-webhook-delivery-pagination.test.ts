@@ -1,5 +1,4 @@
-import { runWebhookDeliveryMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
-import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-261 — 投递审计列表的封套化分页与过滤锁（proposal AC-1..5, AC-9, D9'）。
 // 锁定：{items,total,page,pageCount} 封套、(received_at DESC, id DESC) tie-break
 // 的跨页无重/漏、四过滤 AND 与 total 一致、参数钳制姿态（catch/coerce 不 422）、
@@ -18,7 +17,9 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
+import { runWebhookDeliveryMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
+import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
 import { webhookDeliveries } from '../src/db/schema'

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-223 (PR-1) — Codex implementation-gate regressions.
 //
 // Locks the four findings fixed after the PR-1 impl gate:
@@ -30,7 +31,7 @@ import {
 import { createMcpFixture } from './helpers/mcpServiceBinding'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

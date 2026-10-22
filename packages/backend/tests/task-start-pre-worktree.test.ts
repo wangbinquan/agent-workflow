@@ -1,9 +1,10 @@
-// RFC-020 T3: startTask now accepts a `preCreatedWorktree` so the multipart
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
+// RFC-020 T3: launchTestTask now accepts a `preCreatedWorktree` so the multipart
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
 // now (the wire is URL-only) — bodies are cast through the internal
 // RepoSourceSpec widening; runtime behavior is byte-identical to pre-165.
 // upload route can land user-uploaded files into the worktree BEFORE the
-// task row is created. When passed, startTask must NOT shell out to git;
+// task row is created. When passed, launchTestTask must NOT shell out to git;
 // when omitted, behavior is identical to the pre-RFC-020 path.
 
 import {
@@ -28,7 +29,8 @@ import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createWorkflow } from '../src/services/workflow'
-import { abortAllActiveTasks, isTaskActive, startTask as startTaskBase } from '@/services/task'
+import { abortAllActiveTasks, isTaskActive } from '@/services/task'
+import { launchTestTask as launchTestTaskBase } from './helpers/productionTaskLaunch'
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { nonInteractiveGitEnv } from '../src/util/git'
@@ -84,11 +86,11 @@ function git(...args: string[]): void {
   })
 }
 
-function startTask(
-  input: Parameters<typeof startTaskBase>[0],
-  deps: Parameters<typeof startTaskBase>[1],
+function launchTestTask(
+  input: Parameters<typeof launchTestTaskBase>[0],
+  deps: Parameters<typeof launchTestTaskBase>[1],
 ) {
-  return startTaskBase(input, {
+  return launchTestTaskBase(input, {
     launchProvenance: { kind: 'direct-json', initiator: 'manual' },
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
@@ -180,7 +182,7 @@ beforeAll(async () => {
   await startGitHttpRemote()
 })
 
-describe('startTask with preCreatedWorktree (RFC-020)', () => {
+describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
   test('honors caller-supplied taskId / worktreePath / branch / baseCommit', async () => {
     const { appHome, repoPath, db, stubOpencode, wf } = await setup()
     // Caller pre-creates the worktree (simulating the multipart route).
@@ -194,13 +196,13 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
     expect(wt.earlyError).toBeNull()
     expect(existsSync(wt.worktreePath)).toBe(true)
     // Write a marker into the worktree to simulate an uploaded file landing
-    // there before startTask runs.
+    // there before launchTestTask runs.
     writeFileSync(join(wt.worktreePath, 'uploaded.txt'), 'hi')
 
     // RFC-165: preCreatedWorktree's surviving consumer (fusion) pairs it with
     // the internal launch face — the local repo rides deps.internalSource,
     // never the retired repoPath wire field.
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: wf.id,
         name: 'fixture-task',
@@ -238,7 +240,7 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
     // 都没测。RFC-248 给空来源加了显式 422 后它才露出来。
     // 改用幸存的单仓 wire 形态（`file://` URL），让它真的走一遍单仓 git 路径。
     const { appHome, repoPath, db, stubOpencode, wf } = await setup()
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: wf.id,
         name: 'fixture-task',
@@ -277,11 +279,11 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
       .where(eq(workflows.id, wf.id))
 
     await expect(
-      startTask(
+      launchTestTask(
         {
           workflowId: wf.id,
           name: 'manual-trigger-mismatch',
-          repoUrl: 'file:///definitely/not/materialized/by-this-test',
+          repoUrl: 'http://127.0.0.1:1/definitely-not-materialized.git',
           inputs: { topic: 'orders' },
         } as unknown as StartTask,
         {
@@ -312,7 +314,7 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
       .set({ definition: JSON.stringify(definition) })
       .where(eq(workflows.id, wf.id))
 
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: wf.id,
         name: 'webhook-agent-context',
@@ -326,14 +328,16 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
         appHome,
         binaryOverride: [stubOpencode],
         awaitScheduler: true,
-        launchProvenance: { kind: 'webhook' },
-        webhookTriggerId: 'trigger-rfc292',
-        webhookFireId: 'fire-rfc292',
-        triggerContext: {
-          trigger: {
-            webhook: {
-              event_type: 'note',
-              comment_text: 'please-fix-from-webhook',
+        invoker: {
+          type: 'webhook',
+          webhookTriggerId: 'trigger-rfc292',
+          webhookFireId: 'fire-rfc292',
+          triggerContext: {
+            trigger: {
+              webhook: {
+                event_type: 'note',
+                comment_text: 'please-fix-from-webhook',
+              },
             },
           },
         },

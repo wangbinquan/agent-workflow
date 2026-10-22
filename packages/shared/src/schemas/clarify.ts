@@ -366,7 +366,7 @@ export function terminatedAsForStatus(status: ClarifyRoundStatus): ClarifyTermin
 
 /**
  * RFC-161: the task-detail canvas click target kind for a clarify / cross-clarify
- * node_run. `getTaskNodeRuns` stamps `NodeRunSchema.clarifyNavKind` from the run's
+ * node_run. `taskNodeRunsProjection` stamps `NodeRunSchema.clarifyNavKind` from the run's
  * latest clarify_round status via this pure mapping (read-time derived, no migration).
  */
 export type ClarifyNodeNavKind = 'awaiting' | 'answered'
@@ -380,7 +380,7 @@ export type ClarifyNodeNavKind = 'awaiting' | 'answered'
  *     404 — either way the canvas leaves the node un-clickable).
  * The single source of truth for clarify nav classification; the backend gates the
  * 'awaiting' result further on the task not being dead (canceled/failed) — see
- * getTaskNodeRuns — because cancelTaskRow/failTask leave orphaned awaiting_human
+ * taskNodeRunsProjection — because cancelTaskRow/failTask leave orphaned awaiting_human
  * rounds behind.
  */
 export function clarifyNavKindForRoundStatus(

@@ -1,5 +1,6 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-387: test-only legacy launch configuration fixture; production uses the daemon session bundle.
-// RFC-159 — assemble StartTaskDeps from LIVE config, per-call.
+// RFC-159 — assemble TestTaskLaunchOptions from LIVE config, per-call.
 //
 // Extracted from routes/tasks.ts so the scheduled-task scheduler builds deps the
 // SAME way the HTTP launch does — reading config on every fire/request (not frozen
@@ -11,7 +12,7 @@ import { resolveTaskSubagentLiveCaptureFromReader } from '@/modules/task-executi
 import type { SecretBox } from '@/auth/secretBox'
 import type { LegacyProviderNeutralDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { resolveLaunchRuntimeConfig } from './launchRuntimeConfig'
-import type { StartTaskDeps } from '@/services/task'
+import type { TestTaskLaunchOptions } from './productionTaskLaunch'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -30,7 +31,7 @@ export function resolveSubagentLiveCapture(
 }
 
 /**
- * Build the common StartTaskDeps for a launch. Byte-equivalent to the inline object
+ * Build the common TestTaskLaunchOptions for a launch. Byte-equivalent to the inline object
  * the JSON launch used (routes/tasks.ts:249-256). Callers with extra deps
  * (multipart's `preCreatedWorktree` / `preResolvedSource`) spread them on top.
  */
@@ -42,9 +43,9 @@ export function buildStartTaskDeps(
   /** RFC-204: needed to unseal a cached repo for a reuse-by-id launch. */
   secretBox?: SecretBox,
   /** RFC-347: daemon/bootstrap-owned identity query; omitted only by legacy tests. */
-  identityAccess?: StartTaskDeps['identityAccess'],
-  moduleMembers?: Pick<StartTaskDeps, 'repositoryWorkspace' | 'runtimeSessionLeases'>,
-): StartTaskDeps {
+  identityAccess?: TestTaskLaunchOptions['identityAccess'],
+  moduleMembers?: Pick<TestTaskLaunchOptions, 'repositoryWorkspace' | 'runtimeSessionLeases'>,
+): TestTaskLaunchOptions {
   const subagentLiveCapture = resolveSubagentLiveCapture(configPath)
   return {
     db,

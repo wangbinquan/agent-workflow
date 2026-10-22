@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-330 T9～T11 —— 数字员工案例的归属与成员制（D19 / D20），与编排任务完整同形。
 //
 // 事故形态（proposal §1）：`GET /api/employee-cases/:id` / resume / terminate /
@@ -29,7 +30,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { buildActor } from '../src/auth/actor'
 import { canOperateCase, canViewCase } from '../src/services/employeeCaseMembers'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   TASKS_LIST_CHANNEL,
   tasksListBroadcaster,

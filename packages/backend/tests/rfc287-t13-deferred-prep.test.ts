@@ -1,3 +1,6 @@
+import { launchTestTask as launchTestTaskProduction } from './helpers/productionTaskLaunch'
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
+import { workspaceMaintenanceFilesystemForTest } from './helpers/workspaceMaintenance'
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-287 T13（G7 核心）—— 仓库准备推迟到任务行落库之后。
@@ -26,8 +29,9 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows, users, nodeRuns, taskRepos, cachedRepos } from '../src/db/schema'
-import { startTask as startTaskProduction, type StartTaskDeps } from '@/services/task'
+import type { TestTaskLaunchOptions } from './helpers/productionTaskLaunch'
 import { runGit } from '@/util/git'
+import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
 import { ulid } from 'ulid'
 import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
 import { startGitHttpRemote } from './helpers/gitHttpRemote'
@@ -45,13 +49,13 @@ import { composeAgentLaunchResourceOperations } from '../src/modules/task-execut
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 
-// RFC-359 AC-6：`StartTaskDeps.db` 放宽到中立句柄之后，这里**仍然要窄回 `DbClient`**——
+// RFC-359 AC-6：`TestTaskLaunchOptions.db` 放宽到中立句柄之后，这里**仍然要窄回 `DbClient`**——
 // 本夹具驱动的是 SQLite 那台执行引擎（`composeTaskExecutionTestRuntime`，W5-T19f 的
 // `sqlite-execution-engine` 那一类），它按定义只收 bun:sqlite 库。约束写在这里而不是靠强转，
 // 于是「哪个夹具真的需要 SQLite」在类型上说得出口。
 function withRealSchedulerDriver<T extends { readonly db: DbClient }>(
   deps: T,
-): T & Pick<StartTaskDeps, 'schedulerDriver'> {
+): T & Pick<TestTaskLaunchOptions, 'schedulerDriver'> {
   return {
     ...deps,
     schedulerDriver: createTaskExecutionTestTopology({ db: deps.db, driver: 'real' })
@@ -60,18 +64,18 @@ function withRealSchedulerDriver<T extends { readonly db: DbClient }>(
 }
 
 /** Every start fixture in this file explicitly selects the real test topology. */
-function startTask(
-  input: Parameters<typeof startTaskProduction>[0],
-  deps: Omit<StartTaskDeps, 'schedulerDriver'> & { readonly db: DbClient },
-): ReturnType<typeof startTaskProduction> {
-  return startTaskProduction(input, withRealSchedulerDriver(deps))
+function launchTestTask(
+  input: Parameters<typeof launchTestTaskProduction>[0],
+  deps: Omit<TestTaskLaunchOptions, 'schedulerDriver'> & { readonly db: DbClient },
+): ReturnType<typeof launchTestTaskProduction> {
+  return launchTestTaskProduction(input, withRealSchedulerDriver(deps))
 }
 
 /**
  * 等任务落到终态。
  *
  * G7 之后仓库准备在**后台**推进（proposal §2：任务行先落 pending，克隆/物化在后台
- * 进行），所以 `await startTask(...)` 返回时准备通常还没开始跑完——本文件里凡是断言
+ * 进行），所以 `await launchTestTask(...)` 返回时准备通常还没开始跑完——本文件里凡是断言
  * 「准备后的状态」的用例都必须先等它落定，否则读到的是占位态。
  */
 async function settle(db: DbClient, taskId: string, budgetMs = 60_000): Promise<void> {
@@ -131,7 +135,11 @@ async function seed(db: DbClient): Promise<{ workflowId: string; userId: string 
  * 那同一份 deps 交进来（`tests/helpers/retryEngine.ts` 在给了 `resumeWith` 时会调
  * 真的 `retryRepositoryPreparation`）。
  */
-const REPO_PREP_DEPS = (db: DbClient, actorUserId: string, cloneTimeoutMs = 1_000): StartTaskDeps =>
+const REPO_PREP_DEPS = (
+  db: DbClient,
+  actorUserId: string,
+  cloneTimeoutMs = 1_000,
+): TestTaskLaunchOptions =>
   withRealSchedulerDriver({
     db,
     actorUserId,
@@ -155,7 +163,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
   })
 
   test('准备失败时**任务行仍然留下来**，状态 failed 且 git 原文可见', async () => {
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId,
         name: 'deferred-fail',
@@ -221,7 +229,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
         mountPaths: ['', 'vendor/sdk'],
         name: `deferred-group-${ulid()}`,
       })
-      const task = await startTask(
+      const task = await launchTestTask(
         {
           workflowId: s.workflowId,
           name: 'deferred-success',
@@ -277,7 +285,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
   test('默认（不开开关）逐字维持旧行为：预物化，失败不落行', async () => {
     let threw = false
     try {
-      await startTask(
+      await launchTestTask(
         {
           workflowId,
           name: 'eager',
@@ -321,7 +329,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
 // RFC-287 T13（G7）—— 准备期间的**孤儿回收豁免**。
 //
 // 这条不是「顺手加的」，是实测查出来的一个真风险：`__repo_prep__` 行没有 pid
-// （准备由 startTask 协程驱动、不 spawn 子进程）、没有子行、也不是 wrapper。而
+// （准备由 launchTestTask 协程驱动、不 spawn 子进程）、没有子行、也不是 wrapper。而
 // 周期孤儿回收器在 Codex 设计门 P1-1 之后**不再保守判活**——「无驱动」直接判死。
 // 若无豁免，一个跑几分钟的大仓克隆会被中途回收，随后撞终态守卫、失败整个任务。
 //
@@ -381,7 +389,7 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
   test('准备失败后，__repo_prep__ 行可被 retryNode 接受（不被前置门挡掉）', async () => {
     const db2 = createInMemoryDb(MIGRATIONS)
     const s = await seed(db2)
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: s.workflowId,
         name: 'retry-prep',
@@ -399,8 +407,8 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
         gitBaselineSyncWindowMs: 0,
       } as never,
     )
-    // G7：startTask 立刻返回，准备在后台推进——合成的 `__repo_prep__` 行是后台第一步铸的。
-    // RFC-359 起 node run 的铸造走统一写事务（在新的事件循环任务里开始），这一行比 startTask
+    // G7：launchTestTask 立刻返回，准备在后台推进——合成的 `__repo_prep__` 行是后台第一步铸的。
+    // RFC-359 起 node run 的铸造走统一写事务（在新的事件循环任务里开始），这一行比 launchTestTask
     // 的返回晚一个宏任务落库；这里等它出现，而不是把「返回时已存在」当成契约。
     const prep = await (async () => {
       const t0 = Date.now()
@@ -442,9 +450,9 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
 // 仓库不存在 / 无权限**不占窗口**，立刻失败。用总窗口而非固定次数，因为用户关心
 // 的是「最多等多久」，不是「重试几次」。
 describe('RFC-287 G6 — 基线同步窗口化重试', () => {
-  // T14 改测法：原版测的是 `await startTask(...)` 的**阻塞时长**——那恰恰是 G7 要
+  // T14 改测法：原版测的是 `await launchTestTask(...)` 的**阻塞时长**——那恰恰是 G7 要
   // 消灭的行为（proposal §2 G7：任务行先落 pending，克隆/物化在后台推进）。启动
-  // 异步化之后 startTask 立刻返回，原断言必然失效；更要命的是，只要它还在，就等于
+  // 异步化之后 launchTestTask 立刻返回，原断言必然失效；更要命的是，只要它还在，就等于
   // 把「启动接口同步阻塞」这个缺陷锁成了契约。
   //
   // 改成测**准备本身**耗多久：窗口大 ⇒ 任务更晚落 failed。这才是 G6 的语义，且与
@@ -464,7 +472,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
     const db3 = createInMemoryDb(MIGRATIONS)
     const s = await seed(db3)
     const launch = async (windowMs: number, name: string): Promise<number> => {
-      const task = await startTask(
+      const task = await launchTestTask(
         {
           workflowId: s.workflowId,
           name,
@@ -494,7 +502,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
     const dbA = createInMemoryDb(MIGRATIONS)
     const s = await seed(dbA)
     const t0 = Date.now()
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: s.workflowId,
         name: 'g7-async',
@@ -532,7 +540,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
   test('窗口耗尽后仍按失败收场，且原因不被重试吞掉', async () => {
     const db4 = createInMemoryDb(MIGRATIONS)
     const s = await seed(db4)
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: s.workflowId,
         name: 'g6-exhaust',
@@ -594,7 +602,7 @@ describe('RFC-287 — scratch 启动排除在延后准备之外', () => {
   test('开着 deferRepoPreparation 时，scratch 任务仍立刻拿到正确的 spaceKind', async () => {
     const db5 = createInMemoryDb(MIGRATIONS)
     const s = await seed(db5)
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: s.workflowId,
         name: 'scratch-not-deferred',
@@ -637,7 +645,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     s: { workflowId: string; userId: string },
     name: string,
   ): Promise<string> {
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: s.workflowId,
         name,
@@ -666,7 +674,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
   test('占位行必须带上（脱敏的）repoUrl，否则准备期间看不到自己在等哪个仓', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: s.workflowId,
         name: 'ac10-repourl',
@@ -802,7 +810,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
         createdAt: now,
       })
       .run()
-    const task = await startTask(
+    const task = await launchTestTask(
       { workflowId: s2.workflowId, name: 'bf3', cachedRepoId: cachedId, inputs: {} } as never,
       {
         db,
@@ -1146,45 +1154,45 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
 // 启动一个指向 `file://` 的**存量镜像**时，调用方拿到的是 201 Created，稳定错误码
 // 只出现在几秒后的任务失败里。proposal §G7 明确把「地址格式」留在同步段
 // （「填错了立刻告诉你」），§7 也写明这是「明确的参数校验失败」——延后与之相反。
-describe('RFC-287 G5×G7 —— 延后准备不得把地址格式拒绝也一起延后', () => {
-  async function seedFileMirror(db: DbClient): Promise<string> {
-    const id = ulid()
+describe('RFC-287 G5×G7 —— 生产延后准备的地址拒绝', () => {
+  // RFC-395 II-pre：生产同步段保存来源快照；存量镜像地址在实际准备时解析并留下失败行。
+  test('cachedRepoId 指向 file:// 镜像：生产准备拒绝并保留失败任务', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const seeded = await seed(db)
+    const cachedRepoId = ulid(),
+      url = 'file:///srv/private/repo'
     await db.insert(cachedRepos).values({
-      id,
-      urlHash: 'h_' + id,
-      urlRedacted: 'file:///srv/private/repo',
-      localPath: '/tmp/mirror-' + id,
+      id: cachedRepoId,
+      urlHash: `h_${cachedRepoId}`,
+      urlRedacted: url,
+      localPath: `/tmp/mirror-${cachedRepoId}`,
       lastFetchedAt: 0,
       createdAt: Date.now(),
-      updatedAt: Date.now(),
-    } as never)
-    return id
-  }
-
-  test('cachedRepoId 指向 file:// 镜像：同步拒，不铸任务行', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const s = await seed(db)
-    const cachedRepoId = await seedFileMirror(db)
-    let code = ''
-    try {
-      await startTask(
-        { workflowId: s.workflowId, name: 'x', cachedRepoId, inputs: {} } as never,
-        {
-          db,
-          actorUserId: s.userId,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-          deferRepoPreparation: true,
-          appHome: TEST_HOME,
-        } as never,
-      )
-    } catch (err) {
-      code = (err as { code?: string }).code ?? String(err)
-    }
-    expect(code, '必须同步给出稳定错误码，而不是 201 之后后台失败').toBe(
-      'repo-url-file-scheme-unsupported',
+    })
+    rememberVolatileRepoUrl(db, cachedRepoId, url)
+    const task = await launchTestTask(
+      {
+        workflowId: seeded.workflowId,
+        name: 'file-cache',
+        cachedRepoId,
+        inputs: {},
+      },
+      {
+        db,
+        actorUserId: seeded.userId,
+        deferRepoPreparation: true,
+        appHome: TEST_HOME,
+        gitBaselineSyncWindowMs: 0,
+      },
     )
-    // 关键差别：同步拒绝**不留任务行**（延后失败才留）。
-    expect((await db.select().from(tasks)).length).toBe(0)
+    await settle(db, task.id)
+    const [stored] = await db.select().from(tasks).where(eq(tasks.id, task.id))
+    expect(stored).toMatchObject({ status: 'failed', cachedRepoId, workspacePrunedAt: null })
+    const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+    const preparation = runs.find((run) => run.nodeId === REPO_PREP_NODE_ID)
+    expect(preparation?.status).toBe('failed')
+    expect(preparation?.errorMessage).toContain('file://')
+    expect(await db.select().from(taskRepos).where(eq(taskRepos.taskId, task.id))).toHaveLength(0)
   })
 
   test('url_redacted 为 NULL 时预筛放行（不解密、交给唯一权威拒绝点）', async () => {
@@ -1204,7 +1212,7 @@ describe('RFC-287 G5×G7 —— 延后准备不得把地址格式拒绝也一起
     } as never)
     let code = ''
     try {
-      await startTask(
+      await launchTestTask(
         { workflowId: s.workflowId, name: 'y', cachedRepoId: id, inputs: {} } as never,
         {
           db,
@@ -1227,7 +1235,7 @@ async function launchFailingPrep2(
   s: { workflowId: string; userId: string },
   name: string,
 ): Promise<string> {
-  const task = await startTask(
+  const task = await launchTestTask(
     {
       workflowId: s.workflowId,
       name,
@@ -1331,7 +1339,7 @@ describe('RFC-287 AC-14 —— 准备窗口内的取消', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
     const { cancelViaEngine } = await import('./helpers/cancelEngine')
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: s.workflowId,
         name: 'ac14-cancel',
@@ -1590,7 +1598,7 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
     // （shutdown.ts 里 `abortAllActiveTasks(DAEMON_SHUTDOWN_ABORT_REASON)`）。
     const { abortAllActiveTasks } = await import('@/services/task')
 
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: s.workflowId,
         name: 'f2-shutdown',
@@ -1778,7 +1786,6 @@ describe('RFC-287 AC-14 —— 终止条件必须穿透子模块同步', () => {
 // `repos/` 下攒了 13 个 `…-nope.partial-*`，全是测试留下的。
 describe('RFC-287 —— 半成品镜像目录的回收', () => {
   test('到龄的 .partial-* 被清掉，未到龄的与正常镜像一律不动', async () => {
-    const { runPartialCloneGc } = await import('@/services/gc')
     const { mkdirSync, existsSync, utimesSync } = await import('node:fs')
     const home = mkdtempSync(join(tmpdir(), 'aw-partialgc-'))
     const repos = join(home, 'repos')
@@ -1792,11 +1799,14 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
     const old = new Date(Date.now() - 48 * 3600_000)
     utimesSync(stale, old, old)
 
-    const r = await runPartialCloneGc(home)
+    const r = await workspaceMaintenanceFilesystemForTest(home).runPartialCloneGc(
+      Date.now(),
+      30 * 60 * 1000,
+    )
     expect(existsSync(stale), '到龄的半成品必须被清掉').toBe(false)
     expect(existsSync(fresh), '未到龄的可能正在被写入，不得删').toBe(true)
     expect(existsSync(canonical), '正常镜像目录一律不碰').toBe(true)
-    expect(r.removed.length).toBe(1)
+    expect(r.removed).toBe(1)
     // 扫描面只认带 `.partial-` 的目录，canonical 不计入。
     expect(r.scanned).toBe(2)
 
@@ -1808,7 +1818,6 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
   // 仓库（`https://host/org/foo.partial-bar.git` ⇒ `<hash>-foo.partial-bar`）会被整个
   // 删掉——而 `cached_repos.local_path` 还指着它，既存运行任务的工作树跟着失效。
   test('名字里带 .partial- 的合法镜像不得被误删（ULID 必须锚在结尾）', async () => {
-    const { runPartialCloneGc } = await import('@/services/gc')
     const { mkdirSync, existsSync, utimesSync } = await import('node:fs')
     const home = mkdtempSync(join(tmpdir(), 'aw-partialgc-lookalike-'))
     const repos = join(home, 'repos')
@@ -1822,14 +1831,16 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
     utimesSync(legit, old, old)
     utimesSync(real, old, old)
 
-    const r = await runPartialCloneGc(home)
+    const r = await workspaceMaintenanceFilesystemForTest(home).runPartialCloneGc(
+      Date.now(),
+      30 * 60 * 1000,
+    )
     expect(existsSync(legit), '合法镜像绝不能被删').toBe(true)
     expect(existsSync(real)).toBe(false)
     expect(r.scanned, '只有真半成品进扫描面').toBe(1)
   })
 
   test('年龄阈值随配置的克隆超时放大（长超时下不得删掉仍在写的 partial）', async () => {
-    const { runPartialCloneGc } = await import('@/services/gc')
     const { mkdirSync, existsSync, utimesSync } = await import('node:fs')
     const home = mkdtempSync(join(tmpdir(), 'aw-partialgc-timeout-'))
     const repos = join(home, 'repos')
@@ -1841,19 +1852,37 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
     const old = new Date(Date.now() - 30 * 3600_000)
     utimesSync(dir, old, old)
 
-    expect((await runPartialCloneGc(home, Date.now(), 48 * 3600_000)).removed.length).toBe(0)
+    expect(
+      (
+        await workspaceMaintenanceFilesystemForTest(home).runPartialCloneGc(
+          Date.now(),
+          48 * 3600_000,
+        )
+      ).removed,
+    ).toBe(0)
     expect(existsSync(dir), '长克隆超时下不得删').toBe(true)
     // 不给超时（或超时很短）时仍按 24h 收。
-    expect((await runPartialCloneGc(home)).removed.length).toBe(1)
+    expect(
+      (
+        await workspaceMaintenanceFilesystemForTest(home).runPartialCloneGc(
+          Date.now(),
+          30 * 60 * 1000,
+        )
+      ).removed,
+    ).toBe(1)
     expect(existsSync(dir)).toBe(false)
 
     rmSync(home, { recursive: true, force: true })
   })
 
   test('repos 目录不存在时安全返回（首次启动 / 从未克隆过）', async () => {
-    const { runPartialCloneGc } = await import('@/services/gc')
     const home = mkdtempSync(join(tmpdir(), 'aw-partialgc-empty-'))
-    expect(await runPartialCloneGc(home)).toEqual({ scanned: 0, removed: [] })
+    expect(
+      await workspaceMaintenanceFilesystemForTest(home).runPartialCloneGc(
+        Date.now(),
+        30 * 60 * 1000,
+      ),
+    ).toEqual({ scanned: 0, removed: 0 })
     rmSync(home, { recursive: true, force: true })
   })
 
@@ -2204,7 +2233,7 @@ describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
     // git 在跑；先取消（现在能真杀 git）再删是安全的两步。
     const db = createInMemoryDb(MIGRATIONS)
     const s = await seed(db)
-    const task = await startTask(
+    const task = await launchTestTask(
       {
         workflowId: s.workflowId,
         name: 'ac14-delete',

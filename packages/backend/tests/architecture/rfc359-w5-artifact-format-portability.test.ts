@@ -1,3 +1,4 @@
+// RFC-395 II-pre：已退役写合同改为历史工件原始载荷，保留完整恢复矩阵。
 // RFC-359 W5 —— **落盘工件格式的跨引擎可读性**账本（行为式，只降不升）。
 //
 // # 机制：同一列，两个引擎各写各的格式，两侧解码器又都 `.strict()`
@@ -90,7 +91,6 @@ import {
   skillVersionAbs,
 } from '../../src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 import type { PostgresqlResourcePackageMutationArtifact } from '../../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
-import type { BundleArtifact } from '../../src/services/bundle/provider'
 
 const SRC = resolve(import.meta.dir, '..', '..', 'src')
 
@@ -174,8 +174,11 @@ function neverTouchedDatabase(): never {
   ) as never
 }
 
-/** SQLite 侧的代表性落盘样本。类型标注即锚点：`BundleArtifact` 改形状/改名 → 本文件编译失败。 */
-function sqliteSamples(appHome: string, pluginsDir: string): readonly BundleArtifact[] {
+/** SQLite 侧的代表性落盘样本。类型标注即锚点：历史行按原始载荷播种，由生产恢复解码器检验。 */
+function sqliteSamples(
+  appHome: string,
+  pluginsDir: string,
+): readonly (Record<string, unknown> & { readonly kind: string })[] {
   const filesDir = skillFilesAbs(appHome, SKILL_ID)
   return [
     {

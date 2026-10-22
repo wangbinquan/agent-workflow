@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-317 T41（findings TP-03 / DE-01 / DE-02）—— 三条新端口的行为回归。
 //
 // 为什么这些测试存在：T41 把三处**跨界直查**换成了 public 端口。换掉的是「谁来执行
@@ -31,7 +32,7 @@ import {
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { createDigitalEmployeeWriterCutoverPersistence } from '@/modules/digital-employee/infrastructure/writerCutoverPersistence'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

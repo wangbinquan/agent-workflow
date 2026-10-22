@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-294 W9-B/W4-E7 compatibility locks.
 //
 // These are daemon-lifetime user journeys rather than timer implementation
@@ -23,7 +24,7 @@ import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 import { pollAndClaim, runDueSchedulesOnce } from '@/services/scheduledTaskScheduler'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import { createWorkflow } from '@/services/workflow'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import {

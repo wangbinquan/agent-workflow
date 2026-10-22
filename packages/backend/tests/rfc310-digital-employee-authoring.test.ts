@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 import { exampleProgramFixture } from './helpers/executionContractFixture'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -40,7 +41,7 @@ import {
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
 import { listAgents } from '@/services/agent'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   designEmployeeTypePackage,
   testEmployeeTypePackage,

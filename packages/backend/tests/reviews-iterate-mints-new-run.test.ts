@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Locks in RFC-011 backend semantics: review reject / iterate must not
 // reset the latest upstream node_run in place. Instead it marks the old
 // row canceled (with a stable supersede prefix on errorMessage) and mints
@@ -8,6 +9,7 @@
 // If this goes red, services/review.ts:submitReviewDecision iterate/reject
 // branch is out of lock-step with RFC-011 design §3.1.
 
+import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -22,11 +24,7 @@ import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { submitReviewDecision } from '@/modules/collaboration/infrastructure/review'
-import {
-  abortAllActiveTasks,
-  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
-  wakeHumanGateContinuation,
-} from '../src/services/task'
+import { abortAllActiveTasks, wakeHumanGateContinuation } from '@/services/task'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
@@ -41,11 +39,11 @@ function git(...args: string[]): Promise<string> {
   return runTestGit(args, GIT_TIMEOUT_MS)
 }
 
-function startTaskWithLocalRepo(
-  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
-  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+function launchTestTaskWithLocalRepo(
+  input: Parameters<typeof launchTestTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof launchTestTaskWithLocalRepoBase>[1],
 ) {
-  return startTaskWithLocalRepoBase(input, {
+  return launchTestTaskWithLocalRepoBase(input, {
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -176,7 +174,7 @@ async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
 
   process.env.AGENT_WORKFLOW_HOME = appHome
 
-  const task = await startTaskWithLocalRepo(
+  const task = await launchTestTaskWithLocalRepo(
     {
       workflowId: wf.id,
       name: 'fixture-task',
@@ -223,7 +221,7 @@ async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
  * the review.ts rollback branch is skipped regardless of the rollback flag.
  *
  * To exercise the actual rollback path (and the new `-rollback` supersede
- * marker it produces), tests call this helper after startTask: it dirties
+ * marker it produces), tests call this helper after launchTestTask: it dirties
  * the worktree, captures a real stash sha, and writes that sha into the
  * latest designer node_run's pre_snapshot column. From there a subsequent
  * submitReviewDecision with rollback=true will invoke rollbackToSnapshot,

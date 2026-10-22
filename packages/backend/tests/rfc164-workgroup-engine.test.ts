@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-164 PR-3 — launch path + round engine (leader_worker backend closure).
 //
 // Locks:
@@ -49,7 +50,7 @@ import {
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createAgent } from '../src/services/agent'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createWorkgroup } from '../src/services/workgroups'
 import {
   buildWorkgroupHostSnapshot,

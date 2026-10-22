@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-310 PR-1B —— 配置路由错误码的行为点名（route-error-code-coverage 守卫
 // 要求每个 route-local 错误码有测试点名；CI 32093049068 首扫照出三个漏点：
 // `action-template-capability-required` / `development-adapter-purpose-required`
@@ -15,7 +16,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { eq } from 'drizzle-orm'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

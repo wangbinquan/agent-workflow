@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-347 — trusted authority mint, explicit runtime lifetime and exact
 // compatibility-debt ledger.  Existing RFC-305/RFC-312 suites remain the
 // behavior oracle; this file locks the new seams that those suites did not
@@ -260,7 +261,6 @@ describe('RFC-347 exact production source locks', () => {
       'src/bootstrap/daemonModules/providerCore.ts',
       'src/main.ts',
       'src/modules/identity-access/composition.ts',
-      'src/modules/identity-access/infrastructure/legacyUserService.ts',
     ])
     expect(importPaths('identity-access/composition')).toEqual([
       // RFC-370: standalone compatibility facade binds through the module composition.
@@ -281,7 +281,6 @@ describe('RFC-347 exact production source locks', () => {
       'src/server.ts',
       'src/services/ownerScopedName.ts',
       'src/services/userIdentities.ts',
-      'src/services/users.ts',
     ])
     expect(source('src/modules/identity-access/composition.ts')).not.toContain('/ws/')
     for (const file of productionSources.filter(({ path }) => path.startsWith('src/ws/'))) {

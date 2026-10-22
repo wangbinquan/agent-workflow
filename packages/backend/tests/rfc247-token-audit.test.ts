@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-247 D16 / §6 / T28 / F13 / F14 — the token call audit.
 //
 // Four properties, each of which fails in a way that is easy to miss:
@@ -26,7 +27,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { pruneTokenAudit, recordTokenCall, redactSnapshot } from '../src/services/tokenAudit'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

@@ -1,8 +1,9 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-349 — auth/OIDC/identity callers receive Promise application bindings;
 // process bootstrap owns provider selection and database lifetime.
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Hono, type MiddlewareHandler } from 'hono'
 
@@ -23,10 +24,6 @@ describe('RFC-349 auth caller closure（源码闭包）', () => {
     const authCli = source('src/cli/auth.ts')
     const userBootstrap = source('src/cli/userBootstrap.ts')
     const userOperations = source('src/modules/identity-access/composition/userOperations.ts')
-    const usersService = source('src/services/users.ts')
-    const sqliteUserFixture = source(
-      'src/modules/identity-access/infrastructure/legacyUserService.ts',
-    )
 
     expect(oidcRoute).not.toContain("from '@/server'")
     expect(oidcRoute).not.toContain('deps.db')
@@ -38,13 +35,14 @@ describe('RFC-349 auth caller closure（源码闭包）', () => {
       expect(caller).not.toContain("from '@/auth/loginPolicy'")
       expect(caller).not.toContain("from '@/auth/sessionStore'")
     }
-    expect(userOperations).not.toContain("from '@/services/users'")
-    expect(usersService).not.toContain('DbClient')
-    expect(usersService).not.toContain("from '@/db/schema'")
-    expect(usersService).not.toContain("from '@/auth/sessionStore'")
-    expect(usersService).not.toContain("from '@/services/accountAuthPolicy'")
-    expect(sqliteUserFixture).toContain('await auth.writeLocalPasswordIfUnmanaged')
-    expect(sqliteUserFixture).toContain('await auth.revokeAllSessionsForUser')
+    for (const path of [
+      'src/services/users.ts',
+      'src/modules/identity-access/composition/legacyUserService.ts',
+      'src/modules/identity-access/infrastructure/legacyUserService.ts',
+    ])
+      expect(existsSync(resolve(import.meta.dir, '..', path))).toBe(false)
+    expect(userOperations).toContain('await input.auth.writeLocalPasswordIfUnmanaged')
+    expect(userOperations).toContain('await input.auth.revokeAllSessionsForUser')
   })
 })
 

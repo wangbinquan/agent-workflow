@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-324 D9 —— 记忆管理权跟随资源的**写权**，而写权现在有两档。
 //
 // `canManageMemory` 的判据一直是「随 scope 资源的写权」（RFC-099 D12）。RFC-324 之
@@ -17,7 +18,7 @@ import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { agents, resourceGrants, workflows } from '../src/db/schema'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 
 const NOW = 1_700_000_000_000

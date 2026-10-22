@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-349 回归防护 —— 崩溃后接着跑的「排队中工作上下文」必须以**被正式 admit 的**属主身份跑。
 //
 // 为什么这条测试存在：`resumeQueuedIntentWorkingSets` 原先自己捏一个 actor
@@ -198,7 +199,7 @@ describeEachProvider('RFC-349 intent boot resume authority', (harness) => {
       contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
     })
     await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
-    const { createUser } = await import('../src/services/users')
+    const { createUser } = await import('./helpers/userFixture')
     const owner = await createUser(db, {
       username: `owner-${ulid().toLowerCase()}`,
       displayName: 'Owner',

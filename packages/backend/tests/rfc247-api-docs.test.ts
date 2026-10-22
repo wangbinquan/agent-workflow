@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-247 D17 / D18 / AC-22 / T35 — the generated documentation.
 //
 // AC-22 is the only thing standing between this page and the usual fate of API
@@ -17,7 +18,7 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
 import { registerRoute, resetRouteMetaRegistry } from '../src/routes/registry'
 import { buildApiDocs, clientSnippets, wellKnownMcp } from '../src/services/apiDocs'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

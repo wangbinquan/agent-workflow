@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-324 —— 授权分档的行为矩阵（HTTP 面）。
 //
 // 锁的是本 RFC 的全部产品承诺，逐条对应 proposal.md §7：
@@ -25,7 +26,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import type { ResourceGrantLevel } from '@agent-workflow/shared'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

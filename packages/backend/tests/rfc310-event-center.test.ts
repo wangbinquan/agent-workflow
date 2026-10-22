@@ -1,3 +1,4 @@
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 import { describe, expect, test } from 'bun:test'
 
 import { eventTypeCatalog } from '@/db/schema'
@@ -46,7 +47,7 @@ function composeForProvider(
 
 function testAutomation(
   harness: ProviderHarness,
-  startTask: (input: {
+  launchFixtureTask: (input: {
     readonly eventDeliveryId: string
     readonly targetRefId: string
     readonly triggerContext: unknown
@@ -74,7 +75,7 @@ function testAutomation(
       async start(context, input) {
         const origin = await workIntents.resolve(context.origin, context.portId)
         if (origin === null) throw new Error('event-automation-origin-not-found')
-        return await startTask({
+        return await launchFixtureTask({
           eventDeliveryId: origin.eventDeliveryId,
           targetRefId: input.target.refId,
           triggerContext: input.trigger,

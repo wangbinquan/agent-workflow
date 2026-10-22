@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-259 — GitHub 入站集成锁（proposal AC-1/3/8/9/10/14 的 HTTP 层）：
 //   HMAC 验签两态落 rejected 行、404 provider 同形（未知 provider + 跨 provider
 //   token）、ping 200 ignored、X-GitHub-Delivery 去重 bump（Redeliver 复用同
@@ -12,7 +13,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { ulid } from 'ulid'
 import { eventually } from './helpers/eventually'

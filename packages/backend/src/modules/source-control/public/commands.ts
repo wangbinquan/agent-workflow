@@ -68,7 +68,7 @@ export interface WorkspaceClaimFinalizationCommand {
    *
    * TaskExecution invokes this after releasing its durable owner.  Keeping the
    * operation on the selected Source Control command prevents the PostgreSQL
-   * runtime from reaching back into SQLite's systemWorkspaceGc facade.
+   * runtime from reaching back into a SQLite-only GC path.
    */
   finalizeClaimedWorkspace(taskId: string, now?: number): Promise<void>
 }

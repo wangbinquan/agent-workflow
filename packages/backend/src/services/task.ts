@@ -1,59 +1,44 @@
 import {
-  type ResolvedRepoSource,
-  type RepoSourceSpec,
-  normalizeStartTaskRepos,
-  resolveRepoSourceSingleWithProvider,
   type MaterializedRepo,
   type MaterializedSpace,
   type WorkspaceCleanupHookEvent,
   type MaterializedSpaceCleanup,
   createMaterializedSpaceCleanup,
   cleanupMaterializedSpaceLease,
-  withWorkspaceCleanupReport,
   type PlannedSpaceLayout,
   materializeSpaceWithProvider,
   createFileWorkspacePresenceQueries,
   composeWorkspaceMaintenanceCommand,
 } from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
-// Task service — start / list / get.
+// Task service — continuation and retained read projections.
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
 import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/public/participants'
 import {
   resolveTaskLaunchRuntimeConfiguration,
-  resolveTaskStartLaunchConfiguration,
   resolveTaskSubagentLiveCapture,
   type TaskLaunchConfigurationQueries,
 } from '@/modules/task-execution/public/queries'
 import type {
   ScriptLanguage,
+  GitCommitIdentity,
   PlannedDirectoryNode,
   FailureCode,
-  GitCommitIdentity,
-  NodeRun,
-  NodeRunOutput,
   StartTask,
   Task,
-  TaskCatalogVisibility,
-  TaskLaunchOrigin,
-  TaskNodeRuns,
   TaskRepo,
-  TriggerContext,
   WebhookTaskSourceLink,
 } from '@agent-workflow/shared'
 import type { DwState } from '@agent-workflow/shared'
-// RFC-359 W10：workgroup 运行态行的 INSERT 内联进任务铸行事务后，校验 schema 直接取用。
-import { compareNodeRunMintOrder, DwStateSchema } from '@agent-workflow/shared'
+import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import {
   isRetryableGitFailure,
   DAEMON_SHUTDOWN_ABORT_REASON,
   isDaemonInterruptionAbortReason,
   REPO_PREP_NODE_ID,
-  PLATFORM_WORKSPACE_DIR,
   mountDepth,
-  CommitPushMetaSchema,
   WorkflowDefinitionSchema,
   allowedFromForTaskEvent,
   diffWorkflowForSync,
@@ -64,7 +49,6 @@ import {
   webhookTaskSourceLinkOf,
 } from '@agent-workflow/shared'
 import type {
-  CommitPushMeta,
   Language,
   NodeRunStatus,
   NodeRunSyncSummary,
@@ -76,27 +60,19 @@ import type {
 } from '@agent-workflow/shared'
 import {
   and,
-  agents,
   asc,
   cachedRepos,
-  clarifyRounds,
   desc,
-  docVersions,
   eq,
   inArray,
   isNotNull,
   nodeRunOutputs,
   nodeRuns,
   runtimeSessionLeases,
-  sql,
-  taskCollaborators,
-  taskExecutionIntents,
   taskRepos,
   taskSpaceNodes,
   tasks,
-  users,
   workflows,
-  workgroupTaskState,
   type LegacySqliteTaskDatabase,
   type LegacyProviderNeutralDatabase,
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
@@ -106,25 +82,17 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { setDwStateTx } from '@/services/workgroup/state'
 import type { SecretBox } from '@/auth/secretBox'
-import type { NodeRunPromptOperations } from '@/modules/task-execution/public/types'
-import { selectNodeRunPromptOperations } from '@/modules/task-execution/public/participants'
 
-import { buildLaunchCollabRows } from '@/services/taskCollab'
-import { getWorkflow } from '@/services/workflow'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
-import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
-import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
-import { materializingSpaces } from '@/services/gc'
+
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
 import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
-import { sha256Hex } from '@/util/hash'
+
 import type { StaleRunKillOutcome } from '@/util/process'
-import {
-  childLaunchAdmissionIssue,
-  type SourceTerminationSnapshot,
-} from '@/modules/task-execution/public/types'
+
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
@@ -150,21 +118,14 @@ import {
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
-import { ensureCachedRepoIdentity } from '@/services/gitRepoCache'
-import {
-  findTrackedPathUnderMounts,
-  reclaimStaleRefLocks,
-  type WorktreeCleanupProvenance,
-  runGit,
-  withWorktreeRegistryLock,
-} from '@/util/git'
+
+import { reclaimStaleRefLocks, runGit, withWorktreeRegistryLock } from '@/util/git'
 import { removeDirectoryWithRetry } from '@/util/fsReclaim'
-import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
-import { isFileSchemeUrl, redactGitUrl } from '@agent-workflow/shared'
+
+import { redactGitUrl } from '@agent-workflow/shared'
 import {
   ConflictError,
   DomainError,
-  ForbiddenError,
   NotFoundError,
   ValidationError,
   diagnosticTextOf,
@@ -177,43 +138,24 @@ import {
   composeSqliteRepositoryWorkspaceStore,
   type RepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
-import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
-import { parsePortValidationFailuresJson } from './envelope'
-import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from './reviewRoundStart'
-// RFC-359 W10：任务铸行事件改走两个引擎共用的 `appendTaskCreatedCommittedEvent`（async）。
+
 import {
-  appendTaskCreatedCommittedEvent,
   builtinWorkflowSyncPreview,
   workflowSyncGateReason,
 } from '@/modules/task-execution/public/participants'
-import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import type { CommittedEventRef } from '@/platform/events/committed/types'
-import { isHumanReviewConclusion, selectCurrentReviewRound } from '@agent-workflow/shared'
-import { clarifyNavKindForRoundStatus, type ClarifyRoundStatus } from '@agent-workflow/shared'
+
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import { UserAccessError } from '@/modules/identity-access/public/types'
-import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
-import type { GetUserGitCommitIdentity } from '@/modules/identity-access/public/queries'
-import { getUserGitCommitIdentity } from '@/services/users'
+
 import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
 import type { TaskExecutionResourceAuthority } from '@/services/execution/taskExecutionResources'
-import {
-  assertTriggerPreflight,
-  triggerPreflightIssue,
-  triggerSourceFromContext,
-} from '@/services/execution/triggerPreflight'
+import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
 import { assertFrozenTaskTriggerPreflight } from '@/modules/task-execution/infrastructure/frozenTaskTriggerPreflight'
 import { collectExecutionRefs } from '@agent-workflow/shared'
 import {} from '@/services/taskAuthorization'
-import {
-  deriveTaskLaunchOrigin,
-  taskLaunchAdmissionIssue,
-  type TaskLaunchProvenance,
-} from '@/modules/task-execution/domain/taskLaunchOrigin'
-import { branchTraceForTask } from '@/modules/task-execution/application/branchTrace'
+
 import { composeAgentRunDistillObserver } from '@/modules/task-execution/composition/agentRunDistillObserver'
 import { selectResumeRollbackTargets } from '@/modules/task-execution/application/resumeRollbackTargets'
-import { DrizzleBranchTraceSnapshotReader } from '@/modules/task-execution/infrastructure/branchTraceSnapshotReader'
+
 import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
 
 type WorkspacePreparationRepositoryProjection = Parameters<
@@ -245,7 +187,7 @@ type TaskDriveRuntimeOptions = Omit<TaskDriveRequest, 'taskId' | 'executionConte
  * closed instead of returning to the legacy live-row resolver.
  */
 async function freezeClosureForLaunch(
-  deps: Pick<StartTaskDeps, 'launchResources'>,
+  deps: Pick<TaskContinuationDependencies, 'launchResources'>,
   workflowId: string,
   definition: WorkflowDefinition,
 ): Promise<string | null> {
@@ -260,33 +202,12 @@ async function freezeClosureForLaunch(
   return await freezeTaskExecutionCallClosure({ id: workflowId, definition }, deps.launchResources)
 }
 
-/**
- * RFC-292 reusable no-materialization launch preparation for public multipart
- * and ordinary startTask paths. Returns the closure frozen for this exact root
- * so callers may reuse it for static validation; startTask still repeats the
- * preparation to close route-to-service TOCTOU races.
- */
-export async function prepareWorkflowTriggerLaunch(args: {
-  deps: StartTaskDeps
-  workflowId: string
-  definition: WorkflowDefinition
-}): Promise<string | null> {
-  const definition = migrateWorkflowDefinitionToLatest(args.definition)
-  const closureJson = await freezeClosureForLaunch(args.deps, args.workflowId, definition)
-  assertTriggerPreflight({
-    root: definition,
-    closureJson,
-    source: triggerSourceFromContext(args.deps.triggerContext),
-  })
-  return closureJson
-}
-
 const log = createLogger('task')
 
 const taskDriverRegistry = taskExecutionModule.runtimeRegistry
 
 function continuationSource(
-  deps: StartTaskDeps,
+  deps: TaskContinuationDependencies,
   kind: TaskExecutionIntentKind,
 ): TaskExecutionIntentSource {
   if (kind === 'gate-continuation') return 'internal'
@@ -380,12 +301,14 @@ export async function shutdownActiveTaskExecutions(
 // （`DrizzleTaskExecutionShutdownOperations.interruptSurvivor` / `.markRecoveryRequired`，
 // 由 `services/shutdown.ts` 经 `dependencies.operations` 调用），这一份自那以后生产侧零调用方。
 
-export interface StartTaskDeps {
+export interface TaskContinuationDependencies {
+  /** Frozen commit identity used when resuming repository preparation. */
+  gitCommitIdentity?: GitCommitIdentity | null
   /** The selected live configuration follows short-lived drive and continuation paths. */
   launchConfiguration?: TaskLaunchConfigurationQueries
   /** Explicit launch command knobs retain precedence over live defaults. */
   launchConfigurationOverrides?: Pick<
-    StartTaskDeps,
+    TaskContinuationDependencies,
     'defaultPerNodeTimeoutMs' | 'defaultNodeRetries' | 'sessionRestartBudget' | 'defaultRuntime'
   >
   /** Required by bootstrap when recovering a journaled preparation; absent only for legacy tasks. */
@@ -415,32 +338,12 @@ export interface StartTaskDeps {
   repositoryWorkspace?: RepositoryWorkspaceStore
   /** Provider-selected native runtime-session lease operations. */
   runtimeSessionLeases?: RuntimeSessionLeaseOperations
-  /** RFC-347 daemon-scoped identity query. Optional only for legacy test
-   * fixtures, which use the runtime-neutral compatibility fallback. */
-  identityAccess?: Readonly<{
-    getUserGitCommitIdentity?: GetUserGitCommitIdentity
-    delegatedRequests?: DelegatedRequestAuthorityFactory
-  }>
-  /**
-   * Generic TaskEngine catalog visibility for a root execution. Call children
-   * ignore caller input and inherit the exact persisted parent value.
-   */
-  catalogVisibility?: TaskCatalogVisibility
   /** Test/recovery seam; production uses the structured process-tree reaper. */
   killStaleRunProcessTree?: typeof killStaleRunProcessTree
   /** Override app home (tests). Defaults to `Paths.root`. */
   appHome?: string
   /** Default per-node timeout (ms). Defaults from settings; tests can pin. */
   defaultPerNodeTimeoutMs?: number
-  /**
-   * RFC-287 G7：把仓库准备推迟到任务行落库之后（仅 JSON-body 启动）。
-   *
-   * 开启后 `startTask` 只做「填错了立刻告诉你」的同步校验，任务先落 `pending`，
-   * 克隆/抓取/多仓物化/建工作树由 `runTask` 认领后作为第 0 步推进；失败转 `failed`
-   * 且 git 原文可见。multipart（要把上传物写进工作树）与 preCreated（调用方已建好
-   * 树）必须保持预物化语义，故这两条路径不受本开关影响。
-   */
-  deferRepoPreparation?: boolean
   /**
    * RFC-287 G7：任务启动路径的克隆/抓取超时（`config.gitCloneTimeoutMs`）。
    *
@@ -554,203 +457,42 @@ export interface StartTaskDeps {
   configPath?: string
   /** Await scheduler completion in this call (tests). HTTP route does NOT pass this. */
   awaitScheduler?: boolean
-  /**
-   * RFC-020: when the multipart route has already created the worktree (so it
-   * can land upload files into it BEFORE the task row exists), it passes the
-   * pre-materialized worktree info in here. `startTask` then skips its own
-   * `createWorktree` call and uses these values verbatim. JSON-bodied calls
-   * never pass this; we generate a fresh ulid + worktree as before.
-   */
-  preCreatedWorktree?: PreCreatedWorktree
-  /**
-   * RFC-107 — the multipart-upload route resolves the (single) repo source
-   * BEFORE materializing the worktree (it must turn a `repoUrl` into a local
-   * cache path so it can clone, build the worktree, and write uploads into it).
-   * It threads that already-resolved source back in here so `startTask`'s own
-   * resolution loop reuses it for the single repo (index 0) instead of calling
-   * `resolveRepoSourceSingle` a second time — guaranteeing the URL is resolved
-   * EXACTLY ONCE (no redundant clone/fetch) on both the success handoff and the
-   * materialize-failure (`earlyError`) handoff. Only meaningful for single-repo
-   * bodies (multipart upload is single-repo only); multi-repo ignores it.
-   */
-  preResolvedSource?: ResolvedRepoSource
-  /**
-   * RFC-165 (F3): the fully-materialized space handed off by a route that had
-   * to touch the workspace before the task row exists (multipart uploads).
-   * Carries success OR failure (earlyError) — startTask consumes it verbatim
-   * and never re-resolves / re-materializes. Supersedes the
-   * preCreatedWorktree+preResolvedSource pair for the multipart flow (the
-   * pair remains for the legacy fusion handoff until its internalSource
-   * migration).
-   */
-  materializedSpace?: MaterializedSpace
-  /**
-   * RFC-165 (F4): the framework-INTERNAL local-path launch face. Deliberately
-   * a deps field (never a body field) so it is unreachable from any wire —
-   * the public StartTask contract retires path mode, but fusion (and the
-   * test suite via `startTaskWithLocalRepo`) legitimately launch against a
-   * pre-existing local repo. Mutually exclusive with `scratch` / `repoUrl` /
-   * `repos`; may be combined with `preCreatedWorktree` (paths must agree).
-   * Tasks launched through it persist `space_kind='internal'` (GC-excluded —
-   * fusion's approval flow needs the dirs to survive terminal states).
-   */
+  /** Existing internal continuations keep their source and local repository reference. */
   internalSource?: { kind: 'local-path'; repoPath: string; baseBranch: string }
-  /**
-   * RFC-310: trusted platform input mount roots frozen onto the task row. These
-   * paths are force-included in every RFC-130 isolation snapshot so ignored
-   * requirement/pipeline evidence remains visible to Agent nodes. Internal
-   * launch dependency only; public StartTask inputs cannot set this contract.
-   */
-  platformInputPaths?: readonly string[]
-  /**
-   * RFC-036 — launcher user id. NULL falls back to the legacy single-user
-   * behavior (ownerUserId stays NULL; no collab/assignment rows written).
-   * The route passes actor.user.id when the actor is a real user; daemon-
-   * token callers can leave it unset or pass '__system__' explicitly.
-   */
+  /** Actor snapshot for continuation intent and runtime configuration. */
   actorUserId?: string
-  /**
-   * RFC-320 — server-resolved creator identity. `undefined` means the launch
-   * boundary still needs to resolve/inherit it; `null` is the explicit
-   * system-owned branch. Public payloads can never populate this field.
-   */
-  gitCommitIdentity?: GitCommitIdentity | null
-  /**
-   * RFC-301 — trusted, task-owned root launch provenance. Required for every
-   * root production launch; forbidden for call children, which read the exact
-   * parent row inside the initial INSERT transaction instead.
-   */
-  launchProvenance?: TaskLaunchProvenance
-  /**
-   * RFC-159 — when the scheduled-task background loop fires a task it passes the
-   * originating `scheduled_tasks.id` here; `startTask` stamps it onto the task row
-   * (`tasks.scheduled_task_id`) atomically. Omitted for manual launches.
-   */
+  /** Scheduler continuations preserve the originating schedule's intent source. */
   scheduledTaskId?: string
-  /**
-   * RFC-257 — webhook-trigger attribution (`tasks.webhook_trigger_id` /
-   * `webhook_fire_id`), stamped atomically like scheduledTaskId. Set by the
-   * executor facade from the `webhook` invoker; omitted everywhere else.
-   */
-  webhookTriggerId?: string
-  webhookFireId?: string
-  /** Source-neutral Event Center attribution for event-started tasks. */
-  eventSubscriptionId?: string
-  eventDeliveryId?: string
-  /**
-   * RFC-292 — complete nested launch-source context shared by every authored
-   * trigger-aware sink. It is internal execution input and MUST be serialized
-   * into the initial task INSERT before scheduler can read/cache the row.
-   * Undefined means a non-webhook launch; callers may not supply a flat map.
-   */
-  triggerContext?: TriggerContext
-  /** RFC-303: root Webhook launch snapshot; child launches inherit in the INSERT tx. */
-  sourceTerminationSnapshot?: SourceTerminationSnapshot
-  /** RFC-303: process-local pre-task owner for clone/fetch/materialization. */
-  sourceTerminationLaunchSignal?: AbortSignal
-  /** RFC-303: durable launch gate, also invoked inside the initial task INSERT tx. */
-  sourceTerminationAdmission?: () => void
-  /**
-   * RFC-164: workgroup launch payload. `snapshotJson` REPLACES the workflow
-   * row's definition as the frozen workflow_snapshot (the builtin host row is
-   * an FK anchor; the real per-launch structure is synthesized — design §2/§3).
-   * Stamped atomically with the task INSERT like scheduledTaskId.
-   */
-  workgroupLaunch?: { workgroupId: string; configJson: string; snapshotJson: string; dw?: DwState }
-  /**
-   * RFC-243 §6.2 L: node-invoked CHILD launch payload. `frozenSnapshotJson`
-   * (the child definition frozen in the PARENT's ref closure at parent launch,
-   * D9) replaces the referenced workflow row's CURRENT definition as the
-   * snapshot AND as the definition every launch gate evaluates — the resource
-   * row serves only as the FK anchor. `refClosureJson` is the closure subset
-   * handed down for grandchildren. Parent linkage columns are stamped
-   * atomically with the task INSERT.
-   */
-  callLaunch?: {
-    parentTaskId: string
-    parentNodeRunId: string
-    invocationDepth: number
-    /**
-     * RFC-359 W8-A: WHO is firing this child launch. Distinct from
-     * `actorUserId` (which becomes the child's own `owner_user_id`): the
-     * parent-admission gate requires the launcher to be the parent's owner,
-     * while an owner-less legacy parent still mints an owner-less child.
-     * Supplied by the child-launch port from the delegated call Actor.
-     */
-    launchActorUserId: string
-    /**
-     * Frozen child definition (call-workflow arm). NULL for the workgroup arm
-     * — there the host snapshot is composed by the frozen launch face and
-     * rides `workgroupLaunch.snapshotJson`; only the parent linkage columns
-     * come from here.
-     */
-    frozenSnapshotJson: string | null
-    refClosureJson: string | null
-  }
-  /**
-   * RFC-165 §4: single-agent launch payload. `snapshotJson` (the synthesized
-   * `__agent_host__` snapshot) replaces the FK-anchor row's stub definition
-   * as the frozen workflow_snapshot; `agentName` lands in
-   * `tasks.source_agent_name` (taskExecutionKind's 'agent' discriminator).
-   * The launch transaction re-checks the agent still exists (F17) — a
-   * concurrent delete between the service-level 404 gate and the INSERT
-   * must fail the launch, not mint a task for a ghost agent.
-   *
-   * RFC-175 (§2e): `agentId` is the resolved stable id threaded from
-   * `startAgentTask`. The in-tx re-check asserts the same-name agent still has
-   * THIS id (belt-and-suspenders behind the launch reservation) and
-   * `tasks.source_agent_id` is written from it — so a post-migration relaunch
-   * can verify the subject on re-launch.
-   */
-  agentLaunch?: { agentName: string; agentId: string; snapshotJson: string }
-  /**
-   * RFC-304: this task materializes one round of a code capability. `roundId`
-   * becomes `tasks.code_round_id` — the discriminator `taskExecutionKind()`
-   * reads — and `snapshotJson` is the synthesized single-node snapshot the
-   * detail page draws. Mutually exclusive with the other three launch payloads
-   * (asserted below); a task belongs to exactly one execution subject.
-   */
-  codeRoundLaunch?: { roundId: string; capability: string; snapshotJson: string }
-  /**
-   * RFC-310 PR-4: this task materializes ONE digital-employee AgentAttempt.
-   * `snapshotJson` is the synthesized input→agent→output host snapshot
-   * (modules/task-execution/domain/digitalEmployeeHost.ts)。任务无自有
-   * `inputs[]` 表单（prompt 经 task inputs 注入，跳过 anchor 空定义校验），
-   * kind 判别保持 'workflow'（snapshot 自带 output 节点，RFC-243 outcome
-   * 投影零新增分支）。与其他 launch payload 互斥（同一任务只属一个执行主体）。
-   */
-  digitalEmployeeLaunch?: { actionRunId: string; caseId?: string; snapshotJson?: string }
-  /**
-   * RFC-199 T6.5 deterministic race seam. Production callers never set this;
-   * backend regressions use it to linearize workflow delete/version writers
-   * immediately before or after the task-row transaction without sleeps.
-   */
-  workflowLaunchCommitHook?: (event: WorkflowLaunchCommitHookEvent) => void | Promise<void>
+  /** A child continuation keeps its internal intent source. */
+  callLaunch?: { readonly parentTaskId: string }
+
   /** RFC-199 test seam for deterministic remove/ref/root cleanup failures. */
   workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
 }
 
-function repositoryWorkspaceFor(deps: Pick<StartTaskDeps, 'db' | 'repositoryWorkspace'>) {
+function repositoryWorkspaceFor(
+  deps: Pick<TaskContinuationDependencies, 'db' | 'repositoryWorkspace'>,
+) {
   return deps.repositoryWorkspace ?? composeSqliteRepositoryWorkspaceStore(deps.db)
 }
 
 /**
  * RFC-359 AC-1（plan §5hn 批次二 ①）—— **延后仓库准备**这一步真正需要的那些依赖。
  *
- * 从 `StartTaskDeps` 里拆出来的理由与 §5ge / §5hn 批次一的几次拆分完全一样：
+ * 从 `TaskContinuationDependencies` 里拆出来的理由与 §5ge / §5hn 批次一的几次拆分完全一样：
  * 这一步的函数体**早就是中立的**（`await db.select(...)` / `setTaskStatus` /
  * `setNodeRunStatus` / `mintNodeRun` 收的都已是 `ProviderNeutralDatabase`），
- * 只有类型把它钉死在 SQLite 那一侧——`StartTaskDeps.db` 是 `DbClient`。
+ * 只有类型把它钉死在 SQLite 那一侧——`TaskContinuationDependencies.db` 是 `DbClient`。
  * 后果不是不好看：**RFC-287 G7 因此在 PostgreSQL 上根本没实现**
  *（`rfc359-w5hn-deferred-repo-preparation-parity` 钉着那处落差），
  * 因为 PG 的根拿不到一个它能构造的准备步骤，只能传 `skipRepositoryPreparation`。
  *
- * `repositoryWorkspace` 在这里是**必填**：`StartTaskDeps` 那边缺省会回落到
+ * `repositoryWorkspace` 在这里是**必填**：`TaskContinuationDependencies` 那边缺省会回落到
  * `composeSqliteRepositoryWorkspaceStore(db)`，那正是本 RFC 在消灭的隐式 provider 绑定。
  * 装配方各自交自己那份（PG 根有 `composePostgresqlRepositoryWorkspaceStore`）。
  */
 export interface DeferredRepositoryPreparationDependencies extends Pick<
-  StartTaskDeps,
+  TaskContinuationDependencies,
   | 'secretBox'
   | 'cloneTimeoutMs'
   | 'gitBaselineSyncWindowMs'
@@ -785,194 +527,11 @@ export function composeDeferredRepositoryPreparationStep(input: {
   return createPersistedRepositoryPreparationStep(input)
 }
 
-function requireTaskRecoveryOperations(deps: StartTaskDeps): TaskRecoveryOperations {
+function requireTaskRecoveryOperations(deps: TaskContinuationDependencies): TaskRecoveryOperations {
   if (deps.taskRecoveryOperations === undefined) {
     throw new Error('task-recovery-operations-not-composed')
   }
   return deps.taskRecoveryOperations
-}
-
-/**
- * RFC-320 — the single task-creation identity resolver. Root user launches
- * read the creator profile once; call children inherit the immutable parent
- * pair; system-owned internal tasks stay explicitly identity-less.
- */
-export async function resolveTaskGitCommitIdentity(
-  deps: StartTaskDeps,
-): Promise<GitCommitIdentity | null> {
-  if (deps.gitCommitIdentity !== undefined) return deps.gitCommitIdentity
-
-  if (deps.callLaunch !== undefined) {
-    const parent = await deps.db
-      .select({ name: tasks.gitUserName, email: tasks.gitUserEmail })
-      .from(tasks)
-      .where(eq(tasks.id, deps.callLaunch.parentTaskId))
-      .limit(1)
-    const snapshot = parent[0]
-    if (snapshot === undefined) {
-      throw new NotFoundError(
-        'parent-task-not-found',
-        `parent task '${deps.callLaunch.parentTaskId}' was not found`,
-      )
-    }
-    if (snapshot.name === null && snapshot.email === null) return null
-    if (snapshot.name === null || snapshot.email === null) {
-      throw new ConflictError(
-        'git-identity-snapshot-invalid',
-        `parent task '${deps.callLaunch.parentTaskId}' has an incomplete Git identity snapshot`,
-      )
-    }
-    return { name: snapshot.name, email: snapshot.email }
-  }
-
-  const userId = deps.actorUserId
-  if (userId === undefined || userId === SYSTEM_USER_ID) return null
-  try {
-    return deps.identityAccess?.getUserGitCommitIdentity === undefined
-      ? await getUserGitCommitIdentity(deps.db, userId)
-      : await deps.identityAccess.getUserGitCommitIdentity.execute(userId)
-  } catch (error) {
-    if (!(error instanceof UserAccessError)) throw error
-    switch (error.kind) {
-      case 'conflict':
-      case 'validation':
-        throw new ConflictError(error.code, error.message, error.details)
-      case 'forbidden':
-        throw new ForbiddenError(error.code, error.message, error.details)
-      case 'not-found':
-        throw new NotFoundError(error.code, error.message, error.details)
-    }
-  }
-}
-
-export interface WorkflowLaunchCommitHookEvent {
-  stage: 'materialized-before-task-commit' | 'task-committed'
-  workflowId: string
-  capturedWorkflowVersion: number
-  taskId: string
-  spaceKind: MaterializedSpace['kind']
-  worktreePath: string
-  repoWorktrees: ReadonlyArray<{
-    repoPath: string
-    worktreePath: string
-    branch: string
-  }>
-}
-
-/**
- * RFC-020: a worktree the caller has already created (e.g. multipart upload
- * flow) so `startTask` can land its task row with the right paths without
- * shelling out to git twice.
- */
-export interface PreCreatedWorktree {
-  taskId: string
-  worktreePath: string
-  branch: string
-  baseCommit: string | null
-  /**
-   * Explicit ownership handoff. `borrowed` is never recursively removed;
-   * fusion hands off its ephemeral repo as `owned-root`; callers using
-   * materializeWorktree hand off the exact linked-worktree provenance.
-   */
-  cleanup:
-    | { kind: 'borrowed' }
-    | { kind: 'owned-root'; path: string }
-    | { kind: 'linked-worktree'; provenance: WorktreeCleanupProvenance }
-}
-
-/**
- * RFC-024 + RFC-066: per-repo source resolution. Carved out of the original
- * `resolveRepoSource` so the multi-repo launcher can call it N times in a
- * loop without re-implementing the path/URL fork. Single-repo path is
- * byte-for-byte identical to the pre-RFC-066 inline implementation — that
- * baseline is locked by `tests/source/start-task-single-path-baseline.test.ts`.
- *
- * RFC-068 wiring is automatic: the path-mode opt-in fetch runs when
- * `input.fetchBeforeLaunch === true` (top-level flag, applies to every
- * repo entry in multi-repo mode), and URL-mode FF fires inside
- * `resolveCachedRepo` per (cacheDir, syncBranch) pair so each multi-repo
- * URL entry hits its own cached mirror with no cross-talk.
- */
-/**
- * RFC-287 G5×G7 —— 延后准备时的**地址格式预筛**（三轮门 Codex 契约面 P1）。
- *
- * 为什么需要：G7 把 `resolveRepoSourceSingle`（G5 唯一的权威拒绝点）推到了后台，
- * 于是以 `cachedRepoId` / 仓库组启动一个指向 `file://` 的存量镜像时，HTTP 面拿到的
- * 是 **201 Created**，稳定错误码 `repo-url-file-scheme-unsupported` 只出现在几秒后
- * 的任务失败里。而 proposal §G7 白纸黑字把「**地址格式**」列进「同步段只留『填错了
- * 立刻告诉你』的校验」，§7 也写明这是「明确的参数校验失败」——延后失败与之直接相反。
- *
- * 定位是**预筛，不是第二个权威**：只看零成本、零网络就能拿到的脱敏 URL；拿不到
- * （`url_redacted` 为 NULL——密钥轮换等）就放行，交给后台那个唯一拒绝点解封后判。
- * 这样既不会分叉出两套判据，也不会为了报错去做解密。
- */
-async function assertLaunchSourceSchemeSync(deps: StartTaskDeps, input: StartTask): Promise<void> {
-  const reject = (redacted: string): never => {
-    throw new ValidationError(
-      'repo-url-file-scheme-unsupported',
-      `refusing to launch from ${redacted}: file:// mirrors are no longer a supported remote; push the repo to a real remote and re-register it`,
-      { url: redacted },
-    )
-  }
-  const checkCachedId = async (id: unknown): Promise<void> => {
-    if (typeof id !== 'string' || id.length === 0) return
-    const row = (await deps.db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1))[0]
-    // 行不存在这里不报——留给后台那条既有的 `cached-repo-not-found`，免得两处各报各的。
-    const redacted = row?.urlRedacted ?? null
-    if (typeof redacted === 'string' && isFileSchemeUrl(redacted)) reject(redacted)
-  }
-  await checkCachedId((input as { cachedRepoId?: unknown }).cachedRepoId)
-  for (const r of (input as { repos?: readonly unknown[] }).repos ?? []) {
-    await checkCachedId((r as { cachedRepoId?: unknown }).cachedRepoId)
-  }
-  // `sourceTaskId` 重放（前端「重启」多仓任务的**唯一**通道）此前完全没被预筛到
-  // ——四轮门跨 RFC 面实测:以它启动一个存量 `file://` 多仓任务，同步段放行、返回
-  // 201，几秒后才后台失败。而 AC-8 原话是「同步段即拒……不得延后成『201 之后后台
-  // 失败』」，且存量 `file://` 多仓任务最可能被点到的正是这个按钮。
-  // 冻结布局里每个仓都带 `cached_repo_id`，复用同一个判据即可（仍是零解封）。
-  const sourceTaskId = (input as { sourceTaskId?: unknown }).sourceTaskId
-  if (typeof sourceTaskId === 'string' && sourceTaskId.length > 0) {
-    for (const r of await deps.db
-      .select({ cachedRepoId: taskRepos.cachedRepoId })
-      .from(taskRepos)
-      .where(eq(taskRepos.taskId, sourceTaskId))
-      .all()) {
-      await checkCachedId(r.cachedRepoId)
-    }
-  }
-  const groupId = (input as { repoGroupId?: unknown }).repoGroupId
-  if (typeof groupId === 'string' && groupId.length > 0) {
-    // 组的成员本就带 `repoUrlRedacted`，无需再逐个查库。
-    for (const m of (await resolveRepoGroupLayout(repositoryWorkspaceFor(deps), groupId)).repos) {
-      if (isFileSchemeUrl(m.repoUrlRedacted)) reject(m.repoUrlRedacted)
-    }
-  }
-}
-
-/** Legacy SQLite adapter retained for direct service callers. */
-async function resolveRepoSourceSingle(
-  spec: RepoSourceSpec,
-  input: StartTask,
-  deps: StartTaskDeps,
-): Promise<ResolvedRepoSource> {
-  const appHome = deps.appHome ?? Paths.root
-  return await resolveRepoSourceSingleWithProvider(spec, input, {
-    appHome,
-    repositoryWorkspace: repositoryWorkspaceFor(deps),
-    loadFrozenSpaceLayout: async (sourceTaskId) =>
-      await loadFrozenSpaceLayout(deps.db, sourceTaskId),
-    ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-    ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
-    ...(deps.internalSource === undefined ? {} : { internalSource: deps.internalSource }),
-    ...(deps.preResolvedSource === undefined ? {} : { preResolvedSource: deps.preResolvedSource }),
-    ...(deps.gitCommitIdentity === undefined ? {} : { gitCommitIdentity: deps.gitCommitIdentity }),
-    ...(deps.sourceTerminationLaunchSignal === undefined
-      ? {}
-      : { sourceTerminationLaunchSignal: deps.sourceTerminationLaunchSignal }),
-    ...(deps.workspaceCleanupHook === undefined
-      ? {}
-      : { workspaceCleanupHook: deps.workspaceCleanupHook }),
-  })
 }
 
 /**
@@ -1033,14 +592,14 @@ export function selectSyncRollbackTargets<
 
 /**
  * RFC-103 T2 — single source for threading runtime config (auto commit&push +
- * global concurrency) from `StartTaskDeps` into `RunTaskOptions`. Used by
+ * global concurrency) from `TaskContinuationDependencies` into `RunTaskOptions`. Used by
  * startTask / resumeTask / retryNode so the three kick sites can't drift: the
  * historical bug (01-LIFE-06) was retryNode dropping commit&push entirely, and
  * `maxConcurrentNodes` was never threaded from any HTTP entry (02-SCHED).
  */
 export function runtimeConfigOpts(
   deps: Pick<
-    StartTaskDeps,
+    TaskContinuationDependencies,
     | 'commitPush'
     | 'mergeAgent'
     | 'maxConcurrentNodes'
@@ -1118,7 +677,7 @@ export function runtimeConfigOpts(
       ? { codeHostResponseMaxBytes: deps.codeHostResponseMaxBytes }
       : {}),
     // RFC-253（RFC-284 T30 修配）：管理员解释器覆盖 + 依赖构建预算——此前唯二
-    // 被漏斗丢弃的 launchRuntime 键（根任务即断线，见 StartTaskDeps 字段注释）。
+    // 被漏斗丢弃的 launchRuntime 键（根任务即断线，见 TaskContinuationDependencies 字段注释）。
     ...(deps.scriptInterpreters !== undefined
       ? { scriptInterpreters: deps.scriptInterpreters }
       : {}),
@@ -1154,19 +713,19 @@ const missingMemoryDistillEnqueuer: MemoryDistillEnqueuer = Object.freeze({
 /**
  * RFC-359 AC-1（plan §5ha 第 ① 步）—— 「造一台任务驱动协调器」需要的**确切**依赖面。
  *
- * 为什么把它从 `StartTaskDeps` 里摘出来：这台协调器是 `RootTaskLaunchKernel`
+ * 为什么把它从 `TaskContinuationDependencies` 里摘出来：这台协调器是 `RootTaskLaunchKernel`
  * 的四件入参之一，PostgreSQL daemon 在自己那边**就地**造一台
- * （`cli/postgresqlDaemonApplication.ts:953`），与 `StartTaskDeps` 无关；
+ * （`cli/postgresqlDaemonApplication.ts:953`），与 `TaskContinuationDependencies` 无关；
  * 而 SQLite 侧唯一的造法锁在本文件里、且以 legacy 启动路的那个大依赖包为入参，
  * 于是 `cli/start.ts` **造不出内核**——这正是启动面合一（plan §5gv）Step B 的卡点。
  *
  * 这个类型是**按函数体实际读到的字段**列的，不是拍脑袋收窄：
- * `runtimeConfigOpts` 那一组（它自己就已经是 `Pick<StartTaskDeps, …>`）＋ 下面这六个。
- * `StartTaskDeps` 仍然满足它，所以本文件内四处既有构造点一个字都不用改。
+ * `runtimeConfigOpts` 那一组（它自己就已经是 `Pick<TaskContinuationDependencies, …>`）＋ 下面这六个。
+ * `TaskContinuationDependencies` 仍然满足它，所以本文件内四处既有构造点一个字都不用改。
  */
 export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOpts>[0] &
   Pick<
-    StartTaskDeps,
+    TaskContinuationDependencies,
     | 'schedulerDriver'
     | 'binaryOverride'
     | 'configPath'
@@ -1177,11 +736,11 @@ export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOp
     | 'launchConfigurationOverrides'
   > & {
     /**
-     * RFC-359 AC-1（plan §5hm）：收成中立句柄。此前这一格是从 `StartTaskDeps` Pick 来的
+     * RFC-359 AC-1（plan §5hm）：收成中立句柄。此前这一格是从 `TaskContinuationDependencies` Pick 来的
      * `LegacySqliteTaskDatabase`——**不是因为协调器真要 SQLite**，而是它装的驱动生命周期端口
      * 当年只有 SQLite 一份（要 `DbClient`）。端口合一之后那个约束没了：
      * 协调器这一路上读 `db` 的三处（生命周期端口、闸门继续前置、工作区清理）全是中立实现。
-     * `StartTaskDeps` 仍然满足这个更宽的类型，所以本文件内既有构造点一个字都不用改。
+     * `TaskContinuationDependencies` 仍然满足这个更宽的类型，所以本文件内既有构造点一个字都不用改。
      */
     readonly db: LegacyProviderNeutralDatabase
   }
@@ -1379,9 +938,8 @@ function createPersistedRepositoryPreparationStep(input: {
         ...(descriptor.workingBranch !== null ? { workingBranch: descriptor.workingBranch } : {}),
         ...(descriptor.requestedRef !== null ? { ref: descriptor.requestedRef } : {}),
       } as unknown as StartTask
-      const ownership: StartTaskOwnership = {
+      const ownership: RepositoryPreparationOwnership = {
         cleanup: createMaterializedSpaceCleanup(descriptor.taskId, null),
-        taskRowCommitted: true,
       }
       const result = await runDeferredRepoPreparation({
         deps: {
@@ -1419,39 +977,6 @@ function createPersistedRepositoryPreparationStep(input: {
       return result.ok ? { kind: 'ready' } : { kind: 'terminal-won' }
     },
   })
-}
-
-function workflowLaunchVersionMismatch(
-  workflowId: string,
-  expectedVersion: number,
-  currentVersion: number | null,
-): ConflictError {
-  const current = currentVersion === null ? 'deleted' : `v${currentVersion}`
-  return new ConflictError(
-    'workflow-version-mismatch',
-    `workflow '${workflowId}' changed during launch (expected v${expectedVersion}, now ${current})`,
-    { expectedVersion, currentVersion },
-  )
-}
-
-function workflowLaunchHookEvent(
-  stage: WorkflowLaunchCommitHookEvent['stage'],
-  workflow: Workflow,
-  space: MaterializedSpace,
-): WorkflowLaunchCommitHookEvent {
-  return {
-    stage,
-    workflowId: workflow.id,
-    capturedWorkflowVersion: workflow.version,
-    taskId: space.taskId,
-    spaceKind: space.kind,
-    worktreePath: space.worktreePath,
-    repoWorktrees: space.repos.map((repo) => ({
-      repoPath: repo.repoPath,
-      worktreePath: repo.worktreePath,
-      branch: repo.branch,
-    })),
-  }
 }
 
 /** Old task snapshots only have repo mounts. Rebuild the smallest provable tree. */
@@ -1520,168 +1045,8 @@ async function loadFrozenSpaceLayout(
   }
 }
 
-/** Existing SQLite service entry, now only a provider adapter around the
- * shared materializer. */
-async function materializeSpace(
-  input: StartTask,
-  deps: StartTaskDeps,
-  appHome: string,
-  presetTaskId?: string,
-): Promise<MaterializedSpace> {
-  return await materializeSpaceWithProvider(
-    input,
-    {
-      appHome,
-      repositoryWorkspace: repositoryWorkspaceFor(deps),
-      loadFrozenSpaceLayout: async (sourceTaskId) =>
-        await loadFrozenSpaceLayout(deps.db, sourceTaskId),
-      ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-      ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
-      ...(deps.internalSource === undefined ? {} : { internalSource: deps.internalSource }),
-      ...(deps.preResolvedSource === undefined
-        ? {}
-        : { preResolvedSource: deps.preResolvedSource }),
-      ...(deps.gitCommitIdentity === undefined
-        ? {}
-        : { gitCommitIdentity: deps.gitCommitIdentity }),
-      ...(deps.sourceTerminationLaunchSignal === undefined
-        ? {}
-        : { sourceTerminationLaunchSignal: deps.sourceTerminationLaunchSignal }),
-      ...(deps.workspaceCleanupHook === undefined
-        ? {}
-        : { workspaceCleanupHook: deps.workspaceCleanupHook }),
-    },
-    presetTaskId,
-  )
-}
-
-/**
- * RFC-165 (F4): the framework-internal LOCAL-PATH launch face — a thin
- * adapter that moves `{repoPath, baseBranch}` off the body and into
- * `deps.internalSource` before delegating to startTask. Consumers: the test
- * suite (the retired wire fields lived in ~300 fixtures) and any internal
- * caller that owns a pre-existing local repo. NOT reachable from any route;
- * the banned-lock allowlists exactly this symbol.
- */
-export async function startTaskWithLocalRepo(
-  input: StartTask & { repoPath: string; baseBranch: string },
-  deps: StartTaskDeps,
-): Promise<Task> {
-  const { repoPath, baseBranch, ...rest } = input
-  return startTask(rest as StartTask, {
-    ...deps,
-    internalSource: { kind: 'local-path', repoPath, baseBranch },
-    ...(deps.callLaunch === undefined && deps.launchProvenance === undefined
-      ? {
-          // This adapter is retained for backend fixtures only; every
-          // production root is forced through startExecution/Fusion and
-          // provides an explicit trusted provenance.
-          launchProvenance: {
-            kind: 'direct-json' as const,
-            initiator: 'manual' as const,
-          },
-        }
-      : {}),
-  })
-}
-
-function rootLaunchOriginFromDeps(deps: StartTaskDeps): TaskLaunchOrigin | null {
-  if (deps.callLaunch !== undefined) {
-    if (deps.launchProvenance !== undefined) {
-      throw new ValidationError(
-        'task-launch-provenance-conflict',
-        'call child launch must inherit its parent origin and may not carry root provenance',
-      )
-    }
-    if (
-      deps.scheduledTaskId !== undefined ||
-      deps.webhookTriggerId !== undefined ||
-      deps.webhookFireId !== undefined ||
-      deps.eventSubscriptionId !== undefined ||
-      deps.eventDeliveryId !== undefined
-    ) {
-      throw new ValidationError(
-        'task-launch-child-metadata-invalid',
-        'call child launch may inherit trigger context but may not carry root schedule/webhook attribution ids',
-      )
-    }
-    return null
-  }
-
-  if (deps.launchProvenance === undefined) {
-    throw new ValidationError(
-      'task-launch-provenance-missing',
-      'root task launch requires trusted launch provenance',
-    )
-  }
-  const issue = taskLaunchAdmissionIssue(deps.launchProvenance, {
-    scheduledTaskId: deps.scheduledTaskId,
-    webhookTriggerId: deps.webhookTriggerId,
-    webhookFireId: deps.webhookFireId,
-    eventSubscriptionId: deps.eventSubscriptionId,
-    eventDeliveryId: deps.eventDeliveryId,
-    hasTriggerContext: deps.triggerContext !== undefined,
-    // RFC-304: a capability round's anchor is its round row, not a trigger fire.
-    hasCodeRound: deps.codeRoundLaunch !== undefined,
-  })
-  if (issue !== null) throw new ValidationError(issue.code, issue.message)
-  return deriveTaskLaunchOrigin(deps.launchProvenance)
-}
-
-interface StartTaskOwnership {
+interface RepositoryPreparationOwnership {
   cleanup: MaterializedSpaceCleanup | null
-  taskRowCommitted: boolean
-}
-
-function cleanupFromPreCreated(pre: PreCreatedWorktree): MaterializedSpaceCleanup {
-  switch (pre.cleanup.kind) {
-    case 'borrowed':
-      return createMaterializedSpaceCleanup(pre.taskId, null)
-    case 'owned-root':
-      return createMaterializedSpaceCleanup(pre.taskId, pre.cleanup.path)
-    case 'linked-worktree':
-      return createMaterializedSpaceCleanup(pre.taskId, null, [pre.cleanup.provenance])
-  }
-}
-
-/**
- * RFC-387: test-only legacy admission over the factory; removed in W4.
- * Own the cleanup handoff before any workflow/version/validation read. This is
- * essential for multipart and fusion callers: those callers materialize first,
- * so even an initial exact-version mismatch must release their workspace.
- */
-export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<Task> {
-  const ownership: StartTaskOwnership = {
-    cleanup:
-      deps.materializedSpace?.cleanup ??
-      (deps.preCreatedWorktree === undefined
-        ? null
-        : cleanupFromPreCreated(deps.preCreatedWorktree)),
-    taskRowCommitted: false,
-  }
-  try {
-    const gitCommitIdentity = await resolveTaskGitCommitIdentity(deps)
-    const launchConfiguration =
-      deps.launchConfiguration === undefined
-        ? {}
-        : await resolveTaskStartLaunchConfiguration(deps.launchConfiguration)
-    return await startTaskImpl(
-      input,
-      { ...deps, ...launchConfiguration, ...deps.launchConfigurationOverrides, gitCommitIdentity },
-      ownership,
-    )
-  } catch (error) {
-    if (!ownership.taskRowCommitted && ownership.cleanup !== null) {
-      const report = await cleanupMaterializedSpaceLease(
-        ownership.cleanup,
-        deps.workspaceCleanupHook,
-      )
-      throw withWorkspaceCleanupReport(error, report)
-    }
-    throw error
-  } finally {
-    if (ownership.cleanup !== null) materializingSpaces.delete(ownership.cleanup.taskId)
-  }
 }
 
 /**
@@ -1767,995 +1132,6 @@ function taskRepoRowsFor(
     submoduleInitError: r.submoduleInitError,
     schemaVersion: 1,
   }))
-}
-
-async function startTaskImpl(
-  input: StartTask,
-  deps: StartTaskDeps,
-  ownership: StartTaskOwnership,
-): Promise<Task> {
-  const platformInputPaths = normalizeTaskPlatformInputPaths(deps.platformInputPaths ?? [])
-  if (platformInputPaths === null) {
-    throw new ValidationError(
-      'task-platform-input-paths-invalid',
-      'platform input paths must be bounded roots below .agent-workflow/inputs or .agent-workflow/pipeline',
-    )
-  }
-  if (platformInputPaths.length > 0 && deps.internalSource === undefined) {
-    throw new ValidationError(
-      'task-platform-input-paths-not-internal',
-      'platform input paths are only supported for trusted internal task launches',
-    )
-  }
-  deps.sourceTerminationAdmission?.()
-  if (deps.sourceTerminationLaunchSignal?.aborted === true) {
-    throw new ConflictError(
-      'webhook-mr-launch-terminal',
-      'the MR/PR stream became terminal before launch preparation',
-    )
-  }
-  // RFC-301: validate closed root provenance before workflow reads, repository
-  // resolution, or filesystem materialization. Child origin stays unresolved
-  // until the parent is read inside the task-row transaction below.
-  const rootLaunchOrigin = rootLaunchOriginFromDeps(deps)
-
-  // Resolve workflow.
-  const workflow = await getWorkflow(deps.db, input.workflowId)
-  if (workflow === null) {
-    throw new NotFoundError('workflow-not-found', `workflow '${input.workflowId}' not found`)
-  }
-  // RFC-243 §6.2 L: a child launch executes the definition FROZEN at the
-  // parent's launch, never the resource row's current one (D9) — every gate
-  // below (execution policy, multi-repo, static validation, inputs) evaluates
-  // the definition that will actually run. The resource row stays the FK
-  // anchor (agent/workgroup host precedent).
-  let effectiveDefinition = workflow.definition
-  if (deps.callLaunch !== undefined && deps.callLaunch.frozenSnapshotJson !== null) {
-    try {
-      const parsed = WorkflowDefinitionSchema.safeParse(
-        JSON.parse(deps.callLaunch.frozenSnapshotJson),
-      )
-      if (!parsed.success) throw new Error('schema')
-      effectiveDefinition = migrateWorkflowDefinitionToLatest(parsed.data)
-    } catch {
-      throw new ValidationError(
-        'workflow-call-ref-missing',
-        `frozen child definition for workflow '${input.workflowId}' is unreadable`,
-      )
-    }
-  }
-  // RFC-175 (§2c): immediate-submit OCC guard for relaunch. When present, reject
-  // if the workflow we're about to snapshot has a different `version` than the
-  // one the relaunch normalized its inputs against — so inputs validated against
-  // vN can't be silently stored into a concurrently-PUT vN+1 (reopening the
-  // stale-input path §4.8 closes). Compared against the SAME workflow object we
-  // snapshot below. Immediate-launch only (never persisted into a scheduled
-  // payload — §2d; a schedule intentionally re-snapshots the latest def at fire).
-  if (
-    input.expectedWorkflowVersion !== undefined &&
-    workflow.version !== input.expectedWorkflowVersion
-  ) {
-    throw workflowLaunchVersionMismatch(
-      input.workflowId,
-      input.expectedWorkflowVersion,
-      workflow.version,
-    )
-  }
-
-  // RFC-165: scratch tasks have no repo source at all — skip spec
-  // normalization/resolution and materialize a fresh scratch repo instead.
-  const isScratch = input.scratch === true
-  // RFC-066: collapse legacy and v2 bodies into a uniform per-repo spec list.
-  // RFC-165: an internal launch (fusion / framework helpers) carries its repo
-  // via deps.internalSource, NOT the wire body — mirror materializeSpace's
-  // derivation or the preCreatedWorktree branch below sees zero specs.
-  const repoSpecs = isScratch
-    ? []
-    : deps.internalSource !== undefined
-      ? [{ repoPath: deps.internalSource.repoPath, baseBranch: deps.internalSource.baseBranch }]
-      : normalizeStartTaskRepos(input)
-
-  // RFC-066: multi-repo gates. Reject up-front BEFORE the static workflow
-  // validation step (which may itself reject the workflow for unrelated
-  // reasons) so the failure code unambiguously points at the multi-repo
-  // mismatch. The workflow snapshot is the source of truth; workflow edits
-  // after this point cannot retroactively introduce a wrapper-git / upload
-  // node into an already-started task. Single-repo launches keep their
-  // existing behavior (workflows containing wrapper-git / upload are still
-  // launchable as today, gated by the static validation rules only).
-  // RFC-248 D9/D12: RFC-066 当年在这里拦掉了多仓 + wrapper-git 与多仓 + 上传输入
-  // 两种组合，理由是包裹器只会对单一 worktree 取快照、上传物不知道该落到哪个仓。
-  // 两条都已解除：
-  //   - wrapper-git 现在逐仓快照、逐仓 diff，路径用挂载路径前缀化后合并成一个
-  //     `list<path>`（task-execution GitStrategy）。不解除的话仓库组永远
-  //     用不了平台的 Code → Audit → Fix 主链路。
-  //   - 上传输入落到任务根下的 `.agent-workflow/inputs/`，由 per-worktree
-  //     platform profile 排除，不属于任何成员仓。
-
-  // Static validation gate (proposal.md §静态校验): "校验失败不阻止保存，但阻止启动 task".
-  // Run the same 5-rule check the editor uses, against the live agent/skill set,
-  // and refuse to launch if it surfaces any error-severity issues. Warnings pass.
-  // RFC-243 §3.1 / RFC-271 T6f2：闭包在**校验之前**冻结，校验与执行读同一份。
-  // 根启动此前是「validator 查 live 解析一次、freeze 按启动者再解析一次」——两
-  // 条判据本就不同（validator 不收 Actor、查所有同名行），决策 28 把启动改成
-  // id-hint 优先之后差异更大，能真的分叉成「校验的是 W1、执行的是 W2」。
-  // 子启动直接用父任务传下来的子集，绝不重查 live（父冻结 G1、随后行改成 G2 时，
-  // 重查会去校验一个 scheduler 根本不会执行的定义）。
-  const frozenClosureJson =
-    deps.callLaunch !== undefined
-      ? deps.callLaunch.refClosureJson
-      : await prepareWorkflowTriggerLaunch({
-          deps,
-          workflowId: workflow.id,
-          definition: effectiveDefinition,
-        })
-
-  // RFC-292: root + frozen call closure must agree with the launch source
-  // before repository/upload materialization and before the task INSERT.
-  if (deps.callLaunch !== undefined) {
-    assertTriggerPreflight({
-      root: effectiveDefinition,
-      closureJson: frozenClosureJson,
-      source: triggerSourceFromContext(deps.triggerContext),
-    })
-  }
-
-  const validation = validateWorkflowDef(
-    effectiveDefinition,
-    // RFC-243 实现门 P1-2 — the service funnel enforces 4f/4g on the exact
-    // definition it will execute (frozen child included).
-    await buildWorkflowValidationContext(deps.db, {
-      definition: effectiveDefinition,
-      currentWorkflow: { id: workflow.id, name: workflow.name },
-      frozenClosureJson,
-    }),
-  )
-  if (!validation.ok) {
-    const errors = validation.issues.filter((i) => (i.severity ?? 'error') === 'error')
-    throw new ValidationError(
-      'workflow-invalid',
-      `workflow '${input.workflowId}' failed static validation (${errors.length} error${errors.length === 1 ? '' : 's'}); fix issues before starting a task`,
-      { issues: validation.issues },
-    )
-  }
-
-  const rawWorkflowSnapshotJson =
-    deps.callLaunch?.frozenSnapshotJson ??
-    deps.workgroupLaunch?.snapshotJson ??
-    deps.agentLaunch?.snapshotJson ??
-    deps.codeRoundLaunch?.snapshotJson ??
-    deps.digitalEmployeeLaunch?.snapshotJson ??
-    JSON.stringify(workflow.definition)
-  const taskWorkflowSnapshotJson =
-    workflow.builtin === true
-      ? layoutBuiltinWorkflowSnapshotJson(rawWorkflowSnapshotJson)
-      : rawWorkflowSnapshotJson
-  // Browser-side required/picker gates are advisory: JSON API callers and
-  // scheduled fires reach this service directly. Validate the packed map here
-  // before any repo resolution/materialization so a missing required input
-  // cannot silently execute as an empty string. Agent/workgroup launches own
-  // different synthesized-host contracts and validate them in their launch
-  // services before entering this generic workflow funnel. RFC-304 code-round
-  // launches likewise: a round's inputs are its stage-sequence inputs, not a
-  // user-authored `inputs[]` form (the host workflow declares none).
-  if (
-    deps.agentLaunch === undefined &&
-    deps.workgroupLaunch === undefined &&
-    deps.codeRoundLaunch === undefined &&
-    deps.digitalEmployeeLaunch === undefined
-  ) {
-    // RFC-243: child launches validate against the FROZEN definition's inputs
-    // (identical map semantics — the call node wired them from its ports).
-    assertWorkflowLaunchInputs(effectiveDefinition.inputs, input.inputs)
-  }
-
-  const appHome = deps.appHome ?? Paths.root
-
-  // RFC-020/165: three handoffs into a materialized space —
-  //   (1) `deps.materializedSpace`: a route already resolved+materialized
-  //       (multipart; carries success OR failure) — consumed verbatim so
-  //       resolve/materialize run exactly once end-to-end (design F3);
-  //   (2) `deps.preCreatedWorktree`: legacy fusion handoff (single path-mode
-  //       repo; migrates to internalSource with RFC-165 T5);
-  //   (3) materialize here (JSON-body flow).
-  let space: MaterializedSpace
-  /** RFC-287 G7：延后准备时先铸的 id，供 runTask 第 0 步物化时复用。 */
-  let deferredTaskId: string | null = null
-  /** G7/AC-11：延后准备时**先行落定**的仓库身份，占位行据此持久化来源。 */
-  let deferredCachedRepoId: string | null = null
-  if (deps.materializedSpace !== undefined) {
-    space = deps.materializedSpace
-  } else if (deps.preCreatedWorktree !== undefined) {
-    if (input.scratch === true) {
-      throw new ValidationError(
-        'scratch-precreated-unsupported',
-        'multipart uploads into a scratch space must use the materializedSpace handoff',
-      )
-    }
-    // RFC-248 D12: 多仓 + 上传的禁令已解除；上传物落任务根下的固定目录，
-    // 不属于任何成员仓（applyUploadsToWorktree 的 inputsSubdir）。
-    const source =
-      deps.preResolvedSource ??
-      (await resolveRepoSourceSingle(
-        deps.internalSource !== undefined
-          ? { repoPath: deps.internalSource.repoPath, baseBranch: deps.internalSource.baseBranch }
-          : repoSpecs[0]!,
-        input,
-        deps,
-      ))
-    // RFC-165 (F4): internalSource + preCreatedWorktree must agree on the repo.
-    if (deps.internalSource !== undefined && deps.internalSource.repoPath !== source.repoPath) {
-      throw new ValidationError(
-        'internal-source-conflict',
-        'internalSource.repoPath must match the pre-created worktree source',
-      )
-    }
-    const pre = deps.preCreatedWorktree
-    const occupied = await findTrackedPathUnderMounts(
-      source.repoPath,
-      pre.baseCommit ?? source.baseBranch ?? 'HEAD',
-      [PLATFORM_WORKSPACE_DIR],
-    )
-    if (occupied !== null) {
-      throw new ValidationError(
-        'platform-workspace-root-occupied',
-        `reserved platform workspace '${PLATFORM_WORKSPACE_DIR}' is already tracked (${occupied.trackedPath})`,
-        { mountPath: '', trackedPath: occupied.trackedPath, ref: pre.baseCommit },
-      )
-    }
-    const profile = await bindWorkspaceExcludeParticipant({
-      worktreePath: pre.worktreePath,
-      appHome,
-    }).ensure()
-    space = {
-      kind: 'single',
-      spaceKind:
-        deps.internalSource !== undefined
-          ? 'internal'
-          : source.repoUrl !== null
-            ? 'remote'
-            : 'local',
-      taskId: pre.taskId,
-      worktreePath: pre.worktreePath,
-      branch: pre.branch,
-      baseCommit: pre.baseCommit,
-      earlyError: null,
-      resolvedSources: [source],
-      nodePaths: [],
-      cleanup: ownership.cleanup ?? cleanupFromPreCreated(pre),
-      repos: [
-        {
-          repoIndex: 0,
-          repoPath: source.repoPath,
-          repoUrl: source.repoUrl,
-          cachedRepoId: source.cachedRepoId,
-          baseBranch: source.baseBranch ?? '',
-          branch: pre.branch,
-          baseCommit: pre.baseCommit,
-          worktreePath: pre.worktreePath,
-          worktreeDirName: '',
-          mountPath: '',
-          subdir: '',
-          readonly: false,
-          workspaceProfileVersion: profile.version,
-          workspaceProfileDigest: profile.digest,
-          submoduleInitOk: true,
-          submoduleInitError: null,
-          hasSubmodules: false,
-        },
-      ],
-    }
-  } else if (
-    deps.deferRepoPreparation === true &&
-    input.scratch !== true &&
-    // RFC-287 四轮门(用户拍板)：`sourceTaskId` 重放**不走延后准备**。
-    //
-    // 它是前端「重启」多仓任务的唯一通道，而占位行存不住它的来源——冻结布局在**源
-    // 任务**的 `task_repos` 上，新任务的那张表要等回填才写，`tasks` 也没有
-    // `source_task_id` 列。于是 `retryRepoPreparation` 的 `!hasGroup && !hasCached`
-    // 必然成立、409 `repo-prep-source-unavailable`，而前端横幅只看「有没有失败的准备
-    // 行」就把重试按钮画出来了 ⇒ **一个必然点不动的按钮**（四轮门跨 RFC 面实测）。
-    //
-    // 排除它 = 这条路径保持 G7 之前的同步语义：失败在 HTTP 调用处抛出、不铸任务行、
-    // 不出现死按钮。代价是拿不到「失败留记录」那半收益；换来的是不撒谎。
-    // （另两个候选——加 `tasks.source_task_id` 列、或只让按钮不出现——分别要一次迁移
-    // 与「确认能力缺失」，用户选了这条。）
-    typeof (input as { sourceTaskId?: unknown }).sourceTaskId !== 'string'
-  ) {
-    // 同步段的地址格式校验（proposal §G7 明列）——见 assertLaunchSourceSchemeSync。
-    await assertLaunchSourceSchemeSync(deps, input)
-    // RFC-287 G7：JSON-body 启动把仓库准备**推迟到任务行落库之后**。
-    //
-    // 今天物化在落行之前，于是「克隆超时 / 远端不可达」这类失败**不留任何记录**
-    // ——用户点了启动，转半天圈，最后得到一个 HTTP 错误，任务列表里什么都没有。
-    // 改为先落 `pending` 行（G7 明确**不新增状态**），准备在后台推进，失败转
-    // `failed` 且 git 原文可见。
-    //
-    // 只有 JSON-body 这一条走：multipart 要把上传物写进工作树、preCreated 是
-    // 调用方已经建好的树，两者都必须保持预物化语义（proposal §G7）。
-    //
-    // **scratch 同样排除**（实现门自审补）：临时空间没有远端要克隆——G7 要解决的
-    // 「拉不动远端时什么都不留」在它身上根本不存在，延后零收益。而占位行必须先
-    // 认领一个 spaceKind，写 'remote' 对 scratch 就是**错的**，直到回填才纠正。
-    // 今天下游恰好不敏感（gc 只处理终态任务、taskDelete 的分支不涉及），但那是
-    // 运气不是保证：任何将来按 spaceKind 分流的非终态读点都会踩中这段窗口。
-    // 与其给一个零收益的路径留一段错值窗口，不如从判据上把它排除。
-    deferredTaskId = ulid()
-    // AC-11 的前提：**先把仓库身份落定**，再异步取内容。
-    //
-    // 重试准备仓库要能找回原始来源，可任务行存不住它——`tasks.repo_url` 是脱敏存的
-    // （RFC-054 W3-4，源码注释原话：「so it can never drive a relaunch; this id is
-    // what does」），能驱动重跑的只有 `cached_repo_id`，而它按老流程要等克隆成功才
-    // 存在。于是延后准备的任务一旦准备失败，手里既没有可用 URL 也没有 id。
-    //
-    // 拆法：身份解析（canonical hash → 一行 cached_repos + URL 密封）是**纯 DB 写**、
-    // 几毫秒，留在这里；克隆 / fetch / 建工作树才异步。这样占位行就带着一个真实且
-    // 稳定的 cachedRepoId，不必新增列、也不必把明文凭据多存一份。
-    // 组启动本就带 repoGroupId（可重建），无需此步。
-    if (typeof input.repoUrl === 'string' && input.repoUrl.length > 0) {
-      const identity = await ensureCachedRepoIdentity(
-        {
-          store: repositoryWorkspaceFor(deps),
-          ...(appHome !== undefined ? { appHome } : {}),
-          secretBox: deps.secretBox,
-        },
-        { url: input.repoUrl },
-      )
-      deferredCachedRepoId = identity.cachedRepoId
-    } else if (typeof input.cachedRepoId === 'string' && input.cachedRepoId.length > 0) {
-      // 二轮实现门 B-F3：以 `cachedRepoId` 启动时**它本身就是身份**，直接落到占位行。
-      // 漏掉这一支的后果：用合法 cachedRepoId 启动、warm fetch 失败后点「重试准备」，
-      // `retryRepoPreparation` 发现既无 group 也无 cached id，直接
-      // `repo-prep-source-unavailable`——AC-11 对这条**公开支持**的启动路径完全失效。
-      deferredCachedRepoId = input.cachedRepoId
-    }
-    space = {
-      kind: 'single',
-      spaceKind: 'remote',
-      taskId: deferredTaskId,
-      // 「尚未物化」与「物化失败」共用空串，但由 earlyError 区分：失败态 earlyError
-      // 非空、本态为 null。落行时据此仍写 `pending`。
-      worktreePath: '',
-      branch: '',
-      baseCommit: null,
-      earlyError: null,
-      resolvedSources: [],
-      repos: [],
-      nodePaths: [],
-      // 尚未物化 ⇒ 没有已占用的目录，空租约（ownedRoot=null、零 worktree）。
-      // 真正的租约在 runTask 第 0 步物化成功后由 materializeSpace 产出。
-      cleanup: createMaterializedSpaceCleanup(deferredTaskId, null),
-    }
-  } else {
-    space = await materializeSpace(input, deps, appHome)
-  }
-  const taskId = space.taskId
-  const worktreePath = space.worktreePath
-  const branch = space.branch
-  const baseCommit = space.baseCommit
-  const earlyError = space.earlyError
-  const materializedRepos = space.repos
-  const resolvedSources = space.resolvedSources
-  ownership.cleanup = space.cleanup
-
-  // RFC-320: the pair was resolved once at the creation boundary. Never read
-  // profile state (or client input) again after workspace materialization.
-  const persistedGitUserName = deps.gitCommitIdentity?.name ?? null
-  const persistedGitUserEmail = deps.gitCommitIdentity?.email ?? null
-
-  // RFC-066: `tasks.*` legacy columns mirror `materializedRepos[0]` for back-
-  // compat. When materialize failed early (only possible in multi-repo path —
-  // single-repo failures still produce a `materializedRepos[0]` so the
-  // legacy "failed task row with worktree path empty" surface is preserved),
-  // fall back to the resolved-source view so we never write `undefined`.
-  const head: MaterializedRepo | undefined = materializedRepos[0]
-  const fallbackSource: ResolvedRepoSource | undefined = resolvedSources[0]
-  const headRepoPath = head?.repoPath ?? fallbackSource?.repoPath ?? ''
-  // 延后准备时 head/fallbackSource 都还空着，但**请求里就有 URL**——不写进去，
-  // 准备窗口内（以及准备失败之后）任务详情就完全看不到仓库地址，用户既不知道自己
-  // 在等哪个仓，失败后也无从判断是不是地址填错了。落库前照既有规则脱敏（RFC-054
-  // W3-4：repo_url 存脱敏形，故它只能用于显示、不能驱动 relaunch——能驱动的是
-  // cached_repo_id）。（T14 exact-SHA CI 抓到：git-protocols e2e 读 201 响应的
-  // repoUrl 为空。）
-  const headRepoUrl =
-    head?.repoUrl ??
-    fallbackSource?.repoUrl ??
-    (deferredTaskId !== null && typeof input.repoUrl === 'string' && input.repoUrl.length > 0
-      ? input.repoUrl
-      : null)
-  // RFC-204: the deterministic mirror ref. repo_url is stored REDACTED (RFC-054
-  // W3-4) so it can never drive a relaunch; this id is what does.
-  // 延后准备时 head/fallbackSource 都还是空的，此刻唯一已知的来源就是先行落定的
-  // 身份 id——写进去，重试准备才有据可依（AC-11）。
-  const headCachedRepoId =
-    head?.cachedRepoId ?? fallbackSource?.cachedRepoId ?? deferredCachedRepoId ?? null
-  // RFC-248: 组身份快照。与 D8「启动时快照」一致——`task_repos` 本就是布局
-  // 快照，这里只再存一份 id+名字供溯源、记忆注入与详情页 chip 使用。
-  const repoGroupLayout =
-    typeof input.repoGroupId === 'string' && input.repoGroupId.length > 0
-      ? await resolveRepoGroupLayout(repositoryWorkspaceFor(deps), input.repoGroupId)
-      : null
-  const repoGroupSnapshot =
-    repoGroupLayout === null || input.repoGroupId === undefined
-      ? null
-      : { id: input.repoGroupId, name: repoGroupLayout.groupName }
-  // 延后准备时 head/fallbackSource 都还空着，但**请求里就有 `ref`**——不存下来，
-  // AC-11 的「重试准备仓库」就再也拿不到它(四轮门两路独立实测)：`retryRepoPreparation`
-  // 手工重建启动输入，`ref` 不在其中；而基线分支的唯一来源是
-  // `resolveRepoSourceSingle` 的 `specRef ?? cached.defaultBranch`，于是重试静默落到
-  // 镜像默认分支。用户在启动向导里选了 `release/2.1`、准备失败点一次重试，agent 就在
-  // `main` 上改代码并 commit&push，界面零提示。RFC-248 当年专门在 schema 里硬拒过
-  // 同一形态(「API 调用方以为自己换了分支，实际跑在别的 ref 上」)，重试路径把它从
-  // 后门放了回来。
-  //
-  // 存进 `base_branch` 是最自然的落点：这个字段的语义就是基线分支，而回填事务
-  // (prepared.baseBranch)会在准备成功后把它覆写成**解析后**的值，所以占位期存
-  // 「请求的 ref」不会污染终态。
-  const headBaseBranch =
-    head?.baseBranch ??
-    fallbackSource?.baseBranch ??
-    (deferredTaskId !== null && typeof input.ref === 'string' && input.ref.length > 0
-      ? input.ref
-      : '')
-  const headBranch = head?.branch ?? (branch !== '' ? branch : `agent-workflow/${taskId}`)
-  const headBaseCommit = head?.baseCommit ?? baseCommit
-
-  const now = Date.now()
-  let launchIntentId: string | null = null
-  let createdEventRef: CommittedEventRef | null = null
-  try {
-    await deps.workflowLaunchCommitHook?.(
-      workflowLaunchHookEvent('materialized-before-task-commit', workflow, space),
-    )
-    deps.sourceTerminationAdmission?.()
-
-    // RFC-165 (F17-r3): the task row + its per-repo rows + the launch
-    // collaborator rows + the single-agent existence RE-check land in ONE
-    // transaction — atomicity replaces the old best-effort manual
-    // rollback (which, per Codex P1, could even delete a PRE-EXISTING task
-    // when a handed-off taskId collided).
-    //
-    // RFC-359 W10 —— 事务边界从 bun:sqlite 专属的同步 `dbTxSync` 换成中立的
-    // `withTaskExecutionWrite`（`databaseSessionFor(db).transaction`）：同一笔原子、同一套
-    // 回滚语义，但两个引擎共用一条。体内每一条语句都必须 `await`——drizzle 的查询构建器是
-    // **惰性** thenable，既不 `.run()` 也不 `await` 的写在两个引擎上一条都不会发生；只
-    // `.run()` 不 await 的写在 PostgreSQL 上是一个没人等的 Promise，语句可能落在事务外，
-    // 而两边都不抛。
-    await withTaskExecutionWrite(deps.db, async (tx) => {
-      // This read and the initial INSERT share SQLite's transaction boundary:
-      // terminal revoke wins first, or the later effect must observe the task.
-      deps.sourceTerminationAdmission?.()
-      // RFC-199 T6.5: the workflow row captured before materialization is not
-      // sufficient to authorize the final task insert. Re-read inside the
-      // SAME transaction that writes the FK. Delete-first linearizes here as
-      // a structured mismatch (rather than a raw SQLite FK 500); when the
-      // editor supplied an exact version, a materialization-time writer is
-      // fenced here as well. If this transaction wins first, deleteWorkflow's
-      // in-transaction reference check necessarily observes the task row.
-      const liveWorkflow = await tx
-        .select({ version: workflows.version })
-        .from(workflows)
-        .where(eq(workflows.id, workflow.id))
-        .get()
-      if (liveWorkflow === undefined) {
-        throw workflowLaunchVersionMismatch(
-          workflow.id,
-          input.expectedWorkflowVersion ?? workflow.version,
-          null,
-        )
-      }
-      if (
-        input.expectedWorkflowVersion !== undefined &&
-        liveWorkflow.version !== input.expectedWorkflowVersion
-      ) {
-        throw workflowLaunchVersionMismatch(
-          workflow.id,
-          input.expectedWorkflowVersion,
-          liveWorkflow.version,
-        )
-      }
-
-      // RFC-243 child-launch fence: cancellation can abort a controller after
-      // startTask materialized the inherited space but before this final task
-      // INSERT. Check the parent inside the SAME synchronous transaction as
-      // the child row: child-first commits before cancel's child-set freeze;
-      // cancel-first makes this launch fail with no post-terminal child.
-      let launchOrigin = rootLaunchOrigin
-      let catalogVisibility: TaskCatalogVisibility = deps.catalogVisibility ?? 'public'
-      let sourceTerminationSnapshot = deps.sourceTerminationSnapshot ?? null
-      let executionLineageId = taskId
-      let continuationSlotKey = 'task-root'
-      let operationGeneration = 0
-      let lineageSlotPath: Array<{
-        stableNodeKey: string
-        frozenOccurrenceKey: string
-        workflowRevision: number | null
-      }> = [
-        {
-          stableNodeKey: 'task-root',
-          frozenOccurrenceKey: taskId,
-          workflowRevision: workflow.version,
-        },
-      ]
-      if (deps.callLaunch !== undefined) {
-        const parent = await tx
-          .select({
-            id: tasks.id,
-            status: tasks.status,
-            ownerUserId: tasks.ownerUserId,
-            invocationDepth: tasks.invocationDepth,
-            launchOrigin: tasks.launchOrigin,
-            catalogVisibility: tasks.catalogVisibility,
-            sourceTerminationBinding: tasks.sourceTerminationBinding,
-            sourceTerminationLaunchRev: tasks.sourceTerminationLaunchRev,
-            sourceTerminationFence: tasks.sourceTerminationFence,
-            sourceTerminationEffectRev: tasks.sourceTerminationEffectRev,
-            executionLineageId: tasks.executionLineageId,
-            lineageSlotPathJson: tasks.lineageSlotPathJson,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, deps.callLaunch.parentTaskId))
-          .get()
-        if (parent === undefined) {
-          throw new NotFoundError(
-            'parent-task-not-found',
-            `parent task '${deps.callLaunch.parentTaskId}' disappeared during child launch`,
-          )
-        }
-        const parentRun = await tx
-          .select({
-            taskId: nodeRuns.taskId,
-            status: nodeRuns.status,
-            childTaskId: nodeRuns.childTaskId,
-            continuationSlotKey: nodeRuns.continuationSlotKey,
-            lineageSlotPathJson: nodeRuns.lineageSlotPathJson,
-            operationGeneration: nodeRuns.operationGeneration,
-          })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, deps.callLaunch.parentNodeRunId))
-          .get()
-        if (parentRun === undefined) {
-          // RFC-359 W8-A: the calling node_run is the whole reason this child
-          // exists. It used to be optional here — a missing row silently
-          // degraded to a `legacy-call:` slot key and generation 0, which is
-          // exactly how a child could be minted with no live call row to
-          // return to.
-          throw new NotFoundError(
-            'parent-node-run-not-found',
-            `parent node_run '${deps.callLaunch.parentNodeRunId}' was not found`,
-          )
-        }
-        // RFC-359 W8-A: the parent-admission gates are ONE shared judgement
-        // (`domain/childLaunchAdmission.ts`) — this engine used to run only the
-        // first two of them, so a mismatched call row, a stolen child
-        // reservation, a skipped invocation depth or a non-owner launcher all
-        // minted a child here while the other provider refused. Same rows, same
-        // order, same codes on both.
-        const admission = childLaunchAdmissionIssue(parent, parentRun, {
-          parentNodeRunId: deps.callLaunch.parentNodeRunId,
-          childTaskId: taskId,
-          invocationDepth: deps.callLaunch.invocationDepth,
-          launchActorUserId: deps.callLaunch.launchActorUserId,
-        })
-        if (admission !== null) throw new ConflictError(admission.code, admission.message)
-        launchOrigin = parent.launchOrigin
-        catalogVisibility = parent.catalogVisibility
-        sourceTerminationSnapshot =
-          parent.sourceTerminationBinding === null || parent.sourceTerminationLaunchRev === null
-            ? null
-            : {
-                binding: parent.sourceTerminationBinding,
-                launchRevision: parent.sourceTerminationLaunchRev,
-                fence: parent.sourceTerminationFence,
-                effectRevision: parent.sourceTerminationEffectRev,
-              }
-        executionLineageId = parent.executionLineageId ?? parent.id
-        continuationSlotKey =
-          parentRun.continuationSlotKey ?? `legacy-call:${deps.callLaunch.parentNodeRunId}`
-        operationGeneration = parentRun.operationGeneration
-        const inheritedPathRaw = parentRun.lineageSlotPathJson ?? parent.lineageSlotPathJson
-        try {
-          const parsed: unknown = inheritedPathRaw === null ? null : JSON.parse(inheritedPathRaw)
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            lineageSlotPath = parsed as typeof lineageSlotPath
-          }
-        } catch {
-          lineageSlotPath = [
-            {
-              stableNodeKey: 'task-root',
-              frozenOccurrenceKey: executionLineageId,
-              workflowRevision: null,
-            },
-          ]
-        }
-        lineageSlotPath = [
-          ...lineageSlotPath,
-          {
-            stableNodeKey: 'child-task',
-            frozenOccurrenceKey: continuationSlotKey,
-            workflowRevision: workflow.version,
-          },
-        ]
-      }
-      if (launchOrigin === null) {
-        throw new Error('task launch origin remained unresolved before initial INSERT')
-      }
-
-      // F17: a concurrent agent delete between the service-level 404 gate and
-      // this insert must fail the launch — never mint a task for a ghost.
-      //
-      // RFC-223 (PR-3a, R3-3): re-verify by the CANONICAL id (source_agent_id is
-      // written from `agentLaunch.agentId` below, and the snapshot node freezes
-      // the same id). Matching by id — not name — means a same-named replacement
-      // created in the tiny window can never satisfy this gate (it has a
-      // different id), so the frozen id always names the agent the launcher
-      // actually resolved. The launch reservation already blocks delete/rename
-      // mid-launch; this is the belt-and-suspenders behind it.
-      if (deps.agentLaunch !== undefined) {
-        const live = await tx
-          .select({ id: agents.id })
-          .from(agents)
-          .where(eq(agents.id, deps.agentLaunch.agentId))
-          .get()
-        if (live === undefined) {
-          throw new NotFoundError(
-            'agent-not-found',
-            `agent '${deps.agentLaunch.agentName}' was deleted during launch`,
-          )
-        }
-      }
-      if (deps.preCreatedWorktree !== undefined && deps.internalSource !== undefined)
-        await taskDriveComposition.admitTransferredWorkspace(tx, {
-          kind: 'fusion',
-          taskId,
-          worktreePath: space.worktreePath,
-          baseCommit: space.baseCommit,
-          ownerRef: taskId,
-        })
-      await tx
-        .insert(tasks)
-        .values({
-          id: taskId,
-          // RFC-037: required name (StartTaskSchema already trimmed + length-validated).
-          name: input.name,
-          workflowId: workflow.id,
-          workflowSnapshot: taskWorkflowSnapshotJson,
-          workflowVersion: workflow.version, // RFC-109: record the version this snapshot froze
-          digitalEmployeeRoundId: deps.digitalEmployeeLaunch?.actionRunId ?? null,
-          digitalEmployeeCaseId: deps.digitalEmployeeLaunch?.caseId ?? null,
-          repoPath: headRepoPath,
-          // RFC-054 W3-4 KNOWN_GAP fix: never persist the credentialed URL.
-          // gitRepoCache has already used the cleartext form to clone (line
-          // 197 above); from this point onward the daemon only needs the
-          // redacted form (for display, WS broadcast, error messages). The
-          // cleartext URL is reachable only ephemerally via the cache key
-          // hash, so even DB-level access can't reconstruct it.
-          repoUrl: headRepoUrl !== null ? redactGitUrl(headRepoUrl) : null,
-          cachedRepoId: headCachedRepoId,
-          // RFC-248: 组溯源 + 记忆注入的 scope 来源。名字是**快照**（设计门 G5）
-          // ——组被删除后任务详情的 chip 仍要能渲染名字，而不是悬空 id。
-          repoGroupId: repoGroupSnapshot?.id ?? null,
-          repoGroupName: repoGroupSnapshot?.name ?? null,
-          worktreePath,
-          baseBranch: headBaseBranch,
-          branch: headBranch !== '' ? headBranch : `agent-workflow/${taskId}`,
-          baseCommit: headBaseCommit,
-          status: earlyError === null ? 'pending' : 'failed',
-          inputs: JSON.stringify(input.inputs),
-          maxDurationMs: input.maxDurationMs ?? null,
-          maxTotalTokens: input.maxTotalTokens ?? null,
-          // RFC-320: immutable creator snapshot; NULL only for explicit
-          // system-owned internal tasks.
-          gitUserName: persistedGitUserName,
-          gitUserEmail: persistedGitUserEmail,
-          // RFC-075: user-specified working branch (NULL → isolation branch) +
-          // the auto commit&push toggle (false → legacy, no commit/push).
-          workingBranch: input.workingBranch ?? null,
-          autoCommitPush: input.autoCommitPush ?? false,
-          // RFC-066: count of `task_repos` rows. Single-repo path always = 1;
-          // multi-repo populates with the materialized count (zero only when the
-          // first repo failed before any task_repos row was minted).
-          repoCount: Math.max(1, materializedRepos.length),
-          startedAt: now,
-          finishedAt: earlyError === null ? null : now,
-          errorSummary: earlyError !== null ? `worktree creation failed: ${earlyError}` : null,
-          errorMessage: earlyError,
-          // RFC-036: launcher identity (NULL = legacy / __system__ fallback).
-          ownerUserId: deps.actorUserId ?? null,
-          // RFC-301: immutable launch-tree source. Roots derive from trusted
-          // provenance; children read the exact parent in this transaction.
-          launchOrigin,
-          catalogVisibility,
-          // RFC-159: the scheduled_tasks row that auto-launched this task (NULL =
-          // manual). Stamped atomically with the row so the schedule's run history is
-          // durable regardless of any later bookkeeping write.
-          scheduledTaskId: deps.scheduledTaskId ?? null,
-          // RFC-257: webhook-trigger attribution, same atomic-stamp discipline.
-          webhookTriggerId: deps.webhookTriggerId ?? null,
-          webhookFireId: deps.webhookFireId ?? null,
-          eventSubscriptionId: deps.eventSubscriptionId ?? null,
-          eventDeliveryId: deps.eventDeliveryId ?? null,
-          // RFC-269: publish trigger inputs in this same task-row INSERT. The
-          // scheduler starts only after this transaction commits and reads the
-          // task row once, so a later UPDATE is observably too late.
-          triggerContextJson:
-            deps.triggerContext === undefined ? null : JSON.stringify(deps.triggerContext),
-          platformInputPathsJson:
-            platformInputPaths.length === 0 ? null : JSON.stringify(platformInputPaths),
-          sourceTerminationBinding: sourceTerminationSnapshot?.binding ?? null,
-          sourceTerminationLaunchRev: sourceTerminationSnapshot?.launchRevision ?? null,
-          sourceTerminationFence: sourceTerminationSnapshot?.fence ?? null,
-          sourceTerminationEffectRev: sourceTerminationSnapshot?.effectRevision ?? null,
-          // RFC-164: workgroup link + runtime config copy (NULL = not a workgroup task).
-          workgroupId: deps.workgroupLaunch?.workgroupId ?? null,
-          workgroupConfigJson: deps.workgroupLaunch?.configJson ?? null,
-          // RFC-165 §4: single-agent soft link (taskExecutionKind 'agent' discriminator).
-          sourceAgentName: deps.agentLaunch?.agentName ?? null,
-          // RFC-175 (§2e): the resolved stable agent id (re-verified above), so a
-          // post-migration relaunch can carry an `expectedAgentId` OCC guard.
-          sourceAgentId: deps.agentLaunch?.agentId ?? null,
-          // RFC-304: code-capability round link (taskExecutionKind 'code-round'
-          // discriminator). Soft reference — see the column comment in schema.ts.
-          codeRoundId: deps.codeRoundLaunch?.roundId ?? null,
-          // RFC-165: execution-space kind. 'local' is transitional (path mode, until
-          // its public retirement lands within this PR); 'internal' is stamped via
-          // the internalSource dep (fusion) once that migration lands.
-          spaceKind: space.spaceKind,
-          // RFC-243: parent linkage for node-invoked children + the frozen
-          // reference closure (parents freeze it above; children carry the
-          // handed-down subset). All NULL/0 on ordinary launches.
-          parentTaskId: deps.callLaunch?.parentTaskId ?? null,
-          parentNodeRunId: deps.callLaunch?.parentNodeRunId ?? null,
-          invocationDepth: deps.callLaunch?.invocationDepth ?? 0,
-          // RFC-271 T6f2：`frozenClosureJson` 已经在校验之前算好，两条分支同源
-          // —— 根是刚冻结的那份，子是继承下来的那份，落库的与校验用的逐字同一。
-          refClosureJson: frozenClosureJson,
-          // RFC-165 (R3-2-r4): a materialize-failure row has NO revivable workspace —
-          // stamp the tombstone atomically with the row so retry / sync-workflow can
-          // never CAS it back to pending against a missing directory.
-          // RFC-287 G7 / AC-15：**延后准备态不得打墓碑**。判据是 earlyError——它非空
-          // 才是「物化失败、没有可复活的工作区」；延后态 earlyError 为 null，工作树
-          // 只是「还没建」，打了墓碑会让 retryNode 再也 CAS 不回 pending，于是
-          // 「重试准备仓库」这条 G7 的核心语义直接失效。
-          workspacePrunedAt: earlyError !== null && worktreePath === '' ? now : null,
-          // RFC-311：本行自身即其（暂时只有自己的）子树 max(started_at)。
-          branchStartedAt: now,
-          // RFC-311 G1：树根一次写定——有父就继承父的根，没父就是自己。
-          // parent_task_id 铸行后不可变，所以这一列此后永不需要更新；过滤视图
-          // 的快路径按它分组（见 taskOperations.ts fastFilteredRootQuery）。
-          rootTaskId:
-            deps.callLaunch?.parentTaskId === undefined
-              ? taskId
-              : ((
-                  await tx
-                    .select({ rootTaskId: tasks.rootTaskId })
-                    .from(tasks)
-                    .where(eq(tasks.id, deps.callLaunch.parentTaskId))
-                    .get()
-                )?.rootTaskId ?? deps.callLaunch.parentTaskId),
-          executionLineageId,
-          lineageSlotPathJson: JSON.stringify(lineageSlotPath),
-        })
-        .run()
-
-      launchIntentId = ulid()
-      const launchPayloadJson = JSON.stringify({ v: 1, workflowId: workflow.id })
-      await tx
-        .insert(taskExecutionIntents)
-        .values({
-          id: launchIntentId,
-          taskId,
-          kind: 'launch',
-          state: earlyError === null ? 'pending' : 'failed',
-          source:
-            deps.callLaunch !== undefined || deps.internalSource !== undefined
-              ? 'internal'
-              : deps.scheduledTaskId !== undefined ||
-                  deps.webhookFireId !== undefined ||
-                  deps.eventDeliveryId !== undefined
-                ? 'scheduler'
-                : 'rest',
-          requestHash: sha256Hex(
-            JSON.stringify({
-              kind: 'launch',
-              taskId,
-              workflowId: workflow.id,
-              workflowVersion: workflow.version,
-              continuationSlotKey,
-              operationGeneration,
-            }),
-          ),
-          payloadJson: launchPayloadJson,
-          executionLineageId,
-          continuationSlotKey,
-          slotPathJson: JSON.stringify(lineageSlotPath),
-          operationGeneration,
-          expectedTaskRevision: 1,
-          failureCode: earlyError === null ? null : 'launch-materialization-failed',
-          createdAt: now,
-          completedAt: earlyError === null ? null : now,
-          updatedAt: now,
-        })
-        .run()
-
-      createdEventRef = await appendTaskCreatedCommittedEvent(tx, {
-        taskId,
-        status: earlyError === null ? 'pending' : 'failed',
-        errorSummary: earlyError !== null ? `worktree creation failed: ${earlyError}` : null,
-        occurredAt: now,
-      })
-
-      // RFC-311 — task-operations catalog provider 的 keyset 排序键维护：新任务把自己的
-      // started_at 沿父链向上推进（分支最新活动时间是聚合值,列表只按 root
-      // 行取页）。链长受调度树深度约束（MAX_TREE_DEPTH=64 同款上限）;这是
-      // 唯一铸行点,invariants 的自愈规则兜住历史漂移。
-      {
-        let cursor: string | null = deps.callLaunch?.parentTaskId ?? null
-        for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
-          const parent = await tx
-            .select({ id: tasks.id, parentTaskId: tasks.parentTaskId })
-            .from(tasks)
-            .where(eq(tasks.id, cursor))
-            .get()
-          if (parent === undefined) break
-          await tx
-            .update(tasks)
-            .set({ branchStartedAt: sql`MAX(${tasks.branchStartedAt}, ${now})` })
-            .where(eq(tasks.id, parent.id))
-            .run()
-          cursor = parent.parentTaskId
-        }
-      }
-
-      // RFC-066: persist per-repo metadata. Single-repo tasks land one row at
-      // repo_index=0 mirroring the legacy columns above; multi-repo tasks land
-      // N rows sorted by repo_index. The list view's `repoCount` chip is driven
-      // by `tasks.repo_count`; the detail page's `Task.repos[]` array is hydrated
-      // from this table by `getTask`.
-      if (materializedRepos.length > 0) {
-        await tx
-          .insert(taskRepos)
-          .values(taskRepoRowsFor(taskId, materializedRepos, input.workingBranch ?? null))
-          .run()
-      }
-
-      // RFC-249: freeze the explicit directory tree atomically with task +
-      // repo rows. Repository metadata stays in task_repos; these rows retain
-      // pure directories that cannot be reconstructed from mount paths.
-      if (space.nodePaths.length > 0) {
-        await tx
-          .insert(taskSpaceNodes)
-          .values(
-            space.nodePaths.map((nodePath) => ({
-              taskId,
-              nodePath,
-              schemaVersion: 1,
-            })),
-          )
-          .run()
-      }
-
-      // RFC-217 T2 — workgroup runtime state row, atomically with the task
-      // row. gate starts 'idle'; a dynamic_workflow launch seeds the complete
-      // DwState checkpoint (phase 'generating') here instead of smuggling it
-      // inside workgroup_config_json.
-      if (deps.workgroupLaunch) {
-        // RFC-359 W10 —— 原来这里调 `insertWorkgroupTaskStateTx`（签名钉在 `DbTxSync` 上的
-        // 同步参与者，且本站点是它唯一的调用方）。事务转中立后再传它就会撞上最毒的那一档：
-        // `.run()` 在 PostgreSQL 上回一个没人 await 的 Promise，行静默不落。这里把那六行
-        // INSERT 原样内联，DwState 仍按 `DwStateSchema` 校验后序列化。
-        const dw = deps.workgroupLaunch.dw ?? null
-        await tx
-          .insert(workgroupTaskState)
-          .values({
-            taskId,
-            gateStatus: 'idle',
-            dwStateJson: dw === null ? null : JSON.stringify(DwStateSchema.parse(dw)),
-            updatedAt: Date.now(),
-          })
-          .run()
-      }
-
-      // RFC-067 NOTE: an earlier draft of this RFC also wrote `user.name` /
-      // `user.email` into the worktree's local `.git/config` as a defense-in-
-      // depth fallback for git invocations that bypass the runner's spawn env.
-      // We dropped that path: by default `git config <key> <value>` inside a
-      // worktree writes to the PARENT repo's shared `.git/config`, so two
-      // concurrent tasks against the same source repo race-overwrite each
-      // other's identity. Per-worktree config via `extensions.worktreeConfig=
-      // true` would have to be enabled on the parent repo (a global flag we do
-      // not own). Pure spawn-env injection (in services/runner.ts) is therefore
-      // the single source of truth for task identity; agents that bypass the
-      // runner fall back to the parent repo's default user, matching
-      // pre-RFC-067 behaviour.
-
-      // RFC-036/RFC-099: record owner + collaborators (assignments removed,
-      // D6) inside the SAME transaction — a validation throw (inactive user)
-      // rolls back the task + task_repos rows atomically.
-      if (deps.actorUserId) {
-        const userRows = await tx.select({ id: users.id, status: users.status }).from(users)
-        const collabRows = buildLaunchCollabRows(
-          {
-            taskId,
-            ownerUserId: deps.actorUserId,
-            collaboratorUserIds: input.collaboratorUserIds ?? [],
-            now,
-          },
-          userRows,
-        )
-        if (collabRows.length > 0) {
-          await tx.insert(taskCollaborators).values(collabRows).run()
-        }
-      }
-    })
-    ownership.taskRowCommitted = true
-    space.cleanup.state = 'committed'
-
-    // Observer-only half of the deterministic race seam. A test callback must
-    // not be able to strand a committed pending row before scheduler kickoff;
-    // surface its own assertion through captured state and keep launch moving.
-    try {
-      await deps.workflowLaunchCommitHook?.(
-        workflowLaunchHookEvent('task-committed', workflow, space),
-      )
-    } catch (error) {
-      log.warn('rfc199/start-task-post-commit-hook-failed', {
-        taskId,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  } catch (err) {
-    // The outer ownership wrapper cleans every pre-commit failure, including
-    // errors thrown before this transaction for handed-off multipart/fusion
-    // spaces. Keeping one owner avoids route/service cleanup drift.
-    log.debug('rfc199/start-task-precommit-failure-deferred-to-owner', {
-      taskId,
-      error: err instanceof Error ? err.message : String(err),
-    })
-    throw err
-  }
-
-  const task = (await getTask(deps.db, taskId)) as Task
-  await publishCommittedEventsAfterCommit(createdEventRef === null ? [] : [createdEventRef])
-
-  if (earlyError !== null) {
-    return task
-  }
-
-  const repositoryPreparation: RepositoryPreparationStep =
-    deferredTaskId === null
-      ? skipRepositoryPreparation
-      : createPersistedRepositoryPreparationStep({
-          deps: {
-            ...deps,
-            repositoryWorkspace: repositoryWorkspaceFor(deps),
-            loadFrozenSpaceLayout: async (sourceTaskId) =>
-              await loadFrozenSpaceLayout(deps.db, sourceTaskId),
-          },
-          appHome,
-        })
-
-  const coordinator = composeTestTaskDriveFactory({ deps, appHome, repositoryPreparation }).session
-  if (launchIntentId === null) return task
-  const receipt = await coordinator.submit({
-    taskId,
-    intentId: launchIntentId,
-    completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
-  })
-  if (receipt.kind === 'not-attached') {
-    const fenced = await getTask(deps.db, taskId)
-    log.warn('task will not be driven: the task coordinator refused to attach', {
-      taskId,
-      status: fenced?.status ?? 'unknown',
-      sourceTerminationFence: (fenced as { sourceTerminationFence?: unknown } | null)
-        ?.sourceTerminationFence,
-    })
-    return fenced as Task
-  }
-  if (deps.awaitScheduler === true) {
-    return (await getTask(deps.db, taskId)) as Task
-  }
-  return (await getTask(deps.db, taskId)) as Task
 }
 
 /**
@@ -2906,7 +1282,7 @@ async function reapRunBeforeWorktreeReset(
     spawnLaunchNonce?: string | null
   },
   reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
-  deps: StartTaskDeps,
+  deps: TaskContinuationDependencies,
   log: Logger,
 ): Promise<void> {
   const heldNativeLease = await db
@@ -2947,7 +1323,7 @@ async function reapHeldRuntimeSessionOwnersForTask(
   db: LegacyProviderNeutralDatabase,
   taskId: string,
   reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
-  deps: StartTaskDeps,
+  deps: TaskContinuationDependencies,
   log: Logger,
 ): Promise<void> {
   const ownerIds = [
@@ -2993,7 +1369,7 @@ async function reapHeldRuntimeSessionOwnersForTask(
 export async function wakeHumanGateContinuation(
   taskId: string,
   continuationRef: string,
-  deps: StartTaskDeps,
+  deps: TaskContinuationDependencies,
 ): Promise<void> {
   if (deps.awaitScheduler === true) await awaitTaskDriverIdle(taskId)
   else if (isTaskDriverActive(taskId)) return
@@ -3019,7 +1395,7 @@ export async function wakeHumanGateContinuation(
 export async function resumeDynamicWorkflowExecution(
   db: LegacySqliteTaskDatabase,
   id: string,
-  deps: StartTaskDeps,
+  deps: TaskContinuationDependencies,
   swap: { workflowSnapshot?: string; dw: DwState },
 ): Promise<Task> {
   return resumeKick(db, id, deps, {
@@ -3058,7 +1434,7 @@ export async function resumeDynamicWorkflowExecution(
 async function resumeKick(
   db: LegacyProviderNeutralDatabase,
   id: string,
-  deps: StartTaskDeps,
+  deps: TaskContinuationDependencies,
   opts: {
     intentKind: 'resume' | 'sync-workflow' | 'gate-continuation'
     event: TaskTransitionEvent
@@ -3673,7 +2049,7 @@ async function reclaimStalePrepArtifacts(
 export async function retryRepositoryPreparation(
   db: LegacySqliteTaskDatabase,
   taskId: string,
-  deps: StartTaskDeps,
+  deps: TaskContinuationDependencies,
 ): Promise<Task> {
   const appHome = deps.appHome ?? Paths.root
   const factory = composeTestTaskDriveFactory({
@@ -3768,7 +2144,7 @@ async function runDeferredRepoPreparation(args: {
   prepTaskId: string
   task: Task
   space: MaterializedSpace
-  ownership: StartTaskOwnership
+  ownership: RepositoryPreparationOwnership
 }): Promise<{ ok: boolean; preparedTask: Task | null }> {
   const { deps, input, appHome, signal, taskId, prepTaskId, task, space, ownership } = args
   if (
@@ -4307,22 +2683,6 @@ export async function getTask(db: LegacyProviderNeutralDatabase, id: string): Pr
 }
 
 /**
- * RFC-075: defensively parse `node_runs.commit_push_json` into CommitPushMeta.
- * Returns null for regular rows (NULL column) and for any corrupt payload —
- * the column is framework-written, so corruption shouldn't happen, but a bad
- * row must not 5xx the whole task-detail response.
- */
-function parseCommitPushJson(raw: string | null): CommitPushMeta | null {
-  if (raw === null || raw === '') return null
-  try {
-    const parsed = CommitPushMetaSchema.safeParse(JSON.parse(raw))
-    return parsed.success ? parsed.data : null
-  } catch {
-    return null
-  }
-}
-
-/**
  * RFC-203 T4 — deterministic failed-run oracle: for failed tasks, project the
  * RFC-145 failure code of the FAILED NODE's freshest top-level run into the
  * task-level DTO (Task / TaskSummary.failureCode) so the list page and the
@@ -4368,272 +2728,6 @@ export async function loadTaskFailureCodes(
   return out
 }
 
-/**
- * Returns all node_runs rows for a task plus their captured port outputs.
- * Ordering: started_at ascending so the frontend can render them as a
- * timeline. node_runs that haven't started yet (`pending`) tail the list
- * sorted by id.
- */
-export async function getTaskNodeRuns(
-  db: LegacyProviderNeutralDatabase,
-  taskId: string,
-  selectedNodeRunPrompts?: NodeRunPromptOperations,
-): Promise<TaskNodeRuns> {
-  const nodeRunPrompts = selectNodeRunPromptOperations(selectedNodeRunPrompts)
-  const task = await getTask(db, taskId)
-  if (task === null) {
-    throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  }
-  // RFC-311 (audit L2-2): exactly the columns the wire mapper below consumes.
-  // The former select() dragged every row's inventory/runtime/startup/iso/
-  // pre-snapshot/consumed-upstream JSON columns (25 columns, the bulk of the
-  // row's bytes) through SQLite → JS on EVERY detail poll — and the running
-  // `node.status` WS frame retriggers this endpoint ~2×/s per viewer. The wire
-  // never carried those columns; promptText stays because it does.
-  const runRows = await db
-    .select({
-      id: nodeRuns.id,
-      seq: nodeRuns.seq,
-      taskId: nodeRuns.taskId,
-      nodeId: nodeRuns.nodeId,
-      status: nodeRuns.status,
-      iteration: nodeRuns.iteration,
-      retryIndex: nodeRuns.retryIndex,
-      parentNodeRunId: nodeRuns.parentNodeRunId,
-      childTaskId: nodeRuns.childTaskId,
-      shardKey: nodeRuns.shardKey,
-      wgRound: nodeRuns.wgRound,
-      reviewIteration: nodeRuns.reviewIteration,
-      containerRunId: nodeRuns.containerRunId,
-      scopePath: nodeRuns.scopePath,
-      startedAt: nodeRuns.startedAt,
-      finishedAt: nodeRuns.finishedAt,
-      pid: nodeRuns.pid,
-      exitCode: nodeRuns.exitCode,
-      errorMessage: nodeRuns.errorMessage,
-      failureCode: nodeRuns.failureCode,
-      promptText: nodeRuns.promptText,
-      // RFC-311 T21:新行的正文在文件里,这里取路径、下面双读还原。
-      promptPath: nodeRuns.promptPath,
-      opencodeSessionId: nodeRuns.opencodeSessionId,
-      rerunCause: nodeRuns.rerunCause,
-      supersededByReview: nodeRuns.supersededByReview,
-      rolledBack: nodeRuns.rolledBack,
-      commitPushJson: nodeRuns.commitPushJson,
-      injectedMemoriesJson: nodeRuns.injectedMemoriesJson,
-      portValidationFailuresJson: nodeRuns.portValidationFailuresJson,
-      tokInput: nodeRuns.tokInput,
-      tokOutput: nodeRuns.tokOutput,
-      tokCacheCreate: nodeRuns.tokCacheCreate,
-      tokCacheRead: nodeRuns.tokCacheRead,
-      tokTotal: nodeRuns.tokTotal,
-    })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, taskId))
-    // 未启动的 run（started_at NULL）两个引擎都排最前：SQLite 的缺省，PG 须显式 nulls first。
-    .orderBy(
-      engineOf(db).ascNullsFirst(nodeRuns.startedAt),
-      engineOf(db).ascNullsFirst(nodeRuns.seq),
-      asc(nodeRuns.id),
-    )
-
-  // RFC-078: group the task's doc_versions by review node_run so we can derive
-  // each review row's content-anchored "this round started" timestamp instead
-  // of surfacing its pinned (slot-first-open) started_at. One extra query; no
-  // N+1. Non-review runs simply have no doc_versions → timing derives to null.
-  // RFC-158: project the extra columns selectCurrentReviewRound needs
-  // (decidedBy for the human-vs-system check; itemIndex / roundGeneration /
-  // reviewIteration for the multi-doc round pick — reviewIteration here is the
-  // PER-DOC value, distinct from node_run.review_iteration). The raw rows
-  // structurally satisfy both ReviewVersionFacts (RFC-078 timing) and
-  // CurrentReviewRoundRow (RFC-158 nav), so one grouping feeds both.
-  const dvRows = await db
-    .select({
-      reviewNodeRunId: docVersions.reviewNodeRunId,
-      createdAt: docVersions.createdAt,
-      versionIndex: docVersions.versionIndex,
-      decision: docVersions.decision,
-      decidedAt: docVersions.decidedAt,
-      decidedBy: docVersions.decidedBy,
-      itemIndex: docVersions.itemIndex,
-      roundGeneration: docVersions.roundGeneration,
-      reviewIteration: docVersions.reviewIteration,
-    })
-    .from(docVersions)
-    .where(eq(docVersions.taskId, taskId))
-  const dvRowsByRun = new Map<string, (typeof dvRows)[number][]>()
-  for (const dv of dvRows) {
-    const list = dvRowsByRun.get(dv.reviewNodeRunId)
-    if (list === undefined) dvRowsByRun.set(dv.reviewNodeRunId, [dv])
-    else list.push(dv)
-  }
-
-  // RFC-161: task-detail canvas click target for clarify / cross-clarify node_runs.
-  // Load the task's clarify_rounds and keep, per intermediary node_run, the
-  // createdAt-max round's status — the SAME selection getClarifyRoundDetail renders
-  // with (orderBy(desc(createdAt)).limit(1)). RFC-161's only safety requirement is
-  // "clarifyNavKind != null ⟹ the run has a round ⟹ getClarifyRoundDetail won't 404";
-  // it does not depend on which round wins a same-createdAt tie (a same-createdAt
-  // duplicate only arises from concurrent idempotent replay of one un-answered emission,
-  // whose rounds are equivalent — a pre-existing clarify-subsystem property RFC-161 does
-  // not touch; see design §4.5). One extra query; no N+1.
-  const crRows = await db
-    .select({
-      intermediaryNodeRunId: clarifyRounds.intermediaryNodeRunId,
-      status: clarifyRounds.status,
-      createdAt: clarifyRounds.createdAt,
-    })
-    .from(clarifyRounds)
-    .where(eq(clarifyRounds.taskId, taskId))
-  const latestRoundByRun = new Map<string, { status: ClarifyRoundStatus; createdAt: number }>()
-  for (const cr of crRows) {
-    const prev = latestRoundByRun.get(cr.intermediaryNodeRunId)
-    if (prev === undefined || cr.createdAt > prev.createdAt) {
-      latestRoundByRun.set(cr.intermediaryNodeRunId, {
-        status: cr.status as ClarifyRoundStatus,
-        createdAt: cr.createdAt,
-      })
-    }
-  }
-  // Orphaned awaiting suppression: cancelTaskRow/failTask only flip the task row and
-  // leave the clarify round + node_run awaiting_human behind (scheduler.ts:541-543 /
-  // :5596-5611), so a canceled/failed task must not advertise its clarify as answerable.
-  // 'answered' is NOT gated — viewing history on any task is fine.
-  const clarifyTaskDead = task.status === 'canceled' || task.status === 'failed'
-
-  const runs: NodeRun[] = await Promise.all(
-    runRows.map(async (r) => {
-      const dvForRun = dvRowsByRun.get(r.id) ?? []
-      const reviewTiming = deriveReviewRoundTiming(r, dvForRun)
-      // RFC-158: canvas click target for this review run. Gated on a renderable
-      // current round (round !== null ⟺ has a doc_version ⟺ getReviewDetail won't
-      // 404), then awaiting (live) vs decided (human conclusion). null for
-      // non-review rows, empty-list reviews (zero doc_version), pending/system
-      // current rounds. Same selectCurrentReviewRound getReviewDetail renders with.
-      //
-      // 'awaiting' additionally requires the current representative to be PENDING:
-      // an awaiting_review run whose current round is an EMPTY list (dispatch
-      // parks awaiting WITHOUT minting a new doc_version, review.ts:688-700) has
-      // only OLD decided rows as its representative — clicking would open that
-      // stale round, not the empty live one, so it must be null instead (impl-gate
-      // reopened-empty regression; mirrors the first-round R5 zero-doc case).
-      const round = selectCurrentReviewRound(dvForRun)
-      let reviewNavKind: 'awaiting' | 'decided' | null = null
-      if (round !== null) {
-        if (r.status === 'awaiting_review') {
-          if (round.representative.decision === 'pending') reviewNavKind = 'awaiting'
-        } else if (isHumanReviewConclusion(round.representative)) {
-          reviewNavKind = 'decided'
-        }
-      }
-      // RFC-161: clarify / cross-clarify canvas nav. null for non-clarify runs (no
-      // round in the map) and canceled/abandoned rounds; 'awaiting' suppressed on a
-      // dead task (orphaned awaiting).
-      let clarifyNavKind = clarifyNavKindForRoundStatus(latestRoundByRun.get(r.id)?.status)
-      if (clarifyNavKind === 'awaiting' && clarifyTaskDead) clarifyNavKind = null
-      return {
-        id: r.id,
-        seq: r.seq ?? null,
-        taskId: r.taskId,
-        nodeId: r.nodeId,
-        parentNodeRunId: r.parentNodeRunId,
-        iteration: r.iteration,
-        shardKey: r.shardKey,
-        retryIndex: r.retryIndex,
-        // RFC-189 — the authoritative lw workgroup round ordinal (NULL elsewhere).
-        wgRound: r.wgRound ?? null,
-        // RFC-182 P1-3 — wire the mint cause for wg-aware history labels.
-        rerunCause: r.rerunCause ?? null,
-        reviewIteration: r.reviewIteration,
-        // RFC-354 — the frame (generation row + breadcrumb) for grouping / labels.
-        containerRunId: r.containerRunId ?? null,
-        scopePath: r.scopePath ?? '',
-        status: r.status,
-        startedAt: r.startedAt,
-        finishedAt: r.finishedAt,
-        pid: r.pid,
-        exitCode: r.exitCode,
-        errorMessage: r.errorMessage,
-        // RFC-203 T4: RFC-145 machine-readable failure code, now surfaced so
-        // the UI can localize failure copy instead of parsing errorMessage.
-        failureCode: (r.failureCode ?? null) as FailureCode | null,
-        // RFC-243: child task launched by this call node_run (link + live status).
-        childTaskId: r.childTaskId ?? null,
-        supersededByReview: (r.supersededByReview ?? null) as 'iterated' | 'rejected' | null,
-        rolledBack: r.rolledBack ?? null,
-        promptText: await nodeRunPrompts.read(r),
-        tokInput: r.tokInput,
-        tokOutput: r.tokOutput,
-        tokTotal: r.tokTotal,
-        tokCacheCreate: r.tokCacheCreate,
-        tokCacheRead: r.tokCacheRead,
-        // RFC-026: surface opencode session id to the UI so a clarify-inline
-        // chip can render + operators can copy it for local debugging.
-        opencodeSessionId: r.opencodeSessionId,
-        // RFC-046: parse the post-budget-clip memory snapshot the runner
-        // persisted at inject time. Malformed payloads degrade to null + log
-        // (the column is JSON written by the runner; nothing user-supplied,
-        // so corruption should be impossible, but defensive at the API edge
-        // beats a 5xx on the whole task detail page).
-        injectedMemories: parseInjectedSnapshotJson(r.injectedMemoriesJson),
-        // RFC-049: structured port-validation failures captured by the runner
-        // (NULL for successful runs or runs that failed for any reason other
-        // than port-content validation). Same defensive-parse contract as
-        // injectedMemories — corrupted payloads degrade to null rather than
-        // throw the whole task detail response.
-        portValidationFailures: parsePortValidationFailuresJson(r.portValidationFailuresJson),
-        // RFC-075: commit&push metadata on framework-synthesized commit rows
-        // (NULL on every regular node_run). Defensive parse: corrupt payloads
-        // degrade to null rather than 5xx the whole task-detail response.
-        commitPush: parseCommitPushJson(r.commitPushJson),
-        // RFC-078: review-round display anchor (see reviewRoundStart.ts). Null for
-        // non-review rows; the UI falls back to startedAt when null.
-        reviewRoundStartedAt: reviewTiming?.roundStartedAt ?? null,
-        reviewDecidedAt: reviewTiming?.decidedAt ?? null,
-        // RFC-158: task-detail canvas click target (see schemas/task.ts).
-        reviewNavKind,
-        // RFC-161: clarify / cross-clarify canvas click target (see schemas/task.ts).
-        clarifyNavKind,
-      }
-    }),
-  )
-
-  // RFC-078: re-sort with review rows keyed on their round anchor (not their
-  // pinned started_at), so a review lands after the content it reviews instead
-  // of at the slot-first-open tick. Non-review rows keep asc(startedAt, id).
-  runs.sort(compareNodeRunsForTimeline)
-
-  let outputs: NodeRunOutput[] = []
-  if (runs.length > 0) {
-    const runIds = runs.map((r) => r.id)
-    const outRows = await db
-      .select()
-      .from(nodeRunOutputs)
-      .where(inArray(nodeRunOutputs.nodeRunId, runIds))
-    outputs = outRows.map((o) => ({
-      nodeRunId: o.nodeRunId,
-      port: o.portName,
-      value: o.content,
-      kind: o.kind, // RFC-072: surface resolved output kind for the Outputs tab
-      // RFC-306: only sent when the port was CLOSED, so an ordinary response is
-      // byte-identical to the pre-RFC-306 one.
-      ...(o.active === false ? { active: false } : {}),
-    }))
-  }
-  // RFC-306: the run trace rides this response — the task detail already fetches
-  // it and already invalidates it on every node-status WS event. Absent when the
-  // task took no branch decisions at all.
-  const branchTrace = await branchTraceForTask(new DrizzleBranchTraceSnapshotReader(db), taskId)
-  return { runs, outputs, ...(branchTrace !== undefined ? { branchTrace } : {}) }
-}
-
-/**
- * Page events for one node_run. `since` is the event id cursor (exclusive);
- * returns up to `limit` events ordered by id ascending plus the new cursor.
- *
- * Caller is responsible for asserting that the task owns the node_run; we
- * just verify the node_run belongs to the task to avoid cross-task leakage.
- */
 function rowToTask(
   row: typeof tasks.$inferSelect,
   workflowName: string | null,

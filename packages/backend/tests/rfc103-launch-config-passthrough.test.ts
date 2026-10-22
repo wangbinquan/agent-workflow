@@ -1,9 +1,10 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-103 T2 (调研报告 01-LIFE-06 / 02-SCHED) — 启动运行期配置透传回归锁。
 //
 // 为什么这条测试存在：maxConcurrentNodes 从未从任何 HTTP 入口接线（生产恒走
 // scheduler 默认 4，无视 settings）；commitPush 只在 JSON start 传，
 // resume/repair/retry/multipart-start 均不传，retryNode 内部 runTask 也丢了
-// commitPush。本测试锁定：① runtimeConfigOpts 把 StartTaskDeps 的 commitPush +
+// commitPush。本测试锁定：① runtimeConfigOpts 把 TaskContinuationDependencies 的 commitPush +
 // maxConcurrentNodes 正确摊进 RunTaskOptions（单一事实源，三处 kick 共用）；
 // ② 5 个 route 入口都经 resolveLaunchRuntimeConfig 解析（源码层文本断言防再漂）。
 import { readFileSync } from 'node:fs'
@@ -120,7 +121,7 @@ describe('RFC-103 T2 runtimeConfigOpts — 单一事实源摊配置', () => {
   })
 
   // RFC-284 T30 修配（RFC-253 覆盖生产死配，漏斗第四次漏接线）：launch 臂一直经
-  // `...launchRuntime` 在运行时携带这两键，但 StartTaskDeps 类型缺席 + 本漏斗
+  // `...launchRuntime` 在运行时携带这两键，但 TaskContinuationDependencies 类型缺席 + 本漏斗
   // 未拾取 ⇒ 根任务与子任务双双静默丢弃（spread 绕过 TS 溢出属性检查——与
   // RFC-266 同型事故）。锁死：两键经同一漏斗摊出，缺省不合成键。
   test('RFC-284 T30: scriptInterpreters / scriptDepsInstallTimeoutMs 经同一漏斗摊出；缺省不合成键', () => {
@@ -171,19 +172,21 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // 启动参与者（终端是根启动内核），那一处 `...dependencies.startDepsFor(actor)` 随之消失。
     // 本条锁的是「剩下的每一条人工续跑入口都还在透传启动配置」，那些一处没动。
     // RFC-359 AC-1（第 8 刀）：5 → 3。少掉的两处是 `repairOptions` / `applyRepair`
-    // ——它们不再自己拼 `StartTaskDeps`，改为交给与 PostgreSQL 共用的那份修复实现。
+    // ——它们不再自己拼 `TaskContinuationDependencies`，改为交给与 PostgreSQL 共用的那份修复实现。
     // RFC-359 AC-1（第 9 刀）：3 → 2。少掉的那一处是 `retry`——`retry` 两份实现合一，
-    // 它不再自己拼 `StartTaskDeps`，复活整段交给注入的 `resumeTaskAs`。
+    // 它不再自己拼 `TaskContinuationDependencies`，复活整段交给注入的 `resumeTaskAs`。
     // RFC-359 AC-1（第 10 刀）：2 → 1。少掉的那一处是 `resume` 自己——它也合一了，
     // 同样只剩「交给注入的 `resumeTaskAs`，再把任务重读一遍」。剩下的那一处是 `syncWorkflow`。
     // RFC-359 AC-1（第 13 刀下）：1 → **0**，而且 `startDepsFor` 这一格整个从依赖面消失。
-    // `syncWorkflow` 是这条路上最后一个持有 legacy `StartTaskDeps` 的路由动词；它与
+    // `syncWorkflow` 是这条路上最后一个持有 legacy `TaskContinuationDependencies` 的路由动词；它与
     // PostgreSQL 合一之后，启动配置全部经注入的 `resumeTaskAs` 进去（与 `retry` / `resume`
-    // 同一条端口），路由层不再认识 `StartTaskDeps`。
+    // 同一条端口），路由层不再认识 `TaskContinuationDependencies`。
     expect((routeOperations.match(/\.\.\.dependencies\.startDepsFor\(actor\)/g) ?? []).length).toBe(
       0,
     )
-    expect(routeOperations, '路由层不得再长回 legacy 启动依赖').not.toContain('StartTaskDeps')
+    expect(routeOperations, '路由层不得再长回 legacy 启动依赖').not.toContain(
+      'TaskContinuationDependencies',
+    )
     // **但启动配置在重试这条路上一个字都不能丢**——这才是 RFC-103 要锁的东西，数字只是它的
     // 影子。合并之后它的正面锚点是这三句：路由把 `retry` 交给共用投影，复活整段走由组合根
     // 装出来的子任务生命周期参与者（`children.resume`），而那条端口的启动配置由组合根用与
@@ -237,7 +240,7 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     }
   })
 
-  test('四种 admission 共用一个 runtimeConfigOpts → coordinator 漏斗', () => {
+  test('三个存续 continuation 共用一个 runtimeConfigOpts → coordinator 漏斗', () => {
     const spreads = taskSrc.match(/\.\.\.runtimeConfigOpts\(/g) ?? []
     // RFC-332 把 start/resume/retry/retry-prep 四份 spread 收进一个 coordinator
     // factory；RFC-333 的 exact human-gate wake 复用同一 factory，但不是第五份
@@ -246,7 +249,8 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // 它那台 coordinator 随之出账——重试的驱动改由紧随其后的 `resumeTask` 那一台负责，
     // 配置单源不变（仍只有一处 `...runtimeConfigOpts(`）。
     expect(spreads).toHaveLength(1)
-    expect(taskSrc.match(/composeTestTaskDriveFactory\(\{/g) ?? []).toHaveLength(4)
+    // RFC-395 II-pre：测试专用 admission 退役，剩余三台 continuation 仍走同一配置漏斗。
+    expect(taskSrc.match(/composeTestTaskDriveFactory\(\{/g) ?? []).toHaveLength(3)
     // RFC-387: only the four test-only admissions retain a factory wrapper; production uses the session.
     const factory = readFileSync(
       join(
@@ -343,7 +347,7 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   })
 
   // RFC-284 T30: RFC-253 两键的全链在场锁 —— config 读出（launchRuntimeConfig）
-  // → StartTaskDeps 携带（task.ts）→ 漏斗摊出（上面的纯函数用例）→ 子任务继承
+  // → TaskContinuationDependencies 携带（task.ts）→ 漏斗摊出（上面的纯函数用例）→ 子任务继承
   //（rfc284-t20 登记表）。任何一环回退即红。
   test('RFC-284 T30: scriptInterpreters / scriptDepsInstallTimeoutMs 从 config 读出且 deps 类型在场', () => {
     const launchSrc = readFileSync(
@@ -352,7 +356,7 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     )
     for (const key of ['scriptInterpreters', 'scriptDepsInstallTimeoutMs']) {
       expect(launchSrc).toContain(`out.${key} = cfg.${key}`)
-      expect(taskSrc).toContain(`${key}?:`) // StartTaskDeps 字段声明在场
+      expect(taskSrc).toContain(`${key}?:`) // TaskContinuationDependencies 字段声明在场
       expect(taskSrc).toContain(`deps.${key} !== undefined`) // 漏斗拾取在场
     }
   })

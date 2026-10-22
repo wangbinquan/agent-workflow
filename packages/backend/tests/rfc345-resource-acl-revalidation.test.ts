@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-345 回归防护 —— 每一次 ACL 写入都必须唤醒在线连接。
 //
 // 为什么这条测试存在：这条 post-commit 通知原先挂在 `services/resourceAcl` 的兼容
@@ -22,7 +23,7 @@ import {
   updateResourceAcl,
 } from '../src/modules/resource-catalog/composition/resourceAcl'
 import { createAgent } from '../src/services/agent'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { registerRevalidationTrigger, type RevocationReason } from '../src/ws/revalidationHook'
 
 const AGENT_FIELDS = {

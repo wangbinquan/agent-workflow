@@ -1,3 +1,4 @@
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-359 W8-T29 —— 「先查存在、再插入唯一键表，且本文件不归一唯一冲突」的高水位账本（只降不升）。
 //
 // 这条守卫挡的是什么
@@ -544,7 +545,6 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   // 的对应写法本来就在 SERIALIZABLE 里读改写，不落进本账本。
   'modules/task-execution/infrastructure/workspaceRollbackEffect.ts: 1',
   'platform/events/committed/appendProgram.ts: 2',
-  'services/task.ts: 1',
 ]
 
 interface ScannedFile {

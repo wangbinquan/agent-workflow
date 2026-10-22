@@ -1,4 +1,4 @@
-import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-311 实现门 P1-6 / P2-3 —— `tasks.branch_started_at` 的维护面。
 //
 // 该列是 task-operations catalog provider 默认视图(快路径)的排序键,语义是「子树 max(started_at)」。
@@ -21,7 +21,8 @@ import type { StartTask } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, users, workflows } from '../src/db/schema'
-import { startTask } from '@/services/task'
+import { launchTestTask } from './helpers/productionTaskLaunch'
+import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { deleteTask } from '../src/services/taskDelete'
@@ -68,6 +69,7 @@ function spaceFor(taskId: string, root: string): MaterializedSpace {
         baseCommit: null,
         repoUrl: null,
         cachedRepoId: null,
+        worktreeDirName: '',
         mountPath: '',
         subdir: '',
         readonly: false,
@@ -78,11 +80,11 @@ function spaceFor(taskId: string, root: string): MaterializedSpace {
     ],
     nodePaths: [],
     cleanup: { taskId, ownedRoot: null, worktrees: [], state: 'owned', report: null },
-  } as unknown as MaterializedSpace
+  }
 }
 
 describe('RFC-311 — branch_started_at is maintained by the real paths', () => {
-  test('a child launched through startTask lifts its ancestors, and deleting it converges them back', async () => {
+  test('a child launched through launchTestTask lifts its ancestors, and deleting it converges them back', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = Date.now()
     await db.insert(users).values({
@@ -131,23 +133,26 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
     const childRoot = mkdtempSync(join(tmpdir(), 'aw-rfc311-branch-'))
     let childId: string
     try {
-      const started = await startTask({ workflowId: wf, name: 'child', inputs: {} } as StartTask, {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        materializedSpace: spaceFor('placeholder', childRoot),
-        // RFC-328: let the real scheduler release its durable owner before this
-        // maintenance-path test overwrites terminal fixtures.
-        awaitScheduler: true,
-        callLaunch: {
-          parentTaskId: parentId,
-          parentNodeRunId: callRun,
-          invocationDepth: 1,
-          launchActorUserId: 'u1',
-          frozenSnapshotJson: EMPTY_DEF,
-          refClosureJson: null,
+      const started = await launchTestTask(
+        { workflowId: wf, name: 'child', inputs: {} } as StartTask,
+        {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          materializedSpace: spaceFor('placeholder', childRoot),
+          // RFC-328: let the real scheduler release its durable owner before this
+          // maintenance-path test overwrites terminal fixtures.
+          awaitScheduler: true,
+          callLaunch: {
+            parentTaskId: parentId,
+            parentNodeRunId: callRun,
+            invocationDepth: 1,
+            launchActorUserId: 'u1',
+            frozenSnapshotJson: EMPTY_DEF,
+            refClosureJson: null,
+          },
         },
-      })
+      )
       childId = started.id
       const childBranch = await branchStartedAt(db, childId)
       const parentAfterLaunch = await branchStartedAt(db, parentId)
@@ -161,7 +166,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
         .update(tasks)
         .set({ status: 'done', finishedAt: Date.now() })
         .where(eq(tasks.id, childId))
-      // startTask 注册了活动任务(真实路径的副作用),删除前解除——这里要测的是
+      // launchTestTask 注册了活动任务(真实路径的副作用),删除前解除——这里要测的是
       // 删除对物化列的影响,不是活动闸门。
       // 删子任务要求父也已终态(deleteTask 的既有闸门)——正是报告里的场景:
       // 「两者终态后管理员删掉 C」。
@@ -200,10 +205,11 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
     try {
       // 顶层任务:根是自己。
       const rootId = ulid()
-      const root = await startTask({ workflowId: wf, name: 'root', inputs: {} } as StartTask, {
+      const root = await launchTestTask({ workflowId: wf, name: 'root', inputs: {} } as StartTask, {
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
           .schedulerDriver,
+        coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
         materializedSpace: spaceFor(rootId, rootDir),
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       })
@@ -229,37 +235,42 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
 
       await markRunning(root.id)
       const childId = ulid()
-      const child = await startTask({ workflowId: wf, name: 'child', inputs: {} } as StartTask, {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        materializedSpace: spaceFor(childId, rootDir),
-        callLaunch: {
-          parentTaskId: root.id,
-          parentNodeRunId: await runOf(root.id, childId),
-          invocationDepth: 1,
-          launchActorUserId: 'u1',
-          frozenSnapshotJson: EMPTY_DEF,
-          refClosureJson: null,
+      const child = await launchTestTask(
+        { workflowId: wf, name: 'child', inputs: {} } as StartTask,
+        {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
+          materializedSpace: spaceFor(childId, rootDir),
+          callLaunch: {
+            parentTaskId: root.id,
+            parentNodeRunId: await runOf(root.id, childId),
+            invocationDepth: 1,
+            launchActorUserId: '__system__',
+            frozenSnapshotJson: EMPTY_DEF,
+            refClosureJson: null,
+          },
         },
-      })
+      )
       expect(await rootTaskIdOf(db, child.id)).toBe(root.id)
 
       // 孙子:继承的是**父的根**,而不是父自己——两者只在深度 ≥2 时才分得开。
       await markRunning(child.id)
       const grandchildId = ulid()
-      const grandchild = await startTask(
+      const grandchild = await launchTestTask(
         { workflowId: wf, name: 'grandchild', inputs: {} } as StartTask,
         {
           db,
           schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
             .schedulerDriver,
+          coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
           materializedSpace: spaceFor(grandchildId, rootDir),
           callLaunch: {
             parentTaskId: child.id,
             parentNodeRunId: await runOf(child.id, grandchildId),
             invocationDepth: 2,
-            launchActorUserId: 'u1',
+            launchActorUserId: '__system__',
             frozenSnapshotJson: EMPTY_DEF,
             refClosureJson: null,
           },

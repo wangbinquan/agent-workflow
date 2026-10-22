@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 import { TaskCatalogPageSchema, type TaskLaunchOrigin } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -10,7 +11,7 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { parseTaskOperationsQuery } from '../src/modules/task-execution/infrastructure/taskListPage'
 import { listTaskOperationsPage } from './helpers/taskListPage'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/taskListPage'
 
 type Db = ProviderNeutralDatabase

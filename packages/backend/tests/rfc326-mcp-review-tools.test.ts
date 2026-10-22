@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-326 — the review gate over MCP (proposal AC-21 / 22 / 23 / 24 / 25 / 27;
 // design §8).
 //
@@ -58,7 +59,7 @@ import { createBoundOperationInvoker } from '../src/platform/operations/boundOpe
 import type { OperationInvoker } from '../src/platform/operations/contracts'
 import { createTokenCallAudit } from '@/auth/composition'
 import { eventually } from './helpers/eventually'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   operationHandlesForInvoker,
   mcpTestOperationActor,

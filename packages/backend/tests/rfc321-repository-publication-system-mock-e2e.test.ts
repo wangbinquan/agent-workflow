@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-321 T16 — real smart-HTTP publication proof.
 //
 // The provider metadata request and git-receive-pack both cross the unified
@@ -38,7 +39,7 @@ import {
 } from '../src/modules/source-control/composition'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { bindCandidateDeliveryParticipant } from '../src/modules/source-control/composition/repositoryCandidate'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { runGit } from '../src/util/git'
 
 const { push: pushCandidate } = bindCandidateDeliveryParticipant()

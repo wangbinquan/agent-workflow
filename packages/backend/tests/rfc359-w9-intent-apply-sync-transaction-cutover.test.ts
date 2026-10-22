@@ -1,3 +1,4 @@
+// RFC-395 II-pre：使用生产 journal 收敛并传入活跃 journal 集合，双 provider 用例保留。
 // RFC-359 W9 —— Intent apply 的 9 笔 **journal 事务**从 bun:sqlite 独有的同步 `dbTxSync`
 // 切到中立事务原语（`databaseSessionFor(db).transaction`）之后的行为锁。
 //
@@ -33,6 +34,7 @@
 // context.recordArtifact`）是源码层文本断言：漏掉 await 不会让任何既有测试变红，
 // 而 `bun run lint:promises` 挡得住裸调用、挡不住显式 `void`。
 
+import { createIntentApplyJournalConvergence } from '@/modules/intent/infrastructure/intentApplyArtifactLifecycle'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -340,7 +342,17 @@ function applyPortFor(
         log: silentLog(),
         ...(options.faults === undefined ? {} : { faults: options.faults }),
       }),
-    converge: (convergeOptions) => operations.converge(silentLog(), convergeOptions ?? {}),
+    converge: (convergeOptions) =>
+      createIntentApplyJournalConvergence({
+        db: harness.db,
+        artifacts: artifacts as never,
+        log: silentLog(),
+      }).converge({
+        activeJournalIds: [
+          ...operations.activeJournalIds(),
+          ...(convergeOptions?.activeJournalIds ?? []),
+        ],
+      }),
     prestaged: () => prestaged,
   }
 }
@@ -546,7 +558,7 @@ describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => 
     expect(await port.converge()).toEqual({ failed: 0, rolledForward: 0 })
     const row = await journalRow(harness, journalId)
     expect(row?.state).toBe('applying')
-    expect(row?.error).toBe('retryable: compensation incomplete: cleanup unavailable')
+    expect(row?.error).toBe('retryable: compensation incomplete')
   })
 
   test('收敛③：收割 CAS 恰好一行 ⇒ 计数 1；再收一次幂等（affectedRows 判据）', async () => {

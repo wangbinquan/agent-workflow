@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-310 PR-9 T98–T103 —— cutover 状态机 + legacy admission gate + adopt。
 //
 // 锁的回归面：
@@ -57,7 +58,7 @@ import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
 } from './helpers/integrationTriggerResourceBinding'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 
 const NOW = 1_755_500_000_000

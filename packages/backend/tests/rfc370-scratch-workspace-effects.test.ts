@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // Scratch launch and replay must use one selected effect adapter. The real
 // Task journal advances only after its preparation/restoration/cleanup ACK.
 import { expect, test } from 'bun:test'
@@ -10,7 +11,7 @@ import {
   prepareScratchWorkspace,
 } from '@/modules/task-execution/infrastructure/scratchWorkspacePreparation'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
-import { materializingSpaces } from '@/services/gc'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { describeEachProvider } from './helpers/eachProvider'
 
 function space(taskId: string): MaterializedSpace {

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-303 / RFC-294 architecture ratchet: provider integration may invoke the
 // task-execution participant, but may not reach task selectors, lifecycle
 // services, GC, or workspace paths. Internal termination identity/fences also
@@ -88,8 +89,8 @@ describe('RFC-317 T13 —— 语料非空', () => {
 describe('RFC-317 T14 —— matcher 自证：伪造的越界 import 必须被抓到', () => {
   test('四个被禁的内部模块逐个命中，单引号双引号都认', () => {
     for (const fabricated of [
-      "import { startTask } from '@/services/task'",
-      'import { collect } from "@/services/gc"',
+      "import { getTask } from '@/services/task'",
+      'import { collect } from "@/services/taskDelete"',
       "import { dispatch } from '@/services/scheduler'",
       "import { run } from '@/services/execution/kernel'",
       "import { worktreePath } from '@/util/paths'",

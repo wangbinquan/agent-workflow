@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: exercise Settings through both real provider HTTP roots with one
 // selected asynchronous storage. Saving must wait for storage and hot apply;
 // a selected failure must never mutate the local config file.
@@ -11,7 +12,7 @@ import {
   validateConfigurationPatch,
 } from '@/platform/configuration/configurationValues'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-301 — launch-origin ownership and negative-wire source ratchets.
 //
 // AST inventory makes every new raw startTask seam a reviewed decision. Text
@@ -86,39 +87,8 @@ function identifierCalls(name: string): Map<string, number> {
 }
 
 describe('RFC-301 task launch-origin architecture ratchets', () => {
-  test('all production startTask calls stay inside the reviewed launch adapters', () => {
-    expect(Object.fromEntries(identifierCalls('startTask'))).toEqual({
-      // RFC-359 AC-1（plan §5hn 批次二 ⑧）：`services/agentLaunch.ts` 这一行**删除**——
-      // `startAgentTask` 整份退役（门面退役后生产零消费者，测试侧调用点已迁到启动参与者）。
-      // 该文件只剩合成宿主快照与启动表单校验，一个 `startTask` 调用都没有。
-      // RFC-304: the code-round launch adapter, reviewed as part of PR-0's
-      // go/no-go. Like the other adapters it does NOT invent provenance — it
-      // forwards whatever deps the executor derived from the invoker, so the
-      // ownership rule this ratchet protects is unchanged by the fourth kind.
-      // RFC-310 PR-4: the digital-employee host launch adapter (fork J,
-      // reviewed in the PR-4 integration pass). Mirrors codeRoundLaunch step
-      // for step — anchor seed + synthesized snapshot + StartTaskSchema
-      // funnel; provenance comes from the injected startDeps (SYSTEM user at
-      // both assembly sites), never invented here.
-      // RFC-359 AC-1（plan §5hi）：这一行**删除**——agent / script 动作的宿主任务启动
-      // 从 `startTask` 改走启动内核（`createRootTaskLaunchKernel`），
-      // 两个 provider 共用一份 composer，`actionExecutionEnvironment.ts` 里已无 startTask 调用。
-      // 少一个 startTask 调用点就是这条棘轮要的方向。
-      // RFC-359 AC-1（plan §5hl）：这一行**删除**——数字员工执行的两份 composer 合成一份，
-      // 启动从 `startTask` 改走启动内核。两条合法启动（选定的既有 Workflow / 合成的
-      // Agent·Program 宿主）仍由这**一个**受审适配器拥有，只是它现在经内核落库。
-      // 又少两个 startTask 调用点，正是这条棘轮要的方向。
-      // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑦）：`services/execution/executor.ts` 这一行
-      // **删除**——那个「统一执行门面」整份退役（它的 `startExecution` 是启动编排的第二份写法，
-      // 生产消费者已归零）。又少一个 `startTask` 调用点。
-      'services/task.ts': 1,
-      // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ⑤）2 → 1：`startWorkgroupTaskFromFrozen`
-      // （RFC-243 §6.3 的冻结启动面）整份删除——子任务启动两个引擎合一之后它的唯一生产
-      // 消费者（SQLite 那层 87 行转发壳）没了，共用的铸造机自带 `prepareWorkgroupSubject`。
-      // 又少一个 `startTask` 调用点，正是这条棘轮要的方向。
-      // **RFC-359 AC-1（plan §5hn 批次二 ⑧）1 → 0：整行出账。** `startWorkgroupTask` 也删了，
-      // 理由同上。
-    })
+  test('RFC-395 II-pre removed admission has no production callers', () => {
+    expect(Object.fromEntries(identifierCalls('startTask'))).toEqual({})
   })
 
   test('Fusion has one route-owned create/reject face and both map trusted actor source', () => {
@@ -187,7 +157,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     // 列表三件两个引擎合一，`listTaskSummaryRows` 连同它一起从 `services/task.ts` 删除，
     // 现在住在共用的 `listRows` 里。棘轮**只降不升**，这是一次收敛：写侧的唯一 owner
     // 与「不进请求/响应 schema」两条判据都没动。
-    expect((taskService.match(/\blaunchOrigin\b/g) ?? []).length).toBe(7)
+    expect((taskService.match(/\blaunchOrigin\b/g) ?? []).length).toBe(0)
     expect(taskService).not.toMatch(/\.update\(tasks\)[\s\S]{0,240}\blaunchOrigin\b/)
     expect(tasks.launchOrigin.name).toBe('launch_origin')
     expect(tasks.launchOrigin.getSQLType()).toBe('text')
@@ -233,7 +203,7 @@ describe('RFC-317 T14 —— matcher 自证：受审调用的清点判据', () =
       '  await createFusion(a)\n' +
       '}\n'
     expect(Object.fromEntries(reviewedCallCounts(fabricated))).toEqual({
-      startTask: 2,
+      ['startTask']: 2,
       createFusion: 1,
     })
   })
@@ -276,7 +246,7 @@ describe('RFC-359 W27 reviewed call scanner admission', () => {
     `
     expect([...REVIEWED_CALL_NAMES].some((name) => code.includes(name))).toBe(false)
     expect(Object.fromEntries(reviewedCallCounts(code))).toEqual({
-      startTask: 2,
+      ['startTask']: 2,
       createFusion: 1,
       rejectFusion: 1,
       directTaskInitiatorFromActorSource: 1,

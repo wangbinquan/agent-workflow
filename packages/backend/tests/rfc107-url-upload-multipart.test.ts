@@ -1,11 +1,12 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-107 — URL-mode launches may now carry multipart file uploads.
 //
 // Before RFC-107 the multipart route refused any `repoUrl` body with
 // `multipart-upload-requires-path-mode` ("URL launches are JSON-only"), because
-// it materialized the worktree from a LOCAL repoPath before startTask and a URL
+// it materialized the worktree from a LOCAL repoPath before launchTestTask and a URL
 // repo isn't on disk at that point. RFC-107 resolves the URL into the
 // gitRepoCache (reusing `resolveRepoSourceSingle`) BEFORE materializing, threads
-// the resolved source into startTask via `preResolvedSource` (resolve exactly
+// the resolved source into launchTestTask via `preResolvedSource` (resolve exactly
 // once), validates the workflow before cloning, and threads the working branch.
 //
 // These lock the four Codex design-gate findings folded into the RFC:
@@ -62,7 +63,8 @@ import {
   workflowDraftSnapshotOf,
   type WorkflowWritePrincipal,
 } from '../src/services/workflow'
-import { abortAllActiveTasks, isTaskActive, startTask as startTaskBase } from '@/services/task'
+import { abortAllActiveTasks, isTaskActive } from '@/services/task'
+import { launchTestTask as launchTestTaskBase } from './helpers/productionTaskLaunch'
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { ValidationError } from '../src/util/errors'
@@ -129,11 +131,11 @@ function git(...args: string[]): string {
   })
 }
 
-function startTask(
-  input: Parameters<typeof startTaskBase>[0],
-  deps: Parameters<typeof startTaskBase>[1],
+function launchTestTask(
+  input: Parameters<typeof launchTestTaskBase>[0],
+  deps: Parameters<typeof launchTestTaskBase>[1],
 ) {
-  return startTaskBase(input, {
+  return launchTestTaskBase(input, {
     launchProvenance: { kind: 'direct-json', initiator: 'manual' },
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
@@ -787,13 +789,13 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
 })
 
 // ---------------------------------------------------------------------------
-// Unit: startTask honors `preResolvedSource` — the URL is resolved EXACTLY ONCE
+// Unit: launchTestTask honors `preResolvedSource` — the URL is resolved EXACTLY ONCE
 // (F3) and a credentialed URL is persisted redacted (F4). Both are proven via a
-// BOGUS/credentialed URL that would FAIL if startTask tried to clone it: because
+// BOGUS/credentialed URL that would FAIL if launchTestTask tried to clone it: because
 // preResolvedSource short-circuits resolution, the launch succeeds and never
 // touches the network.
 // ---------------------------------------------------------------------------
-describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', () => {
+describe('RFC-107 — launchTestTask preResolvedSource (resolve-once + redaction)', () => {
   async function unitSetup() {
     const tmp = makeTempDir('aw-rfc107-unit-')
     const appHome = join(tmp, 'home')
@@ -872,11 +874,11 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
     })
     expect(wt.earlyError).toBeNull()
 
-    // This URL is unreachable + carries credentials. If startTask resolved it,
+    // This URL is unreachable + carries credentials. If launchTestTask resolved it,
     // the clone would fail. It must NOT: preResolvedSource short-circuits the
     // single repo (index 0).
     const credentialedUrl = 'https://user:s3cr3t@example.invalid/repo.git'
-    const task = await startTask(
+    const task = await launchTestTask(
       { workflowId: wf.id, name: 'unit', repoUrl: credentialedUrl, inputs: { topic: 'hi' } },
       {
         db,

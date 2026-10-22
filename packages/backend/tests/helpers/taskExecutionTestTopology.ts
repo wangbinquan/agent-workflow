@@ -1,3 +1,5 @@
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
+import { workspaceMaintenanceForTest } from './workspaceMaintenance'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
@@ -49,7 +51,7 @@ import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/task
 import { createChildExecutionLaunchOperations } from '../../src/modules/task-execution/infrastructure/childExecutionLaunchOperations'
 import { createDatabaseTaskDriverLifecyclePort } from '../../src/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { createTaskExecutionPersistence as createChildPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
-import { finishClaimedWebhookWorkspacePrune } from '../../src/platform/persistence/sqlite/systemWorkspaceGc'
+
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { createLogger } from '../../src/util/log'
@@ -129,7 +131,7 @@ export function singleProcessDeploymentPorts(db: DbClient) {
         db,
         log,
         finalizeWorkspace: async (taskId: string) => {
-          await finishClaimedWebhookWorkspacePrune(db, taskId)
+          await workspaceMaintenanceForTest(db).finalizeClaimedWorkspace(taskId)
         },
       }),
     ),
@@ -399,7 +401,7 @@ export function runTaskWithRealTestTopology(
               db: options.db,
               log: createLogger('task'),
               finalizeWorkspace: async (taskId) => {
-                await finishClaimedWebhookWorkspacePrune(options.db, taskId)
+                await workspaceMaintenanceForTest(options.db).finalizeClaimedWorkspace(taskId)
               },
             }),
             () => ({

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-321 AC-1/2/8/9 — the personal credential surface is session/self only,
 // never echoes plaintext, and stays transactionally coupled to the admin
 // connection trust boundary.
@@ -22,7 +23,7 @@ import {
 import { mountAccountRepositoryTransportCredentialRoutes } from '../src/routes/accountRepositoryTransportCredentials'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { errorHandler } from '../src/util/errors'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()

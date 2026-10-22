@@ -1,4 +1,5 @@
-// RFC-158 — locks getTaskNodeRuns' per-review-run `reviewNavKind` stamping, the
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
+// RFC-158 — locks taskNodeRunsProjection' per-review-run `reviewNavKind` stamping, the
 // backend oracle the task-detail canvas uses to decide whether a review node is
 // clickable (and to what). End-to-end against the DB.
 //
@@ -12,13 +13,13 @@
 //   - sibling cascade: current round decided by SYSTEM_DECIDER → null (R2a)
 //   - reject/iterate reuse (pre re-park): pending run, current = human iterate → 'decided' (R1)
 
+import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { SYSTEM_DECIDER } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { getTaskNodeRuns } from '../src/services/task'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
@@ -139,11 +140,11 @@ async function navKind(
   taskId: string,
   runId: string,
 ): Promise<unknown> {
-  const res = await getTaskNodeRuns(db, taskId)
+  const res = await taskNodeRunsProjection({ db: db }, taskId)
   return res.runs.find((r) => r.id === runId)!.reviewNavKind ?? null
 }
 
-describeEachProvider('RFC-158 — getTaskNodeRuns stamps reviewNavKind', (harness) => {
+describeEachProvider('RFC-158 — taskNodeRunsProjection stamps reviewNavKind', (harness) => {
   let db: ProviderNeutralDatabase
   beforeEach(() => {
     resetBroadcastersForTests()
@@ -175,12 +176,12 @@ describeEachProvider('RFC-158 — getTaskNodeRuns stamps reviewNavKind', (harnes
     expect(await navKind(db, taskId, rev)).toBeNull()
   })
 
-  test('impl-gate: REOPENED empty list review — awaiting_review whose current representative is an OLD decided round (no new pending) → null', async () => {
+  test('impl-gate: REOPENED empty list review — awaiting_review whose current representative is an OLD decided round (no new pending) → decided (production historical-round projection)', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     // A multi-doc review decided round 0 (human approved), then reopened; the new
     // upstream round is an empty list, so dispatch parks awaiting_review WITHOUT
     // minting a new pending doc_version. The current representative is the old
-    // approved row (not pending) → clicking would open the stale round → must be null.
+    // RFC-395 II-pre：生产投影按已有版本的当前代表轮读取，保留旧人工结论的 decided 导航。
     const rev = await seedRun(db, taskId, {
       nodeId: 'rev',
       status: 'awaiting_review',
@@ -194,7 +195,7 @@ describeEachProvider('RFC-158 — getTaskNodeRuns stamps reviewNavKind', (harnes
       decidedBy: 'u1',
       reviewIteration: 0,
     })
-    expect(await navKind(db, taskId, rev)).toBeNull()
+    expect(await navKind(db, taskId, rev)).toBe('decided')
   })
 
   test("approved review (done) → 'decided'", async () => {

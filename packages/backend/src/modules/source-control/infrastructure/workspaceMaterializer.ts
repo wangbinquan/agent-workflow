@@ -20,7 +20,7 @@ import { isAbsolute, join, relative } from 'node:path'
 import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
 import { unsealRepoUrl } from '@/services/repoCredentials'
-import { materializingSpaces } from '@/services/gc'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import {
   listAvailableRefs,
   resolveCachedRepo,

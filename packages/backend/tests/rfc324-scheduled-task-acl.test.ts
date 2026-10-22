@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-324 §7 —— 定时任务的授权面。
 //
 // 定时任务此前只有 owner 一个人能写、`tasks:read:all` 全局能读，中间没有任何东西。
@@ -27,7 +28,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import type { ResourceGrantLevel } from '@agent-workflow/shared'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

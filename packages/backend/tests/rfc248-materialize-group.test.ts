@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-248 PR-3 T21 —— `materializeGroupSpace` 的端到端物化测试（真 git）。
 //
 // 这份文件是 `design/RFC-248-repo-groups/materialize-prototype.sh` 的完整
@@ -35,7 +36,8 @@ import { cachedRepos, taskSpaceNodes } from '../src/db/schema'
 import { rememberVolatileRepoUrl } from '../src/services/repoCredentials'
 import { createRepoGroup, updateRepoGroup } from '../src/services/repoGroup'
 import { createWorkflow } from '../src/services/workflow'
-import { getTask, startTask } from '@/services/task'
+import { getTask } from '@/services/task'
+import { launchTestTask } from './helpers/productionTaskLaunch'
 import { materializeSpace } from './helpers/legacyTaskWorkspace'
 
 import { nonInteractiveGitEnv } from '../src/util/git'
@@ -432,7 +434,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
       definition: { $schema_version: 4, inputs: [], nodes: [], edges: [] },
     })
 
-    const first = await startTask(
+    const first = await launchTestTask(
       { workflowId: workflow.id, name: 'first', inputs: {}, repoGroupId: gid },
       {
         db,
@@ -478,7 +480,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
       1,
     )
 
-    const replay = await startTask(
+    const replay = await launchTestTask(
       { workflowId: workflow.id, name: 'replay', inputs: {}, sourceTaskId: first.id },
       {
         db,

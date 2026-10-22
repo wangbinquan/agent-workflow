@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-190 — GET /api/overview (homepage capability portal aggregate).
 //
 // Why this file exists (design.md §4.1): it locks
@@ -43,7 +44,7 @@ import { composeScheduledTaskRuntimeFor } from '../src/modules/integration/compo
 import { composeSystemOverviewQuery } from '../src/modules/system-operations/application/overview'
 import { createTaskOverviewQuery } from '../src/modules/task-execution/composition/taskOverview'
 import { assertNotBuiltin } from '../src/services/systemResources'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 

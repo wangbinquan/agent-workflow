@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-099 B3 — task-membership answer rights + attribution recording.
 //
 // Locks the D5/D7/D8/D14 behavior end to end over HTTP:
@@ -30,7 +31,7 @@ import {
 } from '../src/db/schema'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createClarifyRound } from '../src/services/clarify/service'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

@@ -1,6 +1,6 @@
 import type { SecretBox } from '@/auth/secretBox'
 import type { BusinessEnvironmentValue } from '@/platform/crewstation/nativeMaterial'
-import { materializingSpaces } from '@/services/gc'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import type { Logger } from '@/util/log'
 import { createHostedRepositoryPublicationTransport } from '../infrastructure/crewstation/publicationTransport'
 import type { MaterializedSpace } from '../application/workspaceMaterialization'

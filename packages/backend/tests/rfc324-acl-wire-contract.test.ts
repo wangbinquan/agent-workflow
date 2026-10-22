@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-324 —— `/acl` 端点的线上契约。
 //
 // 锁 proposal.md §7 的 AC-5 / AC-6 与 §6 的 I4：
@@ -23,7 +24,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const NOW = 1_700_000_000_000

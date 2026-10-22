@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-054 W1-2 — shared harness for the API contract suite.
 //
 // Builds a fully-seeded in-memory app with the daemon token already mapped
@@ -23,7 +24,7 @@ import { createSecretBoxFromKey } from '../../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../../src/db/client'
 import { composeDatabaseMigrationModule } from '../../src/modules/system-operations/composition/databaseMigration'
 import { getWorkflow } from '../../src/services/workflow'
-import { createUser } from '../../src/services/users'
+import { createUser } from '../helpers/userFixture'
 import {
   agents,
   mcps,

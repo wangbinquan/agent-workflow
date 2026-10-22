@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-342 / RFC-294 P0-A — Memory scope moves are a dedicated OCC command.
 //
 // These tests lock the command boundary, old+new scope authorization, durable
@@ -31,7 +32,7 @@ import type { MemoryCatalogOperations } from '../src/modules/memory/public/catal
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { loadInjectableMemories } from '../src/modules/memory/application/injection/injectMemory'
 import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { MEMORY_CHANNEL, memoryBroadcaster, resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
 

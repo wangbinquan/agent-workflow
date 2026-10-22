@@ -1,14 +1,15 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
+// RFC-363: exercise the production Task kernel, real provider transactions and Git adapter.
+// These cases protect the gap between source freezing, a durable SC receipt and Task acceptance.
 import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { composeWorkspacePreparationMaintenance } from '@/modules/task-execution/composition/workspacePreparationMaintenance'
-import { materializingSpaces } from '@/services/gc'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { snapshotMaintenanceTaskIds } from '@/bootstrap/daemonSession'
 import { compensatePreMaterializedRepository } from '@/modules/task-execution/infrastructure/preMaterializedRepositoryWorkspace'
 import type { ProviderNeutralDatabase } from '@/db/query'
-// RFC-363: exercise the production Task kernel, real provider transactions and Git adapter.
-// These cases protect the gap between source freezing, a durable SC receipt and Task acceptance.
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import {

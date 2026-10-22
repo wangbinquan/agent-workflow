@@ -1394,7 +1394,7 @@ export const NodeRunSchema = z.object({
   reviewDecidedAt: z.number().int().nullable().optional(),
   /**
    * RFC-158: for REVIEW node_runs, the task-detail canvas click target — read-time
-   * derived in getTaskNodeRuns from the run's doc_versions (NOT persisted, no
+   * derived in taskNodeRunsProjection from the run's doc_versions (NOT persisted, no
    * migration):
    *   - 'awaiting'  — has a renderable current round AND status='awaiting_review'
    *                   (open the live review界面).
@@ -1411,7 +1411,7 @@ export const NodeRunSchema = z.object({
   reviewNavKind: z.enum(['awaiting', 'decided']).nullable().optional(),
   /**
    * RFC-161: for clarify / cross-clarify node_runs, the task-detail canvas click
-   * target — read-time derived in getTaskNodeRuns from the run's latest
+   * target — read-time derived in taskNodeRunsProjection from the run's latest
    * clarify_round status (NOT persisted, no migration; see
    * clarifyNavKindForRoundStatus):
    *   - 'awaiting'  — latest round is awaiting_human AND the task is not dead

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-075 T11 — end-to-end scheduler trigger for auto commit&push.
 //
 // Drives a real task (single writer agent) through the scheduler with a stub
@@ -23,7 +24,7 @@ import { nodeRuns, tasks } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
-import { startTaskWithLocalRepo } from '../src/services/task'
+import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { commitPushNodeId, isCommitPushNodeId } from '../src/services/commitPush'
 import type { CommitPushMeta } from '@agent-workflow/shared'
 import {
@@ -152,7 +153,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
   afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
 
   test('autoCommitPush ON → writer change is committed + pushed to the remote', async () => {
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: h.wfId,
         name: 'cp-on',
@@ -206,7 +207,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
   // the resumed invocation re-triggers it (the node is already complete), so
   // the staged change was never committed or pushed. Resume re-runs it once.
   test('resume re-runs an interrupted auto commit&push and publishes the change', async () => {
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: h.wfId,
         name: 'cp-resume',
@@ -289,7 +290,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
   })
 
   test('autoCommitPush OFF (default) → no commit node_run (byte-baseline)', async () => {
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: h.wfId,
         name: 'cp-off',

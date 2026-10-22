@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
@@ -138,7 +139,7 @@ describeEachProviderHttpApplication(
     test('HTTP refuses new legacy Missions after cutover while exposing the drain report', async () => {
       const [{ createSession }, { createUser }] = await Promise.all([
         import('./helpers/auth/sessionStore'),
-        import('@/services/users'),
+        import('./helpers/userFixture'),
       ])
       const db = scope.harness.db
       await composeDigitalEmployeeWriterCutoverFor(db).activate({

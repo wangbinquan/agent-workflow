@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-391: both engines use one passive graph; cold restore, selection admission and
 // maintenance materialization protection retain their explicit behavior contracts.
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
@@ -28,7 +29,7 @@ import {
 } from '@/bootstrap/daemonLifecycleProgram'
 import * as resourceCatalog from '@/bootstrap/daemonModules/resourceCatalog'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
-import { materializingSpaces } from '@/services/gc'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { composeUnstartedApplication } from './helpers/providerHttpApplication'

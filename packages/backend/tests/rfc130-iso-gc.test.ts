@@ -1,9 +1,11 @@
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // RFC-130 PR-E — orphan iso worktree GC. A node run normally discardNodeIso's its
 // iso worktree on completion, but a crash / kept conflict-human iso / daemon restart
 // can leave {appHome}/iso/{taskId}/* behind. runIsoWorktreeGc removes the iso
 // containers of TERMINAL tasks (and iso dirs with no task row = deleted task), and
 // keeps ACTIVE tasks' iso worktrees (they may be in flight).
 
+import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,7 +14,6 @@ import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
-import { runIsoWorktreeGc } from '../src/services/gc'
 
 async function seedWorkflow(db: ProviderNeutralDatabase): Promise<string> {
   const id = ulid()
@@ -51,7 +52,15 @@ describeEachProvider('RFC-130 PR-E — orphan iso worktree GC', (harness) => {
   test('no iso root → no-op', async () => {
     const db = harness.db
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc130-isogc-'))
-    expect(await runIsoWorktreeGc(db, appHome)).toEqual({ scanned: 0, removed: [] })
+    expect(
+      await workspaceMaintenanceForTest(db, appHome).runGcPhase({
+        phase: 'iso',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...{ worktreeAutoGc: { enabled: true } },
+      }),
+    ).toEqual({ scanned: 0, removed: 0, skipped: 0 })
     rmSync(appHome, { recursive: true, force: true })
   })
 
@@ -68,10 +77,16 @@ describeEachProvider('RFC-130 PR-E — orphan iso worktree GC', (harness) => {
       mkdirSync(join(appHome, 'iso', id, 'noderun'), { recursive: true })
     }
 
-    const res = await runIsoWorktreeGc(db, appHome)
+    const res = await workspaceMaintenanceForTest(db, appHome).runGcPhase({
+      phase: 'iso',
+      activeTaskIds: [],
+      gitCloneTimeoutMs: 30 * 60 * 1000,
+      now: Date.now(),
+      ...{ worktreeAutoGc: { enabled: true } },
+    })
     expect(res.scanned).toBe(3)
     // Terminal (done) + orphan-row (deleted) removed; active (running) kept.
-    expect(res.removed.sort()).toEqual([doneTask, deletedTask].sort())
+    expect(res.removed).toBe(2)
     expect(existsSync(join(appHome, 'iso', doneTask))).toBe(false)
     expect(existsSync(join(appHome, 'iso', deletedTask))).toBe(false)
     expect(existsSync(join(appHome, 'iso', runningTask))).toBe(true)

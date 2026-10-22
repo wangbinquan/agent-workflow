@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-315 — Webhook and source-neutral rules share one permission family.
 // These HTTP tests lock the capability shrink that motivated the RFC: a normal
 // user still has event-sources:update but cannot write automation rules, every
@@ -12,7 +13,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 
 function ruleBody(name: string, targetKind: 'workflow' | 'digital-employee' = 'workflow') {
   return {

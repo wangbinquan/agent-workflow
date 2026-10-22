@@ -1,3 +1,4 @@
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // P-4-09: worktree GC scan.
 
 import { resolveSubmoduleParams } from '@/services/gitRepoCache'
@@ -9,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { tasks, workflows } from '../src/db/schema'
-import { runWorktreeGc } from '../src/services/gc'
+import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { createWorktree, runGit } from '../src/util/git'
 
 interface Harness {
@@ -83,27 +84,45 @@ describeEachProvider('runWorktreeGc', (harness) => {
 
   test('disabled => no-op', async () => {
     await seedDoneTask(h)
-    const r = await runWorktreeGc(h.db, { worktreeAutoGc: { enabled: false } })
-    expect(r).toEqual({ scanned: 0, removed: [], skipped: 0 })
+    const r = await workspaceMaintenanceForTest(h.db).runGcPhase({
+      phase: 'worktree',
+      activeTaskIds: [],
+      gitCloneTimeoutMs: 30 * 60 * 1000,
+      now: Date.now(),
+      ...{ worktreeAutoGc: { enabled: false } },
+    })
+    expect(r).toEqual({ scanned: 0, removed: 0, skipped: 0 })
   })
 
   test('removes terminal-state worktrees older than threshold', async () => {
     const longAgo = Date.now() - 10 * 24 * 60 * 60 * 1000
-    const { taskId, worktreePath } = await seedDoneTask(h, { finishedAt: longAgo })
+    const { worktreePath } = await seedDoneTask(h, { finishedAt: longAgo })
     expect(existsSync(worktreePath)).toBe(true)
-    const r = await runWorktreeGc(h.db, {
-      worktreeAutoGc: { enabled: true, olderThanDays: 1 },
+    const r = await workspaceMaintenanceForTest(h.db).runGcPhase({
+      phase: 'worktree',
+      activeTaskIds: [],
+      gitCloneTimeoutMs: 30 * 60 * 1000,
+      now: Date.now(),
+      ...{
+        worktreeAutoGc: { enabled: true, olderThanDays: 1 },
+      },
     })
-    expect(r.removed).toEqual([taskId])
+    expect(r.removed).toBe(1)
     expect(existsSync(worktreePath)).toBe(false)
   })
 
   test('keeps recent worktrees when olderThanDays threshold not met', async () => {
     const { taskId, worktreePath } = await seedDoneTask(h)
-    const r = await runWorktreeGc(h.db, {
-      worktreeAutoGc: { enabled: true, olderThanDays: 7 },
+    const r = await workspaceMaintenanceForTest(h.db).runGcPhase({
+      phase: 'worktree',
+      activeTaskIds: [],
+      gitCloneTimeoutMs: 30 * 60 * 1000,
+      now: Date.now(),
+      ...{
+        worktreeAutoGc: { enabled: true, olderThanDays: 7 },
+      },
     })
-    expect(r.removed).toEqual([])
+    expect(r.removed).toBe(0)
     expect(r.skipped).toBe(1)
     expect(existsSync(worktreePath)).toBe(true)
     // task row not deleted either

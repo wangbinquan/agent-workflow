@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-045 — HTTP layer for PATCH /api/memories/:id.
 //
 // Covers permission + row gate, content-only schema, 422 / 404 / 409 /
@@ -16,7 +17,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Memory } from '@agent-workflow/shared'

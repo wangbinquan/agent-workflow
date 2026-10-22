@@ -1,4 +1,6 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
+import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import { catchUpLegacySequenceTask, mintSequenceRun } from './helpers/rfc374Fixtures'
 // EXPLORATORY combination-scenario probes (agent × review × clarify).
@@ -48,11 +50,7 @@ import {
   addReviewComment,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import {
-  abortAllActiveTasks,
-  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
-  wakeHumanGateContinuation,
-} from '../src/services/task'
+import { abortAllActiveTasks, wakeHumanGateContinuation } from '@/services/task'
 // RFC-097: runTask's entry CAS only claims pending tasks. Every scheduler
 // re-entry below (the post-decision / post-answer `await runTask(...)` calls)
 // is preceded by reenterScheduler — the test stand-in for resumeTask.
@@ -125,11 +123,11 @@ async function runTask(options: Parameters<typeof runTaskBase>[0]): Promise<void
   await runTaskBase(runOptions)
 }
 
-function startTaskWithLocalRepo(
-  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
-  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+function launchTestTaskWithLocalRepo(
+  input: Parameters<typeof launchTestTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof launchTestTaskWithLocalRepoBase>[1],
 ) {
-  return startTaskWithLocalRepoBase(input, {
+  return launchTestTaskWithLocalRepoBase(input, {
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -330,7 +328,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's1', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's1',
@@ -404,7 +402,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's2', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's2',
@@ -543,7 +541,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's3', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's3',
@@ -726,7 +724,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's4', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's4',
@@ -820,7 +818,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's5', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's5',
@@ -941,7 +939,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's6', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's6',
@@ -1079,7 +1077,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's8', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's8',
@@ -1182,7 +1180,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's9', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's9',
@@ -1291,7 +1289,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's10', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's10',
@@ -1370,7 +1368,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's-rfc074', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's-rfc074',
@@ -1502,7 +1500,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's11', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's11',
@@ -1631,7 +1629,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's12', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's12',
@@ -1749,7 +1747,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's13', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's13',
@@ -1880,7 +1878,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's15', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's15',
@@ -2024,7 +2022,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's16', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's16',
@@ -2137,7 +2135,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's17', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's17',
@@ -2248,7 +2246,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's18', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's18',
@@ -2421,7 +2419,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       ],
     }
     const wf = await createWorkflow(c.db, { name: 's19', description: '', definition: def })
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 's19',

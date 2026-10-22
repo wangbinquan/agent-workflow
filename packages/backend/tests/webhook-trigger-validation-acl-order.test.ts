@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // 锁定 `assertTriggerSaveable` 的 **ACL 顺序不变量**：launch 目标对保存者不可见
 // （或不存在）时，必须在读取并回显其 definition 内容之前，以 404 同形拒绝。
 //
@@ -25,7 +26,7 @@ import type { ProviderNeutralDatabase } from '../src/db/query'
 import { workflows } from '../src/db/schema'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { assertWebhookTriggerSaveable } from '../src/modules/integration/composition/webhookAdmission'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { NotFoundError, ValidationError } from '../src/util/errors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {

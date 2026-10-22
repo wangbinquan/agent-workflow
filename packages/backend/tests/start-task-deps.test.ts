@@ -1,6 +1,7 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-159 T2 — buildStartTaskDeps reads LIVE config per-call.
 //
-// The scheduled-task scheduler builds StartTaskDeps via this factory so its fires
+// The scheduled-task scheduler builds TaskContinuationDependencies via this factory so its fires
 // behave identically to manual launches after a config edit (design.md finding 4):
 // every call re-reads the config file rather than freezing values at daemon boot.
 // Also locks the opencodeCmd/subagentLiveCapture conditional spreads that the JSON

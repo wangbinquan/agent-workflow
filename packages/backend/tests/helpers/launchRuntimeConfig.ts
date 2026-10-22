@@ -1,7 +1,8 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-387: test-only legacy launch configuration fixture; production uses the daemon session bundle.
 // RFC-103 T2 + RFC-108 T4 — single source for launch-time runtime config.
 //
-// Resolves the settings that must be threaded into `StartTaskDeps` for EVERY
+// Resolves the settings that must be threaded into `TaskContinuationDependencies` for EVERY
 // scheduler-kicking entry point (JSON start / multipart start / resume / retry /
 // repair-resume / parked clarify+review resume / fusion). Before this lived in
 // routes/tasks.ts and only the task routes used it, so other production kicks

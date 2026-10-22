@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-122 — integration: a self-clarify node with a 'stop' override dispatches
 // WITHOUT the mandatory ask-back protocol (and WITH the STOP CLARIFYING trailer),
 // driven through the REAL scheduler (runTask) + the REAL unified answer driver
@@ -14,6 +15,7 @@
 // Plus a store round-trip and a source-level lock on the scheduler wiring (the
 // dispatch read + the three threads) so a refactor that drops any of them goes red.
 
+import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
@@ -28,11 +30,7 @@ import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import {
-  abortAllActiveTasks,
-  isTaskActive,
-  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
-} from '../src/services/task'
+import { abortAllActiveTasks, isTaskActive } from '@/services/task'
 import {
   getNodeClarifyDirective,
   listNodeClarifyDirectives,
@@ -103,11 +101,11 @@ function runTask(options: Parameters<typeof runTaskBase>[0]) {
   })
 }
 
-function startTaskWithLocalRepo(
-  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
-  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+function launchTestTaskWithLocalRepo(
+  input: Parameters<typeof launchTestTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof launchTestTaskWithLocalRepoBase>[1],
 ) {
-  return startTaskWithLocalRepoBase(input, {
+  return launchTestTaskWithLocalRepoBase(input, {
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -294,7 +292,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
   test('golden-lock: no override ⇒ first dispatch carries MANDATORY ASK-BACK', async () => {
     writePlan(c.appHome, { designer: [{ clarify: { questions: [Q] } }] })
     const wf = await designerSelfClarifyWorkflow(c, 'gl')
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 'gl',
@@ -324,7 +322,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
       designer: [{ clarify: { questions: [Q] } }, { output: { design: 'D1' } }],
     })
     const wf = await designerSelfClarifyWorkflow(c, 'ov')
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 'ov',
@@ -387,7 +385,7 @@ describe('RFC-122 H1 — process retry reads the LATEST directive per attempt', 
       designer: [{ waitFile: 'go', crash: true }, { output: { design: 'D1' } }],
     })
     const wf = await designerSelfClarifyWorkflow(c, 'h1')
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 'h1',
@@ -461,7 +459,7 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
       ],
     })
     const wf = await designerSelfClarifyWorkflow(c, 'fu')
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 'fu',
@@ -520,7 +518,7 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
       designer: [{ output: { design: 'x' }, sessionId: 'ses_gl' }, { clarify: { questions: [Q] } }],
     })
     const wf = await designerSelfClarifyWorkflow(c, 'fugl')
-    const task = await startTaskWithLocalRepo(
+    const task = await launchTestTaskWithLocalRepo(
       {
         workflowId: wf.id,
         name: 'fugl',

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: an asynchronous configuration adapter must settle before an Intent
 // route writes a session or reserves a turn. Real persistence checks that a
 // failed read leaves no operation behind and each request sees the current budget.
@@ -12,7 +13,7 @@ import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
 } from '@/modules/intent/inbound/intentSessionRoutes'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import { errorHandler } from '@/util/errors'
 import { appHome } from '@/util/paths'
 import { describeEachProvider } from './helpers/eachProvider'

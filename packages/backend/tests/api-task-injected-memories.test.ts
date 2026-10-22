@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-046 — locks the REST projection of node_runs.injected_memories_json
 // into the wire-level `injectedMemories` field on NodeRun. Covers:
 //   - Happy path: persisted JSON → parsed array in the response.
@@ -5,12 +6,12 @@
 //   - Corrupted JSON in the column → field surfaces as null (no 5xx).
 //   - Empty-array payload distinct from NULL.
 
+import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { getTaskNodeRuns } from '../src/services/task'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 async function seedTaskAndWorkflow(db: ProviderNeutralDatabase): Promise<{ taskId: string }> {
@@ -76,7 +77,7 @@ async function seedRun(
   return id
 }
 
-describeEachProvider('RFC-046 — getTaskNodeRuns surfaces injectedMemories', (harness) => {
+describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemories', (harness) => {
   let db: ProviderNeutralDatabase
   beforeEach(() => {
     resetBroadcastersForTests()
@@ -102,7 +103,7 @@ describeEachProvider('RFC-046 — getTaskNodeRuns surfaces injectedMemories', (h
       },
     ])
     await seedRun(db, taskId, payload)
-    const res = await getTaskNodeRuns(db, taskId)
+    const res = await taskNodeRunsProjection({ db: db }, taskId)
     expect(res.runs.length).toBe(1)
     const im = res.runs[0]!.injectedMemories
     expect(im).not.toBeNull()
@@ -116,21 +117,21 @@ describeEachProvider('RFC-046 — getTaskNodeRuns surfaces injectedMemories', (h
   test('A2: legacy row with NULL column surfaces as injectedMemories=null', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, null)
-    const res = await getTaskNodeRuns(db, taskId)
+    const res = await taskNodeRunsProjection({ db: db }, taskId)
     expect(res.runs[0]!.injectedMemories).toBeNull()
   })
 
   test('A3: corrupted JSON in column degrades to null (no 5xx)', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, '{not-an-array')
-    const res = await getTaskNodeRuns(db, taskId)
+    const res = await taskNodeRunsProjection({ db: db }, taskId)
     expect(res.runs[0]!.injectedMemories).toBeNull()
   })
 
   test('A4: empty-array payload surfaces as [] (distinct from null)', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, '[]')
-    const res = await getTaskNodeRuns(db, taskId)
+    const res = await taskNodeRunsProjection({ db: db }, taskId)
     expect(res.runs[0]!.injectedMemories).toEqual([])
   })
 })

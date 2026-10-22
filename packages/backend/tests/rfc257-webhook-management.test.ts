@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-257 T7/T8/T9 — 管理面集成锁：
 //   端点（manage 权限、secret 一次性明文 + 掩码 hint、轮换、restrict 删除）；
 //   触发器（owner 制 404 同形、保存期三层校验、kind/endpoint 不可变、级联）；
@@ -9,7 +10,7 @@ import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { eventuallyAtLeast } from './helpers/eventually'
 import {

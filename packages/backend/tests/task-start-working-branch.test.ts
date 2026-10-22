@@ -1,4 +1,5 @@
-// RFC-075 T4/T5/T6 — startTask wiring for the working branch.
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
+// RFC-075 T4/T5/T6 — launchTestTask wiring for the working branch.
 //   - workingBranch + autoCommitPush persist on `tasks` and `task_repos`,
 //     and getTask surfaces them.
 //   - omitted → NULL working branch + auto_commit_push false, worktree stays
@@ -8,6 +9,7 @@
 //   - reusing an existing branch that conflicts with base on merge →
 //     ValidationError(working-branch-base-merge-conflict).
 
+import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -21,12 +23,7 @@ import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { createWorkflow } from '../src/services/workflow'
-import {
-  abortAllActiveTasks,
-  getTask,
-  isTaskActive,
-  startTaskWithLocalRepo as startTaskWithLocalRepoBase,
-} from '../src/services/task'
+import { abortAllActiveTasks, getTask, isTaskActive } from '@/services/task'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
@@ -73,11 +70,11 @@ function git(...args: string[]): void {
   })
 }
 
-function startTaskWithLocalRepo(
-  input: Parameters<typeof startTaskWithLocalRepoBase>[0],
-  deps: Parameters<typeof startTaskWithLocalRepoBase>[1],
+function launchTestTaskWithLocalRepo(
+  input: Parameters<typeof launchTestTaskWithLocalRepoBase>[0],
+  deps: Parameters<typeof launchTestTaskWithLocalRepoBase>[1],
 ) {
-  return startTaskWithLocalRepoBase(input, {
+  return launchTestTaskWithLocalRepoBase(input, {
     ...deps,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -160,14 +157,14 @@ async function setup(): Promise<Harness> {
   return { appHome, repoPath, db, stubOpencode, wfId: wf.id }
 }
 
-describe('RFC-075 — startTask working branch', () => {
+describe('RFC-075 — launchTestTask working branch', () => {
   let h: Harness
   beforeEach(async () => {
     h = await setup()
   })
 
   function launch(extra: Record<string, unknown>) {
-    return startTaskWithLocalRepo(
+    return launchTestTaskWithLocalRepo(
       {
         workflowId: h.wfId,
         name: 'wb-task',

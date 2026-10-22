@@ -1,3 +1,4 @@
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-292 architecture ratchets: the canonical trigger namespace must not
 // fork back into code-host-only helpers, runtime dispatch must keep authored
 // and framework prompts separated, and frozen context must stay off raw
@@ -120,7 +121,7 @@ describe('RFC-292 trigger namespace source locks', () => {
     const getTaskProjection = sliceBetween(
       task,
       'export async function getTask(',
-      '\nfunction parseCommitPushJson(',
+      '\nexport async function loadTaskFailureCodes(',
     )
     const rowProjection = sliceBetween(
       task,

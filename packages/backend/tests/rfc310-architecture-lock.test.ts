@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-310 T1 —— development-automation 架构锁（骨架期起就生效的棘轮）。
 //
 // 锁四类合同（design.md §1.2/§1.3）：
@@ -217,6 +218,9 @@ describe('rfc310 development-automation architecture lock', () => {
     // RFC-349 已将 capability-template 与 demo-seed 的合法 provider writer 放回
     // code-capability context，因此不能再把整个 context 的 insert/update/delete
     // 当成已退役 round-writer 的同义词。
+    expect(readFileSync(join(BACKEND_SRC, 'services/task.ts'), 'utf8')).not.toContain(
+      'codeRoundLaunch',
+    )
     const retiredFiles = [
       'src/services/codeRoundLaunch.ts',
       'src/services/codeCapabilityWake.ts',

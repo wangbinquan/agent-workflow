@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-212 PR-2 — revalidation behaviour (AC-1 … AC-4b, AC-8, T6 ratchet).
 //
 // Drives `revalidateAllConnections` directly against a real in-memory DB with
@@ -20,9 +21,9 @@ import { createSession } from './helpers/auth/sessionStore'
 import { describeCredential } from '../src/auth/session'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, taskCollaborators, userSessions, workflows } from '../src/db/schema'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { revokeSession } from './helpers/auth/sessionStore'
-import { disableUser, patchUser } from '../src/services/users'
+import { disableUser, patchUser } from './helpers/userFixture'
 import {
   liveConnections,
   resetConnectionsForTest,

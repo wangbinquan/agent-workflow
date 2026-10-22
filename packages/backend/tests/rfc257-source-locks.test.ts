@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-257 — 源码文本锁（design §10）。
 // ① `/webhooks` handler 不得用 `c.req.url` 推导/拼接对外 URL：反代/TLS 终止下
 //    它是内网 origin（docs/audit-backlog.md:81 已登记的既有缺陷类），给 GitLab
@@ -35,7 +36,7 @@ describe('RFC-257 · source locks', () => {
   test('webhookDispatch forwards selected-provider execution and Digital Employee ports', () => {
     // RFC-349: repository credentials and publication topology are owned by
     // the injected TaskExecution participant. Integration must not rebuild a
-    // SQLite StartTaskDeps graph or receive SecretBox/DbClient directly.
+    // SQLite TaskContinuationDependencies graph or receive SecretBox/DbClient directly.
     const text = readFileSync(
       resolve(SRC, 'modules/integration/infrastructure/webhookDispatchRuntime.ts'),
       'utf8',

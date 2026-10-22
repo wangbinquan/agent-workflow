@@ -1,3 +1,4 @@
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // RFC-098 B2 / WP-9 oracles — snapshot ref pinning end-to-end + gc ref
 // cleanup + multi-repo two-phase all-or-nothing rollback (design.md §B2-WP-9
 // + 对抗检视修订 #3).
@@ -33,7 +34,7 @@ import { monotonicFactory } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
-import { runWorktreeGc } from '../src/services/gc'
+import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { rollbackNodeRunWorktrees } from '../src/services/nodeRollback'
 import type { RollbackTarget } from '../src/services/nodeRollback'
 import {
@@ -140,8 +141,14 @@ describeEachProvider(
         finishedAt: Date.now() - 10 * 24 * 60 * 60 * 1000,
       })
 
-      const r = await runWorktreeGc(db, { worktreeAutoGc: { enabled: true, olderThanDays: 1 } })
-      expect(r.removed).toEqual([taskId])
+      const r = await workspaceMaintenanceForTest(db).runGcPhase({
+        phase: 'worktree',
+        activeTaskIds: [],
+        gitCloneTimeoutMs: 30 * 60 * 1000,
+        now: Date.now(),
+        ...{ worktreeAutoGc: { enabled: true, olderThanDays: 1 } },
+      })
+      expect(r.removed).toBe(1)
       expect(existsSync(wt.worktreePath)).toBe(false)
       // gc.ts batch-deleted the task's snapshot refs from the source repo.
       expect(await taskSnapshotRefs(repoPath, taskId)).toEqual([])

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // flag-audit W0（design/flag-audit-2026-07-07.md §3-13 / dedup-audit `task-terminal-status-set`）
 // —— 终态集合单源化的回归锁。
 //
@@ -27,7 +28,7 @@ describe('终态集合单源化（flag-audit W0）', () => {
   // 那份实现已随两份合一退役；它们的 R1 / R2 判据现在落在留下的那一份里，所以锚点换成它。
   test('曾手抄终态数组的文件已全部改引 shared', () => {
     for (const rel of [
-      'services/gc.ts',
+      'modules/source-control/application/workspaceMaintenance.ts',
       'services/stuckTaskDetector.ts',
       'modules/knowledge-evolution/application/fusionOrchestration.ts',
       'modules/task-execution/infrastructure/taskRouteRepairOperations.ts',

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-182 T1 —— 房间执行体验后端锁（runHistory 派生锁在
 // rfc179-member-current-run.test.ts 的 RFC-182 describe；引擎 mint→pending 帧
 // 锁在 rfc164-workgroup-engine.test.ts）。本文件锁：
@@ -6,16 +7,16 @@
 //     clarify.answered 不失效房间 key——不在外部 mint 发帧，续跑开跑前对房间
 //     不可见）。源级锁：广播块存在 + 引擎 broadcastPendingMint 恒「一 mint 一帧」
 //     （1 定义 + 3 调用，全部位于真 mint 分支内）。
-//   - getTaskNodeRuns 响应 mapper 带出 rerunCause（P1-3 勘误缝位：routes 是薄
+//   - taskNodeRunsProjection 响应 mapper 带出 rerunCause（P1-3 勘误缝位：routes 是薄
 //     委托、无 select 可加——wire 缝在 services/task.ts 的手写 mapper）。
 
+import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { tasks, workflows } from '../src/db/schema'
 import { mintNodeRun } from '../src/services/nodeRunMint'
-import { getTaskNodeRuns } from '../src/services/task'
 
 import { describeEachProvider } from './helpers/eachProvider'
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
@@ -48,7 +49,7 @@ describe('RFC-182 — pending 帧源级锁', () => {
   })
 })
 
-describeEachProvider('RFC-182 P1-3 — getTaskNodeRuns 响应带 rerunCause', (harness) => {
+describeEachProvider('RFC-182 P1-3 — taskNodeRunsProjection 响应带 rerunCause', (harness) => {
   test('mapper 透出 mint cause（wg 历轮标签的 wire 依据）', async () => {
     const db = harness.db
     const taskId = ulid()
@@ -79,7 +80,7 @@ describeEachProvider('RFC-182 P1-3 — getTaskNodeRuns 响应带 rerunCause', (h
       cause: 'wg-message-turn',
       overrides: { shardKey: 'msg:m-x:0' },
     })
-    const { runs } = await getTaskNodeRuns(db, taskId)
+    const { runs } = await taskNodeRunsProjection({ db: db }, taskId)
     const run = runs.find((r) => r.id === runId)
     expect(run?.rerunCause).toBe('wg-message-turn')
   })

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-257 T6 — 分流服务集成锁：fan-out（AC-7）/ supersede 与并发互斥（AC-9/
 // AC-11）/ 熔断三重置源（AC-10）/ owner 每次触发重校验（AC-13）/ repo 解析含
 // unseal 复核（AC-8）/ 行级容错。launch/cancel 经测试接缝注入（真默认 =
@@ -13,7 +14,7 @@ import { ulid } from 'ulid'
 import { webhookTriggerContextOf, type CodeHostEvent } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   cachedRepos,
   employeeDefinitionRevisions,

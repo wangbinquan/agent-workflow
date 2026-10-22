@@ -1,9 +1,11 @@
+// RFC-395 II-pre：版本 / 删除拒绝改接生产 participant；工作区补偿改接生产 materializer，提交后删除走真实内核。
+
 // RFC-199 B3/T6.5 regression locks.
-// A workflow can be updated or deleted after startTask's first read but before
-// its task-row transaction. The final transaction must fail closed and the
-// launch-owned materialization ledger must remove every scratch/worktree
-// artifact without deleting shared URL cache mirrors. Conversely, a task-row
-// insert that commits first must make the fenced workflow delete report in-use.
+// A workflow can be updated or deleted while its launch is being prepared. The
+// production launch kernel refuses the stale or missing workflow, and the
+// materialization ledger must remove every scratch/worktree artifact without
+// deleting shared URL cache mirrors. Conversely, a task-row insert that commits
+// first must make the fenced workflow delete report in-use.
 
 import type { StartTask, WorkflowDefinition } from '@agent-workflow/shared'
 import { beforeAll, afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -11,12 +13,31 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from '
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
-import { ulid } from 'ulid'
+
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { cachedRepos, tasks } from '../src/db/schema'
 import { repoGroupNodesFromAttachments } from './helpers/repoGroupFixture'
-import { materializingSpaces } from '../src/services/gc'
+
+import { materializeSpace } from './helpers/legacyTaskWorkspace'
+import {
+  materializeWorktree,
+  materializeSpaceWithProvider,
+  cleanupMaterializedSpace,
+  cleanupMaterializedSpaceLease,
+  createMaterializedSpaceCleanup,
+  type MaterializedSpace,
+} from '@/modules/source-control/infrastructure/workspaceMaterializer'
+import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
+import { loadFrozenSpaceLayout } from '@/modules/task-execution/infrastructure/frozenWorkspaceLayout'
+import { launchTestTask } from './helpers/productionTaskLaunch'
+import { ulid } from 'ulid'
+import { createFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
+import {
+  createFileFusionWorkspaceEffects,
+  fusionWorkDirectory,
+} from '@/modules/source-control/infrastructure/local/fileFusionWorkspaceEffects'
 import {
   createWorkflow,
   deleteWorkflow,
@@ -24,14 +45,7 @@ import {
   updateWorkflow,
   workflowDraftSnapshotOf,
   type WorkflowWritePrincipal,
-} from '../src/services/workflow'
-import {
-  startTask,
-  startTaskWithLocalRepo,
-  type WorkflowLaunchCommitHookEvent,
-} from '@/services/task'
-import { materializeSpace } from './helpers/legacyTaskWorkspace'
-import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+} from '@/services/workflow'
 
 import { createRepoGroup } from '@/services/repoGroup'
 import { runGit } from '../src/util/git'
@@ -39,13 +53,6 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const SYSTEM: WorkflowWritePrincipal = { kind: 'system', reason: 'rfc199-launch-race-test' }
-const EMPTY_DEFINITION: WorkflowDefinition = {
-  $schema_version: 4,
-  inputs: [],
-  nodes: [],
-  edges: [],
-}
 
 interface Harness {
   tmp: string
@@ -77,28 +84,60 @@ async function buildHarness(sourceCount: number): Promise<Harness> {
   return { tmp, appHome, db: createInMemoryDb(MIGRATIONS), sourcePaths }
 }
 
-async function seedWorkflow(db: DbClient, name: string) {
-  return createWorkflow(db, { name, description: '', definition: EMPTY_DEFINITION })
+const SYSTEM: WorkflowWritePrincipal = { kind: 'system', reason: 'rfc199-launch-race-test' }
+const EMPTY_DEFINITION: WorkflowDefinition = {
+  $schema_version: 4,
+  inputs: [],
+  nodes: [],
+  edges: [],
 }
+const seedWorkflow = (db: DbClient, name: string) =>
+  createWorkflow(db, { name, description: '', definition: EMPTY_DEFINITION })
 
-async function expectWorktreeFullyRemoved(
-  event: WorkflowLaunchCommitHookEvent,
-  db: DbClient,
-): Promise<void> {
-  for (const repo of event.repoWorktrees) {
+function launch(harness: Harness, request: StartTask) {
+  return launchTestTask(request, {
+    db: harness.db,
+    appHome: harness.appHome,
+    schedulerDriver: { async drive() {} },
+    coordinator: {
+      async submit({ taskId }) {
+        return { kind: 'accepted', taskId }
+      },
+    },
+  })
+}
+function prepare(harness: Harness, task: StartTask) {
+  return composeRepositoryPreparation({ db: harness.db, appHome: harness.appHome }).legacy.prepare({
+    task,
+    taskId: ulid(),
+    gitCommitIdentity: null,
+    loadFrozenSpaceLayout: (id) => loadFrozenSpaceLayout(harness.db, id),
+  })
+}
+function prepareLocal(harness: Harness, workingBranch?: string) {
+  return materializeSpaceWithProvider(
+    { workingBranch },
+    {
+      appHome: harness.appHome,
+      repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(harness.db),
+      internalSource: { kind: 'local-path', repoPath: harness.sourcePaths[0]!, baseBranch: 'main' },
+      loadFrozenSpaceLayout: (id) => loadFrozenSpaceLayout(harness.db, id),
+    },
+    ulid(),
+  )
+}
+async function expectWorktreeFullyRemoved(space: MaterializedSpace, db: DbClient) {
+  for (const repo of space.repos) {
     expect(existsSync(repo.worktreePath)).toBe(false)
     const registered = await runGit(repo.repoPath, ['worktree', 'list', '--porcelain'])
     expect(registered.exitCode).toBe(0)
-    expect(registered.stdout).not.toContain(repo.worktreePath)
+    expect(registered.stdout).not.toContain(repo.worktreePath.replace(/\\/g, '/'))
     const branch = await runGit(repo.repoPath, ['branch', '--list', repo.branch])
     expect(branch.exitCode).toBe(0)
     expect(branch.stdout.trim()).toBe('')
   }
-
-  // URL cache rows/mirrors are shared and intentionally outlive a failed
-  // launch. Their task-owned worktree registrations/branches do not.
-  const caches = await db.select().from(cachedRepos)
-  for (const cache of caches) expect(existsSync(cache.localPath)).toBe(true)
+  for (const cache of await db.select().from(cachedRepos))
+    expect(existsSync(cache.localPath)).toBe(true)
 }
 
 // RFC-254: multi-repo materialize does file:// clones (slow on Windows); default 5s
@@ -109,7 +148,7 @@ beforeAll(async () => {
   await startGitHttpRemote()
 })
 
-describe('RFC-199 startTask workflow delete/version race', () => {
+describe('RFC-199 production materialization cleanup', () => {
   let harness: Harness | undefined
 
   afterEach(() => {
@@ -117,101 +156,72 @@ describe('RFC-199 startTask workflow delete/version race', () => {
     harness = undefined
   })
 
-  test('version writer after normal URL materialization returns mismatch and cleans only task-owned worktree', async () => {
+  test('version writer after URL materialization rejects the stale request; cleanup removes only task-owned worktree', async () => {
     harness = await buildHarness(1)
     const workflow = await seedWorkflow(harness.db, 'normal-version-race')
-    let captured: WorkflowLaunchCommitHookEvent | undefined
-
-    await expect(
-      startTask(
-        {
-          workflowId: workflow.id,
-          expectedWorkflowVersion: workflow.version,
-          name: 'normal-race',
-          repoUrl: remoteUrlFor(harness.sourcePaths[0]!),
-          inputs: {},
-        },
-        {
-          db: harness.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: harness.appHome,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-          workflowLaunchCommitHook: async (event) => {
-            if (event.stage !== 'materialized-before-task-commit') return
-            captured = event
-            expect(existsSync(event.repoWorktrees[0]!.worktreePath)).toBe(true)
-            await updateWorkflow(
-              harness!.db,
-              workflow.id,
-              {
-                expectedVersion: workflow.version,
-                clientMutationId: ulid(),
-                snapshot: {
-                  ...workflowDraftSnapshotOf(workflow),
-                  description: 'concurrent v2',
-                },
-              },
-              SYSTEM,
-            )
-          },
-        },
-      ),
-    ).rejects.toMatchObject({
+    const request: StartTask = {
+      workflowId: workflow.id,
+      expectedWorkflowVersion: workflow.version,
+      name: 'normal-race',
+      repoUrl: remoteUrlFor(harness.sourcePaths[0]!),
+      inputs: {},
+    }
+    const space = await prepare(harness, request)
+    expect(existsSync(space.repos[0]!.worktreePath)).toBe(true)
+    await updateWorkflow(
+      harness.db,
+      workflow.id,
+      {
+        expectedVersion: workflow.version,
+        clientMutationId: ulid(),
+        snapshot: { ...workflowDraftSnapshotOf(workflow), description: 'concurrent v2' },
+      },
+      SYSTEM,
+    )
+    await expect(launch(harness, request)).rejects.toMatchObject({
       code: 'workflow-version-mismatch',
       status: 409,
       details: { expectedVersion: workflow.version, currentVersion: workflow.version + 1 },
     })
-
-    expect(captured).toBeDefined()
+    // 生产 participant 在准备前拒绝版本；已由调用方物化的资源仍由其持有的 SC 租约清理。
+    // 不把这两条生产合同包装成已不存在的「插入事务二次版本检查」。
+    expect(await cleanupMaterializedSpace(space)).toMatchObject({ complete: true, failures: [] })
     expect(await harness.db.select().from(tasks)).toHaveLength(0)
     expect((await getWorkflow(harness.db, workflow.id))?.version).toBe(workflow.version + 1)
     expect(await harness.db.select().from(cachedRepos)).toHaveLength(1)
     expect(existsSync(harness.sourcePaths[0]!)).toBe(true)
-    await expectWorktreeFullyRemoved(captured!, harness.db)
+    await expectWorktreeFullyRemoved(space, harness.db)
   })
 
-  test('delete-first after scratch materialization returns mismatch and removes scratch repo + lease', async () => {
+  test('delete-first after scratch materialization rejects the missing workflow and removes scratch repo + lease', async () => {
     harness = await buildHarness(0)
     const workflow = await seedWorkflow(harness.db, 'scratch-delete-race')
-    let captured: WorkflowLaunchCommitHookEvent | undefined
-
-    await expect(
-      startTask(
-        {
-          workflowId: workflow.id,
-          name: 'scratch-race',
-          scratch: true,
-          inputs: {},
-        },
-        {
-          db: harness.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: harness.appHome,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-          workflowLaunchCommitHook: async (event) => {
-            if (event.stage !== 'materialized-before-task-commit') return
-            captured = event
-            expect(existsSync(event.worktreePath)).toBe(true)
-            await deleteWorkflow(
-              harness!.db,
-              workflow.id,
-              { expectedVersion: workflow.version, clientMutationId: ulid() },
-              SYSTEM,
-            )
-          },
-        },
-      ),
-    ).rejects.toMatchObject({
-      code: 'workflow-version-mismatch',
-      status: 409,
-      details: { expectedVersion: workflow.version, currentVersion: null },
+    const request: StartTask = {
+      workflowId: workflow.id,
+      name: 'scratch-race',
+      scratch: true,
+      inputs: {},
+    }
+    const space = await prepare(harness, request)
+    expect(existsSync(space.worktreePath)).toBe(true)
+    expect(materializingSpaces.has(space.taskId)).toBe(true)
+    await deleteWorkflow(
+      harness.db,
+      workflow.id,
+      {
+        expectedVersion: workflow.version,
+        clientMutationId: ulid(),
+      },
+      SYSTEM,
+    )
+    // 删除发生在生产资源快照读取前，公开错误是 not-found，而非旧事务钩子的 null-version mismatch。
+    await expect(launch(harness, request)).rejects.toMatchObject({
+      code: 'workflow-not-found',
+      status: 404,
     })
-
-    expect(captured).toBeDefined()
-    expect(existsSync(captured!.worktreePath)).toBe(false)
-    expect(materializingSpaces.has(captured!.taskId)).toBe(false)
+    expect(await cleanupMaterializedSpace(space)).toMatchObject({ complete: true, failures: [] })
+    expect(existsSync(space.worktreePath)).toBe(false)
+    expect(materializingSpaces.has(space.taskId)).toBe(false)
     expect(await getWorkflow(harness.db, workflow.id)).toBeNull()
     expect(await harness.db.select().from(tasks)).toHaveLength(0)
   })
@@ -219,16 +229,9 @@ describe('RFC-199 startTask workflow delete/version race', () => {
   test('delete-first after multi-repo materialization unregisters every worktree and removes container', async () => {
     harness = await buildHarness(2)
     const workflow = await seedWorkflow(harness.db, 'multi-delete-race')
-    // RFC-248: 两个源仓先经 createRepoGroup 的 URL 导入路径落成 cached_repos，
-    // 再组成一个平铺两仓的组（挂载点 r0 / r1）。
+    const store = composeSqliteRepositoryWorkspaceStore(harness.db)
     const group = await createRepoGroup(
-      {
-        store: composeSqliteRepositoryWorkspaceStore(harness.db),
-        cache: {
-          store: composeSqliteRepositoryWorkspaceStore(harness.db),
-          appHome: harness.appHome,
-        },
-      },
+      { store, cache: { store, appHome: harness.appHome } },
       {
         name: 'rfc199-multi',
         description: '',
@@ -245,108 +248,61 @@ describe('RFC-199 startTask workflow delete/version race', () => {
       },
       null,
     )
-    const multiGroupId = group.id
-    let captured: WorkflowLaunchCommitHookEvent | undefined
-
-    await expect(
-      startTask(
-        {
-          workflowId: workflow.id,
-          expectedWorkflowVersion: workflow.version,
-          name: 'multi-race',
-          // RFC-248: wire `repos[]` 已退役——多仓一律经 repoGroupId。本条测的
-          // 主题（多仓物化后的 delete-first 竞态回收）不变，只是入口换了。
-          repoGroupId: multiGroupId,
-          inputs: {},
-        },
-        {
-          db: harness.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: harness.appHome,
-          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-          workflowLaunchCommitHook: async (event) => {
-            if (event.stage !== 'materialized-before-task-commit') return
-            captured = event
-            expect(event.repoWorktrees).toHaveLength(2)
-            for (const repo of event.repoWorktrees) expect(existsSync(repo.worktreePath)).toBe(true)
-            await deleteWorkflow(
-              harness!.db,
-              workflow.id,
-              { expectedVersion: workflow.version, clientMutationId: ulid() },
-              SYSTEM,
-            )
-          },
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'workflow-version-mismatch', status: 409 })
-
-    expect(captured).toBeDefined()
-    expect(existsSync(captured!.worktreePath)).toBe(false)
+    const request: StartTask = {
+      workflowId: workflow.id,
+      name: 'multi-race',
+      repoGroupId: group.id,
+      inputs: {},
+    }
+    const space = await prepare(harness, request)
+    expect(space.repos).toHaveLength(2)
+    for (const repo of space.repos) expect(existsSync(repo.worktreePath)).toBe(true)
+    await deleteWorkflow(
+      harness.db,
+      workflow.id,
+      {
+        expectedVersion: workflow.version,
+        clientMutationId: ulid(),
+      },
+      SYSTEM,
+    )
+    await expect(launch(harness, request)).rejects.toMatchObject({
+      code: 'workflow-not-found',
+      status: 404,
+    })
+    expect(await cleanupMaterializedSpace(space)).toMatchObject({ complete: true, failures: [] })
+    expect(existsSync(space.worktreePath)).toBe(false)
     expect(await harness.db.select().from(tasks)).toHaveLength(0)
     expect(await harness.db.select().from(cachedRepos)).toHaveLength(2)
-    for (const sourcePath of harness.sourcePaths) expect(existsSync(sourcePath)).toBe(true)
-    await expectWorktreeFullyRemoved(captured!, harness.db)
+    for (const source of harness.sourcePaths) expect(existsSync(source)).toBe(true)
+    await expectWorktreeFullyRemoved(space, harness.db)
   })
 
   test('new user working branch is deleted only when its ref still equals the materialized SHA', async () => {
     harness = await buildHarness(1)
-    const workflow = await seedWorkflow(harness.db, 'new-working-branch-race')
     const workingBranch = 'feature/rfc199-new'
-    let captured: WorkflowLaunchCommitHookEvent | undefined
-
-    await expect(
-      startTaskWithLocalRepo(
-        {
-          workflowId: workflow.id,
-          expectedWorkflowVersion: workflow.version,
-          name: 'new-working-branch',
-          repoPath: harness.sourcePaths[0]!,
-          baseBranch: 'main',
-          workingBranch,
-          inputs: {},
-        },
-        {
-          db: harness.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: harness.appHome,
-          workflowLaunchCommitHook: async (event) => {
-            if (event.stage !== 'materialized-before-task-commit') return
-            captured = event
-            await updateWorkflow(
-              harness!.db,
-              workflow.id,
-              {
-                expectedVersion: workflow.version,
-                clientMutationId: ulid(),
-                snapshot: {
-                  ...workflowDraftSnapshotOf(workflow),
-                  description: 'force exact mismatch',
-                },
-              },
-              SYSTEM,
-            )
-          },
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'workflow-version-mismatch' })
-
-    expect(captured).toBeDefined()
-    expect(existsSync(captured!.repoWorktrees[0]!.worktreePath)).toBe(false)
-    const branch = await runGit(harness.sourcePaths[0]!, [
-      'rev-parse',
-      '--verify',
-      '--quiet',
-      `refs/heads/${workingBranch}`,
-    ])
-    expect(branch.exitCode).not.toBe(0)
+    const space = await prepareLocal(harness, workingBranch)
+    const repo = space.repos[0]!
+    expect(
+      (await runGit(repo.repoPath, ['rev-parse', `refs/heads/${workingBranch}`])).stdout.trim(),
+    ).toBe(repo.baseCommit!)
+    expect(await cleanupMaterializedSpace(space)).toMatchObject({ complete: true, failures: [] })
+    expect(existsSync(repo.worktreePath)).toBe(false)
+    expect(
+      (
+        await runGit(repo.repoPath, [
+          'rev-parse',
+          '--verify',
+          '--quiet',
+          `refs/heads/${workingBranch}`,
+        ])
+      ).exitCode,
+    ).not.toBe(0)
   })
 
   test('existing user working branch advanced by base merge is CAS-restored to its original ref', async () => {
     harness = await buildHarness(1)
     const source = harness.sourcePaths[0]!
-    const workflow = await seedWorkflow(harness.db, 'existing-working-branch-race')
     const workingBranch = 'feature/rfc199-existing'
     expect((await runGit(source, ['branch', workingBranch, 'main'])).exitCode).toBe(0)
     const before = (
@@ -357,53 +313,214 @@ describe('RFC-199 startTask workflow delete/version race', () => {
     expect((await runGit(source, ['commit', '-q', '-m', 'advance base'])).exitCode).toBe(0)
     const mainAfter = (await runGit(source, ['rev-parse', 'main'])).stdout.trim()
     expect(mainAfter).not.toBe(before)
-
-    let captured: WorkflowLaunchCommitHookEvent | undefined
-    await expect(
-      startTaskWithLocalRepo(
-        {
-          workflowId: workflow.id,
-          expectedWorkflowVersion: workflow.version,
-          name: 'existing-working-branch',
-          repoPath: source,
-          baseBranch: 'main',
-          workingBranch,
-          inputs: {},
-        },
-        {
-          db: harness.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: harness.appHome,
-          workflowLaunchCommitHook: async (event) => {
-            if (event.stage !== 'materialized-before-task-commit') return
-            captured = event
-            expect(
-              (await runGit(source, ['rev-parse', `refs/heads/${workingBranch}`])).stdout.trim(),
-            ).toBe(mainAfter)
-            await updateWorkflow(
-              harness!.db,
-              workflow.id,
-              {
-                expectedVersion: workflow.version,
-                clientMutationId: ulid(),
-                snapshot: {
-                  ...workflowDraftSnapshotOf(workflow),
-                  description: 'force exact mismatch',
-                },
-              },
-              SYSTEM,
-            )
-          },
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'workflow-version-mismatch' })
-
-    expect(captured).toBeDefined()
-    expect(existsSync(captured!.repoWorktrees[0]!.worktreePath)).toBe(false)
+    const space = await prepareLocal(harness, workingBranch)
+    expect((await runGit(source, ['rev-parse', `refs/heads/${workingBranch}`])).stdout.trim()).toBe(
+      mainAfter,
+    )
+    expect(await cleanupMaterializedSpace(space)).toMatchObject({ complete: true, failures: [] })
+    expect(existsSync(space.repos[0]!.worktreePath)).toBe(false)
     expect((await runGit(source, ['rev-parse', `refs/heads/${workingBranch}`])).stdout.trim()).toBe(
       before,
     )
+  })
+
+  test('fusion-style owned root is removed when production workflow lookup fails', async () => {
+    harness = await buildHarness(0)
+    const fusionId = ulid(),
+      taskId = ulid()
+    const ownedRoot = fusionWorkDirectory(harness.appHome, fusionId, 1)
+    const effects = createFileFusionWorkspaceEffects({ appHome: harness.appHome })
+    let prepared = false
+    const operations = createFusionEngineTaskOperations({
+      db: harness.db,
+      workspaces: {
+        ...effects,
+        async prepare(request) {
+          const result = await effects.prepare(request)
+          prepared = true
+          expect(existsSync(join(result.worktreePath, 'proposal.md'))).toBe(true)
+          return result
+        },
+      },
+      coordinator: {
+        async submit() {
+          throw new Error('missing workflow must not drive')
+        },
+      },
+      cancellation: {
+        async cancel() {
+          throw new Error('unexpected cancel')
+        },
+      },
+    })
+    await expect(
+      operations.launch({
+        fusionId,
+        taskId,
+        iteration: 1,
+        workflowId: 'missing-workflow',
+        ownerUserId: '__system__',
+        name: 'fusion-style',
+        inputs: {},
+        initiator: 'manual',
+        platformInputPaths: [],
+        seed: {
+          base: [{ path: 'proposal.md', content: new TextEncoder().encode('ephemeral\n') }],
+          overlay: null,
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'workflow-not-found' })
+    expect(prepared).toBe(true)
+    expect(existsSync(ownedRoot)).toBe(false)
+    expect(await harness.db.select().from(tasks)).toHaveLength(0)
+  })
+
+  test('owned-root cleanup failure is structured and never reported as zero residue', async () => {
+    harness = await buildHarness(0)
+    const ownedRoot = join(harness.tmp, 'fusion-cleanup-failure')
+    mkdirSync(ownedRoot, { recursive: true })
+    const lease = createMaterializedSpaceCleanup(ulid(), ownedRoot)
+    const report = await cleanupMaterializedSpaceLease(lease, (event) => {
+      if (event.stage === 'owned-root-remove') throw new Error('injected rm failure')
+    })
+    expect(report).toMatchObject({
+      complete: false,
+      failures: [{ stage: 'owned-root-remove', message: 'injected rm failure', path: ownedRoot }],
+    })
+    expect(existsSync(ownedRoot)).toBe(true)
+  })
+
+  test('worktree-remove cleanup failure is structured and retains registration for recovery', async () => {
+    harness = await buildHarness(1)
+    const space = await prepareLocal(harness)
+    const repo = space.repos[0]!
+    expect(
+      await cleanupMaterializedSpace(space, (event) => {
+        if (event.stage === 'worktree-remove') throw new Error('injected remove failure')
+      }),
+    ).toMatchObject({
+      complete: false,
+      failures: [{ stage: 'worktree-remove', message: 'injected remove failure' }],
+    })
+    expect(existsSync(repo.worktreePath)).toBe(true)
+    expect((await runGit(repo.repoPath, ['worktree', 'list', '--porcelain'])).stdout).toContain(
+      repo.worktreePath.replace(/\\/g, '/'),
+    )
+    expect((await runGit(repo.repoPath, ['branch', '--list', repo.branch])).stdout.trim()).not.toBe(
+      '',
+    )
+  })
+
+  test('branch-restore cleanup hook failure is structured after worktree unregister', async () => {
+    harness = await buildHarness(1)
+    const space = await prepareLocal(harness)
+    const repo = space.repos[0]!
+    expect(
+      await cleanupMaterializedSpace(space, (event) => {
+        if (event.stage === 'branch-restore') throw new Error('injected ref failure')
+      }),
+    ).toMatchObject({
+      complete: false,
+      failures: [{ stage: 'branch-restore', message: 'injected ref failure' }],
+    })
+    expect(existsSync(repo.worktreePath)).toBe(false)
+    expect((await runGit(repo.repoPath, ['worktree', 'list', '--porcelain'])).stdout).not.toContain(
+      repo.worktreePath.replace(/\\/g, '/'),
+    )
+    expect(
+      (await runGit(repo.repoPath, ['rev-parse', '--verify', `refs/heads/${repo.branch}`]))
+        .exitCode,
+    ).toBe(0)
+  })
+
+  test('concurrent branch CAS advance is retained and never force-reset', async () => {
+    harness = await buildHarness(1)
+    const space = await prepareLocal(harness)
+    const repo = space.repos[0]!
+    const before = (
+      await runGit(repo.repoPath, ['rev-parse', `refs/heads/${repo.branch}`])
+    ).stdout.trim()
+    const tree = (await runGit(repo.repoPath, ['rev-parse', `${before}^{tree}`])).stdout.trim()
+    const commit = await runGit(repo.repoPath, [
+      'commit-tree',
+      tree,
+      '-p',
+      before,
+      '-m',
+      'concurrent ref writer',
+    ])
+    expect(commit.exitCode).toBe(0)
+    const concurrentCommit = commit.stdout.trim()
+    expect(
+      (
+        await runGit(repo.repoPath, [
+          'update-ref',
+          `refs/heads/${repo.branch}`,
+          concurrentCommit,
+          before,
+        ])
+      ).exitCode,
+    ).toBe(0)
+    expect(await cleanupMaterializedSpace(space)).toMatchObject({
+      complete: false,
+      failures: [{ stage: 'branch-restore' }],
+    })
+    expect(existsSync(repo.worktreePath)).toBe(false)
+    expect(
+      (await runGit(repo.repoPath, ['rev-parse', `refs/heads/${repo.branch}`])).stdout.trim(),
+    ).toBe(concurrentCommit)
+  })
+
+  test('task insert first makes concurrent fenced delete report workflow-in-use', async () => {
+    harness = await buildHarness(0)
+    const workflow = await seedWorkflow(harness.db, 'task-first-race')
+    let deleteFailure: unknown
+    let committedTaskId: string | undefined
+    const task = await launchTestTask(
+      {
+        workflowId: workflow.id,
+        expectedWorkflowVersion: workflow.version,
+        name: 'task-first',
+        scratch: true,
+        inputs: {},
+      },
+      {
+        db: harness.db,
+        appHome: harness.appHome,
+        schedulerDriver: { async drive() {} },
+        coordinator: {
+          async submit(request) {
+            committedTaskId = request.taskId
+            expect((await harness!.db.select().from(tasks)).map((row) => row.id)).toEqual([
+              request.taskId,
+            ])
+            try {
+              await deleteWorkflow(
+                harness!.db,
+                workflow.id,
+                {
+                  expectedVersion: workflow.version,
+                  clientMutationId: ulid(),
+                },
+                SYSTEM,
+              )
+            } catch (error) {
+              deleteFailure = error
+            }
+            return { kind: 'accepted', taskId: request.taskId }
+          },
+        },
+      },
+    )
+    expect(committedTaskId).toBe(task.id)
+    expect(deleteFailure).toMatchObject({
+      code: 'workflow-in-use',
+      status: 409,
+      details: { referenceCount: 1 },
+    })
+    expect(await getWorkflow(harness.db, workflow.id)).not.toBeNull()
+    expect(await harness.db.select().from(tasks)).toHaveLength(1)
+    expect(existsSync(task.worktreePath)).toBe(true)
   })
 
   test('multi-repo hard failure on a later repo cleans prior worktree, branch, and owned container', async () => {
@@ -481,281 +598,6 @@ describe('RFC-199 startTask workflow delete/version race', () => {
     ).toBe(blockedBranch)
   })
 
-  test('fusion-style preCreated owned root is removed when workflow lookup fails before handoff conversion', async () => {
-    harness = await buildHarness(0)
-    const ownedRoot = join(harness.tmp, 'fusion-ephemeral')
-    mkdirSync(ownedRoot, { recursive: true })
-    writeFileSync(join(ownedRoot, 'proposal.md'), 'ephemeral\n')
-
-    await expect(
-      startTask(
-        { workflowId: 'missing-workflow', name: 'fusion-style', inputs: {} },
-        {
-          db: harness.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: harness.appHome,
-          launchProvenance: { kind: 'fusion', initiator: 'manual' },
-          internalSource: { kind: 'local-path', repoPath: ownedRoot, baseBranch: 'fusion' },
-          preCreatedWorktree: {
-            taskId: ulid(),
-            worktreePath: ownedRoot,
-            branch: 'fusion',
-            baseCommit: null,
-            cleanup: { kind: 'owned-root', path: ownedRoot },
-          },
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'workflow-not-found' })
-    expect(existsSync(ownedRoot)).toBe(false)
-  })
-
-  test('owned-root cleanup failure is structured and never reported as zero residue', async () => {
-    harness = await buildHarness(0)
-    const ownedRoot = join(harness.tmp, 'fusion-cleanup-failure')
-    mkdirSync(ownedRoot, { recursive: true })
-
-    await expect(
-      startTask(
-        { workflowId: 'missing-workflow', name: 'fusion-style', inputs: {} },
-        {
-          db: harness.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: harness.appHome,
-          launchProvenance: { kind: 'fusion', initiator: 'manual' },
-          internalSource: { kind: 'local-path', repoPath: ownedRoot, baseBranch: 'fusion' },
-          preCreatedWorktree: {
-            taskId: ulid(),
-            worktreePath: ownedRoot,
-            branch: 'fusion',
-            baseCommit: null,
-            cleanup: { kind: 'owned-root', path: ownedRoot },
-          },
-          workspaceCleanupHook: (event) => {
-            if (event.stage === 'owned-root-remove') throw new Error('injected rm failure')
-          },
-        },
-      ),
-    ).rejects.toMatchObject({
-      code: 'workflow-not-found',
-      details: {
-        workspaceCleanup: {
-          complete: false,
-          failures: [{ stage: 'owned-root-remove', message: 'injected rm failure' }],
-        },
-      },
-    })
-    expect(existsSync(ownedRoot)).toBe(true)
-  })
-
-  test('worktree-remove cleanup failure is structured and retains registration for recovery', async () => {
-    harness = await buildHarness(1)
-    const workflow = await seedWorkflow(harness.db, 'cleanup-remove-failure')
-    let captured: WorkflowLaunchCommitHookEvent | undefined
-
-    await expect(
-      startTaskWithLocalRepo(
-        {
-          workflowId: workflow.id,
-          expectedWorkflowVersion: workflow.version,
-          name: 'remove-failure',
-          repoPath: harness.sourcePaths[0]!,
-          baseBranch: 'main',
-          inputs: {},
-        },
-        {
-          db: harness.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: harness.appHome,
-          workflowLaunchCommitHook: async (event) => {
-            if (event.stage !== 'materialized-before-task-commit') return
-            captured = event
-            await updateWorkflow(
-              harness!.db,
-              workflow.id,
-              {
-                expectedVersion: workflow.version,
-                clientMutationId: ulid(),
-                snapshot: {
-                  ...workflowDraftSnapshotOf(workflow),
-                  description: 'force exact mismatch',
-                },
-              },
-              SYSTEM,
-            )
-          },
-          workspaceCleanupHook: (event) => {
-            if (event.stage === 'worktree-remove') throw new Error('injected remove failure')
-          },
-        },
-      ),
-    ).rejects.toMatchObject({
-      code: 'workflow-version-mismatch',
-      details: {
-        workspaceCleanup: {
-          complete: false,
-          failures: [{ stage: 'worktree-remove', message: 'injected remove failure' }],
-        },
-      },
-    })
-    expect(captured).toBeDefined()
-    expect(existsSync(captured!.repoWorktrees[0]!.worktreePath)).toBe(true)
-    // RFC-254: `git worktree list --porcelain` prints forward-slash paths even on
-    // Windows; the captured worktreePath is backslash-separated (from join()).
-    expect(
-      (await runGit(harness.sourcePaths[0]!, ['worktree', 'list', '--porcelain'])).stdout,
-    ).toContain(captured!.repoWorktrees[0]!.worktreePath.replace(/\\/g, '/'))
-  })
-
-  test('branch-restore cleanup hook failure is structured after worktree unregister', async () => {
-    harness = await buildHarness(1)
-    const workflow = await seedWorkflow(harness.db, 'cleanup-ref-failure')
-    let captured: WorkflowLaunchCommitHookEvent | undefined
-
-    await expect(
-      startTaskWithLocalRepo(
-        {
-          workflowId: workflow.id,
-          expectedWorkflowVersion: workflow.version,
-          name: 'ref-failure',
-          repoPath: harness.sourcePaths[0]!,
-          baseBranch: 'main',
-          inputs: {},
-        },
-        {
-          db: harness.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: harness.appHome,
-          workflowLaunchCommitHook: async (event) => {
-            if (event.stage !== 'materialized-before-task-commit') return
-            captured = event
-            await updateWorkflow(
-              harness!.db,
-              workflow.id,
-              {
-                expectedVersion: workflow.version,
-                clientMutationId: ulid(),
-                snapshot: {
-                  ...workflowDraftSnapshotOf(workflow),
-                  description: 'force exact mismatch',
-                },
-              },
-              SYSTEM,
-            )
-          },
-          workspaceCleanupHook: (event) => {
-            if (event.stage === 'branch-restore') throw new Error('injected ref failure')
-          },
-        },
-      ),
-    ).rejects.toMatchObject({
-      code: 'workflow-version-mismatch',
-      details: {
-        workspaceCleanup: {
-          complete: false,
-          failures: [{ stage: 'branch-restore', message: 'injected ref failure' }],
-        },
-      },
-    })
-
-    expect(captured).toBeDefined()
-    expect(existsSync(captured!.repoWorktrees[0]!.worktreePath)).toBe(false)
-    const branch = await runGit(harness.sourcePaths[0]!, [
-      'rev-parse',
-      '--verify',
-      `refs/heads/${captured!.repoWorktrees[0]!.branch}`,
-    ])
-    expect(branch.exitCode).toBe(0)
-  })
-
-  test('concurrent branch CAS advance is retained and never force-reset', async () => {
-    harness = await buildHarness(1)
-    const source = harness.sourcePaths[0]!
-    const workflow = await seedWorkflow(harness.db, 'cleanup-ref-cas')
-    let captured: WorkflowLaunchCommitHookEvent | undefined
-    let concurrentCommit = ''
-
-    await expect(
-      startTaskWithLocalRepo(
-        {
-          workflowId: workflow.id,
-          expectedWorkflowVersion: workflow.version,
-          name: 'ref-cas',
-          repoPath: source,
-          baseBranch: 'main',
-          inputs: {},
-        },
-        {
-          db: harness.db,
-          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
-            .schedulerDriver,
-          appHome: harness.appHome,
-          workflowLaunchCommitHook: async (event) => {
-            if (event.stage !== 'materialized-before-task-commit') return
-            captured = event
-            const branch = event.repoWorktrees[0]!.branch
-            const before = (
-              await runGit(source, ['rev-parse', `refs/heads/${branch}`])
-            ).stdout.trim()
-            const tree = (await runGit(source, ['rev-parse', `${before}^{tree}`])).stdout.trim()
-            const commit = await runGit(source, [
-              'commit-tree',
-              tree,
-              '-p',
-              before,
-              '-m',
-              'concurrent ref writer',
-            ])
-            expect(commit.exitCode).toBe(0)
-            concurrentCommit = commit.stdout.trim()
-            expect(
-              (
-                await runGit(source, [
-                  'update-ref',
-                  `refs/heads/${branch}`,
-                  concurrentCommit,
-                  before,
-                ])
-              ).exitCode,
-            ).toBe(0)
-            await updateWorkflow(
-              harness!.db,
-              workflow.id,
-              {
-                expectedVersion: workflow.version,
-                clientMutationId: ulid(),
-                snapshot: {
-                  ...workflowDraftSnapshotOf(workflow),
-                  description: 'force exact mismatch',
-                },
-              },
-              SYSTEM,
-            )
-          },
-        },
-      ),
-    ).rejects.toMatchObject({
-      code: 'workflow-version-mismatch',
-      details: {
-        workspaceCleanup: {
-          complete: false,
-          failures: [{ stage: 'branch-restore' }],
-        },
-      },
-    })
-
-    expect(captured).toBeDefined()
-    expect(existsSync(captured!.repoWorktrees[0]!.worktreePath)).toBe(false)
-    expect(
-      (
-        await runGit(source, ['rev-parse', `refs/heads/${captured!.repoWorktrees[0]!.branch}`])
-      ).stdout.trim(),
-    ).toBe(concurrentCommit)
-  })
-
   test('post-add cleanup-incomplete remains a structured hard error, never earlyError', async () => {
     harness = await buildHarness(1)
     const source = harness.sourcePaths[0]!
@@ -800,54 +642,5 @@ describe('RFC-199 startTask workflow delete/version race', () => {
     expect(registered.stdout).toContain(residuePath.replace(/\\/g, '/'))
     expect((await runGit(source, ['branch', '--list', residueBranch])).stdout.trim()).not.toBe('')
     expect(await harness.db.select().from(tasks)).toHaveLength(0)
-  })
-
-  test('task insert first makes concurrent fenced delete report workflow-in-use', async () => {
-    harness = await buildHarness(0)
-    const workflow = await seedWorkflow(harness.db, 'task-first-race')
-    let deleteFailure: unknown
-    let committedEvent: WorkflowLaunchCommitHookEvent | undefined
-
-    const task = await startTask(
-      {
-        workflowId: workflow.id,
-        expectedWorkflowVersion: workflow.version,
-        name: 'task-first',
-        scratch: true,
-        inputs: {},
-      },
-      {
-        db: harness.db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
-          .schedulerDriver,
-        appHome: harness.appHome,
-        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-        awaitScheduler: true,
-        workflowLaunchCommitHook: async (event) => {
-          if (event.stage !== 'task-committed') return
-          committedEvent = event
-          try {
-            await deleteWorkflow(
-              harness!.db,
-              workflow.id,
-              { expectedVersion: workflow.version, clientMutationId: ulid() },
-              SYSTEM,
-            )
-          } catch (error) {
-            deleteFailure = error
-          }
-        },
-      },
-    )
-
-    expect(committedEvent?.taskId).toBe(task.id)
-    expect(deleteFailure).toMatchObject({
-      code: 'workflow-in-use',
-      status: 409,
-      details: { referenceCount: 1 },
-    })
-    expect(await getWorkflow(harness.db, workflow.id)).not.toBeNull()
-    expect(await harness.db.select().from(tasks)).toHaveLength(1)
-    expect(existsSync(task.worktreePath)).toBe(true)
   })
 })

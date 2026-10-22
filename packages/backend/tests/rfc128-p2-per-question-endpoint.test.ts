@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-128 P2 — 逐题 seal 端点 + defer 意图 + 待下发 gate（先红后绿，route 层）。
 //
 // P2 在既有 `POST /api/clarify/:nodeRunId/answers` 上加 `defer` + `questionIds`，并给
@@ -37,7 +38,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { createSession } from './helpers/auth/sessionStore'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { loadUndispatchedSelfQuestionerTargets } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyAnswer, ClarifyQuestion } from '@agent-workflow/shared'

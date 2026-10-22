@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-222 — the `manager` (资源管理员) role behavior matrix.
 //
 // manager = admin minus user management, system settings/ops, and task
@@ -22,7 +23,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { resolveTaskRole } from '../src/services/resourceAcl'
-import { createUser, patchUser } from '../src/services/users'
+import { createUser, patchUser } from './helpers/userFixture'
 import { ValidationError } from '../src/util/errors'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

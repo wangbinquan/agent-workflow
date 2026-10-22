@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // LOCKS: RFC-066 PR-A T4 — getTask hydrates Task.repos[] from task_repos
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
 // now (the wire is URL-only) — bodies are cast through the internal
@@ -14,7 +15,8 @@ import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { startTask, startTaskWithLocalRepo, getTask } from '../src/services/task'
+import { getTask } from '@/services/task'
+import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { basename } from 'node:path'
@@ -76,7 +78,7 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
 
   test('B26 single-repo task → repos.length === 1, repoCount === 1, mirror values match', async () => {
     h = await buildHarness(1)
-    const launched = await startTaskWithLocalRepo(
+    const launched = await launchTestTaskWithLocalRepo(
       {
         workflowId: 'wf-gt',
         name: 't',
@@ -111,7 +113,7 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
   // flakes, and nothing here gets slower except by doing more I/O.
   test('B27 multi-repo task → repos array ordered by repoIndex ascending', async () => {
     h = await buildHarness(3)
-    const launched = await startTask(
+    const launched = await launchTestTask(
       {
         workflowId: 'wf-gt',
         name: 'multi',

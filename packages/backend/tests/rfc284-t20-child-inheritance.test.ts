@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-284 T20（§4）—— buildChildRuntime/buildChildDeps 子任务继承面的双向锁。
 //
 // 方向一（防漏配）：INHERITABLE_RUN_CONFIG_KEYS 是唯一登记，buildChildRuntime
@@ -10,7 +11,7 @@
 // script 两键已离开本组，处置理由保留如下供追溯）：
 //   - scriptInterpreters / scriptDepsInstallTimeoutMs：已随 RFC-284 T30 修配
 //     **转 inherit**（用户拍板）——追查发现根任务同样断线（launch 臂 runtime
-//     携带、StartTaskDeps 缺席、runtimeConfigOpts 丢弃），根侧修通 + 子任务
+//     携带、TaskContinuationDependencies 缺席、runtimeConfigOpts 丢弃），根侧修通 + 子任务
 //     下传一并落地（proposal C9）。
 //   - codeHostConnections / codeHostFetch：**刻意不下传（T30 更正原「疑似漏配」
 //     判读）**——scheduler 在消费点自带 keyfile 自解析兜底

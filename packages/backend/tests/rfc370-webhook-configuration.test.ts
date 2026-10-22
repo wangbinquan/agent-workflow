@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: webhook presentation and admission consume current asynchronous
 // configuration. Keep writes before response enrichment and retain read-failure
 // fallbacks while using real endpoint persistence on both database providers.
@@ -15,7 +16,7 @@ import {
   rotateWebhookEndpointUrlToken,
   updateWebhookEndpoint,
 } from '@/services/webhookEndpoints'
-import { createUser } from '@/services/users'
+import { createUser } from './helpers/userFixture'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   integrationTriggerResourceAuthority,

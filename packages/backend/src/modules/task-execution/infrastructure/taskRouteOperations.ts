@@ -1054,8 +1054,8 @@ export async function taskNodeRunsProjection(
     }),
   )
   // RFC-078 —— 评审行的时间线锚是它这一轮**内容**的时间，不是槽位首次打开时钉住的
-  // `started_at`；没有这次重排，评审行会排在它所评审的产物**之前**。SQLite 侧
-  // `services/task.ts:getTaskNodeRuns` 一直做这一步（`runs.sort(compareNodeRunsForTimeline)`）。
+  // `started_at`；没有这次重排，评审行会排在它所评审的产物**之前**。
+  // RFC-395 II-pre：生产投影统一在这里按时间线排序，测试也直接覆盖这一条路径。
   runs.sort(compareNodeRunsForTimeline)
   const outputRows =
     runs.length === 0

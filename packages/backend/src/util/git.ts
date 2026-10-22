@@ -2532,7 +2532,7 @@ export async function removeWorktree(opts: RemoveWorktreeOptions): Promise<void>
 // 起于 issue #13：Windows 上节点超时被杀后，逃逸的后代还占着 iso 工作树里的句柄，
 // `git worktree remove` 报 `failed to delete '…': Invalid argument`，而
 // `discardNodeIso` 只 warn 一句「留待 GC」就放过去了——可 iso GC **明确跳过活跃任务**
-// （`systemWorkspaceGc.ts` / `workspaceMaintenance.ts`），那句承诺对活任务从不成立。
+// （`workspaceMaintenance.ts`），那句承诺对活任务从不成立。
 // 于是残留目录一直挡着同一条路径，重试的 `git worktree add` 逐次撞
 // `fatal: '<path>' already exists`，任务永久停摆。
 //

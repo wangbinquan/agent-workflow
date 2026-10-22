@@ -1,3 +1,4 @@
+// RFC-395 II-pre：崩溃收敛改走生产维护装配，保留补偿与前滚断言。
 // RFC-294 P0-B/W6 pre-refactor characterization.
 //
 // 立项时 Intent Apply 与 BundleApply 是两台引擎，这几条锁的是两台都必须保住的
@@ -9,6 +10,7 @@
 // 这四条是**合一前后都不许变**的用户可见行为，正是合一最容易悄悄改掉的那一类
 // （回收阈值、收敛的幂等性、失败重放的语义）。任何一条红都说明合一动了不该动的东西。
 
+import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { randomBytes } from 'node:crypto'
@@ -21,11 +23,7 @@ import { ulid } from 'ulid'
 import { buildActor, type Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, intentApplyJournal, intentSessions, resourceBundleApplies } from '@/db/schema'
-import {
-  applyIntentChangeset,
-  convergeIntentApplyJournal,
-  type IntentApplyReceipt,
-} from '@/modules/intent/composition/apply'
+import { applyIntentChangeset, type IntentApplyReceipt } from '@/modules/intent/composition/apply'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeSqliteResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
@@ -223,7 +221,13 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
     test('fresh work survives a sweep; after restart-age it converges failed and replay stays side-effect free', async () => {
       const pair = await seedPair('crash', 'applying', Date.now())
 
-      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+      expect(
+        await composeIntentApplyConvergence({
+          db,
+          appHome,
+          pluginsDir: join(appHome, 'plugins'),
+        }).converge({ activeJournalIds: [] }),
+      ).toEqual({
         failed: 0,
         rolledForward: 0,
       })
@@ -244,7 +248,13 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
         .set({ updatedAt: stale })
         .where(eq(resourceBundleApplies.id, pair.bundleId))
 
-      expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+      expect(
+        await composeIntentApplyConvergence({
+          db,
+          appHome,
+          pluginsDir: join(appHome, 'plugins'),
+        }).converge({ activeJournalIds: [] }),
+      ).toEqual({
         failed: 1,
         rolledForward: 0,
       })

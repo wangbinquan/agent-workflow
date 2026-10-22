@@ -1,3 +1,4 @@
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-359 W7 —— `insert(tasks)` 的每个站点都必须自带血缘与启动来源三列。
 //
 // # 这条守卫替代的是一个触发器
@@ -85,7 +86,6 @@ const TASK_INSERT_SITES: readonly string[] = [
   // （长驻协调器不能把 17 个旋钮冻在 boot，见 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`），
   // 解析体加注释与一个局部变量，本文件变长；站点与它写的三列一格未动。
   // RFC-370 v2 P1: 2537 → 2504 with the Task host binding removed; the site and its three columns remain.
-  'services/task.ts:2415 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {

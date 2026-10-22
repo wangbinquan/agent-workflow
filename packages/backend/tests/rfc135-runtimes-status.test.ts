@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-135 — GET /api/runtimes/status (homepage multi-runtime status line).
 //
 // Locks the contract that replaced the legacy single-runtime probe
@@ -31,7 +32,7 @@ import {
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
 
 const TOKEN = 'a'.repeat(64)

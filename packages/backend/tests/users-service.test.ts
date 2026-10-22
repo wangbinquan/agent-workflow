@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-036 — users service: PR1 scope (create + reset-password + disable +
 // last-access-administrator protection + search + __system__ immutability).
 
@@ -14,7 +15,7 @@ import {
   patchUser,
   resetPassword,
   searchUsersPublic,
-} from '../src/services/users'
+} from './helpers/userFixture'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { verifyPassword } from '../src/auth/passwords'
 
@@ -100,7 +101,9 @@ describeEachProvider('users service', (harness) => {
   })
 
   test('disableUser refuses __system__', async () => {
-    await expect(disableUser(db, SYSTEM_USER_ID)).rejects.toThrow(/cannot disable __system__/)
+    await expect(disableUser(db, SYSTEM_USER_ID)).rejects.toMatchObject({
+      code: 'system-user-immutable',
+    })
   })
 
   // Self-disable lockout — an actor disabling their own account would revoke
@@ -149,7 +152,9 @@ describeEachProvider('users service', (harness) => {
   })
 
   test('enableUser refuses __system__', async () => {
-    await expect(enableUser(db, SYSTEM_USER_ID)).rejects.toThrow(/cannot modify __system__/)
+    await expect(enableUser(db, SYSTEM_USER_ID)).rejects.toMatchObject({
+      code: 'system-user-immutable',
+    })
   })
 
   // Regression (2026-06-24 incident): __system__ is a non-login sentinel, so it

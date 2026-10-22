@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-228 — an Agent's persisted resource ids are canonical identity, but a
 // dangling id is never a runnable capability. Save and launch boundaries must
 // reject the complete dependsOn closure, while actor-safe status distinguishes
@@ -31,7 +32,7 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 import { composeDatabaseAgentResourceInventorySource } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

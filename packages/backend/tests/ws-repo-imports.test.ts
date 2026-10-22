@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-033-T3: /ws/repo-imports/{batchId} channel.
 // RFC-285 B6②：本频道自此有升级门（发起者 ∨ 资源管理员；缺行同形拒绝）——
 // 正向用例先 seed 真批次（stub resolver，不触网），门矩阵见文件末 describe。
@@ -11,7 +12,7 @@ import {
 import { REPO_IMPORT_CHANNEL, repoImportsBroadcaster } from '../src/ws/broadcaster'
 import { __resetBatchImportForTests, startBatchImport } from '../src/services/repoBatchImport'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 

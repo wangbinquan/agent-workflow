@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-310 —— 「创建对话框造的载荷，真实后端收不收」的端到端契约。
 //
 // 为什么这条测试存在（两次用户实报事故的共同根因）：
@@ -43,7 +44,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'c'.repeat(64)
 

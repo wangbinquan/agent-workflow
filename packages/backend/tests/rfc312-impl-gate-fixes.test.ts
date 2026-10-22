@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-312 —— Codex **实现门**四条 P1 与两条 P2 的回归锁（2026-08-20）。
 //
 // 为什么单独立一个文件：这些缺陷的共同点是**既有测试全绿的情况下依然存在**——它们都藏在
@@ -26,7 +27,7 @@ import {
   revalidateAllConnections,
   trackConnection,
 } from '../src/ws/connections'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeCredential } from '../src/auth/session'
 import type { WsCredential } from '../src/ws/registry'

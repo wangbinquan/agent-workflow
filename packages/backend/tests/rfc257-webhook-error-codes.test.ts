@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-257 — 路由错误码逐个行为触发（route-error-code-coverage 锁要求每个新
 // code 被测试点名——点名的正确姿势是把那条错误路径真的走一遍并断言 code）。
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
@@ -16,7 +17,7 @@ import {
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { webhookDeliveries, webhookEndpoints, webhookTriggers, workflows } from '../src/db/schema'
 import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'

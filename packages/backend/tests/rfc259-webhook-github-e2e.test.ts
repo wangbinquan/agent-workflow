@@ -1,4 +1,4 @@
-import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-259 — GitHub 全链路端到端（proposal AC-13，镜像 rfc257-webhook-e2e）：
 // mock GitHub 的 HMAC 签名 POST 打进真 app（真三段式路由 + 真
 // createWebhookDispatcher），只在 launch 处注入 fake（落真 tasks 行）。
@@ -12,7 +12,8 @@ import { ulid } from 'ulid'
 
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
+import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import {
   tasks,
   webhookDeliveries,

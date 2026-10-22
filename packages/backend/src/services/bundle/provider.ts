@@ -1,19 +1,6 @@
-// RFC-271 T8 / T12b —— `BundleApply` 引擎的 provider 契约与依赖规划器。
-//
-// 场景差异全部收进 `BundleApplyProvider`：引擎本体既不认识 intent 也不认识配置包。
-// 它只知道「一串 op、一套解析钩子、一个执行身份」。
-//
-// ⚠️ **`serializationKey` 与 `idempotencyKey.scope` 是两回事**（invariants I1）。
-// 源码按 `sessionId` 串行（`applyChangeset.ts:201` `withSessionApplyLock`）——即**按
-// 资源实例**串行，不是按命名空间。配置包若直接拿常量 `scope:'package'` 当串行键，
-// 所有导入会全局串行：Alice 一个慢 npm 安装堵死 Bob 完全无关的纯 agent 包。
-
+// RFC-271 依赖规划与生产回执合同；RFC-395 II-pre 删除未接线的 BundleApply 合同。
 import type { AclResourceType, BundleResourceType } from '@agent-workflow/shared'
-import type { BundleOp, BundleOpKind, ResourceBundle } from '@agent-workflow/shared'
-import type { Actor } from '@/auth/actor'
-
-/** journal 的四态。 */
-export type BundleApplyState = 'prepared' | 'applying' | 'committed' | 'failed'
+import type { BundleOp, BundleOpKind } from '@agent-workflow/shared'
 
 export interface BundleAppliedOp {
   opId: string
@@ -45,87 +32,6 @@ export interface BundleReceipt {
   skippedSecrets?: BundleSkippedSecret[]
 }
 
-/**
- * 补偿 oracle 的条目（I14 record-before-act）：**外部副作用落地之前**写进
- * journal，让崩溃后的收敛器能精确删掉它。
- *
- * ⚠️ 插件那条必须带 `generationId`：只记 `{pluginId}` 不够——粗粒度 GC 会被任一
- * 非终态 node run 完全挡住，于是目录永久残留且 journal 无法证明补偿完成。
- * 这要求调用方**预铸** generation id 再调 installer。
- */
-/**
- * `StagedSkillVersion` 的结构镜像。这里**不** import 那个类型：provider 是引擎与
- * 场景之间的契约层，把技能版本模块拖进来会让两边的依赖方向反过来。字段对不上会在
- * `apply.ts` 的赋值处直接编译失败——那正是想要的检查点。
- */
-export interface StagedSkillVersionLike {
-  skillId: string
-  skillName: string
-  opId: string | null
-  publishId: string
-  newVersion: number
-  newHash: string
-  filesDir: string
-  versionDir: string
-  stagingDir: string
-  noop: unknown
-}
-
-export type BundleArtifact =
-  | { kind: 'skill-stage'; skillId: string; opId: string; skillDir: string }
-  /**
-   * 整个 `StagedSkillVersion` 都要落库，不只是补偿用得到的那三个字段。
-   *
-   * 补偿（abort）只需要 `stagingDir`，但 **committed 之后的重放需要 publish**，而
-   * publish 要的是完整结构（newVersion / newHash / filesDir / versionDir …）。只记
-   * 三个字段的话，一次「DB 已提交、publish 前崩溃」的 run 永远补不上那次 publish
-   * ——收敛器看得见这条 committed 行，却没有足够信息把它推完。
-   */
-  | { kind: 'skill-version-stage'; staged: StagedSkillVersionLike }
-  | { kind: 'plugin-install'; pluginId: string; generationId: string; generationDir: string }
-
-export interface BundleApplyProvider<TTransaction = unknown> {
-  /** 幂等身份。配置包：`{scope:'package', key:importId}`，由客户端持有并重放。 */
-  readonly idempotencyKey: { scope: string; key: string }
-  /**
-   * **串行键**——粒度由 provider 自己定（建议按目标资源集合），与幂等 namespace
-   * 无关。见文件头的警告。
-   */
-  readonly serializationKey: string
-  /** 执行身份。owner 归属与全部授权判据都从它出。 */
-  readonly actor: Actor
-  /** 解析 `external:<token>` → 本地资源 id（含类型校验）。`name:` 形态不走这里。 */
-  resolveExternal(ref: string, expectType: AclResourceType): Promise<string>
-  /** 技能文件载体：配置包从 zip 取，intent 从内联句柄取。 */
-  readSkillFile(ref: string): Uint8Array
-  /**
-   * 工作组的 human 成员：包里带的是源实例的 **username**，本机的 `user_id` 与它
-   * 没有任何关系。返回本地 user id，或 `null` = 该成员不加入。
-   *
-   * 缺省实现（intent 场景没有这一步）等价于「全部不加入」。配置包侧只对最终
-   * new / overwrite 的工作组按 `(workgroupSlug, username)` 强制拍板并校验；reuse
-   * 不写 roster，因此既不要求也不消费映射。
-   */
-  resolveHumanMember?(workgroupSlug: string, username: string): string | null
-  /**
-   * 框架 built-in 按**名字**绑到本实例自己 seed 的那一个。包里的 built-in 没有
-   * create op（导入侧自动忽略），引用靠这条解析；返回 null ⇒ 环境前提缺失。
-   */
-  resolveBuiltin?(type: AclResourceType, name: string): Promise<string | null>
-
-  // ── 事务钩子。三个都在**同一个** big tx 内被调用（I7 / I13）。 ──
-  /** claim 事务内的场景特有校验（intent 的 draft revision/hash）。 */
-  claimInTx?(tx: TTransaction): void
-  /**
-   * CAS `prepared→applying` **之后**、任何 commit 内核**之前**（I6）。
-   * pre-stage 窗口（npm 安装 / 技能暂存）足够长，claim 期的校验会过期；配置包在
-   * 这里做 reuse 目标的内容复核（selectedExternalFence）。
-   */
-  revalidateInTx?(tx: TTransaction): void
-  /** 资源写之后、journal 置 committed **之前**，同事务（I7）。 */
-  finalizeInTx?(tx: TTransaction, receipt: BundleReceipt): void
-}
-
 // --- T12b 依赖规划器 ---------------------------------------------------------
 
 const RESOURCE_OF_KIND: Record<BundleOpKind, BundleResourceType> = {
@@ -151,10 +57,6 @@ const RESOURCE_OF_KIND: Record<BundleOpKind, BundleResourceType> = {
 
 export function resourceTypeOfOp(op: BundleOp): BundleResourceType {
   return RESOURCE_OF_KIND[op.kind]
-}
-
-export function opAction(op: BundleOp): 'create' | 'update' {
-  return op.kind.endsWith('-create') ? 'create' : 'update'
 }
 
 /** create op 的 bundle 内标识；update op 没有 slug。 */
@@ -268,41 +170,4 @@ export function planBundleOps(ops: readonly BundleOp[]): BundleOp[] {
       return a.index - b.index
     })
     .map((e) => e.op)
-}
-
-/**
- * I5 pending seams —— 预铸 id **必须早于 preflight**：各 prepare* 内核要靠这两个
- * 集合接受「同 bundle 内还没落库的目标」，否则一个引用同包新建 agent 的工作组会
- * 在 preflight 就报引用不存在。
- */
-export interface BundlePendingSeams {
-  /** 本次将要创建的资源 id（预铸值，不是名字）。 */
-  pendingBundleIds: Set<string>
-  /** 预铸 agent id → 它将要落库的名字。 */
-  pendingAgentNames: Map<string, string>
-}
-
-export function pendingSeamsFor(
-  ops: readonly BundleOp[],
-  idOfSlug: (slug: string) => string,
-): BundlePendingSeams {
-  const pendingBundleIds = new Set<string>()
-  const pendingAgentNames = new Map<string, string>()
-  for (const op of ops) {
-    const slug = opSlug(op)
-    if (slug === null) continue // update 目标已在库里，不属于 pending
-    const id = idOfSlug(slug)
-    pendingBundleIds.add(id)
-    if (resourceTypeOfOp(op) === 'agent') {
-      const name = (op.payload as { name?: unknown }).name
-      if (typeof name === 'string') pendingAgentNames.set(id, name)
-    }
-  }
-  return { pendingBundleIds, pendingAgentNames }
-}
-
-/** 引擎入口的输入。 */
-export interface BundleApplyInput<TTransaction = unknown> {
-  bundle: ResourceBundle
-  provider: BundleApplyProvider<TTransaction>
 }

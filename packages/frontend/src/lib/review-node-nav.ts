@@ -3,7 +3,7 @@
 // Clicking a review node on the task-status canvas opens the review page
 // instead of the (near-empty) NodeDetailDrawer. This pure helper picks WHICH
 // node_run to route to, and whether the node is clickable at all, from the
-// backend-stamped `reviewNavKind` (services/task.ts getTaskNodeRuns).
+// backend-stamped `reviewNavKind` (taskRouteOperations.ts taskNodeRunsProjection).
 //
 // All the review-lifecycle semantics — "has a renderable current round"
 // (never route to a 404), awaiting-vs-decided, human-vs-system decision — live

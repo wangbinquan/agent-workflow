@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-223 PR-7 — the canonical resource surface is id-only.
 //
 // Locks all four migrated resource types:
@@ -13,7 +14,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { agents, mcps, skills, workgroups } from '../src/db/schema'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

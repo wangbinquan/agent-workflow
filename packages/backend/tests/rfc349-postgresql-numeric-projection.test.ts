@@ -1,3 +1,4 @@
+// RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-349 回归防护 —— PostgreSQL 的聚合结果必须落成 JS number，不能是字符串。
 //
 // 为什么这条测试存在（2026-09-03，对着真 PostgreSQL 实测）：`count(*)` 在 PostgreSQL 里
@@ -45,15 +46,6 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
     avg:
       'averageRecentPayloadBytes 的 AVG(LENGTH(payload))：行类型写成 `{ avg: unknown }`，' +
       '返回前走 numberValue(value) 解码，null 原样透传。与上面 value 同一形态。',
-  },
-  // RFC-359 W7：判据改成大小写不敏感后才看得见的一条（此前 `MAX(` 整类漏检）。
-  'services/task.ts': {
-    branchStartedAt:
-      'MAX(a, b) 是**两参数标量**形态、写在 update().set() 里让 branch_started_at 只前进不后退，' +
-      '不是投影列——没有值回到 JS 侧，也就没有可解码的东西（同 capabilities.ts 的 greatest 条目）。' +
-      '⚠️ 但它是一颗雷：两参数 max 只有 SQLite 有，PostgreSQL 要 greatest(a, b)。' +
-      '这块代码今天跑在 `dbTxSync` 里（SQLite-only 执行面）所以打不着，' +
-      '**等 services/task.ts 迁离同步事务面时必须同时换成能力矩阵的 greatest**，否则当场 42883。',
   },
   // RFC-359 W7：两份 provider 实现合一后按领域命名，仍按类型可达性落进 PG 语料。
   'modules/system-operations/infrastructure/resourceLimitPersistence.ts': {

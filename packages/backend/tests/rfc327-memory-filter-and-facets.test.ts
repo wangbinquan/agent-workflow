@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-327 —— 按 scope / 标签检索知识的 REST 与 MCP 面。
 //
 // 为什么这些测试存在：用户问「有没有增加知识的 MCP/API，有没有按 scope、标签过滤的
@@ -32,7 +33,7 @@ import {
   type RecordedOperationCall,
 } from './helpers/mcpOperationRecording'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

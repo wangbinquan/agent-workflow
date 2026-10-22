@@ -1,3 +1,4 @@
+// RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-097 — resume/retry 任务级互斥竞态 oracle（design/RFC-097-task-status-cas/design.md §3 / §7.3）。
 //
 // 锁定的合同（任一回归即红）：
@@ -136,7 +137,7 @@ async function buildHarness(): Promise<Harness> {
   const definition: WorkflowDefinition = {
     $schema_version: 3,
     inputs: [],
-    // RFC-115: retry budget via StartTaskDeps (was node.retries: 0) — fail-mock
+    // RFC-115: retry budget via TaskContinuationDependencies (was node.retries: 0) — fail-mock
     // 一次即败，避免调度器默认 3 次重试拖慢失败路径。预算 0 由 deps() 透传
     // defaultNodeRetries: 0 进 resumeTask / retryNode（见下）。
     nodes: [
@@ -196,7 +197,7 @@ async function buildHarness(): Promise<Harness> {
 }
 
 function deps(h: Harness, mockPath: string) {
-  // RFC-115: retry budget via StartTaskDeps (was node.retries: 0). Threaded
+  // RFC-115: retry budget via TaskContinuationDependencies (was node.retries: 0). Threaded
   // through both resumeTask and retryNode so fail-mock stays one-shot — without
   // it the scheduler's default budget (3) would inflate the count-* oracles.
   return {

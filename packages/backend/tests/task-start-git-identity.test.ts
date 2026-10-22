@@ -1,3 +1,6 @@
+import { ulid } from 'ulid'
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
+import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 // RFC-320 — account profile is the only user-task Git identity source. The
 // task row freezes it once and every runtime spawn consumes that snapshot.
 
@@ -10,16 +13,11 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { tasks, users } from '../src/db/schema'
+import { tasks, users, nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import {
-  abortAllActiveTasks,
-  isTaskActive,
-  resolveTaskGitCommitIdentity,
-  startTaskWithLocalRepo,
-} from '../src/services/task'
+import { abortAllActiveTasks, isTaskActive } from '@/services/task'
 import { createWorkflow } from '../src/services/workflow'
-import { DomainError } from '../src/util/errors'
+import { UserAccessError } from '@/modules/identity-access/public/types'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -200,7 +198,7 @@ async function launch(h: Harness, name: string, actorUserId?: string) {
 }
 
 function launchWithoutEnv(h: Harness, name: string, actorUserId?: string) {
-  return startTaskWithLocalRepo(
+  return launchTestTaskWithLocalRepo(
     {
       workflowId: h.workflowId,
       name,
@@ -282,8 +280,9 @@ describe('RFC-320 task Git identity snapshot', () => {
     const h = await setup()
     await seedUser(h.db, 'alice', 'Alice', null)
     const error = await launch(h, 'missing-email', 'alice').catch((caught: unknown) => caught)
-    expect(error).toBeInstanceOf(DomainError)
-    expect((error as DomainError).code).toBe('git-identity-email-missing')
+    expect(error).toBeInstanceOf(UserAccessError)
+    expect((error as UserAccessError).kind).toBe('validation')
+    expect((error as UserAccessError).code).toBe('git-identity-email-missing')
     expect((await h.db.select().from(tasks)).length).toBe(0)
   })
 
@@ -291,8 +290,9 @@ describe('RFC-320 task Git identity snapshot', () => {
     const h = await setup()
     await seedUser(h.db, 'alice', 'Visible Alice', 'alice@example.test', '')
     const error = await launch(h, 'missing-git-name', 'alice').catch((caught: unknown) => caught)
-    expect(error).toBeInstanceOf(DomainError)
-    expect((error as DomainError).code).toBe('git-identity-name-missing')
+    expect(error).toBeInstanceOf(UserAccessError)
+    expect((error as UserAccessError).kind).toBe('validation')
+    expect((error as UserAccessError).code).toBe('git-identity-name-missing')
     expect((await h.db.select().from(tasks)).length).toBe(0)
   })
 
@@ -379,21 +379,74 @@ describe('RFC-320 task Git identity snapshot', () => {
       })
       .where(eq(users.id, 'alice'))
 
-    expect(
-      await resolveTaskGitCommitIdentity({
+    const childId = ulid(),
+      runId = ulid()
+    await h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, parent.id))
+    await h.db.insert(nodeRuns).values({
+      id: runId,
+      taskId: parent.id,
+      nodeId: 'call',
+      status: 'running',
+      childTaskId: childId,
+      iteration: 0,
+      retryIndex: 0,
+    })
+    const parentRow = (await h.db.select().from(tasks).where(eq(tasks.id, parent.id)))[0]!
+    await launchTestTask(
+      { workflowId: h.workflowId, name: 'child identity', inputs: parent.inputs },
+      {
         db: h.db,
+        appHome: h.appHome,
+        actorUserId: 'alice',
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
-        actorUserId: 'alice',
+        coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
         callLaunch: {
           parentTaskId: parent.id,
-          parentNodeRunId: 'node-run',
+          parentNodeRunId: runId,
           invocationDepth: 1,
           launchActorUserId: 'alice',
-          frozenSnapshotJson: null,
-          refClosureJson: null,
+          frozenSnapshotJson: parentRow.workflowSnapshot,
+          refClosureJson: parentRow.refClosureJson,
         },
-      }),
-    ).toEqual({ name: 'Parent Owner', email: 'parent@example.test' })
+        materializedSpace: {
+          kind: 'single',
+          spaceKind: 'inherited',
+          taskId: childId,
+          worktreePath: parent.worktreePath,
+          branch: parent.branch,
+          baseCommit: parent.baseCommit,
+          earlyError: null,
+          resolvedSources: [
+            {
+              repoPath: parent.repoPath,
+              repoUrl: null,
+              cachedRepoId: null,
+              baseBranch: parent.baseBranch,
+              pathFetchError: null,
+              ffWarnings: [],
+            },
+          ],
+          repos: parent.repos.map((repo) => ({
+            ...repo,
+            submoduleInitOk: repo.submoduleInitOk === true,
+            hasSubmodules: repo.hasSubmodules === true,
+          })),
+          nodePaths: [],
+          cleanup: {
+            taskId: childId,
+            ownedRoot: null,
+            worktrees: [],
+            state: 'owned',
+            report: null,
+          },
+        },
+      },
+    )
+    const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
+    expect({ name: child.gitUserName, email: child.gitUserEmail }).toEqual({
+      name: 'Parent Owner',
+      email: 'parent@example.test',
+    })
   })
 })

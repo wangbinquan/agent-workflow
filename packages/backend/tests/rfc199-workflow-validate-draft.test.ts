@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 import {
   WorkflowDraftValidationReceiptSchema,
   serializeWorkflowDefinitionCandidateV1,
@@ -15,7 +16,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { createWorkflow, getWorkflow } from '../src/services/workflow'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 
 const DAEMON_TOKEN = 'd'.repeat(64)
 const EMPTY_DEFINITION: WorkflowDefinition = {

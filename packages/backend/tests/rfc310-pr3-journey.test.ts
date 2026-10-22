@@ -1,4 +1,4 @@
-import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-310 PR-3 —— 收口 journey：HTTP 面 + composition 装配的连接组织。
 //
 // fork 交付的部件测试（materialize/placement/questions/adapter-runner/...）
@@ -69,7 +69,8 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
+import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 
 setDefaultTimeout(120_000)

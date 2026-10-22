@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-269 / RFC-277 — 代码平台凭据面与 GitLab TLS 例外的锁。
 //
 // 这里锁三件事：
@@ -17,7 +18,7 @@ import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '../src/db/client'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { codeHostConnections } from '../src/db/schema'
 import {

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-159 T7 — manual "run now".
 //
 // Locks the pure-launch contract: run-now fires immediately via the same
@@ -18,7 +19,7 @@ import { describeEachProviderHttpApplication } from './helpers/providerHttpAppli
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { getScheduledTask, runScheduleNow } from './helpers/integrationTriggerResourceBinding'
 import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { createWorkflow } from '../src/services/workflow'
 import { NotFoundError } from '../src/util/errors'
 import type { CreateWorkflow, StartTask } from '@agent-workflow/shared'

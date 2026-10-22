@@ -1,3 +1,4 @@
+// RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-203 T6/T4 — uniform error bodies + task-level failureCode projection.
 //
 // LOCKS: (1) /call-targets missing methodRef returns the uniform
@@ -6,7 +7,7 @@
 // source guards return uniform bodies; (3) WS upgrade rejections return the
 // FLAT uniform body (was nested {error:{...}}); (4) getTask / listTasks
 // project the failed node's RFC-145 failure code (failed-run oracle) and
-// getTaskNodeRuns surfaces the per-run code.
+// taskNodeRunsProjection surfaces the per-run code.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
@@ -19,7 +20,8 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { getTask, getTaskNodeRuns } from '../src/services/task'
+import { getTask } from '../src/services/task'
+import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedFailedTask(
@@ -123,9 +125,9 @@ describeEachProvider('RFC-203 T4 — failureCode projection', (harness) => {
     expect(task?.failureCode ?? null).toBeNull()
   })
 
-  test('getTaskNodeRuns surfaces per-run failureCode', async () => {
+  test('taskNodeRunsProjection surfaces per-run failureCode', async () => {
     const { taskId } = await seedFailedTask(db, 'clarify-required')
-    const res = await getTaskNodeRuns(db, taskId)
+    const res = await taskNodeRunsProjection({ db: db }, taskId)
     const coded = res.runs.find((r) => r.failureCode === 'clarify-required')
     expect(coded).toBeDefined()
   })

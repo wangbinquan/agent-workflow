@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // LOCKS: RFC-218 — port-driven single-agent launch (design §9-5..11, 18-20, 24).
 //
 //   B1  ported snapshot golden: one input node per declared port
@@ -55,7 +56,7 @@ import {
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
 } from './helpers/integrationTriggerResourceBinding'
 import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import {
   buildWorkflowValidationContext,
   validateWorkflowDef,

@@ -1,3 +1,4 @@
+// RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-310 PR-7b T80 —— handoff / attach-MR / resume 三命令。
 //
 // 锁：①handoff：bump epoch + fence，在途 attempt discarded、prepared effect
@@ -25,7 +26,7 @@ import type {
 import type { MrEffectsPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { canonicalDigest } from '../src/modules/development-automation/domain/canonicalJson'
 import { createSession } from './helpers/auth/sessionStore'
-import { createUser } from '../src/services/users'
+import { createUser } from './helpers/userFixture'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
