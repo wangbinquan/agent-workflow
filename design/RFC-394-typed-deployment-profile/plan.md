@@ -25,5 +25,6 @@
 
 ## 验收清单
 
-- [ ] proposal AC-1～AC-3
-- [ ] 推送后 exact SHA 的 CI 全绿（含 PostgreSQL 分片、windows-platform、maintenance-soak、三平台 e2e）
+- [x] proposal AC-1～AC-3（`b84ff545e`；本地 SQLite 全量、PostgreSQL 834 个文件、双 lane 68 个文件全绿）
+- [x] 推送后 exact SHA 的 CI 全绿：CI `39698884341`（含 PostgreSQL 分片、三平台 e2e）、windows-platform `39698884240`、
+  maintenance-soak `39698884291`、integration-opencode `39698884225`

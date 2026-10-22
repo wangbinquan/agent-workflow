@@ -1,3 +1,9 @@
+## 2026-10-21 RFC-294 后继 S2c：RFC-394 Done；S2c 暂停，本会话接手 RFC-395
+
+**RFC-394 Done**：`b84ff545e`（Codex 实施、本会话审核并补正）。部署选择点 `selectDeploymentProfile` 返回类型化 `DeploymentProfile`（`kind`、`requiredProvider`、`probeHost`、`listen`、`selections`），单机 `bootstrap/standalone.ts` 与托管 `composeCrewStationProfile` 各一个工厂；`StartOptions` 退役，71 个选择槽在 `bootstrap/deploymentProfile.ts` 单一声明，会话输入与应用图输入继承复用，会话图经类型锁定键表（`bootstrap/deploymentSelections.ts`）一次展开；启动序列的 `executionHost` 分支改由 profile 宿主探测承担（G9 6 → 5）；`admitSelections` / `HOSTED_ONLY_SELECTIONS` 换成 `requiredProvider` 判定；`main.ts` 只解析参数、选择一次 profile。无生产行为变化。CI `39698884341`、windows-platform、maintenance-soak、integration-opencode 全绿。**对其他会话的影响**：启动入口是 `startCommand(profile, launch, development?)`；新部署选择项加进 `DeploymentSelections` 并同步键表（缺键 / 多键编译失败）；`rfc394-deployment-profile` 结构锁禁止恢复 `StartOptions`、按部署分支或逐字段复制。
+
+**S2c 暂停**：用户 2026-10-21 将 [RFC-395](design/RFC-395-database-target-schema-rebuild/proposal.md)（数据库阶段目标模型与一次迁移）交本会话做任务分解并指挥 Codex 实施；它会大面积改 `bootstrap/` 与持久化层，与 S2c 后继（单机默认值集中、执行权端口去部署字面量、入口根瘦身）冲突，S2c 待 RFC-395 落地后再续，编号届时另取（395、396 已被占用）。
+
 ## 2026-10-21 RFC-395 Draft：数据库阶段目标模型与一次迁移
 
 **进行中 RFC（设计阶段）**：[RFC-395](design/RFC-395-database-target-schema-rebuild/proposal.md)，用户要求全面数据库调研并落地 RFC。以 `3fcb14dbf8ab27cf451934942ea6b9cd647077f8` / schema digest `8e6510d4d0927d538692ecf22cde0b1fa9a97c733a9e044af8d9768418ecb956` 为基线，六份文档明确 217 张源表处置、Task / NodeRun / workspace / 澄清 / 资源引用 / 内容模型、双 provider 原生合同及离线转换后一次切换。重点删除 host workflow、主仓镜像、单仓/多仓快照双形态、运行时 seq/ID 回退与旧 provider 适配；保留事件、Case/Reaction/Task、观测与领域 effect 边界。当前仅文档，未改生产代码或真实数据库；独立功能设计门与实现批准待完成（本会话无可调用 openai-codex review 工具）。完整任务与验收矩阵见 RFC plan；真实切换需另有具体 MigrationPlan 和实例操作批准。

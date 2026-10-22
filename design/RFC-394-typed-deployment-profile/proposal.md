@@ -1,6 +1,7 @@
 # RFC-394 类型化部署 profile：选择点返回 profile，`StartOptions` 退役（RFC-294 S2c 第二步）
 
-- **状态**：In Progress（2026-10-21 落档并派发 Codex 实施、本会话审核。用户 2026-10-20「按你推荐继续推进」：
+- **状态**：Done（2026-10-21：`b84ff545e`；CI `39698884341`、windows-platform `39698884240`、maintenance-soak `39698884291`、
+  integration-opencode `39698884225` 全绿）。2026-10-21 落档并派发 Codex 实施、本会话审核。用户 2026-10-20「按你推荐继续推进」：
   由本会话设计、交 Codex 实施并审核，免设计门与实现门；规则取舍由本会话按推荐决定，见 §6）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S2（S2c「以类型化的 profile 取代 `StartOptions` 覆盖；
   入口根不再按部署模式分支」）；design §9.2「部署能力差异由 profile 提供的能力描述表达」、§9.3「选择只在 bootstrap 发生一次」、
