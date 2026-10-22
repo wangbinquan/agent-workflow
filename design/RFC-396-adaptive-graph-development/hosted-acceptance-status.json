@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "observedAt": "2026-10-22T20:17:18.490Z",
+  "observedAt": "2026-10-22T21:31:19.100Z",
   "rfc": "RFC-396",
   "rfcStatus": "In Progress",
   "acceptanceCriterion": "AC14",
@@ -108,7 +108,16 @@
       "id": "basis:hosted-clamp-native-basis-v2",
       "digest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9"
     },
-    "reviewReceipt": null,
+    "reviewReceipt": {
+      "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+      "caseId": "01M5J5MH5Q3M2ZBAYK0VPT200M",
+      "decidedAt": 1792702234007,
+      "decision": "approved",
+      "id": "01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+      "nodeRunId": "01M5JP0DS1Z2BMGN0X8Y1KFQ7X",
+      "reason": "",
+      "taskId": "01M5JMN7NKDXW8TTMFG01BM7G6"
+    },
     "candidate": null,
     "verificationReceipt": null,
     "deliveryReceipt": null,
@@ -122,81 +131,125 @@
     },
     "reviewExecution": {
       "roundId": "01M5JAY36499QEA29XXNZ7YEKN",
-      "preallocatedTaskId": "01M5JAY3G3WYAFAY0KX986JXG7",
-      "actualTaskObserved": true,
-      "lastObservedTaskStatus": "running",
-      "materialNodeRunId": "01M5JBRHH6X77XZC54Y1AKAYCF",
+      "attemptOrdinal": 1,
+      "taskId": "01M5JMN7NKDXW8TTMFG01BM7G6",
+      "lastObservedTaskStatus": "done",
+      "lastObservedAt": "2026-10-22T21:03:19.103Z",
+      "materialNodeRunId": "01M5JMP2J4MXH27RG8CZNJ51YY",
       "agentSubtask": {
-        "id": "01a164be-b8b5-7000-bfac-b9e4cda64522",
-        "observedAt": "2026-10-22T18:05:57.698Z",
-        "state": "succeeded",
-        "exitCode": 0,
+        "id": "01a1654d-afc6-7000-8d0a-9aae0cdc9908",
         "agentProfileId": "01a146ce-c2ce-7fe4-97ab-3cddd340967d",
-        "startedAt": "2026-10-22T17:55:37.992Z",
-        "stdoutBytes": 2176,
-        "stderrBytes": 0
+        "startedAt": "2026-10-22T20:34:36.311Z",
+        "resultEventAt": "2026-10-22T20:42:45.469Z",
+        "exitCode": 0,
+        "stdoutBytes": 601,
+        "stderrBytes": 0,
+        "bindingState": "settled",
+        "model": "opencode-go/deepseek-v4.1-flash"
       },
-      "nativeGateReceipt": null,
-      "stageBoundary": "A preallocated execution identity initially returned task-not-found. The Task was later observed running with its input complete and material agent running; platform agent success does not establish native approval.",
-      "lastObservedAt": "2026-10-22T20:16:45.979Z",
-      "errorSummary": null,
-      "errorMessage": null,
-      "latestMaterialNodeRunId": "01M5JM340DMD1AT4XFN45E2GGB",
-      "latestMaterialRetryIndex": 1
-    }
+      "nativeGateCreatedAt": "2026-10-22T20:49:45.942Z",
+      "nativeBodyProof": {
+        "at": "2026-10-22T20:50:03.854Z",
+        "basisId": "basis:hosted-clamp-native-basis-v2",
+        "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+        "taskId": "01M5JMN7NKDXW8TTMFG01BM7G6",
+        "nodeRunId": "01M5JP0DS1Z2BMGN0X8Y1KFQ7X",
+        "exactMatch": true,
+        "expectedBytes": 3351,
+        "actualBytes": 3351,
+        "expectedDigest": "b9e19ccbfa30a335fb7867b387b876314b8342d8d7d12b46b58986aa01aedda1",
+        "actualDigest": "b9e19ccbfa30a335fb7867b387b876314b8342d8d7d12b46b58986aa01aedda1"
+      },
+      "nativeGateReceipt": {
+        "operationId": "01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+        "gate": {
+          "kind": "review",
+          "ref": "review:01M5JP0DS1Z2BMGN0X8Y1KFQ7X"
+        },
+        "gateRevision": 2,
+        "taskRevision": 4,
+        "acceptedAt": 1792702234007,
+        "replayed": false
+      },
+      "approvalScope": "代理逐项核对虚构 clamp 托管验收的完整冻结依据；实际执行与交付另行取得。",
+      "stageBoundary": "The complete native body was read and matched byte for byte before approval. Graph recorded the actual approval. The review Task completed after scoped operator-enabled boot recovery; implementation and delivery have not completed."
+    },
+    "reviewExecutionHistory": [
+      {
+        "roundId": "01M5JAY36499QEA29XXNZ7YEKN",
+        "preallocatedTaskId": "01M5JAY3G3WYAFAY0KX986JXG7",
+        "actualTaskObserved": true,
+        "lastObservedTaskStatus": "running",
+        "materialNodeRunId": "01M5JBRHH6X77XZC54Y1AKAYCF",
+        "agentSubtask": {
+          "id": "01a164be-b8b5-7000-bfac-b9e4cda64522",
+          "observedAt": "2026-10-22T18:05:57.698Z",
+          "state": "succeeded",
+          "exitCode": 0,
+          "agentProfileId": "01a146ce-c2ce-7fe4-97ab-3cddd340967d",
+          "startedAt": "2026-10-22T17:55:37.992Z",
+          "stdoutBytes": 2176,
+          "stderrBytes": 0
+        },
+        "nativeGateReceipt": null,
+        "stageBoundary": "A preallocated execution identity initially returned task-not-found. The Task was later observed running with its input complete and material agent running; platform agent success does not establish native approval.",
+        "lastObservedAt": "2026-10-22T20:16:45.979Z",
+        "errorSummary": null,
+        "errorMessage": null,
+        "latestMaterialNodeRunId": "01M5JM340DMD1AT4XFN45E2GGB",
+        "latestMaterialRetryIndex": 1
+      }
+    ]
   },
   "documentationCi": {
-    "commit": "49285bcc90e12260832bfff49d91ede3bfb86ca3",
-    "runId": 39798908249,
-    "attempt1": {
-      "successJobs": 47,
-      "cancelledJobId": 119898458751,
-      "cancelledStep": "Install Playwright system deps (cache hit, Linux only)",
-      "productTestsStartedInCancelledJob": false,
-      "requiredSummary": "failure"
-    },
-    "attempt2": {
-      "scope": "Rerun only the cancelled Ubuntu browser shard and dependent summary; retain the other successful jobs.",
-      "conclusion": "success",
-      "successJobs": 49,
-      "totalJobs": 49
+    "commit": "42611df21e71ca2db7f04846a54f00d80d8ea3af",
+    "runId": 39848361400,
+    "status": "completed",
+    "conclusion": "failure",
+    "jobs": {
+      "total": 49,
+      "success": 47,
+      "failure": 2
     }
   },
   "storageObservation": {
-    "observedAt": "2026-10-22T14:37:04.742Z",
+    "at": "2026-10-22T21:08:50.171Z",
     "spaceId": "01a16276-b7a9-7000-b0b1-7ab7f04240d9",
     "health": "ready",
     "stale": false,
-    "usedBytes": 59444,
-    "quotaBytes": 268435456,
-    "adminContentRead": {
-      "observedAt": "2026-10-22T14:38:25.486Z",
-      "objectId": "01a163ef-738c-7000-9fd7-2e2ad9cbefb4",
-      "httpStatus": 200,
-      "bytes": 3351,
-      "sha256": "d012cfcc70607eda8832cae304cdf598fb66d72db4c9c90b91dac0a1cff36f6b"
+    "logical": {
+      "usedBytes": 101740,
+      "reservedBytes": 0,
+      "deletingBytes": 0,
+      "quotaBytes": 268435456
     },
-    "applicationGatewayWindow": {
-      "scope": "Only object requests originating from this service pod",
-      "httpStatusCounts": {
-        "200": 258,
-        "201": 1,
-        "202": 2,
-        "502": 1,
-        "503": 4
-      },
-      "lastObservedAt": "2026-10-22T14:44:00Z",
-      "lastReferenceFailureAt": "2026-10-22T14:39:37Z",
-      "lastReferenceFailureStatus": 502
+    "queue": {
+      "uploading": 0,
+      "verifying": 0,
+      "deleting": 0,
+      "failed": 0,
+      "unknownWrites": 0,
+      "activeDownloads": 0,
+      "unknownDownloads": 0,
+      "pendingBytes": 0,
+      "oldestPendingAt": null
     },
-    "rootCause": "unconfirmed"
+    "frozenBundleObjectId": "01a164ad-703e-7000-be31-1084f9966592",
+    "contentProbe": {
+      "objectId": "01a164ad-703e-7000-be31-1084f9966592",
+      "method": "GET",
+      "path": "/v3/object-storage/objects/01a164ad-703e-7000-be31-1084f9966592/content",
+      "status": 503,
+      "error": "unavailable",
+      "message": "存储元数据正在变更，请重试",
+      "code": "object_storage_busy"
+    },
+    "boundary": "Space-level ready does not establish that a particular content read is admitted. The frozen bundle content returned object_storage_busy through the normal admin API as well."
   },
   "resumeRequirements": [
-    "Read the complete frozen implementation.md and compare the native review body byte for byte.",
-    "Approve only that verified native review and obtain its actual Graph receipt.",
-    "Request implementation using basis:hosted-clamp-native-basis-v2 and that receipt.",
-    "Collect the actual candidate, independent profile result and terminal delivered Case.",
-    "Record actual service and task image versions; retain the prior failures and deployment history."
+    "Continue the already accepted implement-change round and the same frozen basis and approval; do not submit a duplicate request.",
+    "Collect actual candidate tree, independent profile exit/evidence and terminal delivered Case.",
+    "Keep the exact service/task images and previous failures in the acceptance record; do not treat operator-enabled boot recovery as default automatic recovery acceptance."
   ],
   "deploymentHistory": [
     {
@@ -262,17 +315,19 @@
     "preservedGuards": ["expected remote head", "per-file revision", "exact committed source"]
   },
   "serviceRecoveryObservation": {
-    "observedAt": "2026-10-22T20:17:18.490Z",
+    "observedAt": "2026-10-22T21:03:19.103Z",
     "release": "0.1.8",
     "pod": "rfc396-graph-acceptance-green-7c579d49cb-9xwpv",
-    "observedRestartCount": 0,
-    "epoch": 58,
-    "leaseAcquiredAt": "2026-10-22T20:09:48.805Z",
-    "manualInstanceReplacement": true,
-    "effect": "Normal boot auto-resume recovered the sole interrupted Task. Material retry 1 was pending at the API snapshot and its hosted agent dispatch was logged at 20:18:25 UTC. No native review receipt yet.",
-    "rootCause": "The original platform-unreachable and intermittent object-storage errors remain unconfirmed."
+    "observedRestartCount": 1,
+    "epoch": 59,
+    "leaseLostAt": "2026-10-22T20:54:03.679Z",
+    "leaseLostReason": "platform-unreachable",
+    "leaseAcquiredAt": "2026-10-22T20:55:11.830Z",
+    "restartKind": "automatic after lease loss; no additional manual Pod replacement",
+    "effect": "The approval stayed persisted. The gate continuation was interrupted; normal boot recovery resumed the sole eligible Task and it finished at 21:03:09 UTC.",
+    "rootCause": "The original platform-unreachable cause remains unconfirmed."
   },
-  "currentAcceptancePosition": "Frozen revision 2 is unchanged. The original review Task is running again after scoped normal boot recovery; material retry 1 has been dispatched. Native review, exact body approval, candidate, independent verification and delivery remain open. Earlier failures and remote results are retained.",
+  "currentAcceptancePosition": "Native review body is exact, approval is authoritative, and the review Task is done. Two implementation requests encountered object content 503 errors. The same idempotent request was subsequently accepted and created the implement-change round. Its preallocated Task was still task-not-found at the last probe. Candidate, independent verification and delivered Case remain open.",
   "resourceTrial": {
     "sourceCommit": "67795ed462db9b78cea82fad5ae14c9d09bbca91",
     "gitlabCommit": "eea8eda466c0a7afa739153e74e6c926fe2690cb",
@@ -322,105 +377,43 @@
       "reason": "platform-unreachable",
       "effect": "The original review Task remained interrupted / daemon-restart. Its successful remote agent result was retained, but no pending native review gate was present.",
       "rootCause": "unconfirmed"
+    },
+    {
+      "observedAt": "2026-10-22T20:17:18.490Z",
+      "release": "0.1.8",
+      "pod": "rfc396-graph-acceptance-green-7c579d49cb-9xwpv",
+      "observedRestartCount": 0,
+      "epoch": 58,
+      "leaseAcquiredAt": "2026-10-22T20:09:48.805Z",
+      "manualInstanceReplacement": true,
+      "effect": "Normal boot auto-resume recovered the sole interrupted Task. Material retry 1 was pending at the API snapshot and its hosted agent dispatch was logged at 20:18:25 UTC. No native review receipt yet.",
+      "rootCause": "The original platform-unreachable and intermittent object-storage errors remain unconfirmed."
     }
   ],
   "sharedMainCi": {
-    "commit": "027237f52e1f69a321b2a79d90d6efa7a6eecd5c",
-    "runId": 39841052379,
+    "commit": "42611df21e71ca2db7f04846a54f00d80d8ea3af",
+    "runId": 39848361400,
     "status": "completed",
     "conclusion": "failure",
     "jobs": {
       "total": 49,
-      "success": 45,
-      "failure": 4,
-      "pending": 0
+      "success": 47,
+      "failure": 2
     },
-    "requiredCheckId": 120052157436,
-    "ownDelta": [
-      "STATE.md",
-      "design/RFC-396-adaptive-graph-development/hosted-acceptance-status.json",
-      "design/RFC-396-adaptive-graph-development/real-model-acceptance.md"
-    ],
-    "productionChangedByOwnCommit": false,
-    "functionalAttribution": [
-      {
-        "jobId": 120041847679,
-        "cause": "RFC-395 changed mutation sites P0-5/P0-6; raw PG owner snapshot uses bigint strings, so P0-2 control and witness differ. Original current-before/current-after tests are recorded separately."
-      },
-      {
-        "jobId": 120041848054,
-        "cause": "S14 inventory still expects taskCollab.ts:1 after c35067361 restored tasksTable alias; observed 1111 pass, 1 fail, 7 skip."
-      }
-    ],
-    "mutationEvidence": {
-      "artifactId": 12451719921,
-      "sourceFilesUnchanged": true,
-      "invalid": [
-        {
-          "provider": "sqlite",
-          "mutation": "p0-5"
-        },
-        {
-          "provider": "sqlite",
-          "mutation": "p0-6"
-        },
-        {
-          "provider": "postgresql",
-          "mutation": "p0-5"
-        },
-        {
-          "provider": "postgresql",
-          "mutation": "p0-6"
-        },
-        {
-          "provider": "postgresql",
-          "mutation": "p0-2-owner-snapshot"
-        }
-      ],
-      "current": [
-        {
-          "provider": "sqlite",
-          "phase": "current-before",
-          "valid": true,
-          "summary": {
-            "pass": 26,
-            "fail": 0,
-            "expects": 307
-          }
-        },
-        {
-          "provider": "sqlite",
-          "phase": "current-after",
-          "valid": true,
-          "summary": {
-            "pass": 26,
-            "fail": 0,
-            "expects": 307
-          }
-        },
-        {
-          "provider": "postgresql",
-          "phase": "current-before",
-          "valid": true,
-          "summary": {
-            "pass": 26,
-            "fail": 0,
-            "expects": 307
-          }
-        },
-        {
-          "provider": "postgresql",
-          "phase": "current-after",
-          "valid": true,
-          "summary": {
-            "pass": 26,
-            "fail": 0,
-            "expects": 307
-          }
-        }
-      ]
+    "requiredCheckId": 120084452568,
+    "remainingFailureIds": [120067595038, 120084452568],
+    "postgresql": {
+      "jobId": 120067595146,
+      "p0MutationStep": "success",
+      "artifactId": 12456597057
     },
-    "boundary": "Only the two functional failures were attributed here; the overall required check remains failed. No foreign source, assertions or CI rules were changed and no jobs were rerun."
+    "backendUbuntu20": {
+      "jobId": 120067595127,
+      "pass": 1112,
+      "fail": 0,
+      "skip": 7
+    },
+    "boundary": "Exact-SHA functional jobs succeeded. Overall CI and its required check failed. Excluded static-check findings were not read. Prior failures remain preserved; no assertion or foreign source was changed and no job was rerun."
   },
   "hostedRecoveryInvestigation": {
     "observedAt": "2026-10-22T19:59:26.934Z",
@@ -538,6 +531,324 @@
           "success": 44,
           "failure": 5
         }
+      }
+    },
+    {
+      "commit": "027237f52e1f69a321b2a79d90d6efa7a6eecd5c",
+      "runId": 39841052379,
+      "status": "completed",
+      "conclusion": "failure",
+      "jobs": {
+        "total": 49,
+        "success": 45,
+        "failure": 4,
+        "pending": 0
+      },
+      "requiredCheckId": 120052157436,
+      "ownDelta": [
+        "STATE.md",
+        "design/RFC-396-adaptive-graph-development/hosted-acceptance-status.json",
+        "design/RFC-396-adaptive-graph-development/real-model-acceptance.md"
+      ],
+      "productionChangedByOwnCommit": false,
+      "functionalAttribution": [
+        {
+          "jobId": 120041847679,
+          "cause": "RFC-395 changed mutation sites P0-5/P0-6; raw PG owner snapshot uses bigint strings, so P0-2 control and witness differ. Original current-before/current-after tests are recorded separately."
+        },
+        {
+          "jobId": 120041848054,
+          "cause": "S14 inventory still expects taskCollab.ts:1 after c35067361 restored tasksTable alias; observed 1111 pass, 1 fail, 7 skip."
+        }
+      ],
+      "mutationEvidence": {
+        "artifactId": 12451719921,
+        "sourceFilesUnchanged": true,
+        "invalid": [
+          {
+            "provider": "sqlite",
+            "mutation": "p0-5"
+          },
+          {
+            "provider": "sqlite",
+            "mutation": "p0-6"
+          },
+          {
+            "provider": "postgresql",
+            "mutation": "p0-5"
+          },
+          {
+            "provider": "postgresql",
+            "mutation": "p0-6"
+          },
+          {
+            "provider": "postgresql",
+            "mutation": "p0-2-owner-snapshot"
+          }
+        ],
+        "current": [
+          {
+            "provider": "sqlite",
+            "phase": "current-before",
+            "valid": true,
+            "summary": {
+              "pass": 26,
+              "fail": 0,
+              "expects": 307
+            }
+          },
+          {
+            "provider": "sqlite",
+            "phase": "current-after",
+            "valid": true,
+            "summary": {
+              "pass": 26,
+              "fail": 0,
+              "expects": 307
+            }
+          },
+          {
+            "provider": "postgresql",
+            "phase": "current-before",
+            "valid": true,
+            "summary": {
+              "pass": 26,
+              "fail": 0,
+              "expects": 307
+            }
+          },
+          {
+            "provider": "postgresql",
+            "phase": "current-after",
+            "valid": true,
+            "summary": {
+              "pass": 26,
+              "fail": 0,
+              "expects": 307
+            }
+          }
+        ]
+      },
+      "boundary": "Only the two functional failures were attributed here; the overall required check remains failed. No foreign source, assertions or CI rules were changed and no jobs were rerun."
+    }
+  ],
+  "materialRetryFailure": {
+    "originalTaskId": "01M5JAY3G3WYAFAY0KX986JXG7",
+    "nodeRunId": "01M5JM340DMD1AT4XFN45E2GGB",
+    "retryIndex": 1,
+    "subtaskId": "01a16544-bbfc-7000-863b-4ccb3dfab94c",
+    "process": "not-started",
+    "state": "failed",
+    "endedAt": "2026-10-22T20:23:34.716Z",
+    "error": {
+      "code": "agent_environment_unavailable",
+      "message": "Agent 未启动，固定执行材料或环境不可用"
+    },
+    "environmentId": "01a16544-bbfc-7002-a659-7105878c297e",
+    "podName": "sub-01a16544bbfc7002a6597105878c297e",
+    "startup": {
+      "state": "failed",
+      "stages": [
+        {
+          "kind": "queue",
+          "error": {
+            "code": "pod-create-failed",
+            "message": "此子任务的执行环境准备失败，其他 Agent、窗口与工作树保持"
+          },
+          "state": "failed",
+          "endedAt": "2026-10-22T20:22:41.726Z",
+          "startedAt": "2026-10-22T20:19:41.023Z",
+          "durationMs": 180703
+        },
+        {
+          "kind": "container",
+          "state": "pending"
+        },
+        {
+          "kind": "connect",
+          "state": "pending"
+        },
+        {
+          "kind": "ready",
+          "state": "pending"
+        }
+      ],
+      "endedAt": "2026-10-22T20:22:41.726Z",
+      "startedAt": "2026-10-22T20:19:41.023Z"
+    },
+    "outcome": "The model never started. Normal failure settlement completed, and the same Case/round advanced to attemptOrdinal 1. No specific image, quota or capacity root cause was established."
+  },
+  "postApprovalRecovery": {
+    "scope": "Owned application database was read in a read-only transaction. Only normal config API writes were used.",
+    "observedAt": "2026-10-22T21:00:32.537Z",
+    "taskId": "01M5JMN7NKDXW8TTMFG01BM7G6",
+    "bindingStates": [
+      {
+        "executionId": "agent:01M5JMN7NKDXW8TTMFG01BM7G6:01M5JMP2J4MXH27RG8CZNJ51YY",
+        "nodeRunId": "01M5JMP2J4MXH27RG8CZNJ51YY",
+        "state": "settled",
+        "exitCode": 0,
+        "stdoutBytes": 601
+      },
+      {
+        "executionId": "script:01M5JMN7NKDXW8TTMFG01BM7G6:01M5JP2K2RA5D94HEAVTDN76KW",
+        "nodeRunId": "01M5JP2K2RA5D94HEAVTDN76KW",
+        "state": "settled",
+        "exitCode": 0,
+        "stdoutBytes": 611
+      }
+    ],
+    "owner": [
+      {
+        "state": "released",
+        "recoveryCode": "daemon-restart-recovered"
+      }
+    ],
+    "gateContinuation": [
+      {
+        "id": "01M5JP2FFG2FV8VA72W1NSYJ56",
+        "state": "failed",
+        "failureCode": "daemon-restart"
+      }
+    ],
+    "interruptedNodeCount": 0,
+    "enabledAt": "2026-10-22T21:00:06.897Z",
+    "restoredAt": "2026-10-22T21:03:08.064Z",
+    "configuration": {
+      "original": false,
+      "duringTrial": true,
+      "restored": false,
+      "maxPerWindow": 3,
+      "windowMs": 3600000
+    },
+    "scopeTaskIds": ["01M5JMN7NKDXW8TTMFG01BM7G6"],
+    "sweep": {
+      "at": "2026-10-22T21:03:06.460Z",
+      "swept": true,
+      "deadline": false,
+      "lines": [
+        "[2026-10-22T21:02:07.909Z] INFO  [daemon] lifecycle step id=hosted-targeted-resume phase=execution-recovery outcome=ok durationMs=0",
+        "[2026-10-22T21:03:06.366Z] INFO  [auto-resume] boot auto-resume swept interrupted tasks resumed=1 skipped=0"
+      ]
+    },
+    "taskAfter": {
+      "at": "2026-10-22T21:03:19.103Z",
+      "taskId": "01M5JMN7NKDXW8TTMFG01BM7G6",
+      "status": "done",
+      "errorSummary": null,
+      "errorMessage": null,
+      "autoResumeOnBoot": false
+    },
+    "additionalManualRestart": false,
+    "defaultTargetedRecoveryAccepted": false
+  },
+  "storageObservationHistory": [
+    {
+      "observedAt": "2026-10-22T14:37:04.742Z",
+      "spaceId": "01a16276-b7a9-7000-b0b1-7ab7f04240d9",
+      "health": "ready",
+      "stale": false,
+      "usedBytes": 59444,
+      "quotaBytes": 268435456,
+      "adminContentRead": {
+        "observedAt": "2026-10-22T14:38:25.486Z",
+        "objectId": "01a163ef-738c-7000-9fd7-2e2ad9cbefb4",
+        "httpStatus": 200,
+        "bytes": 3351,
+        "sha256": "d012cfcc70607eda8832cae304cdf598fb66d72db4c9c90b91dac0a1cff36f6b"
+      },
+      "applicationGatewayWindow": {
+        "scope": "Only object requests originating from this service pod",
+        "httpStatusCounts": {
+          "200": 258,
+          "201": 1,
+          "202": 2,
+          "502": 1,
+          "503": 4
+        },
+        "lastObservedAt": "2026-10-22T14:44:00Z",
+        "lastReferenceFailureAt": "2026-10-22T14:39:37Z",
+        "lastReferenceFailureStatus": 502
+      },
+      "rootCause": "unconfirmed"
+    }
+  ],
+  "implementationAdmission": {
+    "requestId": "hosted-clamp-native-implement-v2",
+    "basisId": "basis:hosted-clamp-native-basis-v2",
+    "reviewReceiptId": "01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+    "initialFailure": {
+      "at": "2026-10-22T21:12:59.414Z",
+      "operation": "requestImplementation",
+      "caseId": "01M5J5MH5Q3M2ZBAYK0VPT200M",
+      "requestId": "hosted-clamp-native-implement-v2",
+      "basisId": "basis:hosted-clamp-native-basis-v2",
+      "reviewReceiptId": "01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+      "response": {
+        "status": 500,
+        "code": "internal-error"
+      },
+      "applicationLogAt": "2026-10-22T21:08:57.781Z",
+      "applicationError": "CrewStation object storage responded 503",
+      "stackBoundary": ["open", "files", "assertMaterialsReadable", "requestImplementation"],
+      "objectProbe": {
+        "objectId": "01a164ad-703e-7000-be31-1084f9966592",
+        "method": "GET",
+        "path": "/v3/object-storage/objects/01a164ad-703e-7000-be31-1084f9966592/content",
+        "status": 503,
+        "error": "unavailable",
+        "message": "存储元数据正在变更，请重试",
+        "code": "object_storage_busy"
+      },
+      "candidateGenerated": false,
+      "verificationExecuted": false
+    },
+    "subsequentAttempts": [
+      {
+        "attempt": 2,
+        "startedAt": "2026-10-22T21:14:53.893Z",
+        "finishedAt": "2026-10-22T21:15:29.414Z",
+        "accepted": false,
+        "error": "Error: /api/development-designs/design%3A01M5J5MH5Q3M2ZBAYK0VPT200M/implementation-requests: 500 {\"ok\":false,\"code\":\"internal-error\",\"message\":\"internal server error\"}"
+      }
+    ],
+    "accepted": true,
+    "receipt": {
+      "basisId": "basis:hosted-clamp-native-basis-v2",
+      "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+      "reviewReceiptId": "01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+      "result": {
+        "eventId": "01M5JQKMK2HZX29XQVRGWQ7WS0",
+        "caseId": "01M5J5MH5Q3M2ZBAYK0VPT200M",
+        "queued": false
+      }
+    },
+    "acceptedAt": "2026-10-22T21:17:25.270Z",
+    "roundId": "01M5JQKN530518T6MGWSH90CM2",
+    "roundState": "planned",
+    "preallocatedTaskId": "01M5JQKNC0DKC9Q68Q572JRM8P",
+    "lastTaskProbe": {
+      "at": "2026-10-22T21:27:47.428Z",
+      "error": "Error: /api/tasks/01M5JQKNC0DKC9Q68Q572JRM8P: 404 {\"ok\":false,\"code\":\"task-not-found\",\"message\":\"task '01M5JQKNC0DKC9Q68Q572JRM8P' not found\"}"
+    },
+    "boundary": "Two failed attempts were retained. The ordinary delivery helper then admitted the same idempotent request. A preallocated Task identity is not proof that execution has started; candidate, profile execution and delivery remain unobserved."
+  },
+  "documentationCiHistory": [
+    {
+      "commit": "49285bcc90e12260832bfff49d91ede3bfb86ca3",
+      "runId": 39798908249,
+      "attempt1": {
+        "successJobs": 47,
+        "cancelledJobId": 119898458751,
+        "cancelledStep": "Install Playwright system deps (cache hit, Linux only)",
+        "productTestsStartedInCancelledJob": false,
+        "requiredSummary": "failure"
+      },
+      "attempt2": {
+        "scope": "Rerun only the cancelled Ubuntu browser shard and dependent summary; retain the other successful jobs.",
+        "conclusion": "success",
+        "successJobs": 49,
+        "totalJobs": 49
       }
     }
   ]
