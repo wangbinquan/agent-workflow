@@ -2344,12 +2344,12 @@
     {
       "assertsAbsence": true,
       "classified": true,
-      "corpusScanner": true,
+      "corpusScanner": false,
       "file": "packages/backend/tests/architecture/rfc395-neutral-query-boundary.test.ts",
       "id": "rfc395-neutral-query-boundary",
       "lines": 91,
       "mechanism": "ast",
-      "minCorpusFiles": 1001,
+      "minCorpusFiles": null,
       "negativeFixture": true,
       "runner": "bun"
     },

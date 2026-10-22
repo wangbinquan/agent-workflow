@@ -24,7 +24,8 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 import type { RecordedStatement } from './helpers/statementRecorder'
 
 // RFC-374: the participant's two node-run projections also carry `seq` (outside the probe).
-const ORIGINAL_SOURCE_HASH = 'e722533c0e2e4d189a4e6590f7dc399186ff5720a3a4f6545c7d67fd19478898'
+// RFC-395 I-b: one session table destructuring now serves the whole write transaction.
+const ORIGINAL_SOURCE_HASH = '84c7fba4e25fc7b0540902a335e71dd3a88542c19566a6450b65f023622a685b'
 const SOURCE_PATH = resolve(
   import.meta.dir,
   '../src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',

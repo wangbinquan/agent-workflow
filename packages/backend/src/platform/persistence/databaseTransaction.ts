@@ -42,6 +42,7 @@
 import { sql } from 'drizzle-orm'
 import {
   tablesOf,
+  boundEngineOf,
   engineForHandle,
   inheritDatabaseHandle,
   type PersistenceTables,
@@ -291,11 +292,15 @@ export function createPostgresqlDatabaseSession(db: PostgresqlDatabaseClient): D
 const sessions = new WeakMap<object, DatabaseSession>()
 
 /**
- * 客户端句柄自述的 provider。PostgreSQL 客户端带 `$provider` 品牌（`postgresqlDatabaseClient.ts`）；
- * 没有品牌的客户端只有 bun:sqlite 一种（`db/client.ts`）。第三个 provider 必须带自己的品牌，
- * 并在下面的分派里得到自己的分支——残余分支是 `unhandledDatabaseProvider` 的 never 汇。
+ * 句柄所属的 provider。RFC-395 I-b 起以句柄上绑定的引擎能力为准：原生客户端构造时绑定，事务与
+ * savepoint 句柄随之继承——PostgreSQL 的事务句柄不带 `$provider` 品牌，嵌套调用方又会拿它开会话
+ * （例如 MCP 测试租约在外层事务里再开 `runResourceCatalogTransaction`），只看品牌会把它误判成 SQLite。
+ * 没有绑定的对象才退回品牌：带 `$provider` 的按品牌，否则是 bun:sqlite。第三个 provider 必须在
+ * 下面的分派里得到自己的分支——残余分支是 `unhandledDatabaseProvider` 的 never 汇。
  */
 function databaseProviderOf(client: object): DatabaseProvider {
+  const engine = boundEngineOf(client)
+  if (engine !== undefined) return engine.provider
   const brand = (client as { readonly $provider?: unknown }).$provider
   return brand === undefined ? 'sqlite' : (brand as DatabaseProvider)
 }

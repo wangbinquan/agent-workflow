@@ -36,18 +36,25 @@ export function tablesOf(handle: object): PersistenceTables {
 export function engineForHandle(handle: object): EngineCapabilities {
   return databaseHandleContext(handle).engine
 }
+/** The engine bound to a native handle, or undefined for an object no provider constructed. */
+export function boundEngineOf(handle: object): EngineCapabilities | undefined {
+  return boundContext(handle)?.engine
+}
 export function inheritDatabaseHandle<T extends object>(handle: T, parent: object): T {
   const context = databaseHandleContext(parent)
   contexts.set(handle, context)
   Object.defineProperty(handle, contextKey, { value: context, configurable: true })
   return handle
 }
-function databaseHandleContext(handle: object): DatabaseHandleContext {
+function boundContext(handle: object): DatabaseHandleContext | undefined {
   const native = handle as {
     [contextKey]?: DatabaseHandleContext
     session?: { client?: { [contextKey]?: DatabaseHandleContext } }
   }
-  const context = contexts.get(handle) ?? native[contextKey] ?? native.session?.client?.[contextKey]
+  return contexts.get(handle) ?? native[contextKey] ?? native.session?.client?.[contextKey]
+}
+function databaseHandleContext(handle: object): DatabaseHandleContext {
+  const context = boundContext(handle)
   if (!context) throw new Error('Native persistence handle has no session table set')
   return context
 }

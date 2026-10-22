@@ -145,6 +145,8 @@ const MINIMAL_CHANGESET = JSON.stringify({
  *    客户端上的 `run` 在那一笔里一次都不会被调用；而且 PG 客户端是带 `get` 陷阱的 Proxy，
  *    `db.run = …` 这类赋值会被陷阱整个盖掉。所以钩子只能做成外层 Proxy，并且必须
  *    **连 `transaction` 交出来的句柄一起重新包**——那上面的第一条 `run` 才是 UPDATE 本身。
+ *  · RFC-395 I-b 起 PostgreSQL 是原生 bun-sql：原始语句经 `execute` 发出（`rawExec`），
+ *    SQLite 仍是 `run`，所以两个入口都钩。
  *
  * `fired()` 是判据的一部分：缝一旦没被触发，用例必须红，而不是悄悄退化成一条
  * 「什么都没注入」的绿。
@@ -169,10 +171,12 @@ function firstWriteFaultSeam(target: PersistenceDb, message: string): FirstWrite
   const wrap = <T extends object>(handle: T): T =>
     new Proxy(handle, {
       get(base, property, receiver) {
-        if (property === 'run') {
-          const original = Reflect.get(base, property, receiver) as (
-            ...args: readonly unknown[]
-          ) => unknown
+        if (property === 'run' || property === 'execute') {
+          const original = Reflect.get(base, property, receiver) as
+            | ((...args: readonly unknown[]) => unknown)
+            | undefined
+          // 只钩句柄本来就有的入口：凭空造一个 `execute` 会让 SQLite 句柄被当成 PostgreSQL。
+          if (original === undefined) return undefined
           return (...args: readonly unknown[]) => {
             trip()
             return original.call(base, ...args)

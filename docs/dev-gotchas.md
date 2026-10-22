@@ -8825,3 +8825,33 @@ RFC-393 把 26 个文件从 `cli/` 迁入 `bootstrap/` 时，检索范围只有�
 
 **做法**：迁移前在全仓（含 `packages/frontend`、`packages/shared`、`design/`、`docs/`）搜文件名本身（如 `'start.ts'`、
 `daemonProviderBootstrap`），不要只搜带目录的整串。带日期的历史记录保持原路径，只改当前规则、现状描述与仍需可点的链接。
+
+## Bun.SQL 的 `begin()` / `savepoint()` 会丢掉写结果的 `count`（2026-10-22，RFC-395 I-b 实撞）
+
+Bun.SQL 若发现 `begin(fn)` / `savepoint(fn)` 的回调返回数组，会把它过一遍 `Promise.all`，延续 postgres.js「返回查询数组即一并执行」的约定。
+结果是一个新数组，原写结果上的 `count` / `command` 随之丢失。本机实测（Bun 1.4.3，postgres:17）：
+
+- `sql.unsafe('update …')` 直接执行，`count` 为 2；
+- 同一语句从 `sql.begin(tx => tx.unsafe(…))`、预留连接的 `begin` 或 `savepoint` 回调里返回，`count` 是 `undefined`；
+- 包成对象 `{ value }` 返回，`count` 保留。
+
+**后果**：原生 bun-sql 客户端把事务外的单条写包进世代围栏事务后，`affectedRows` 恒为 0，依赖「恰好 1 行」的 CAS 判据全部误判。
+事务体把写结果返回给调用方时同样如此。SQLite 不受影响，只跑 SQLite 看不出来。
+
+**做法**：值跨事务边界一律装箱（`platform/persistence/postgresqlDatabaseClient.ts` 的 `box` / `unbox`），回归锁在
+`rfc395-query-helpers` 的真库断言。直接用 Bun.SQL 写事务时也一样：不要从 `begin` 回调里直接返回写结果。
+
+## 原生 pg-core 与 sqlite-core 在测试缝上的四处差异（2026-10-22，RFC-395 I-b 实撞）
+
+I-b 之前 PostgreSQL 也走 sqlite-core 的 builder（sqlite-proxy），测试里按 SQLite 写的缝在两条泳道上都生效；换成原生 bun-sql 后，
+下面四处只在 PostgreSQL 泳道失效，SQLite 全绿：
+
+- **原型打桩拦不到 pg-core 的执行**：`PgSelectBase` 的 `execute` 是实例上的箭头函数字段，`spyOn(PgSelectBase.prototype, 'execute')`
+  永远不触发；改钩原型上的 `_prepare`，包它返回的预编译查询的 `execute`（`rfc359-w12-source-termination-atom`）。
+- **union 分支带括号**：pg-core 把 `unionAll` 渲染成 `(select …) union all (select …)`，按 `^select` 识别读语句会漏掉，
+  录制器改认 `^[\s(]*select`。
+- **事务句柄没有 `$provider` 品牌**：只有顶层客户端带品牌，事务与 savepoint 句柄没有；按品牌判 provider 会把嵌套
+  `databaseSessionFor(tx)` 误判成 SQLite，当场 `db.run is not a function`。provider 一律按句柄上绑定的引擎判断
+  （`sessionTables.ts` 的 `boundEngineOf`）。
+- **原始语句入口不同**：SQLite 是 `run` / `all`，原生 PostgreSQL 是 `execute`。故障注入缝两个都要钩，而且只钩句柄本来就有的
+  方法：Proxy 凭空给 SQLite 句柄造一个 `execute`，`rawRows` 会把它当成 PostgreSQL。

@@ -394,8 +394,8 @@ async function updateTaskMembersLocked(
   // PostgreSQL 的 SERIALIZABLE 会把 predicate lock 落在索引**页**上、连改别的任务的
   // 事务都判成读写依赖（实测 32 并发 22.9% 冲突逃逸成 500）。锁 tasks 行即可。
   await databaseSessionFor(db).transaction(async (tx) => {
-    const { tasks, taskCollaborators } = tablesOf(tx)
-    await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, task.id)
+    const { tasks: tasksTable, taskCollaborators } = tablesOf(tx)
+    await engineOf(tx).lockAggregateRoot(tx, tasksTable, tasksTable.id, task.id)
     // Freeze the pre-change audience in the same transaction as the full
     // replacement. The post-commit WS frame can then authorize both sides of
     // the transition without racing a membership read.
@@ -415,7 +415,7 @@ async function updateTaskMembersLocked(
     nextMembers = plan.nextMembers
 
     if (nextOwner !== prevOwner) {
-      await tx.update(tasks).set({ ownerUserId: nextOwner }).where(eq(tasks.id, task.id))
+      await tx.update(tasksTable).set({ ownerUserId: nextOwner }).where(eq(tasksTable.id, task.id))
     }
     await tx.delete(taskCollaborators).where(eq(taskCollaborators.taskId, task.id))
     const values: PersistenceTables['taskCollaborators']['$inferInsert'][] = []

@@ -75,14 +75,15 @@ describe('RFC-357 delta 1 — user search folds case on BOTH sides, so LIKE sens
     const source = pageSource()
     // 模式本身在构造时就 toLocaleLowerCase 了。
     expect(source).toContain("escapeLike(filters.q.toLocaleLowerCase('en-US'))")
-    // 每一处 `LIKE ${pattern}` 的左侧都必须裹在 lower(...) 里。
-    const comparisons = source.match(/^\s*(?:OR )?(.+?) LIKE \$\{pattern\}/gmu) ?? []
+    // 每一处搜索比较的左侧都必须裹在 lower(...) 里。RFC-395 I-b 起 `ESCAPE` 只许出现在
+    // 能力矩阵里（T20 J1），比较改经 `likeCaseInsensitive(列, pattern, escape)` 渲染。
+    const comparisons = source.match(/likeCaseInsensitive\((.+?), pattern, escape\)/gu) ?? []
     expect(comparisons.length).toBeGreaterThan(6)
     for (const comparison of comparisons) {
-      expect(comparison).toContain('lower(')
+      expect(comparison).toContain('likeCaseInsensitive(sql`lower(')
     }
     // 反过来也要真的没有裸 LIKE：一处漏掉 lower() 就在 PostgreSQL 上静默少召回。
-    expect(source).not.toMatch(/\$\{col\('[a-z_]+'\)\} LIKE/u)
+    expect(source).not.toMatch(/\bLIKE\b/u)
   })
 })
 

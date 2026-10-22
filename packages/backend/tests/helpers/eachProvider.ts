@@ -1345,7 +1345,9 @@ function registerPostgresql(
               sinks.add(statements)
               return {
                 statements,
-                selects: () => statements.filter((statement) => /^\s*select/i.test(statement.sql)),
+                // pg-core 给 union 的每个分支加括号：`(select …) union all (select …)` 也是读。
+                selects: () =>
+                  statements.filter((statement) => /^[\s(]*select/i.test(statement.sql)),
                 stop: () => sinks.delete(statements),
               }
             }

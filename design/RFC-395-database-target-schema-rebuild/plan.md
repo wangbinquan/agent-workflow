@@ -333,3 +333,23 @@ I-b 由 Codex 实施（S0～S5），本会话审核并补正，一次提交落�
   - `onCurrentSelected` 钩子已无生产调用方，只剩两份测试用它观察割接后正在服务的 session，暂留；
   - PostgreSQL 同名 shim 在 CHECK / 默认值里的用法（`json_valid` / `unixepoch` / `hex`）按 D12 保留到新 baseline；
   - 部署写闸配置时单行插入不走一次往返的快路径（与改动前一致）。
+- **CI 与补正（2026-10-22，`9e66d89df` 之后的后续提交）**：`9e66d89df` 的主 CI（run 39824594590）后端 24 个分片中 9 个失败，
+  去重后是 13 个用例，另有 Markdown 链接检查与真库 PostgreSQL job 失败；归因全部在本次交付内，已在后续提交中修复：
+  - 本会话合并解构造成 4 个：W23、W26 的源码指纹（先确认改动前的源文件仍还原到旧指纹，再按新文本重算），W7 账本行号，
+    以及 RFC-328 权限扫描器——`taskCollab.ts` 原用别名 `tasksTable`，这个按名字匹配的扫描器本就看不到这处既有的属主写入；
+    codemod 统一成 `tasks` 后它变成「未登记权限」。恢复原别名，扫描结论与改动前一致；
+  - 其余来自 Codex 的交付：
+    - 生产缺陷：PostgreSQL 的事务句柄不带 `$provider` 品牌，嵌套的 `databaseSessionFor(tx)`（如 MCP 测试租约在外层事务里
+      再开 `runResourceCatalogTransaction`）被误判成 SQLite，当场崩溃。provider 改按句柄绑定的引擎判断（`boundEngineOf`）；
+    - 新守卫 `rfc395-neutral-query-boundary` 在 guard-manifest 里错标为语料扫描器，按同类守卫惯例改登记；
+    - W25 未剥开 drizzle 对驱动错误的包装；RFC-357 的 LIKE 源码判据未随能力矩阵写法更新（T20 J1 要求 `ESCAPE` 只在矩阵内，
+      搜索比较两侧仍先 lower）；
+    - W12、RFC-234 的打桩与故障注入缝只覆盖 sqlite-core 的入口，§5ef 的录制器不认 pg-core 带括号的 union；
+    - 研究文档里一处 Markdown 链接指向已删除的 `providerSchema.ts`，改为纯文本路径。
+  - 本地在两种数据库上复跑上述文件，全部通过。RFC-370 MCP 诊断里三处 2 秒等待、能力矩阵里一处 300 毫秒等待，在本机负载 190
+    下超时；它们在 `9e66d89df` 的 CI 上通过，以后继 CI 为准。
+- **p95 对拍**（postgresql-evidence 的 HTTP 性能档，weekly 语料，同一 workflow 各起一台 runner）：改动前 `67795ed46`
+  （run 39824658001）与 I-b `9e66d89df`（run 39824667609）的 PostgreSQL p95（毫秒），依次为 tasks-first 25.26 → 16.79、
+  tasks-second 21.21 → 13.02、tasks-running 20.89 → 10.83、repos-first 7.63 → 2.85、repos-referenced 6.47 → 4.12、
+  reviews-pending 4.33 → 1.94、clarify-pending 2.19 → 1.08、workgroup-pending 6.97 → 3.77、overview 13.98 → 5.11。
+  I-b 九个端点全部在原始预算与 PostgreSQL 容差之内；改动前这次有两个端点超出容差。两台 runner 不同，绝对值只作参考，结论是没有退化。

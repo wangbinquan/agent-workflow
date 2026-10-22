@@ -352,12 +352,14 @@ describeEachProvider('RFC359 W25 bounded root prefix', (harness) => {
   })
 })
 
+// RFC-395 I-b rebaseline: the W23 page outside the prefix now renders `instr` through the engine
+// capability and passes the handle to `branchCtes`; the pre-I-b source still restores to bdb4e8fd….
 test('the inverse retains the exact complete W23 source', () => {
   expect(
     createHash('sha256')
       .update(restoreText(readFileSync(SOURCE_PATH, 'utf8')))
       .digest('hex'),
-  ).toBe('bdb4e8fd0b84a2f1efbfbf51260ecc692cf392f30e673102a28462d6c68f7d48')
+  ).toBe('22f387e0745fcf493dfc070418d3aba1c6408bc80f3bdc4015158d1c6ad9575e')
 })
 test('the real PG compiler retains the original SQL and explains every additional binding', async () => {
   const statements: { sql: string; values: readonly unknown[] }[] = []
@@ -396,7 +398,12 @@ test('the real PG compiler retains the original SQL and explains every additiona
       )
       const start = statements.length
       for (const item of [originalQuery(query), query])
-        await expect(rawRows(db, item)).rejects.toBe(stop)
+        await expect(
+          Promise.resolve(rawRows(db, item)).catch((error: unknown) => {
+            while (error instanceof Error && error.cause !== undefined) error = error.cause
+            throw error
+          }),
+        ).rejects.toBe(stop)
       expect(statements).toHaveLength(start + 2)
       const before = statements[start],
         after = statements[start + 1]

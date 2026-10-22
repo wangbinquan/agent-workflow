@@ -162,7 +162,7 @@ export function recordStatements(sqlite: Database): StatementRecording {
 
   return {
     statements,
-    selects: () => statements.filter((s) => /^\s*select/i.test(s.sql)),
+    selects: () => statements.filter((s) => /^[\s(]*select/i.test(s.sql)),
     stop: () => {
       for (const [k, v] of originals) (sqlite as unknown as Record<string, unknown>)[k] = v
     },

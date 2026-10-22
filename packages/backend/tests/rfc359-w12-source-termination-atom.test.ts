@@ -6,6 +6,7 @@ import { createFileWorkspacePresenceQueries } from '@/modules/source-control/com
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
+import { PgSelectBase } from 'drizzle-orm/pg-core'
 import { SQLiteSelectBase } from 'drizzle-orm/sqlite-core'
 import { ulid } from 'ulid'
 
@@ -32,6 +33,16 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 const BINDING = 'gitlab:rfc359/atom!7'
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 const restores: Array<() => void> = []
+// pg-core's internal prepare step, hooked by the fence-only CAS conflict case below.
+interface PgSelectQuery {
+  toSQL(): { sql: string; params: unknown[] }
+}
+interface PgPreparedSelect {
+  execute(...args: unknown[]): Promise<unknown>
+}
+interface PgSelectPrototype {
+  _prepare(this: PgSelectQuery, name?: string): PgPreparedSelect
+}
 
 function expectSourceTerminationStatementOrder(statements: readonly { readonly sql: string }[]) {
   const isTasks = (schema: string | undefined, table: string | undefined) =>
@@ -529,35 +540,57 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
     let winner: Awaited<ReturnType<typeof writeTaskRuntimeLifecycleInTx>> | undefined
     let capturedSnapshots = 0
     const operation = harness.session.transaction(async (tx) => {
-      // Both providers use this real Drizzle SELECT builder. Hold only this
+      // Each provider runs its own native Drizzle SELECT builder (RFC-395 I-b), so both
+      // prototypes are wrapped; only the active provider's one fires. Hold only this
       // task's completed source snapshot while the named writer and its event
       // run on the same transaction; return the captured rows unchanged.
       // Calling two async functions in order does not order their SQL: SQLite
       // .all() executes eagerly, whereas awaiting a builder starts it later.
       // This is an intra-transaction CAS predicate, not inter-connection
       // PostgreSQL serialization or a replacement for either database write.
-      const execute = SQLiteSelectBase.prototype.execute
-      const snapshot = spyOn(SQLiteSelectBase.prototype, 'execute').mockImplementation(
+      const afterSnapshot = async (query: { sql: string; params: unknown[] }) => {
+        if (
+          query.params[0] === taskId &&
+          /^select "status", "parent_task_id", "source_termination_launch_rev",/.test(query.sql)
+        ) {
+          capturedSnapshots += 1
+          winner = await writeTaskRuntimeLifecycleInTx(tx, {
+            taskId,
+            from: 'running',
+            to: 'done',
+            now: 777,
+            expectedLifecycleRevision: 1,
+            workspacePruneDecision: { prune: false },
+            previousErrorSummary: null,
+            extra: { finishedAt: 777, errorSummary: 'must roll back' },
+          })
+        }
+      }
+      const sqliteExecute = SQLiteSelectBase.prototype.execute
+      const sqliteSnapshot = spyOn(SQLiteSelectBase.prototype, 'execute').mockImplementation(
         async function (this: typeof SQLiteSelectBase.prototype) {
           const query = this.toSQL()
-          const result = await execute.call(this)
-          if (
-            query.params[0] === taskId &&
-            /^select "status", "parent_task_id", "source_termination_launch_rev",/.test(query.sql)
-          ) {
-            capturedSnapshots += 1
-            winner = await writeTaskRuntimeLifecycleInTx(tx, {
-              taskId,
-              from: 'running',
-              to: 'done',
-              now: 777,
-              expectedLifecycleRevision: 1,
-              workspacePruneDecision: { prune: false },
-              previousErrorSummary: null,
-              extra: { finishedAt: 777, errorSummary: 'must roll back' },
-            })
-          }
+          const result = await sqliteExecute.call(this)
+          await afterSnapshot(query)
           return result
+        },
+      )
+      // pg-core declares `execute` as an instance field, so the hook sits on the prototype's
+      // internal `_prepare` (stripped from drizzle's typings) and wraps the prepared query that
+      // `execute` runs.
+      const postgresqlPrototype = PgSelectBase.prototype as unknown as PgSelectPrototype
+      const postgresqlPrepare = postgresqlPrototype._prepare
+      const postgresqlSnapshot = spyOn(postgresqlPrototype, '_prepare').mockImplementation(
+        function (this: PgSelectQuery, name?: string) {
+          const query = this.toSQL()
+          const prepared = postgresqlPrepare.call(this, name)
+          const execute = prepared.execute.bind(prepared)
+          prepared.execute = async (...args: unknown[]) => {
+            const result = await execute(...args)
+            await afterSnapshot(query)
+            return result
+          }
+          return prepared
         },
       )
       try {
@@ -568,7 +601,8 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
           effect('clear-closed'),
         )
       } finally {
-        snapshot.mockRestore()
+        sqliteSnapshot.mockRestore()
+        postgresqlSnapshot.mockRestore()
       }
     })
     await expect(operation).rejects.toMatchObject({ code: 'concurrent-task-transition' })
