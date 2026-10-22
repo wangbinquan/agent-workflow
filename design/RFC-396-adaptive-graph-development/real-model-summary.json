@@ -1,0 +1,287 @@
+{
+  "recordedAt": "2026-10-22T11:55:32.027Z",
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "deployment": "standalone",
+  "applicationSha": "ccde54fafcee93c21ca0d66ca79d574f14ef34fc",
+  "cases": [
+    {
+      "key": "booking",
+      "caseId": "01M5H550KMNV5RQX7S9RP7S5GX",
+      "designRevision": 9,
+      "basisId": "basis:live-booking-pair-basis-v9",
+      "basisDigest": "c085816d91c0b8f65e6115cbfe2cca3da87a0d434b9c0c74f1257e512c32cfe0",
+      "reviewReceiptId": "01M5HNKW0VBEHNJGSHHS2G3Y6X",
+      "candidateTreeOid": "746925f72ffc19d0c784087126bfc1ecad412722",
+      "candidateRef": "fc0c4517266f98e671db54beaba3608c2e0254d4b0fc0203941249e0d2889d05",
+      "deliveryCommitSha": "7485e154f176b40a7a69ba60c3a0f653cef04643",
+      "deliveryArtifact": {
+        "artifactRef": "01M5HPHF96B6EX3KQEQT2F6JXF",
+        "digest": "b4b7c81ba9461c9059d6afde04201224609949b00f194b99c6378e54674f2792"
+      },
+      "publication": null,
+      "executionEvidenceId": "execution:01M5HPHABK3X5WY01FZJH715J5:4b5b2bd050323ec3",
+      "executionReceiptDigest": "89b817025e35ef091cc061771ce5dc81cf4098d854dafa9c6d57d28eb26e8c41",
+      "profile": {
+        "digest": "346d744b8456279d6faa14dd7e41327ef7e4669dc49aabd13b9e6479b5700513",
+        "id": "01M5H59QNZ4T44H5388ZGMVRS8",
+        "revision": 1
+      },
+      "environment": {
+        "digest": "f58cfe32cbba9f6365c5cd48330eeb86523b260e4bed3a380052d9d8781ce692",
+        "observations": {
+          "arch": "arm64",
+          "dependencies": {},
+          "locale": "en_US.UTF-8",
+          "osRelease": "25.6.0",
+          "pathRuntimes": {
+            "bun": {
+              "executable": "/Users/wangbinquan/.bun/bin/bun",
+              "status": "observed",
+              "version": "1.3.13"
+            },
+            "node": {
+              "executable": "/opt/homebrew/bin/node",
+              "status": "observed",
+              "version": "v26.0.0"
+            }
+          },
+          "platform": "darwin",
+          "runtimeProbeScope": "PATH bun/node only; profile scripts may select other tools",
+          "timezone": null,
+          "verifierRuntime": {
+            "bun": "1.4.3",
+            "node": "26.3.0"
+          }
+        }
+      },
+      "testStats": {
+        "passed": 24,
+        "failed": 0,
+        "assertions": 90
+      },
+      "modelKinds": ["state", "decision-table", "sequence"],
+      "humanSources": [
+        {
+          "id": "answer:01M5H7KM11T0A92JETN746YZSF:round:view-combination-tradeoff",
+          "roundId": "01M5H7KM11T0A92JETN746YZSF:round",
+          "confirmedBasis": "v2:6679f54f54cb524973bd8d4f3861b981",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        },
+        {
+          "id": "answer:01M5H7KM11T0A92JETN746YZSF:round:member-priority",
+          "roundId": "01M5H7KM11T0A92JETN746YZSF:round",
+          "confirmedBasis": "v2:c80e65c436fe23001313d3e0702e66fc",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        },
+        {
+          "id": "answer:01M5H7KM11T0A92JETN746YZSF:round:cancel-queue",
+          "roundId": "01M5H7KM11T0A92JETN746YZSF:round",
+          "confirmedBasis": "v2:3ca7920807e581a08e127694e205a64c",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        },
+        {
+          "id": "answer:01M5H68HXAPXC0TP4YYEN8NSZ6:round:member-priority",
+          "roundId": "01M5H68HXAPXC0TP4YYEN8NSZ6:round",
+          "confirmedBasis": "v2:d1c530d786dcfc658e2645af43d38535",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        },
+        {
+          "id": "answer:01M5H68HXAPXC0TP4YYEN8NSZ6:round:cancel-queue",
+          "roundId": "01M5H68HXAPXC0TP4YYEN8NSZ6:round",
+          "confirmedBasis": "v2:538b0c4a307dc9c49ba0f2fa3f8afd5c",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        },
+        {
+          "id": "answer:01M5H68HXAPXC0TP4YYEN8NSZ6:round:interval-endpoint",
+          "roundId": "01M5H68HXAPXC0TP4YYEN8NSZ6:round",
+          "confirmedBasis": "v2:0f109a309437cadc1bb40f8412c33e60",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        }
+      ],
+      "acceptanceEvidenceIds": ["acceptance:live-booking-manual-accept-v9"],
+      "scope": "Fictional scenario, agent-reviewed through product APIs; real OpenCode model and independent profile execution; no business remote publication or human study claim."
+    },
+    {
+      "key": "notifications",
+      "caseId": "01M5H59S2462BFFJBJWGMF4SY9",
+      "designRevision": 9,
+      "basisId": "basis:live-notifications-report-basis-v9",
+      "basisDigest": "65572e58d141e320e47d1823ef980c3946207fbf0b7d4ae8a134f6c4644c6d0b",
+      "reviewReceiptId": "01M5HNDMN4PMJNBPW9RV5E6B53",
+      "candidateTreeOid": "b7d5c10b97511b5b823066196bca7b26ee2c4330",
+      "candidateRef": "e989d0b2da027c8a21c001eb8ba7abb8cdcea49811570389a425e363e6e788a7",
+      "deliveryCommitSha": "dc2f0e1a2c39b3ab081d78cf87423a302a2c45b4",
+      "deliveryArtifact": {
+        "artifactRef": "01M5HPHEQT6PRS9D14CFCX1RG8",
+        "digest": "cb93ced5274356c0336c85f40f63cd598e3547dd5016605546ade4554f3d018a"
+      },
+      "publication": null,
+      "executionEvidenceId": "execution:01M5HPHAB1S1ACNSWCB7HQBWJC:4b5b2bd050323ec3",
+      "executionReceiptDigest": "a9da7ed09e98045cad7ace3830ae4c381c5fa38b9d94e2c1d878f73b0f8bab6a",
+      "profile": {
+        "digest": "346d744b8456279d6faa14dd7e41327ef7e4669dc49aabd13b9e6479b5700513",
+        "id": "01M5H59QNZ4T44H5388ZGMVRS8",
+        "revision": 1
+      },
+      "environment": {
+        "digest": "f58cfe32cbba9f6365c5cd48330eeb86523b260e4bed3a380052d9d8781ce692",
+        "observations": {
+          "arch": "arm64",
+          "dependencies": {},
+          "locale": "en_US.UTF-8",
+          "osRelease": "25.6.0",
+          "pathRuntimes": {
+            "bun": {
+              "executable": "/Users/wangbinquan/.bun/bin/bun",
+              "status": "observed",
+              "version": "1.3.13"
+            },
+            "node": {
+              "executable": "/opt/homebrew/bin/node",
+              "status": "observed",
+              "version": "v26.0.0"
+            }
+          },
+          "platform": "darwin",
+          "runtimeProbeScope": "PATH bun/node only; profile scripts may select other tools",
+          "timezone": null,
+          "verifierRuntime": {
+            "bun": "1.4.3",
+            "node": "26.3.0"
+          }
+        }
+      },
+      "testStats": {
+        "passed": 44,
+        "failed": 0,
+        "assertions": 129
+      },
+      "modelKinds": ["state", "decision-table"],
+      "humanSources": [
+        {
+          "id": "answer:01M5H5PT95MRN285JQDQT60VMX:round:same-version-retry",
+          "roundId": "01M5H5PT95MRN285JQDQT60VMX:round",
+          "confirmedBasis": "v2:4b5bb97c0afa0c22675417d42973a67a",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        },
+        {
+          "id": "answer:01M5H5PT95MRN285JQDQT60VMX:round:error-retention",
+          "roundId": "01M5H5PT95MRN285JQDQT60VMX:round",
+          "confirmedBasis": "v2:254a6289a2b0a1378cefe4899042edff",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        },
+        {
+          "id": "answer:01M5H5PT95MRN285JQDQT60VMX:round:event-id-scope",
+          "roundId": "01M5H5PT95MRN285JQDQT60VMX:round",
+          "confirmedBasis": "v2:2d56c8e8dab816327e6da348e31ba08a",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        }
+      ],
+      "acceptanceEvidenceIds": ["acceptance:live-notifications-manual-accept-v9"],
+      "scope": "Fictional scenario, agent-reviewed through product APIs; real OpenCode model and independent profile execution; no business remote publication or human study claim."
+    },
+    {
+      "key": "existing-module",
+      "caseId": "01M5H59TF3767SKWW9T280J4K3",
+      "designRevision": 8,
+      "basisId": "basis:live-existing-basis-v8",
+      "basisDigest": "a4524d9492df4e92e6ea03407b000dd71a800bb9b411a7f33d26d34ddbded697",
+      "reviewReceiptId": "01M5HGGPCZEC7ZAVRVKMHGVS87",
+      "candidateTreeOid": "6cb114c7678258359c3559e42b9f977c3c3d327c",
+      "candidateRef": "d81e0778b7a4fdb098350a59aaadd8c49de33eea4160d6093fb79ede7666b7aa",
+      "deliveryCommitSha": "6dcda12b3f1897a5867800c4092d6eb4b31cbdea",
+      "deliveryArtifact": {
+        "artifactRef": "01M5HNDQJPANERK0P355QB647M",
+        "digest": "11b0dbc8237b4e0c3935cc55c718411ca3aaa55a491aa6e1fea38d300e748349"
+      },
+      "publication": null,
+      "executionEvidenceId": "execution:01M5HNDKFG4GRSE587J88CC8J2:4b5b2bd050323ec3",
+      "executionReceiptDigest": "154066bdc9032cb36a8636d6c28998c2dedc69b0cf5a78952207ff0cf5e05a00",
+      "profile": {
+        "digest": "346d744b8456279d6faa14dd7e41327ef7e4669dc49aabd13b9e6479b5700513",
+        "id": "01M5H59QNZ4T44H5388ZGMVRS8",
+        "revision": 1
+      },
+      "environment": {
+        "digest": "f58cfe32cbba9f6365c5cd48330eeb86523b260e4bed3a380052d9d8781ce692",
+        "observations": {
+          "arch": "arm64",
+          "dependencies": {},
+          "locale": "en_US.UTF-8",
+          "osRelease": "25.6.0",
+          "pathRuntimes": {
+            "bun": {
+              "executable": "/Users/wangbinquan/.bun/bin/bun",
+              "status": "observed",
+              "version": "1.3.13"
+            },
+            "node": {
+              "executable": "/opt/homebrew/bin/node",
+              "status": "observed",
+              "version": "v26.0.0"
+            }
+          },
+          "platform": "darwin",
+          "runtimeProbeScope": "PATH bun/node only; profile scripts may select other tools",
+          "timezone": null,
+          "verifierRuntime": {
+            "bun": "1.4.3",
+            "node": "26.3.0"
+          }
+        }
+      },
+      "testStats": {
+        "passed": 13,
+        "failed": 0,
+        "assertions": 16
+      },
+      "modelKinds": ["decision-table", "flow"],
+      "humanSources": [
+        {
+          "id": "answer:01M5H630G8E0WH42K5TJPKH3DP:round:exception-policy",
+          "roundId": "01M5H630G8E0WH42K5TJPKH3DP:round",
+          "confirmedBasis": "v2:e4cafa2b4c8ae95d94b559ebb04cfa2d",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        },
+        {
+          "id": "answer:01M5H630G8E0WH42K5TJPKH3DP:round:empty-string",
+          "roundId": "01M5H630G8E0WH42K5TJPKH3DP:round",
+          "confirmedBasis": "v2:e63b9bde105aa13059d0232ea56c99b0",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        },
+        {
+          "id": "answer:01M5H630G8E0WH42K5TJPKH3DP:round:compat-baseline",
+          "roundId": "01M5H630G8E0WH42K5TJPKH3DP:round",
+          "confirmedBasis": "v2:f5487c4a289e4f56f467a1f640ccf642",
+          "status": "provisional",
+          "owner": null,
+          "when": null
+        }
+      ],
+      "acceptanceEvidenceIds": ["acceptance:live-existing-owner-accept-v8"],
+      "scope": "Fictional scenario, agent-reviewed through product APIs; real OpenCode model and independent profile execution; no business remote publication or human study claim."
+    }
+  ]
+}
