@@ -85,3 +85,12 @@
 - 限定三文件 SQLite 30 pass / 0 fail、113 assertions；规划/工作区真实 PostgreSQL 6 pass / 0 fail、50 assertions。完善等覆盖成本检查后，受影响纯领域文件 24 pass / 0 fail、63 assertions，属于前述范围复验。目标 lint 和完整 backend typecheck 通过；首次缺 PostgreSQL 环境变量的运行保留为验收配置错误，未跳过其红灯。
 - `12081efd2` 的 [exact-SHA CI 39748578316](https://github.com/wangbinquan/agent-workflow/actions/runs/39748578316) 已终态成功，49 个 job success。它不包含本节尚待发布的策略 v2 修正，也不替代真实业务验收。
 - 托管 v0.1.3 首次源码发布收到 `source-publication-http-400`，原因未证实；正常重试成功，155 个文件动作、GitLab commit `0acbb6d4e087549c302832e1b42825580d8d5ffe`、release `01a162da-f222-7000-847f-30e3153f6967`。截至本记录处于 migrating，未将它记作激活或业务链路通过。RFC 保持 In Progress。
+
+### 真实生成后的执行引用与反馈闭环
+
+- 策略 v2 已发布为 `8325059a5bf94493bc3d1078439c68e593f90381`。预约短重规划 v3 超时后，沿原 Case 发起原生澄清请求 `live-booking-native-batch-v4`；没有把超时当成功。已有模块 revision 6 原生评审正文 37933 bytes 与冻结依据逐字一致，已批准并启动实现。
+- 通知实现 Task `01M5HDK3A0704N5R5RTVYQT7BS` 完成，实际候选 tree `fa61d403ca92c198c8e105244b2bdeb85ae02387`，新增一个领域文件、四个测试文件及 verify.sh。模型报告 31 项本地测试通过，但平台原始 execution.json 明确 `receipt:null / testReferencesChecked:false`，不能认作独立 profile 通过。
+- 原因是义务绑定 `test/notification.test.ts`，有效追溯引用 `test/notification.test.ts#具体测试名`，平台仅做完整字符串相等比较。修复允许已核对的命名测试同时证明其所在文件；反向不成立，缺失测试名、只有文件的命名义务、仅声明未核对追溯仍不得运行。增加真实命令执行及三个拒绝回归，两文件 SQLite / PostgreSQL 各 18 pass / 0 fail、94 assertions。类型检查发现测试只读数组类型不兼容，随后仅修正参数类型并复验类型。
+- 实现报告中六条 limitations 已生成正常 code-feedback 提案，继续阻止自动交付。内置提示明确：limitations 用于未满足批准范围的实现缺口；已批准边界写 summary，人工与 profile 待办保留原验收，不能伪称通过。未放宽非空 limitations 的交付门。
+- 通知经人工采纳反馈和正常编辑，明确单进程内存范围、任意整数起始与版本空洞，以及 failed 无 error 时“同版本保留最近已知错误、更高版本清除旧错误”的虚构验收策略，并要求新增真实测试。冻结 revision 7、basis digest `86e0a0a4bbc9cb8485a62acbf5cc4fb581e055e3ff685dd820f6104eaf3b1420`，进入原生评审；原三条 provisional 来源及未知责任人/日期不变。
+- 托管 v0.1.3 已 Ready 并申请激活，traffic switch `01a162e6-4cd2-7000-958e-3fe0b026b383`。freeze 与 handoff-prepare 成功，route 阶段等待“目标生产路由实际生效”，业务入口 503；尚未完成激活和 AC14。两槽 Pod Ready 且 Service 端点存在，继续核查正常平台路由，不改其他项目。

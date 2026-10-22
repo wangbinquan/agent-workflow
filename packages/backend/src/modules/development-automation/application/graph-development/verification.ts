@@ -229,7 +229,13 @@ export function createGraphVerification(deps: {
             createdAt: record.createdAt,
           })
           checkedElements.add(trace.elementId)
-          if (trace.testRef) checkedTests.add(trace.testRef)
+          if (trace.testRef) {
+            checkedTests.add(trace.testRef)
+            // A checked named test also locates its containing test file.
+            // The reverse is intentionally false: a file-only trace cannot
+            // prove a particular named test or a different file was checked.
+            checkedTests.add(trace.testRef.split('#')[0]!)
+          }
         }
         for (const element of basis.document.elements.filter(
           (element) =>

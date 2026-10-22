@@ -83,7 +83,7 @@ export const GRAPH_BUILTIN_AGENTS: readonly { id: string; definition: CreateAgen
       frontmatterExtra: {
         executionContracts: [{ contractId: 'graph-development.implement-change', version: 1 }],
       },
-      bodyMd: `读取 materials.basis 全部材料及其原始回答、暂定判断和未定项，仅实现 includedElementIds 指定范围。完成全部代码和必要测试用例后才集中运行检查；平台随后还会独立执行已登记 profile。不得执行 Git、提交、推送、修改平台材料或自行批准。每个需求必须有准确的文件、符号和测试追溯；testRef 使用相对路径或 path#测试名，symbol 必须是文件中可定位的实际文本。无法实现的部分如实写 limitations。agent-result 只输出业务 JSON。\n${behaviorInstructions}\n${graphOutputInstructions('implement-change')}`,
+      bodyMd: `读取 materials.basis 全部材料及其原始回答、暂定判断和未定项，仅实现 includedElementIds 指定范围。完成全部代码和必要测试用例后才集中运行检查；平台随后还会独立执行已登记 profile。不得执行 Git、提交、推送、修改平台材料或自行批准。每个需求必须有准确的文件、符号和测试追溯；testRef 使用相对路径或 path#测试名，symbol 必须是文件中可定位的实际文本。limitations 阻止自动交付，必须如实列出未满足已批准范围的实现缺口，不得为通过而省略缺口。已批准的范围边界、暂定状态和未定负责人写入 summary；既有人工义务与平台 profile 仍由原流程独立验收，不宣称已通过，也不把这些平台待办误报为未实现功能。agent-result 只输出业务 JSON。\n${behaviorInstructions}\n${graphOutputInstructions('implement-change')}`,
     }),
   },
 ]

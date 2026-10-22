@@ -36,6 +36,7 @@ function git(cwd: string, ...args: string[]) {
 describeEachProvider('RFC-396 candidate verification', (harness) => {
   async function fixture(
     mode: 'passed' | 'failed' | 'timeout' | 'missing-trace' | 'manual' | 'limited' | 'report-only',
+    references: { obligation?: string; trace?: string | null; declared?: readonly string[] } = {},
   ) {
     const root = mkdtempSync(join(tmpdir(), 'rfc396-verify-'))
     homes.push(root)
@@ -136,7 +137,7 @@ describeEachProvider('RFC-396 candidate verification', (harness) => {
       document.obligations[0]!.verification = {
         kind: 'execution',
         profileRef: { id: 'checks', revision: 1, digest },
-        testRefs: ['verify.js#booking-test'],
+        testRefs: [references.obligation ?? 'verify.js#booking-test'],
       }
     const changed = await f.commands.change(document.id, {
       expectedRevision: document.revision,
@@ -157,11 +158,11 @@ describeEachProvider('RFC-396 candidate verification', (harness) => {
           obligationId: 'unique',
           path: mode === 'missing-trace' ? 'imaginary.js' : 'booking.js',
           symbol: 'reserve',
-          testRef: 'verify.js#booking-test',
+          testRef: 'trace' in references ? (references.trace ?? null) : 'verify.js#booking-test',
           reason: 'real implementation',
         },
       ],
-      testRefs: ['verify.js#booking-test'],
+      testRefs: references.declared ?? ['verify.js#booking-test'],
       limitations: mode === 'limited' ? ['Concurrency behavior remains unimplemented'] : [],
       deliveryContent: {
         commitMessage: 'Implement reservation',
@@ -199,6 +200,66 @@ describeEachProvider('RFC-396 candidate verification', (harness) => {
       workspace: { workspacePath: ws, baselineRepoPath: repo, baseline },
     }
   }
+  test.skipIf(process.platform === 'win32')(
+    'a checked named test satisfies a file obligation and executes the real profile',
+    async () => {
+      const f = await fixture('passed', { obligation: 'verify.js' })
+      const result = await f.verification.run({
+        designId: 'design-a',
+        roundRef: 'file-ref',
+        workspace: f.workspace,
+      })
+      expect(result.passed).toBe(true)
+      const execution = (await f.store.links('design-a')).find((link) =>
+        link.id.startsWith('execution:'),
+      )!
+      const raw = await f.queries.evidenceArtifacts('design-a', execution.id)
+      const receipt = JSON.parse(raw.files.find((file) => file.path === 'execution.json')!.content)
+      expect(receipt.testReferencesChecked).toBe(true)
+      expect(receipt.receipt.steps[0].exitCode).toBe(0)
+      expect(raw.files.find((file) => file.path === 'logs/0-output-tail.txt')?.content).toContain(
+        'booking-test',
+      )
+    },
+    30_000,
+  )
+  for (const [name, references] of [
+    ['file-only trace cannot prove a named test', { trace: 'verify.js' }],
+    [
+      'a missing named test cannot prove its file',
+      { obligation: 'verify.js', trace: 'verify.js#missing-test' },
+    ],
+    [
+      'a declared file without a checked trace cannot run verification',
+      { obligation: 'verify.js', trace: null, declared: ['verify.js'] },
+    ],
+  ] as const)
+    test.skipIf(process.platform === 'win32')(
+      name,
+      async () => {
+        const f = await fixture('passed', {
+          ...references,
+          ...('declared' in references ? { declared: [...references.declared] } : {}),
+        })
+        const result = await f.verification.run({
+          designId: 'design-a',
+          roundRef: 'invalid-ref',
+          workspace: f.workspace,
+        })
+        expect(result.passed).toBe(false)
+        const execution = (await f.store.links('design-a')).find((link) =>
+          link.id.startsWith('execution:'),
+        )!
+        const raw = await f.queries.evidenceArtifacts('design-a', execution.id)
+        expect(raw.evidence.result).toBe('not-run')
+        const receipt = JSON.parse(
+          raw.files.find((file) => file.path === 'execution.json')!.content,
+        )
+        expect(receipt.testReferencesChecked).toBe(false)
+        expect(receipt.receipt).toBe(null)
+      },
+      30_000,
+    )
   test.skipIf(process.platform === 'win32')(
     'a crash after structural evidence preserves the real artifact binding on verification recovery',
     async () => {

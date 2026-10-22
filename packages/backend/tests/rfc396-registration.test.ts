@@ -27,6 +27,12 @@ test('graph type has six responsibilities while view combinations are selected w
     agent.definition.outputs.includes('design-model'),
   )!
   expect(designer.definition.bodyMd).toContain('不得固定输出')
+  const implementer = GRAPH_BUILTIN_AGENTS.find(
+    (agent) => agent.definition.name === 'graph-development-implementer-v1',
+  )!
+  expect(implementer.definition.bodyMd).toContain('limitations 阻止自动交付')
+  expect(implementer.definition.bodyMd).toContain('未满足已批准范围的实现缺口')
+  expect(implementer.definition.bodyMd).toContain('不宣称已通过')
   for (const workflow of GRAPH_BUILTIN_WORKFLOWS) {
     for (const node of workflow.definition.definition.nodes) {
       if ('promptTemplate' in node && typeof node.promptTemplate === 'string')
