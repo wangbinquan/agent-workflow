@@ -1,3 +1,4 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: the complete root selection must preserve content identity, receivers,
 // per-drive binding and async acknowledgement before any Task effect.
@@ -281,8 +282,8 @@ describe('RFC-370 complete Task run selection', () => {
       expect(calls[0]).toMatch(/^(input|deps)\.taskRunSelection$/)
     }
     const start = read('bootstrap/daemonStart.ts')
-    expect(start).toContain('taskRunSelection: opts.taskRunSelection')
-    expect(start).toContain('taskRunSelection: input.taskRunSelection')
+    expectDeploymentSelection('taskRunSelection')
+    expect(start).toContain('...deploymentSelectionsOf(input)')
     const runtime = read(
       'modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
     )

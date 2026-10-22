@@ -53,7 +53,7 @@ test('both daemon providers and target recomposition retain the selected raw sou
   ).filter(ts.isVariableDeclaration)
   expect(selections).toHaveLength(1)
   expect(compact(selections[0]!.initializer!)).toBe(
-    'opts.runtimeLegacyConfiguration??composeFileRuntimeLegacyConfiguration(Paths.config)',
+    'profile.selections.runtimeLegacyConfiguration??composeFileRuntimeLegacyConfiguration(Paths.config)',
   )
   expect(calls(root, 'composeFileRuntimeLegacyConfiguration')).toHaveLength(1)
   const sessionInputs = descendants(
@@ -62,14 +62,12 @@ test('both daemon providers and target recomposition retain the selected raw sou
   ).filter(ts.isVariableDeclaration)
   expect(sessionInputs).toHaveLength(1)
   expect(compact(sessionInputs[0]!.initializer!)).toContain(',runtimeLegacyConfiguration,')
-  const providerSessions = calls(root, 'composeSession')
+  const providerSessions = calls(root, 'composeDaemonSession')
   expect(providerSessions).toHaveLength(2)
   for (const session of providerSessions) {
     expect(compact(session.arguments[0]!)).toContain('...sessionInput,')
   }
-  expect(compact(body('composeDaemonSession'))).toContain(
-    'runtimeLegacyConfiguration:input.runtimeLegacyConfiguration',
-  )
+  expect(compact(body('composeDaemonSession'))).toContain('...deploymentSelectionsOf(input)')
   for (const [owner, expected] of [
     [
       'composeDaemonApplication',

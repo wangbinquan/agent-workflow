@@ -17,7 +17,6 @@ import type {
   SelectedDaemonProviderCore,
 } from '@/bootstrap/daemonModules/providerCore'
 import type { DaemonTaskExecutionAdapters } from '@/bootstrap/daemonModules/taskExecution'
-import type { DaemonProviderSessionComposeInput } from './daemonSessionInput'
 import type { DaemonApplicationInput } from './daemonApplication'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
@@ -52,7 +51,6 @@ export interface DaemonSessionAdapter<P extends DatabaseProvider = DatabaseProvi
     provider: ResolvedDatabaseProviderRuntime,
     migrationsFolder: string,
   ): DaemonApplicationDatabase<P>
-  admitSelections<T extends object>(input: T): T
   core(input: DaemonApplicationInput<P>): DaemonProviderCoreAdapters<P>
   taskExecution(input: DaemonApplicationInput<P>): DaemonTaskExecutionAdapters<P>
   afterCore(core: SelectedDaemonProviderCore<P>): Promise<void>
@@ -80,50 +78,12 @@ export interface DaemonSessionAdapter<P extends DatabaseProvider = DatabaseProvi
   recoveryProofGeneration(provider: DaemonApplicationProvider<P>): string
 }
 
-export const HOSTED_ONLY_SELECTIONS = [
-  'credentials',
-  'systemAgentRunFamily',
-  'workspacePresence',
-  'reviewArtifacts',
-  'reviewRollbackSnapshots',
-  'taskInputFiles',
-  'mcpDiagnostics',
-  'beforeEventObservationWrite',
-  'humanGateArtifactRecovery',
-  'runtimeInventoryContent',
-  'runtimeManagement',
-  'developmentWorkspaceRepositoryPreparation',
-  'archivedNodeEvents',
-  'crewStationEvents',
-  'intentArtifacts',
-  'databaseBackup',
-  'hostedBackgroundOwners',
-  'taskRecovery',
-  'repositoryPublicationTransport',
-  'programFixtureProcess',
-  'actionWorkspaceEntries',
-  'repositoryRemote',
-  'repositoryRevisionContent',
-  'codeReviewArtifacts',
-  'fusionWorkspaceEffects',
-] as const satisfies readonly (keyof DaemonProviderSessionComposeInput)[]
-type HostedOnlySelection = (typeof HOSTED_ONLY_SELECTIONS)[number]
-/** Reject hosted selections before opening or composing a standalone session. */
-export function standaloneSelectionsOf<T extends object>(input: T): T {
-  const selections = input as Partial<Record<HostedOnlySelection, unknown>>
-  const hosted = HOSTED_ONLY_SELECTIONS.filter((key) => selections[key] !== undefined)
-  if (hosted.length > 0)
-    throw new Error(`hosted-deployment-requires-postgresql: ${hosted.join(', ')}`)
-  return input
-}
-
 export const DAEMON_SESSION_ADAPTERS: {
   readonly [P in DatabaseProvider]: DaemonSessionAdapter<P>
 } = {
   sqlite: {
     open: (provider, migrationsFolder) =>
       requireDatabaseProviderRuntime(provider, 'sqlite').openClient({ migrationsFolder }),
-    admitSelections: standaloneSelectionsOf,
     core: (input) =>
       DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
         db: input.db,
@@ -161,7 +121,6 @@ export const DAEMON_SESSION_ADAPTERS: {
   },
   postgresql: {
     open: (provider) => requireDatabaseProviderRuntime(provider, 'postgresql').openClient(),
-    admitSelections: <T extends object>(input: T): T => input,
     core: (input) =>
       DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
         db: input.db,

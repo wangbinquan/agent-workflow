@@ -1,3 +1,4 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: the actual runner, collaboration factory and provider HTTP roots await selected artifact ACKs.
 import { expect, test } from 'bun:test'
@@ -534,15 +535,11 @@ test('CLI initial and replacement sessions carry raw content selection into the 
   ])
   const pg = calls(sf, sf, 'composeDaemonApplication')
   expect(pg).toHaveLength(1)
-  expect(objectFields(pg[0]!.arguments[0]!, sf).get('portArtifactContentEffects')).toBe(
-    'input.portArtifactContentEffects',
-  )
+  expect(pg[0]!.arguments[0]!.getText(sf)).toContain('...deploymentSelectionsOf(input)')
   const sqliteDeps = calls(sf, sf, 'composeProviderAppComposition')
   expect(sqliteDeps).toHaveLength(1)
   expect(objectFields(sqliteDeps[0]!.arguments[0]!, sf).get('portArtifacts')).toBe('portArtifacts')
-  expect(
-    sf.text.match(/portArtifactContentEffects: opts\.portArtifactContentEffects/g),
-  ).toHaveLength(1)
+  expectDeploymentSelection('portArtifactContentEffects', 'PortArtifactContentEffects')
 })
 
 test('PG and HTTP roots share one selected service between runtime, review and the real artifact route', () => {

@@ -31,8 +31,8 @@
       "reason": "max=0: RFC-377 清零"
     },
     "deployment-mode-branch-sites": {
-      "max": 6,
-      "reason": "max=6: RFC-392 删除 server.ts 两处部署形态默认值（RFC-376 阶段 B 初值 8）；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 5,
+      "reason": "max=5: RFC-394 宿主探测归部署 profile，删除启动序列的部署比较（RFC-376 阶段 B 初值 8）；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "direct-setinterval-sites": {
       "max": 15,

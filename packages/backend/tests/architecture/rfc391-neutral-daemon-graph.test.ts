@@ -10,7 +10,6 @@ const SESSION = PREFIX + 'bootstrap/daemonSession.ts'
 const ADAPTERS = PREFIX + 'bootstrap/daemonSessionAdapters.ts'
 const FIELDS = [
   'open',
-  'admitSelections',
   'core',
   'taskExecution',
   'afterCore',

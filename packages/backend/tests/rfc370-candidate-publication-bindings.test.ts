@@ -1,3 +1,4 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: every real DA and DE root selects the same complete candidate receiver.
 import { expect, test } from 'bun:test'
@@ -60,7 +61,7 @@ test('RFC-383 roots forward the selected candidate factory to both shared derive
     }
     for (const name of ['bindChangeCandidateParticipant', 'bindCandidateDeliveryParticipant'])
       expect(calls(source, name)).toHaveLength(0)
-    expect(source.text).toContain('repositoryCandidateEffects?: RepositoryCandidateEffectsFactory')
+    expectDeploymentSelection('repositoryCandidateEffects', 'RepositoryCandidateEffectsFactory')
   }
   for (const path of [
     'bootstrap/daemonModules/digitalEmployee.ts',
@@ -80,9 +81,9 @@ test('RFC-383 roots forward the selected candidate factory to both shared derive
     }
   }
   const start = load('bootstrap/daemonStart.ts').text
-  expect(start).toContain('repositoryCandidateEffects: opts.repositoryCandidateEffects,')
+  expectDeploymentSelection('repositoryCandidateEffects')
   expect(start.split('repositoryCandidateEffects: input.repositoryCandidateEffects,')).toHaveLength(
-    4,
+    3,
   )
 })
 

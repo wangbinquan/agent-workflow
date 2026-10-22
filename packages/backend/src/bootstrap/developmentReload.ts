@@ -1,6 +1,5 @@
 // Development-only reloader. Bun --hot retains its state in globalThis;
 // ordinary CLI starts never receive its process-local integrity preparation.
-import type { StartOptions } from './daemonStart'
 import {
   selectDaemonHostLifecycle,
   type DaemonHostLifecyclePort,
@@ -8,11 +7,16 @@ import {
 } from '@/modules/system-operations/composition/daemonHostLifecycle'
 import { Paths } from '@/util/paths'
 
+export interface DevelopmentOverlay {
+  readonly daemonHost: DaemonHostLifecyclePort
+  readonly developmentIntegrity: { validatedDatabase?: string }
+}
+
 export interface DevelopmentDaemonState {
   revision: number
   tail: Promise<void>
   current?: { stop(): Promise<void> }
-  integrity: NonNullable<StartOptions['developmentIntegrity']>
+  integrity: DevelopmentOverlay['developmentIntegrity']
 }
 
 export function createDevelopmentDaemonState(): DevelopmentDaemonState {
@@ -22,7 +26,7 @@ export function createDevelopmentDaemonState(): DevelopmentDaemonState {
 /** Coalesce saves during boot/drain and finish the old session before replacing it. */
 export function reloadDevelopmentDaemon(
   state: DevelopmentDaemonState,
-  start: (options: StartOptions) => Promise<void>,
+  start: (development: DevelopmentOverlay) => Promise<void>,
   createHost: () => DaemonHostLifecyclePort = () =>
     selectDaemonHostLifecycle(undefined, {
       infoPath: Paths.daemonInfo,

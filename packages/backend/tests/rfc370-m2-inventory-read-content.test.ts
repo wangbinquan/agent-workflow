@@ -12,7 +12,7 @@ import { createProviderHttpApplication } from './helpers/providerHttpApplication
 import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 
 describeEachProvider('RFC-370 selected runtime inventory read', (harness) => {
-  test('PostgreSQL reads hosted inventory; SQLite rejects the hosted selection', async () => {
+  test('PostgreSQL reads hosted inventory; SQLite rejects its required provider', async () => {
     const taskId = freshTaskId(),
       nodeRunId = ulid(),
       appHome = mkdtempSync(join(tmpdir(), 'aw-inventory-content-'))
@@ -21,6 +21,7 @@ describeEachProvider('RFC-370 selected runtime inventory read', (harness) => {
     let snapshot: InventorySnapshot | null = null,
       reads = 0
     const input = {
+      requiredProvider: 'postgresql' as const,
       token: 'tok',
       appHome,
       configPath: join(appHome, 'config.json'),

@@ -13,7 +13,6 @@
 // 变异实证（2026-08-18，开发期手工做过一轮）：在 domain 下临时放一个
 // `import { Hono } from 'hono'` 文件 → 第 3 条红；在 services/ 下临时 import
 // composition.ts → 第 2 条红；public/ 下临时建 misc.ts → 第 1 条红。
-
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
@@ -49,8 +48,7 @@ const COMPOSITION_CONSUMERS: string[] = [
   'bootstrap/daemonModules/digitalEmployee.ts',
   'bootstrap/daemonModules/integration.ts',
   'bootstrap/daemonModules/repositoryCredentials.ts',
-  'bootstrap/daemonSessionInput.ts',
-  'bootstrap/daemonStart.ts',
+  'bootstrap/deploymentProfile.ts',
   'bootstrap/developmentPurposeRoot.ts',
   'bootstrap/maintenanceWorkerGraph.ts',
 ]

@@ -1,4 +1,5 @@
 // RFC-391 — one passive application graph for daemon and unstarted phases.
+import type { DeploymentSelections } from './deploymentProfile'
 import {
   DAEMON_SESSION_ADAPTERS,
   type DaemonSessionAdapter,
@@ -61,87 +62,37 @@ import {
   type DaemonBootSteps,
   type DaemonBootStepDeclaration,
 } from '@/bootstrap/daemonLifecycleProgram'
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
-import type { TaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
-import type { TaskRecoveryDeploymentSelection } from '@/modules/task-execution/composition/taskRecoverySelection'
-import type { DatabaseBackupEffects } from '@/modules/system-operations/public/commands'
 import type { TaskArchivedEventsReader } from '@/modules/task-execution/public/types'
-import type { ProviderNeutralDatabase } from '@/db/query'
 import type { CrewStationEventIngress } from '@/modules/integration/composition/crewstationEvents'
-import type { ReviewArtifactSelection } from '@/modules/collaboration/composition'
-import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
-import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/composition'
-import type { ScratchWorkspaceEffects } from '@/modules/source-control/composition'
 import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
-import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
-import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import type { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
-import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import { composeDevelopmentPurposeRoot } from './developmentPurposeRoot'
-import type { DevelopmentPurposeSelection } from '@/modules/development-automation/composition'
-import type { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import {
   composeLocalTaskRunRootSelection,
   composeTaskWorkspaceExcludeProfilesFor,
 } from '@/modules/task-execution/composition/localTaskRunSelection'
-import {
-  selectTaskRunRootSelection,
-  type TaskRunRootSelection,
-} from '@/modules/task-execution/composition/taskRunSelection'
-import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
-import type {
-  WorkspaceUploadContentFactory,
-  IsolationWorkspaceFactory,
-  RepositoryGitWorkspaceFactory,
-} from '@/modules/source-control/public/types'
-import type { RepositoryCandidateEffectsFactory } from '@/modules/source-control/composition'
+import { selectTaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
 import {
   selectWorkspaceUploadContentFactory,
   selectIsolationWorkspaceFactory,
   selectRepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/participants'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
-import type {
-  PortArtifactContentEffects,
-  TaskRuntimeInventoryContent,
-} from '@/modules/task-execution/public/types'
-import type {
-  NodeRunPromptContentEffects,
-  TaskDeletionEffects,
-} from '@/modules/task-execution/public/types'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
-import {
-  selectDevelopmentWorkspaceEffectBinding,
-  type ActionWorkspaceEffects,
-  type AutomationWorkspaceEffectsFactory,
-} from '@/modules/development-automation/composition'
-import type { ConflictMergeWorkspaceEffects } from '@/modules/source-control/public/types'
-import type {
-  RepositoryBaselineEffectsFactory,
-  VerificationCommandEffectsFactory,
-} from '@/modules/development-automation/composition'
+import { selectDevelopmentWorkspaceEffectBinding } from '@/modules/development-automation/composition'
 import {
   composeLocalExecutionAuthority,
   readDaemonStartupRecoveryAuthority,
   type DaemonStartupLease,
 } from '@/modules/system-operations/composition'
-import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
 import { type ApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
-import {
-  type EmployeeCaseWorkspaceEffectsFactory,
-  type RepositoryRemoteEffects,
-  type WorkspaceContentEffectsFactory,
-} from '@/modules/source-control/composition'
-import { type ScriptFixtureProcess } from '@/modules/task-execution/composition/programTools'
-import type { ActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionRunners'
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { DigitalEmployeeModuleWithRuntime } from '@/modules/digital-employee/composition'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import {
   createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
-  type BootExecutionRecoveryFactory,
 } from '@/modules/task-execution/composition/bootRecovery'
 import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
@@ -151,29 +102,16 @@ import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersisten
 import type { SecretBox } from '@/auth/secretBox'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { type RuntimeDiagnosticDependencies } from '@/modules/runtime-management/composition/runtimeManagement'
-import type { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
 import { type WebhookDispatcher } from '@/services/webhook/dispatcherTypes'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
 import { reconcileRepositoryTransportConnectionProjections } from '@/modules/source-control/composition'
-import type { CodeReviewArtifactStore } from '@/modules/code-capability/public/participants'
-import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
 import type { composePostgresqlMemoryOperations } from '@/modules/memory/composition'
-import { type PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
-import {
-  type ResourcePackageSkillArtifactOwner,
-  type ResourcePackagePluginArtifactOwner,
-  type SkillPackageContentReader,
-} from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import type { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import {
   type SelectedTaskExecutionProviderRuntime,
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
-import {
-  selectRepositoryWorkspaceReadQueries,
-  type RepositoryWorkspaceReadQueries,
-  type WorkspacePresenceQueries,
-} from '@/modules/source-control/public/queries'
+import { selectRepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition'
 import { composeResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
@@ -182,17 +120,9 @@ import {
   createTaskIdleTimeoutPersistence,
   type TaskIdleTimeoutOperations,
 } from '@/modules/task-execution/composition/taskIdleTimeout'
-import type {
-  composeDevelopmentAutomation,
-  EvidenceDocumentCommands,
-  EvidenceArtifactPort,
-  AttemptContextStorePort,
-} from '@/modules/development-automation/composition'
-import { type MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
-import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
+import type { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
 import type { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
-import { type CustomObserverProgramFactory } from '@/modules/event-center/composition'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
@@ -211,7 +141,6 @@ import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/comp
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { batchOwnerUserId } from '@/services/repoBatchImport'
 import { redactEventPayload } from '@/services/tokenRedaction'
-import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
 import {
   composeProviderAppDeps,
   createComposedApp,
@@ -222,13 +151,6 @@ import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
 import { composeDaemonRealtimePolicy } from '@/bootstrap/daemonRealtimePolicy'
-import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
-import { type SkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
-import type {
-  ProgramArtifactPort,
-  EmployeeInputArtifactPort,
-} from '@/modules/digital-employee/composition'
-import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 import type { LocalMcpDiagnosticsCompositionInput as McpDiagnosticsCompositionInput } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { McpDiagnosticsRuntime } from '@/modules/resource-catalog/composition/mcpDiagnostics'
 
@@ -238,97 +160,26 @@ export interface UnstartedApplicationScope {
   readonly createMcpRuntimeTests: (deps: McpDiagnosticsCompositionInput) => McpDiagnosticsRuntime
 }
 
-export interface DaemonApplicationInput<P extends DatabaseProvider = DatabaseProvider> {
+export interface DaemonApplicationInput<
+  P extends DatabaseProvider = DatabaseProvider,
+> extends DeploymentSelections {
   readonly digitalEmployeeTypePackageDriftPolicy?: 'reject' | 'draft-overlay'
+  readonly requiredProvider: DatabaseProvider | null
   readonly provider: DaemonApplicationProvider<P>
   readonly db: DaemonApplicationDatabase<P>
   readonly config: Config
   readonly log: ReturnType<typeof createLogger>
-  readonly runtimeLegacyConfiguration?: RuntimeLegacyConfigurationPort
   readonly dbPath?: string
   readonly token: string
   readonly appHome: string
   readonly configPath: string
   readonly applicationConfiguration: ApplicationConfigurationBinding
   readonly taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>
-  readonly taskArchive?: TaskArchiveContentBinding
-  readonly skillContent?: SkillContentBinding
-  readonly employeePrograms?: ProgramArtifactPort
-  /** RFC-370 §10 V19: the hosted task-image fixture run; standalone runs on this host. */
-  readonly programFixtureProcess?: ScriptFixtureProcess
-  /** RFC-370 §10 V18: entry checks below a hosted action workspace; standalone checks its disk. */
-  readonly actionWorkspaceEntries?: ActionWorkspaceEntries
-  /** RFC-370 §10 V16: code-review reads of a hosted task volume; standalone reads its worktree. */
-  readonly repositoryRevisionContent?: RepositoryRevisionContentFactory
-  /** RFC-370 §10 V16: hosted code-review artifacts; standalone keeps appHome files. */
-  readonly codeReviewArtifacts?: CodeReviewArtifactStore
-  readonly employeeInputArtifacts?: EmployeeInputArtifactPort
-  readonly missionInputBlobs?: MissionInputBlobPersistence
-  readonly pluginInstaller?: PluginInstallerPort
-  readonly beforeEventObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
-  readonly databaseBackup?: DatabaseBackupEffects
-  readonly archivedNodeEvents?: TaskArchivedEventsReader
-  readonly crewStationEvents?: CrewStationEventIngress
-  readonly intentArtifacts?: IntentArtifactSelection
-  readonly evidenceArtifacts?: EvidenceArtifactPort
-  readonly resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
-  readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
-  readonly resourcePackageSkillContent?: SkillPackageContentReader
-  readonly workspaceContent?: WorkspaceContentEffectsFactory
-  /** RFC-370 §10 V17: hosted repository remote reads (system volume); absent, local mirrors. */
-  readonly repositoryRemote?: RepositoryRemoteEffects
-  readonly workspaceUploads?: WorkspaceUploadContentFactory
-  readonly isolationWorkspaces?: IsolationWorkspaceFactory
-  readonly repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
-  readonly repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
-  readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
-  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
-  readonly verificationCommands?: VerificationCommandEffectsFactory
-  readonly customObserverPrograms?: CustomObserverProgramFactory
-  readonly bootExecutionRecovery?: BootExecutionRecoveryFactory
-  /** RFC-370 v2 H7: bootstrap selects the execution authority; standalone by default. */
-  readonly executionAuthority?: ExecutionAuthorityPort
-  /** RFC-370 v2 §3.6: bootstrap selects the credential mechanism; standalone by default. */
-  readonly credentials?: CredentialAdapterSelection
-  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
-  readonly actionWorkspaceEffects?: ActionWorkspaceEffects
-  readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
-  readonly taskDeletionEffects?: TaskDeletionEffects
-  /** RFC-370 §9.2 V3: a hosted publication's network Git runs in its task volume. */
-  readonly repositoryPublicationTransport?: RepositoryPublicationTransport
-  readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
-  readonly portArtifactContentEffects?: PortArtifactContentEffects
-  readonly runtimeInventoryContent?: TaskRuntimeInventoryContent
-  readonly taskRunSelection?: TaskRunRootSelection
-  readonly taskRecovery?: TaskRecoveryDeploymentSelection
-  readonly taskInputFiles?: TaskInputFiles
-  readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
-  readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
-  /** RFC-370 §10 V20: the fusion engine task's workspace; standalone under appHome. */
-  readonly fusionWorkspaceEffects?: FusionWorkspaceEffects
-  readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
-  readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
-  readonly recoveredExecutionTaskIds?: () => readonly string[]
-  readonly runtimeManagement?: typeof composeLocalRuntimeManagement
-  readonly reviewArtifacts?: ReviewArtifactSelection
-  readonly reviewRollbackSnapshots?: WorkspaceRollbackSnapshotInspector
-  readonly systemAgentRunFamily?: typeof composeLocalSystemAgentRunFamily
-  readonly mcpDiagnostics?: typeof composeLocalMcpDiagnostics
-  readonly developmentPurposes?: DevelopmentPurposeSelection
-  readonly developmentWorkspaceRepositoryPreparation?: ReturnType<
-    typeof createDevelopmentWorkspaceRepositoryPreparation
-  >
-  readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
-  readonly evidenceRead?: EvidenceReadBinding
-  readonly evidenceDocumentCommands?: EvidenceDocumentCommands
-  readonly attemptContext?: AttemptContextStorePort
   readonly daemonInfoPath: string
   readonly daemonRuntime?: DaemonRuntimeQueries
   readonly daemonStartupLease?: DaemonStartupLease
   readonly lockPath: string
   readonly secretBox: SecretBox
-  readonly workspacePresence?: WorkspacePresenceQueries
-  readonly workspaceReads?: RepositoryWorkspaceReadQueries
   /** RFC-349 T10 — see `DatabaseSourceWriteWindow`; bootstrap supplies the live one. */
   readonly sourceWriteWindow: DatabaseSourceWriteWindow
   readonly databaseMigration: DatabaseMigrationModule
@@ -431,7 +282,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   phase: DaemonApplicationPhase,
 ): Promise<DaemonApplication<P>> {
   const adapter = DAEMON_SESSION_ADAPTERS[input.provider.provider] as DaemonSessionAdapter<P>
-  adapter.admitSelections(input)
+  if (input.requiredProvider !== null && input.requiredProvider !== input.provider.provider)
+    throw new Error('hosted-deployment-requires-postgresql')
   const log = input.log
   const developmentPurposeRoot = composeDevelopmentPurposeRoot({
     appHome: input.appHome,

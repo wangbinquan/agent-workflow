@@ -26,14 +26,14 @@ import { createLocalDoctorDiagnosticsFactory } from '@/modules/system-operations
 import { frameBackfillCommand } from './cli/frameBackfill'
 import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
 import {
-  composeDeploymentStartOptions,
+  selectDeploymentProfile,
   migrateForDeployment,
   verifyDatabaseRestoreForDeployment,
 } from './bootstrap/deployment'
 import { migrationReportCommand } from './cli/migrationReport'
-import { startCommand, type StartOptions } from './bootstrap/daemonStart'
-import { composeDaemonSession } from './bootstrap/daemonSession'
+import { startCommand } from './bootstrap/daemonStart'
 import {
+  type DevelopmentOverlay,
   createDevelopmentDaemonState,
   reloadDevelopmentDaemon,
   type DevelopmentDaemonState,
@@ -391,15 +391,14 @@ async function main(): Promise<void> {
     }
 
     case 'start': {
-      const opts: { port?: number; host?: string } = {}
+      const launch: { port?: number; host?: string } = {}
       const port = readPortFlag(Bun.argv)
-      if (port !== undefined) opts.port = port
+      if (port !== undefined) launch.port = port
       const host = readFlag(Bun.argv, '--host')
-      if (host !== undefined) opts.host = host
+      if (host !== undefined) launch.host = host
       // RFC-370 v2 §3.1: the deployment selects its adapters once; flags still win.
-      const deployment = await composeDeploymentStartOptions(process.env)
-      const start = (development?: StartOptions) =>
-        startCommand({ ...deployment, ...opts, ...development }, composeDaemonSession)
+      const profile = await selectDeploymentProfile(process.env)
+      const start = (development?: DevelopmentOverlay) => startCommand(profile, launch, development)
       if (process.env.AGENT_WORKFLOW_DEV_HOT_RELOAD === '1') {
         const retained = globalThis as typeof globalThis & {
           agentWorkflowDevelopment?: DevelopmentDaemonState

@@ -1,3 +1,4 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
 import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
@@ -650,37 +651,11 @@ function factoryResult(value: ts.Expression): ts.Expression {
   return returns[0]!.expression
 }
 
-function optionalPromptContract(sf: ts.SourceFile, name: string, withOperations = false): void {
-  const contract = sf.statements.find(
-    (node): node is ts.InterfaceDeclaration =>
-      ts.isInterfaceDeclaration(node) && node.name.text === name,
-  )
-  if (contract === undefined) throw new Error('actual root contract missing: ' + name)
-  for (const [field, type] of [
-    ['nodeRunPromptContentEffects', 'NodeRunPromptContentEffects'],
-    ...(withOperations ? [['nodeRunPrompts', 'NodeRunPromptOperations']] : []),
-  ]) {
-    const member = contract.members.find(
-      (node): node is ts.PropertySignature =>
-        ts.isPropertySignature(node) && node.name.getText(sf) === field,
-    )
-    expect(member?.questionToken).toBeDefined()
-    expect(member?.type?.getText(sf)).toBe(type)
-  }
-  expect(
-    sf.statements.filter(ts.isImportDeclaration).map((node) => node.moduleSpecifier.getText(sf)),
-  ).toContain("'@/modules/task-execution/public/types'")
-}
-
 test('CLI initial and replacement sessions carry one prompt selection through SQLite and PG', () => {
   const sf = source('bootstrap/daemonStart.ts'),
     body = compositionBody(sf, 'composeDaemonApplication'),
     selected = onlyCall(body, sf, 'composeNodeRunPromptOperations')
-  optionalPromptContract(sf, 'StartOptions')
-  optionalPromptContract(
-    source('bootstrap/daemonSessionInput.ts'),
-    'DaemonProviderSessionComposeInput',
-  )
+  expectDeploymentSelection('nodeRunPromptContentEffects', 'NodeRunPromptContentEffects')
   expect(selected.arguments.map((value) => compact(value, sf))).toEqual([
     'input.nodeRunPromptContentEffects',
     "join(input.appHome,'runs')",
@@ -716,13 +691,8 @@ test('CLI initial and replacement sessions carry one prompt selection through SQ
       sf,
     ),
   ).toBe('taskExecutionModules')
-  expect(
-    compact(
-      properties(binding(sf, sf, 'sessionInput'), sf).get('nodeRunPromptContentEffects')!,
-      sf,
-    ),
-  ).toBe('opts.nodeRunPromptContentEffects')
-  const sessions = calls(sf, sf, 'composeSession')
+  expect(compact(binding(sf, sf, 'sessionInput'), sf)).toContain('...profile.selections,')
+  const sessions = calls(sf, sf, 'composeDaemonSession')
   expect(sessions).toHaveLength(2)
   for (const call of sessions) {
     const value = call.arguments[0]!
@@ -731,21 +701,16 @@ test('CLI initial and replacement sessions carry one prompt selection through SQ
       value.properties.filter(ts.isSpreadAssignment).map((field) => compact(field, sf)),
     ).toContain('...sessionInput')
   }
-  expect(
-    compact(
-      properties(onlyCall(sf, sf, 'composeDaemonApplication').arguments[0]!, sf).get(
-        'nodeRunPromptContentEffects',
-      )!,
-      sf,
-    ),
-  ).toBe('input.nodeRunPromptContentEffects')
+  expect(compact(onlyCall(sf, sf, 'composeDaemonApplication').arguments[0]!, sf)).toContain(
+    '...deploymentSelectionsOf(input),',
+  )
 })
 
 test('PG application carries its one prompt receiver through memory, runtime and the actual HTTP graph', () => {
   const sf = source('bootstrap/daemonApplication.ts'),
     body = compositionBody(sf, 'composeDaemonApplication'),
     selected = onlyCall(body, sf, 'composeNodeRunPromptOperations')
-  optionalPromptContract(sf, 'DaemonApplicationInput')
+  expectDeploymentSelection('nodeRunPromptContentEffects', 'NodeRunPromptContentEffects')
   expect(selected.arguments.map((value) => compact(value, sf))).toEqual([
     'input.nodeRunPromptContentEffects',
     "join(input.appHome,'runs')",

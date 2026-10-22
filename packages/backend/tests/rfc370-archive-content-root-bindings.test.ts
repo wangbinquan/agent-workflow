@@ -1,3 +1,4 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 A2: leaf archive selection must reach both real provider roots, boot
 // recovery and HTTP. No daemon, worker or listener is started by this oracle.
@@ -56,12 +57,12 @@ test('daemon selected archive binding survives provider creation and re-composit
     (item) => ts.isVariableDeclaration(item) && item.name.getText(start) === 'sessionInput',
   ).filter(ts.isVariableDeclaration)
   expect(sessionInputs).toHaveLength(1)
-  expect(compact(sessionInputs[0]!, start)).toContain('taskArchive:opts.taskArchive,')
+  expectDeploymentSelection('taskArchive')
   const pgRoot = declaration(start, 'composeDaemonSession')
   const pgApplication = calls(pgRoot, start, 'composeDaemonApplication')
   expect(pgApplication).toHaveLength(1)
   expect(compact(pgApplication[0]!.arguments[0]!, start)).toContain(
-    'taskArchive:input.taskArchive,',
+    '...deploymentSelectionsOf(input),',
   )
   const sqlite = declaration(start, 'composeDaemonApplication')
   const runtime = calls(sqlite, start, 'composeDaemonTaskExecutionModules')

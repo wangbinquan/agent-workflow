@@ -1,9 +1,9 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
-
 import type { EmployeeInputArtifactPort } from '@/modules/digital-employee/composition'
 import { employeeInputUploads } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
@@ -56,9 +56,9 @@ test('real boot and HTTP roots choose one complete input receiver for both intak
     )
   }
   const start = load('bootstrap/daemonStart.ts')
-  expect(start.text).toContain('employeeInputArtifacts: opts.employeeInputArtifacts,')
-  expect(start.text.split('employeeInputArtifacts: input.employeeInputArtifacts,')).toHaveLength(3)
-  expect(start.text).toContain('readonly employeeInputArtifacts?: EmployeeInputArtifactPort')
+  expectDeploymentSelection('employeeInputArtifacts')
+  expect(start.text.split('employeeInputArtifacts: input.employeeInputArtifacts,')).toHaveLength(2)
+  expectDeploymentSelection('employeeInputArtifacts', 'EmployeeInputArtifactPort')
   expect(start.text).toContain('...sessionInput,')
 })
 

@@ -7,6 +7,7 @@ import { resolve } from 'node:path'
 export function readDaemonGraphSource(): string {
   return [
     'bootstrap/daemonStart.ts',
+    'bootstrap/deploymentProfile.ts',
     'bootstrap/daemonSession.ts',
     'bootstrap/daemonApplication.ts',
     'bootstrap/daemonSessionAdapters.ts',

@@ -4,10 +4,7 @@
 // whichever platform variables happen to be present); standalone is the
 // default. A CrewStation-hosted instance runs the same start and migrate
 // sequences with the hosted adapters selected here.
-import {
-  composeCrewStationRestoreNormalization,
-  composeCrewStationStartOptions,
-} from './crewstation'
+import { composeCrewStationRestoreNormalization, composeCrewStationProfile } from './crewstation'
 import {
   composeCrewStationMigrationInstallation,
   crewStationDatabaseConfig,
@@ -16,9 +13,10 @@ import {
 } from '@/modules/system-operations/composition/crewstationDeployment'
 import { verifyCrewStationDatabaseRestore } from '@/modules/system-operations/composition/crewstationDatabaseRestore'
 import { prepareManualDatabaseMigration } from '@/modules/system-operations/composition/manualDatabaseMigration'
-import type { StartOptions } from './daemonStart'
+import type { DeploymentProfile, DeploymentKind } from './deploymentProfile'
+import { composeStandaloneProfile } from './standalone'
 
-export type DeploymentMode = 'standalone' | 'crewstation'
+export type DeploymentMode = DeploymentKind
 
 export class DeploymentModeError extends Error {
   constructor(value: string) {
@@ -37,15 +35,15 @@ export function readDeploymentMode(
 }
 
 /**
- * Start options of the selected deployment. A hosted instance verifies its
+ * Profile of the selected deployment. A hosted instance verifies its
  * database first, so Settings are readable from it at the start of the shared
  * boot sequence; the verified runtime is then handed to that boot.
  */
-export async function composeDeploymentStartOptions(
+export async function selectDeploymentProfile(
   env: Readonly<Record<string, string | undefined>>,
-): Promise<StartOptions> {
-  if (readDeploymentMode(env) === 'standalone') return {}
-  return composeCrewStationStartOptions(env)
+): Promise<DeploymentProfile> {
+  if (readDeploymentMode(env) === 'standalone') return composeStandaloneProfile()
+  return composeCrewStationProfile(env)
 }
 
 /** `agent-workflow migrate`: the hosted release migration Job, or the local recovery path. */

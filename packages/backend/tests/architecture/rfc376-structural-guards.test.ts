@@ -318,7 +318,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts',
   ],
   'deployment-mode-branch-sites': [
-    'packages/backend/src/bootstrap/daemonStart.ts#startCommand#comparison#1',
     'packages/backend/src/embed.ts#withDeploymentMarker#comparison#1',
     'packages/backend/src/modules/integration/application/ports/crewStationEventInbox.ts#CrewStationEventChannel#port-literal#1',
     'packages/backend/src/modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort#port-literal#1',

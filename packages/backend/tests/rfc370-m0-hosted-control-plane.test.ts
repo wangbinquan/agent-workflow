@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs'
 import { Hono } from 'hono'
 import { parse as parseYaml } from 'yaml'
 import {
-  composeDeploymentStartOptions,
+  selectDeploymentProfile,
   DeploymentModeError,
   readDeploymentMode,
 } from '@/bootstrap/deployment'
@@ -61,7 +61,12 @@ test('the deployment is selected explicitly; standalone needs nothing', async ()
   // Platform variables alone never switch the deployment.
   expect(readDeploymentMode(HOSTED_ENV)).toBe('standalone')
   expect(() => readDeploymentMode({ AW_DEPLOYMENT_MODE: 'cloud' })).toThrow(DeploymentModeError)
-  expect(await composeDeploymentStartOptions({})).toEqual({})
+  expect(await selectDeploymentProfile({})).toMatchObject({
+    kind: 'standalone',
+    requiredProvider: null,
+    listen: {},
+    selections: {},
+  })
 })
 
 // RFC-370 acceptance (2026-10-17): with the standalone default of 16, the two

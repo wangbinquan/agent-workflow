@@ -11,7 +11,6 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 //      都实现了它们。mock driver 骨架证明「注册即扩展」：一个第三 kind 的
 //      driver 只要实现接口就能被 getRuntimeDriver 契约消费——buildBusinessSpawn
 //      在 PR-4 补齐后此骨架扩为完整的零调用点改动集成证明。
-
 import { afterEach, describe, expect, it } from 'bun:test'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
@@ -270,7 +269,7 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
       // RFC-237: boot-time probe prewarm keyed off config.defaultRuntime — a
       // startup probability optimization, not spawn assembly; removing it
       // needs a driver boot-probe declaration, out of proportion (design §5).
-      'bootstrap/daemonStart.ts',
+      'bootstrap/standalone.ts',
       // RFC-317 T33（RT-03）—— `RuntimeBinaryConfig` 的 `opencodePath` /
       // `claudeCodePath` 两个键**镜像的是用户可见的 config schema 字段名**，不是这里
       // 自己发明的 kind 判别。把它收成 `Record<RuntimeKind, string | null>` 要连
@@ -508,7 +507,7 @@ describe('RFC-317 T19 —— kind 判别豁免表无死条目', () => {
   const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
   // 与上面扫描用的是同一个集合语义；这里重新声明是因为原表声明在 it() 体内。
   // 两处一旦不一致，下面第一条断言会红。
-  const ALLOWLIST = ['bootstrap/daemonStart.ts', 'services/runtime/types.ts'] as const
+  const ALLOWLIST = ['bootstrap/standalone.ts', 'services/runtime/types.ts'] as const
 
   it('豁免表与扫描里用的那份一致（防两份各改各的）', () => {
     const source = readFileSync(
@@ -545,7 +544,7 @@ describe('RFC-317 T19 —— kind 判别豁免表无死条目', () => {
 
   it('自证：豁免机制确实会跳过文件（否则上一条断言可能只是恰好为空）', () => {
     const allowlisted = new Set<string>(ALLOWLIST)
-    expect(allowlisted.has('bootstrap/daemonStart.ts')).toBe(true)
+    expect(allowlisted.has('bootstrap/standalone.ts')).toBe(true)
     expect(allowlisted.has('services/scheduler.ts')).toBe(false)
     expect(KIND_DISCRIMINATION.test("if (config.defaultRuntime === 'claude-code') prewarm()")).toBe(
       true,

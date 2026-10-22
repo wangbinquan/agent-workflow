@@ -1,9 +1,9 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
-
 import { missionInputUploads } from '@/db/schema'
 import type { MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import { sha256Hex } from '@/util/hash'
@@ -59,11 +59,8 @@ test('mission upload capture is selected lazily and forwarded through every real
     'blobs:input.missionInputBlobs',
   )
   const start = load('bootstrap/daemonStart.ts')
-  expect(start.text).toContain('missionInputBlobs: opts.missionInputBlobs,')
-  for (const expression of [
-    'composeDaemonApplication',
-    'composeDaemonDevelopmentAutomationModules',
-  ]) {
+  expectDeploymentSelection('missionInputBlobs')
+  for (const expression of ['composeDaemonDevelopmentAutomationModules']) {
     const roots = calls(start, expression)
     expect(roots).toHaveLength(1)
     const argument = roots[0]!.arguments[0]!
@@ -76,7 +73,7 @@ test('mission upload capture is selected lazily and forwarded through every real
     expect(bindings).toHaveLength(1)
     expect(bindings[0]!.initializer.getText(start)).toBe('input.missionInputBlobs')
   }
-  expect(start.text).toContain('readonly missionInputBlobs?: MissionInputBlobPersistence')
+  expectDeploymentSelection('missionInputBlobs', 'MissionInputBlobPersistence')
   expect(start.text).toContain('...sessionInput,')
 })
 

@@ -10,14 +10,6 @@ type Change = {
 const preparation: readonly Change[] = [
   {
     current:
-      '  host?: string\n' +
-      '  /** Process-local preparation shared only by the development hot reloader. */\n' +
-      '  developmentIntegrity?: { validatedDatabase?: string }\n' +
-      '  configuration?: ApplicationConfigurationQueries\n',
-    previous: '  host?: string\n  configuration?: ApplicationConfigurationQueries\n',
-  },
-  {
-    current:
       '  const server = Bun.serve({\n' +
       '    // Bun --hot otherwise aliases the HTTP and control listeners when both\n' +
       "    // request an ephemeral port. Keep this application's reload identity distinct.\n" +
@@ -28,11 +20,19 @@ const preparation: readonly Change[] = [
   {
     current:
       "          skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',\n" +
-      '          developmentIntegrity: opts.developmentIntegrity,\n' +
+      '          developmentIntegrity: development?.developmentIntegrity,\n' +
       '        },\n',
     previous:
       "          skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',\n" +
       '        },\n',
+  },
+]
+const overlayPreparation: readonly Change[] = [
+  {
+    current:
+      'export interface DevelopmentOverlay {\n  readonly daemonHost: DaemonHostLifecyclePort\n  readonly developmentIntegrity: { validatedDatabase?: string }\n}\n',
+    previous:
+      'export interface DevelopmentOverlay {\n  readonly daemonHost: DaemonHostLifecyclePort\n}\n',
   },
 ]
 const declarationCheck: readonly Change[] = [
@@ -79,7 +79,7 @@ function inverseRevision(text: string, changes: readonly Change[]): string {
 }
 
 // Test-only inverse of the approved development preparation and static self-check
-// imports in the RFC-391 neutral application graph. Preserve every other byte, including
+// imports in their RFC-394 owners, including the development overlay. Preserve every other byte, including
 // concurrent host/observation edits; a partial or changed binding must fail closed.
 export function inverseRfc213DevStartupRoot(source: ts.SourceFile): ts.SourceFile {
   const path = '/' + source.fileName.replaceAll('\\', '/')
@@ -87,7 +87,9 @@ export function inverseRfc213DevStartupRoot(source: ts.SourceFile): ts.SourceFil
     ? preparation
     : path.endsWith('/bootstrap/daemonApplication.ts')
       ? declarationCheck
-      : undefined
+      : path.endsWith('/bootstrap/developmentReload.ts')
+        ? overlayPreparation
+        : undefined
   if (changes === undefined) return source
   const text = inverseRevision(source.text, changes)
   if (text === source.text) return source

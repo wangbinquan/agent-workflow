@@ -1,3 +1,5 @@
+import type { DeploymentSelections } from '@/bootstrap/deploymentProfile'
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: check each real call argument rather than matching unrelated source text.
 import { expect, test } from 'bun:test'
@@ -143,21 +145,11 @@ test('three original baseline policies receive the same selected factory at thei
   }
 })
 
-function forwarded(
-  value: ts.ObjectLiteralExpression,
-  source: ts.SourceFile,
-  receiver: string,
-  workspaceReceiver = receiver,
-) {
-  for (const key of Object.keys(fields))
-    expect(compact(property(value, source, key), source)).toBe(
-      `${key === 'automationWorkspaceEffects' ? workspaceReceiver : receiver}.${key}`,
-    )
-}
-
 test('CLI initial and replacement sessions forward the same selected storage objects and Worker descriptor', () => {
   const source = load('bootstrap/daemonStart.ts')
-  forwarded(oneRoot(source, 'composeDaemonApplication'), source, 'input')
+  expect(compact(oneRoot(source, 'composeDaemonApplication'), source)).toContain(
+    '...deploymentSelectionsOf(input),',
+  )
   const sqliteHttp = oneRoot(source, 'composeProviderAppComposition')
   expect(sqliteHttp.properties.some((node) => node.name?.getText(source) === 'selections')).toBe(
     true,
@@ -178,11 +170,9 @@ test('CLI initial and replacement sessions forward the same selected storage obj
   if (!initializer || !ts.isCallExpression(initializer)) throw new Error('frozen session required')
   expect(compact(initializer.expression, source)).toBe('Object.freeze')
   const value = objectArgument(initializer)
-  forwarded(value, source, 'opts')
-  expect(compact(property(value, source, 'maintenanceEffectsBootstrap'), source)).toBe(
-    'opts.maintenanceEffectsBootstrap',
-  )
-  const sessions = namedCalls(source, source, 'composeSession')
+  expect(compact(value, source)).toContain('...profile.selections,')
+  expectDeploymentSelection('maintenanceEffectsBootstrap', 'MaintenanceWorkerEffectsDescriptor')
+  const sessions = namedCalls(source, source, 'composeDaemonSession')
   expect(sessions).toHaveLength(2)
   for (const call of sessions) {
     const argument = objectArgument(call)
@@ -336,32 +326,9 @@ test('all three original checkpoint consumers await the selected receipt before 
 })
 
 test('public root types expose existing complete contracts without adding partial callback ports', () => {
-  for (const [path, names] of [
-    ['bootstrap/daemonStart.ts', ['StartOptions']],
-    ['bootstrap/daemonSessionInput.ts', ['DaemonProviderSessionComposeInput']],
-    ['bootstrap/daemonApplication.ts', ['DaemonApplicationInput']],
-  ] as const) {
-    const source = load(path)
-    for (const name of names) {
-      const interfaces = source.statements.filter(
-        (node): node is ts.InterfaceDeclaration =>
-          ts.isInterfaceDeclaration(node) && node.name.text === name,
-      )
-      expect(interfaces).toHaveLength(1)
-      const expected =
-        path !== 'bootstrap/daemonApplication.ts'
-          ? { ...fields, maintenanceEffectsBootstrap: 'MaintenanceWorkerEffectsDescriptor' }
-          : fields
-      for (const [key, type] of Object.entries(expected)) {
-        const members = interfaces[0]!.members.filter((node) => node.name?.getText(source) === key)
-        expect(members).toHaveLength(1)
-        const member = members[0]!
-        if (!ts.isPropertySignature(member)) throw new Error('complete optional port type required')
-        expect(member.questionToken).toBeDefined()
-        expect(member.type?.getText(source)).toBe(type)
-      }
-    }
-  }
+  for (const [key, type] of Object.entries(fields))
+    expectDeploymentSelection(key as keyof DeploymentSelections, type)
+  expectDeploymentSelection('maintenanceEffectsBootstrap', 'MaintenanceWorkerEffectsDescriptor')
 })
 
 test('RFC-383 workspace selection reaches the three shared consumers and the HTTP fallback', () => {

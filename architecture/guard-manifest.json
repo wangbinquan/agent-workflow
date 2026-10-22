@@ -2321,6 +2321,18 @@
       "assertsAbsence": true,
       "classified": true,
       "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc394-deployment-profile.test.ts",
+      "id": "rfc394-deployment-profile",
+      "lines": 462,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "id": "runtime-parameter-ratchet",
       "lines": 83,

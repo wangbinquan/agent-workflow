@@ -1,4 +1,5 @@
 // RFC-391 — the sole daemon session graph and lifecycle composition.
+import { deploymentSelectionsOf } from './deploymentSelections'
 import { composeDaemonApplication } from './daemonApplication'
 import { DAEMON_SESSION_ADAPTERS, type DaemonSessionAdapter } from './daemonSessionAdapters'
 import type {
@@ -210,7 +211,8 @@ export async function composeDaemonSession(
 ): Promise<ComposedDaemonProviderSession> {
   const input = composeInput
   const adapter = DAEMON_SESSION_ADAPTERS[input.provider.provider] as DaemonSessionAdapter
-  adapter.admitSelections(input)
+  if (input.requiredProvider !== null && input.requiredProvider !== input.provider.provider)
+    throw new Error('hosted-deployment-requires-postgresql')
   const db = adapter.open(input.provider, input.migrationsFolder)
   input.log.info('db ready', {
     provider: input.provider.provider,
@@ -234,74 +236,14 @@ export async function composeDaemonSession(
 
   const application = await composeDaemonApplication(
     {
-      taskDeletionEffects: input.taskDeletionEffects,
-      repositoryPublicationTransport: input.repositoryPublicationTransport,
-      nodeRunPromptContentEffects: input.nodeRunPromptContentEffects,
-      portArtifactContentEffects: input.portArtifactContentEffects,
-      runtimeInventoryContent: input.runtimeInventoryContent,
-      taskRunSelection: input.taskRunSelection,
-      taskRecovery: input.taskRecovery,
-      taskInputFiles: input.taskInputFiles,
-      repositoryPreparationEffects: input.repositoryPreparationEffects,
-      scratchWorkspaceEffects: input.scratchWorkspaceEffects,
-      fusionWorkspaceEffects: input.fusionWorkspaceEffects,
-      workspaceMaintenanceFilesystem: input.workspaceMaintenanceFilesystem,
-      workspacePresence: input.workspacePresence,
-      initializeExecution: input.initializeExecution,
-      recoveredExecutionTaskIds: input.recoveredExecutionTaskIds,
-      systemAgentRunFamily: input.systemAgentRunFamily,
-      mcpDiagnostics: input.mcpDiagnostics,
-      developmentPurposes: input.developmentPurposes,
-      runtimeManagement: input.runtimeManagement,
-      reviewArtifacts: input.reviewArtifacts,
-      reviewRollbackSnapshots: input.reviewRollbackSnapshots,
-      developmentWorkspaceRepositoryPreparation: input.developmentWorkspaceRepositoryPreparation,
-      workspaceExcludeProfiles: input.workspaceExcludeProfiles,
-      automationWorkspaceEffects: input.automationWorkspaceEffects,
-      actionWorkspaceEffects: input.actionWorkspaceEffects,
-      conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
+      ...deploymentSelectionsOf(input),
+      requiredProvider: input.requiredProvider,
       provider: input.provider,
       db,
       config: input.config,
-      runtimeLegacyConfiguration: input.runtimeLegacyConfiguration,
       log: input.log,
       dbPath: Paths.db,
-      applicationConfiguration: input.applicationConfiguration,
       taskLaunchConfiguration: input.taskLaunchConfiguration,
-      taskArchive: input.taskArchive,
-      skillContent: input.skillContent,
-      employeePrograms: input.employeePrograms,
-      programFixtureProcess: input.programFixtureProcess,
-      actionWorkspaceEntries: input.actionWorkspaceEntries,
-      repositoryRevisionContent: input.repositoryRevisionContent,
-      codeReviewArtifacts: input.codeReviewArtifacts,
-      employeeInputArtifacts: input.employeeInputArtifacts,
-      missionInputBlobs: input.missionInputBlobs,
-      pluginInstaller: input.pluginInstaller,
-      beforeEventObservationWrite: input.beforeEventObservationWrite,
-      databaseBackup: input.databaseBackup,
-      archivedNodeEvents: input.archivedNodeEvents,
-      crewStationEvents: input.crewStationEvents,
-      intentArtifacts: input.intentArtifacts,
-      evidenceArtifacts: input.evidenceArtifacts,
-      resourcePackageSkillArtifacts: input.resourcePackageSkillArtifacts,
-      resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
-      resourcePackageSkillContent: input.resourcePackageSkillContent,
-      workspaceContent: input.workspaceContent,
-      repositoryRemote: input.repositoryRemote,
-      workspaceUploads: input.workspaceUploads,
-      isolationWorkspaces: input.isolationWorkspaces,
-      repositoryGitWorkspaces: input.repositoryGitWorkspaces,
-      repositoryCandidateEffects: input.repositoryCandidateEffects,
-      workspaceReads: input.workspaceReads,
-      employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
-      repositoryBaselines: input.repositoryBaselines,
-      verificationCommands: input.verificationCommands,
-      bootExecutionRecovery: input.bootExecutionRecovery,
-      customObserverPrograms: input.customObserverPrograms,
-      evidenceRead: input.evidenceRead,
-      evidenceDocumentCommands: input.evidenceDocumentCommands,
-      attemptContext: input.attemptContext,
       daemonRuntime: input.daemonRuntime,
       daemonStartupLease: input.lock,
       token: input.token,
@@ -310,11 +252,6 @@ export async function composeDaemonSession(
       configPath: Paths.config,
       daemonInfoPath: Paths.daemonInfo,
       lockPath: Paths.lock,
-      secretBox: input.secretBox,
-      ...(input.executionAuthority === undefined
-        ? {}
-        : { executionAuthority: input.executionAuthority }),
-      ...(input.credentials === undefined ? {} : { credentials: input.credentials }),
       sourceWriteWindow: input.sourceWriteWindow,
       databaseMigration,
       dbVersion: input.dbVersion,

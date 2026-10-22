@@ -6,11 +6,9 @@ import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // `Bun.serve` + `shutdown()`——同一件事两种写法，PG 那份漏掉的步骤（design §6）正是从这条分叉长出来的。
 // 这条源码锁钉住：`bootstrap/daemonStart.ts` 只有一个 `Bun.serve(`、一个 `serveDaemon(` 定义、两个调用点
 // （PG 分支与 SQLite 主路径；T16 把 provider 执行分支归零后只剩一个），以及两个会话的关闭参与者 id 集合相等。
-
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-
 import { DAEMON_CLOSE_PARTICIPANTS } from '../src/bootstrap/daemonLifecycleProgram'
 import { propertyBodies } from './helpers/daemonProgramSource'
 
@@ -49,14 +47,14 @@ test('serveDaemon 的 shutdown 只做监听器层的事：provider 专属收尾�
   expect(body).toContain('input.lock.release()')
 })
 
-test('startCommand 没有 provider 执行分支：不比较 provider 字面量，会话装配只经 composeSession 查表', () => {
+test('startCommand 没有 provider 执行分支：不比较 provider 字面量，初始和替换会话直接调用同一个中立装配器', () => {
   const body = START.slice(
     START.indexOf('export async function startCommand('),
     START.indexOf('async function composeDaemonApplication<'),
   )
   expect(body).not.toMatch(/provider\s*[!=]==\s*'(?:sqlite|postgresql)'/u)
   expect(body).not.toContain("'postgresql' as const")
-  expect(body.split('composeSession({').length - 1).toBe(2)
+  expect(body.split('composeDaemonSession({').length - 1).toBe(2)
   expect(START).toContain('DAEMON_SESSION_ADAPTERS[input.provider.provider]')
   expect(START).toContain('readonly [P in DatabaseProvider]: DaemonSessionAdapter<P>')
 })

@@ -29,7 +29,7 @@ test('the real startup root selects one lazy lease and encloses boot in its fail
   const selected = calls(start, 'composeDaemonStartupLease')
   expect(selected).toHaveLength(1)
   const argument = selected[0]!.arguments[0]!
-  expect(argument.getText(start)).toContain('selected: opts.startupLease')
+  expect(argument.getText(start)).toContain('selected: profile.selections.startupLease')
   expect(argument.getText(start)).toContain('local: () =>')
   const lifetime = calls(start, 'runDaemonStartupWithLease')
   expect(lifetime).toHaveLength(1)

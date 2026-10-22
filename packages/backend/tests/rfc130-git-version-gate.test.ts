@@ -12,7 +12,6 @@
 // `detectGitCapabilities()` was never called at boot (which also left the
 // RFC-034 submodule-caps cache permanently null). This file locks the wiring:
 // the pure gate, the doctor floor (2.5.0 → 2.38.0), and the start.ts order.
-
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -79,11 +78,14 @@ describe('doctor evaluateGitCheck — floor raised 2.5.0 → 2.38.0', () => {
 })
 
 describe('boot wiring (source locks + real probe)', () => {
-  test('start.ts wires detectGitCapabilities + gate BEFORE the DB opens', () => {
+  test('the profile wires detectGitCapabilities and startup awaits its gate before DB preparation', () => {
     const src = readFileSync(resolve(import.meta.dir, '../src/bootstrap/daemonStart.ts'), 'utf8')
-    const probeIdx = src.indexOf('detectGitCapabilities()')
-    const gateIdx = src.indexOf('mergeTreeGateError(')
-    const dbIdx = src.indexOf('openDb(')
+    const profile = readFileSync(resolve(import.meta.dir, '../src/bootstrap/standalone.ts'), 'utf8')
+    expect(profile).toContain('detectGitCapabilities()')
+    expect(profile).toContain('mergeTreeGateError(gitCaps)')
+    const probeIdx = src.indexOf('await profile.probeHost({ log, config })')
+    const gateIdx = src.indexOf('if (fatal !== null)')
+    const dbIdx = src.indexOf('await prepareDaemonDatabaseProviderForBoot(')
     expect(probeIdx).toBeGreaterThan(-1)
     expect(gateIdx).toBeGreaterThan(-1)
     expect(dbIdx).toBeGreaterThan(-1)

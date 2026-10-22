@@ -1,9 +1,9 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
-
 import { plugins } from '@/db/schema'
 import type { PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
@@ -57,8 +57,8 @@ test('the complete plugin installer receiver reaches the real startup and HTTP c
   expect(selection.left.getText(composition)).toBe('input.installer')
   expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
   const start = load('bootstrap/daemonStart.ts')
-  expect(start.text).toContain('pluginInstaller: opts.pluginInstaller,')
-  for (const expression of ['composeDaemonApplication', 'composeDaemonResourceCatalogModules']) {
+  expectDeploymentSelection('pluginInstaller')
+  for (const expression of ['composeDaemonResourceCatalogModules']) {
     const roots = calls(start, expression)
     expect(roots).toHaveLength(1)
     const argument = roots[0]!.arguments[0]!
@@ -71,7 +71,7 @@ test('the complete plugin installer receiver reaches the real startup and HTTP c
     expect(bindings).toHaveLength(1)
     expect(bindings[0]!.initializer.getText(start)).toBe('input.pluginInstaller')
   }
-  expect(start.text).toContain('readonly pluginInstaller?: PluginInstallerPort')
+  expectDeploymentSelection('pluginInstaller', 'PluginInstallerPort')
   expect(start.text).toContain('...sessionInput,')
 })
 

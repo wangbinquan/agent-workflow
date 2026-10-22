@@ -1,18 +1,14 @@
 // RFC-305 architecture lock: additions must flow through the shared catalog,
 // the identity-access public surface, and the sole transactional writer.
-
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
-
 import { PERMISSIONS, SYSTEM_DOMAIN_POINTS } from '@agent-workflow/shared'
 import ts from 'typescript'
-
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
 import { ALL_TOOLS } from '../src/mcp/tools'
@@ -320,7 +316,6 @@ describe('RFC-305 identity-access architecture', () => {
       // 凭据适配器、来源令牌校验与恢复请求人解析。
       'packages/backend/src/bootstrap/crewstation.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition',
-      'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition/ownerIdentityQueries',
       'packages/backend/src/bootstrap/daemonHttpComposition.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/bootstrap/daemonHttpComposition.ts -> @/modules/identity-access/composition/userOperations',
@@ -328,12 +323,11 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/bootstrap/daemonModules/providerCore.ts -> @/modules/identity-access/composition',
       'packages/backend/src/bootstrap/daemonModules/providerCore.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/bootstrap/daemonModules/providerCore.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/bootstrap/daemonSessionInput.ts -> @/modules/identity-access/composition/authentication',
       // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：`bootstrap/daemonStart.ts` 是 SQLite 的**第三个
       // 组合根**（`server.ts` / `postgresqlDaemonApplication.ts` 早就在这张表上），列表行的
       // owner 身份投影在这里装配后注入任务路由——与另外两个根同形。
       // RFC-370 M0：启动参数携带部署选定的凭据适配器（类型），两个 provider 根按它装配。
-      'packages/backend/src/bootstrap/daemonStart.ts -> @/modules/identity-access/composition/authentication',
+      'packages/backend/src/bootstrap/deploymentProfile.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',

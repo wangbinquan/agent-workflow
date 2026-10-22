@@ -65,6 +65,7 @@ export type ProviderHttpApplicationInput = Pick<
   | 'executionAuthority'
 > &
   Omit<DaemonApplicationTestSeams, 'workflowRuntime'> & {
+    readonly requiredProvider?: DaemonApplicationInput['requiredProvider']
     readonly appHome?: string
     readonly configPath?: string
     readonly configuration?: ApplicationConfigurationQueries
@@ -279,6 +280,7 @@ export async function createProviderHttpApplicationFromBinding(
     } = input
     application = await compose({
       ...selections,
+      requiredProvider: input.requiredProvider ?? null,
       db: binding.db,
       provider,
       config,

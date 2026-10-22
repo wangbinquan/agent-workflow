@@ -1,3 +1,4 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -65,7 +66,7 @@ test('all real startup and HTTP roots forward the same selected context through 
   const pg = load('bootstrap/daemonApplication.ts')
   const pgRoot = calls(start, 'composeDaemonApplication')
   expect(pgRoot).toHaveLength(1)
-  binding(start, pgRoot[0]!, 'input')
+  expect(pgRoot[0]!.arguments[0]!.getText(start)).toContain('...deploymentSelectionsOf(input)')
   for (const [source, receiver] of [
     [start, 'input'],
     [pg, 'input'],
@@ -73,7 +74,7 @@ test('all real startup and HTTP roots forward the same selected context through 
     const roots = calls(source, 'composeDaemonDevelopmentAutomationModules')
     expect(roots).toHaveLength(1)
     binding(source, roots[0]!, receiver)
-    expect(source.text).toContain('attemptContext?: AttemptContextStorePort')
+    expectDeploymentSelection('attemptContext', 'AttemptContextStorePort')
   }
   const bundle = load('bootstrap/daemonModules/developmentAutomation.ts')
   const consumers = calls(bundle, 'composeDevelopmentAutomation')
@@ -82,8 +83,8 @@ test('all real startup and HTTP roots forward the same selected context through 
   const http = calls(start, 'composeDaemonDevelopmentAutomationModules')
   expect(http).toHaveLength(1)
   binding(start, http[0]!, 'input')
-  expect(start.text).toContain('attemptContext: opts.attemptContext,')
-  expect(start.text).toContain('readonly attemptContext?: AttemptContextStorePort')
+  expectDeploymentSelection('attemptContext')
+  expectDeploymentSelection('attemptContext', 'AttemptContextStorePort')
   expect(start.text).toContain('...sessionInput,')
 })
 

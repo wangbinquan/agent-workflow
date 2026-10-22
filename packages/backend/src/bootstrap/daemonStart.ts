@@ -1,99 +1,36 @@
 // `agent-workflow start` — daemon foreground entry.
+import type { DeploymentProfile } from './deploymentProfile'
+import type { DevelopmentOverlay } from './developmentReload'
+import { composeDaemonSession } from './daemonSession'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
-import type { TaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
-import type { TaskRecoveryDeploymentSelection } from '@/modules/task-execution/composition/taskRecoverySelection'
-import type { DatabaseBackupEffects } from '@/modules/system-operations/public/commands'
-import type { HumanGateArtifactRecovery } from '@/modules/collaboration/public/commands'
-import type { TaskArchivedEventsReader } from '@/modules/task-execution/public/types'
-import type { ProviderNeutralDatabase } from '@/db/query'
-import type { CrewStationEventIngress } from '@/modules/integration/composition/crewstationEvents'
-import type { ReviewArtifactSelection } from '@/modules/collaboration/composition'
-import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
-import type { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
-import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
-import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/composition'
-import type { ScratchWorkspaceEffects } from '@/modules/source-control/composition'
-import type { FusionWorkspaceEffects } from '@/modules/source-control/public/participants'
-import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
-import { type DevelopmentPurposeSelection } from '@/modules/development-automation/composition'
-import type { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
-import { type TaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
-import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
-import type {
-  WorkspaceUploadContentFactory,
-  IsolationWorkspaceFactory,
-  RepositoryGitWorkspaceFactory,
-} from '@/modules/source-control/public/types'
-import type { RepositoryCandidateEffectsFactory } from '@/modules/source-control/composition'
 import {
   selectWorkspaceUploadContentFactory,
   selectIsolationWorkspaceFactory,
   selectRepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/participants'
-import type {
-  PortArtifactContentEffects,
-  TaskRuntimeInventoryContent,
-} from '@/modules/task-execution/public/types'
-import type {
-  NodeRunPromptContentEffects,
-  TaskDeletionEffects,
-} from '@/modules/task-execution/public/types'
-import {
-  type ActionWorkspaceEffects,
-  type AutomationWorkspaceEffectsFactory,
-} from '@/modules/development-automation/composition'
-import type { ConflictMergeWorkspaceEffects } from '@/modules/source-control/public/types'
-import type {
-  RepositoryBaselineEffectsFactory,
-  VerificationCommandEffectsFactory,
-} from '@/modules/development-automation/composition'
-import {
-  composeApplicationConfigurationBinding,
-  type ApplicationConfigurationBinding,
-} from '@/modules/system-operations/composition/applicationConfiguration'
-import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
+import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
-import { createSecretBox, type SecretBox } from '@/auth/secretBox'
-import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
-import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
+import { createSecretBox } from '@/auth/secretBox'
 import { createExecutionExitRequests } from './executionActivation'
 import { ensureTokenFile } from '@/auth/token'
-import {
-  type EvidenceDocumentCommands,
-  type EvidenceArtifactPort,
-  type AttemptContextStorePort,
-} from '@/modules/development-automation/composition'
-import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
 import { IS_EMBEDDED } from '@/embed'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
-import { type BootExecutionRecoveryFactory } from '@/modules/task-execution/composition/bootRecovery'
 import { maybePreMigrationBackup } from '@/services/backupScheduler'
 import {
   composeDaemonHostApplication,
   composeDaemonStartupLease,
   runDaemonStartupWithLease,
   type DaemonStartupLease,
-  type DaemonStartupLeasePort,
-  type DaemonDatabasePreOpenRecoveryPort,
   prepareDatabasePreOpenRecovery,
 } from '@/modules/system-operations/composition'
-import {
-  prepareDaemonDatabaseProviderForBoot,
-  type DaemonDatabaseInstallationPort,
-} from '@/modules/system-operations/composition/daemonDatabase'
-import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
-import { type PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
-import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
+import { prepareDaemonDatabaseProviderForBoot } from '@/modules/system-operations/composition/daemonDatabase'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
-import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { type CustomObserverProgramFactory } from '@/modules/event-center/composition'
 import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
@@ -102,144 +39,13 @@ import {
   type DaemonProviderBootstrap,
 } from './daemonProviderBootstrap'
 import { describeDaemonProviderSessionFailure } from './daemonProviderSession'
-import { type SignalledDaemonRuntimeOwner } from './daemonProviderRuntimeHandles'
-import type { MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'
-import type {
-  EmployeeCaseWorkspaceEffectsFactory,
-  RepositoryRemoteEffects,
-  WorkspaceContentEffectsFactory,
-} from '@/modules/source-control/composition'
-import type {
-  ResourcePackageSkillArtifactOwner,
-  ResourcePackagePluginArtifactOwner,
-  SkillPackageContentReader,
-} from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import {
-  composeFileRuntimeLegacyConfiguration,
-  type RuntimeLegacyConfigurationPort,
-} from '@/modules/runtime-management/composition/runtimeRegistry'
-import type { MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
-import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
-import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
-import { type SkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
-import type {
-  ProgramArtifactPort,
-  EmployeeInputArtifactPort,
-} from '@/modules/digital-employee/composition'
-import type { ScriptFixtureProcess } from '@/modules/task-execution/composition/programTools'
-import type { ActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionRunners'
-import type { CodeReviewArtifactStore } from '@/modules/code-capability/public/participants'
-import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
-import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
+import { composeFileRuntimeLegacyConfiguration } from '@/modules/runtime-management/composition/runtimeRegistry'
 import {
   selectDaemonHostLifecycle,
   type DaemonHostLifecyclePort,
 } from '@/modules/system-operations/composition/daemonHostLifecycle'
-import {
-  selectRepositoryWorkspaceReadQueries,
-  type RepositoryWorkspaceReadQueries,
-} from '@/modules/source-control/public/queries'
-import type { DaemonProviderSessionComposer } from './daemonSessionInput'
-
-export interface StartOptions {
-  port?: number
-  host?: string
-  /** Process-local preparation shared only by the development hot reloader. */
-  developmentIntegrity?: { validatedDatabase?: string }
-  configuration?: ApplicationConfigurationQueries
-  applicationConfiguration?: ApplicationConfigurationBinding
-  runtimeLegacyConfiguration?: RuntimeLegacyConfigurationPort
-  databasePreOpenRecovery?: DaemonDatabasePreOpenRecoveryPort
-  databaseInstallation?: DaemonDatabaseInstallationPort
-  taskArchive?: TaskArchiveContentBinding
-  skillContent?: SkillContentBinding
-  employeePrograms?: ProgramArtifactPort
-  /** RFC-370 §10 V19: where a program tool's contract fixture runs (hosted only). */
-  programFixtureProcess?: ScriptFixtureProcess
-  /** RFC-370 §10 V18: entry checks below a hosted action workspace (hosted only). */
-  actionWorkspaceEntries?: ActionWorkspaceEntries
-  /** RFC-370 §10 V16: code-review reads of hosted task volumes (hosted only). */
-  repositoryRevisionContent?: RepositoryRevisionContentFactory
-  /** RFC-370 §10 V16: code-review artifacts as object publications (hosted only). */
-  codeReviewArtifacts?: CodeReviewArtifactStore
-  employeeInputArtifacts?: EmployeeInputArtifactPort
-  missionInputBlobs?: MissionInputBlobPersistence
-  pluginInstaller?: PluginInstallerPort
-  beforeEventObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
-  humanGateArtifactRecovery?: HumanGateArtifactRecovery
-  databaseBackup?: DatabaseBackupEffects
-  archivedNodeEvents?: TaskArchivedEventsReader
-  crewStationEvents?: CrewStationEventIngress
-  intentArtifacts?: IntentArtifactSelection
-  evidenceArtifacts?: EvidenceArtifactPort
-  resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
-  resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
-  resourcePackageSkillContent?: SkillPackageContentReader
-  workspaceContent?: WorkspaceContentEffectsFactory
-  /** RFC-370 §10 V17: hosted repository remote reads; absent, local mirrors. */
-  repositoryRemote?: RepositoryRemoteEffects
-  workspaceUploads?: WorkspaceUploadContentFactory
-  isolationWorkspaces?: IsolationWorkspaceFactory
-  repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
-  repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
-  workspaceReads?: RepositoryWorkspaceReadQueries
-  employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
-  repositoryBaselines?: RepositoryBaselineEffectsFactory
-  verificationCommands?: VerificationCommandEffectsFactory
-  customObserverPrograms?: CustomObserverProgramFactory
-  bootExecutionRecovery?: BootExecutionRecoveryFactory
-  automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
-  actionWorkspaceEffects?: ActionWorkspaceEffects
-  conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
-  taskDeletionEffects?: TaskDeletionEffects
-  /** RFC-370 §9.2 V3 — hosted only: publication network Git in the task volume. */
-  readonly repositoryPublicationTransport?: RepositoryPublicationTransport
-  nodeRunPromptContentEffects?: NodeRunPromptContentEffects
-  portArtifactContentEffects?: PortArtifactContentEffects
-  runtimeInventoryContent?: TaskRuntimeInventoryContent
-  taskRunSelection?: TaskRunRootSelection
-  taskRecovery?: TaskRecoveryDeploymentSelection
-  taskInputFiles?: TaskInputFiles
-  readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
-  readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
-  /** RFC-370 §10 V20 — hosted only: the fusion engine task's volume workspace. */
-  readonly fusionWorkspaceEffects?: FusionWorkspaceEffects
-  readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
-  readonly workspacePresence?: WorkspacePresenceQueries
-  readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
-  readonly recoveredExecutionTaskIds?: () => readonly string[]
-  /** RFC-370 §9.2 V1 — deployment workers started with execution authority. */
-  readonly hostedBackgroundOwners?: readonly SignalledDaemonRuntimeOwner[]
-  readonly runtimeManagement?: typeof composeLocalRuntimeManagement
-  readonly reviewArtifacts?: ReviewArtifactSelection
-  readonly reviewRollbackSnapshots?: WorkspaceRollbackSnapshotInspector
-  readonly systemAgentRunFamily?: typeof composeLocalSystemAgentRunFamily
-  readonly mcpDiagnostics?: typeof composeLocalMcpDiagnostics
-  readonly developmentPurposes?: DevelopmentPurposeSelection
-  readonly developmentWorkspaceRepositoryPreparation?: ReturnType<
-    typeof createDevelopmentWorkspaceRepositoryPreparation
-  >
-  workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
-  maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
-  evidenceRead?: EvidenceReadBinding
-  evidenceDocumentCommands?: EvidenceDocumentCommands
-  attemptContext?: AttemptContextStorePort
-  daemonHost?: DaemonHostLifecyclePort
-  startupLease?: DaemonStartupLeasePort
-  /** RFC-370 v2 H7 — the deployment's execution authority; standalone is always active. */
-  executionAuthority?: ExecutionAuthorityPort
-  /** RFC-370 v2 §3.6 — the deployment's credential mechanism; standalone sessions by default. */
-  credentials?: CredentialAdapterSelection
-  /** RFC-370 M0 — a platform-provided master key instead of the local secret.key file. */
-  secretBox?: SecretBox
-  /**
-   * RFC-370 M0 — where git and agent runtimes execute. `remote` (a CrewStation
-   * service slot) has neither on its host, so the local git and runtime probes
-   * do not apply; the selected execution adapters own those dependencies.
-   */
-  executionHost?: 'local' | 'remote'
-}
+import { selectRepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 
 /**
  * RFC-359 W3-T14 —— 监听器与关机序列只有一份，两个 provider 共用。
@@ -413,8 +219,9 @@ function formatDbSchemaDriftGuidance(err: DbSchemaDriftError): string {
 }
 
 export async function startCommand(
-  opts: StartOptions,
-  composeSession: DaemonProviderSessionComposer,
+  profile: DeploymentProfile,
+  launch: { host?: string; port?: number },
+  development?: DevelopmentOverlay,
 ): Promise<void> {
   // 1. Logger — must come before lock so failures land in stdout/file.
   configureLogger({
@@ -431,7 +238,7 @@ export async function startCommand(
 
   // 2. The selected startup provider supplies exclusivity and release ACKs.
   const lock = await composeDaemonStartupLease({
-    selected: opts.startupLease,
+    selected: profile.selections.startupLease,
     local: () => ({
       lockPath: Paths.lock,
       controlPath: Paths.controlFile,
@@ -441,7 +248,7 @@ export async function startCommand(
   })
   await runDaemonStartupWithLease(lock, async () => {
     log.info('lock acquired', lock.diagnostics)
-    const daemonHost = selectDaemonHostLifecycle(opts.daemonHost, {
+    const daemonHost = selectDaemonHostLifecycle(development?.daemonHost, {
       infoPath: Paths.daemonInfo,
       controlPath: Paths.controlFile,
       pid: process.pid,
@@ -481,7 +288,7 @@ export async function startCommand(
     const preOpenRecovery = await prepareDatabasePreOpenRecovery({
       contract: logicalSchemaContract,
       migrationsFolder,
-      recovery: opts.databasePreOpenRecovery,
+      recovery: profile.selections.databasePreOpenRecovery,
     })
     const schemaHistory = preOpenRecovery.history
     // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
@@ -505,21 +312,21 @@ export async function startCommand(
 
     // 3. Load config; honor logLevel if user set non-default in config.
     const applicationConfiguration =
-      opts.applicationConfiguration ??
+      profile.selections.applicationConfiguration ??
       composeApplicationConfigurationBinding({
         kind: 'file',
         configPath: Paths.config,
-        ...(opts.configuration === undefined ? {} : { queries: opts.configuration }),
       })
     const configuration = applicationConfiguration.queries
     const taskLaunchConfiguration = composeTaskLaunchConfiguration(
-      opts.applicationConfiguration !== undefined ||
+      profile.selections.applicationConfiguration !== undefined ||
         applicationConfiguration.synchronousQueries === undefined
         ? { kind: 'selected', queries: configuration }
         : { kind: 'local-sync', queries: applicationConfiguration.synchronousQueries },
     )
     const runtimeLegacyConfiguration =
-      opts.runtimeLegacyConfiguration ?? composeFileRuntimeLegacyConfiguration(Paths.config)
+      profile.selections.runtimeLegacyConfiguration ??
+      composeFileRuntimeLegacyConfiguration(Paths.config)
     let config = await configuration.read()
     if (config.logLevel !== 'info') {
       configureLogger({ level: config.logLevel })
@@ -530,64 +337,20 @@ export async function startCommand(
       theme: config.theme,
     })
 
-    // RFC-370 M0: a CrewStation service slot has no git and no agent runtime on
-    // its host — execution and workspaces run in platform task containers — so
-    // the local host probes below apply only where this process executes work.
-    if ((opts.executionHost ?? 'local') === 'local') {
-      // 4. git version probe — RFC-130 D7: every node run merge-backs via
-      // `git merge-tree --write-tree` (git >= 2.38). On older git the daemon boots
-      // fine and every task dies at merge-back (AFTER its agent already ran) with a
-      // cryptic `merge-back-failed: git merge-tree: usage: ...` — refuse at boot
-      // instead. Unlike optional agent runtimes, git is a platform dependency for
-      // repository/worktree/snapshot/merge-back operations. Side effect: populate
-      // the RFC-034 capability cache read by resolveSubmoduleParams.
-      const gitCaps = await detectGitCapabilities()
-      const gitGateError = mergeTreeGateError(gitCaps)
-      if (gitGateError !== null) {
-        log.error('git incompatible', {
-          found: gitCaps.version?.raw ?? null,
-          requiredMinimum: MIN_GIT_VERSION,
-        })
-        console.error(
-          `agent-workflow: ${gitGateError}\n` +
-            `  upgrade git to >= ${MIN_GIT_VERSION} and restart; the daemon's PATH must resolve the upgraded binary.`,
-        )
-        await lock.release()
-        process.exit(1)
-      }
-      log.info('git probe ok', { version: gitCaps.version?.raw ?? null })
-
-      // RFC-111 D10: claude-code is optional — probe it SOFT (warn only, NEVER
-      // refuse to start) when it is the configured default. RFC-226 makes OpenCode
-      // optional too, but deliberately does not probe it here at all: its
-      // version/build admission belongs to explicit runtime validation and use.
-      if (config.defaultRuntime === 'claude-code') {
-        const ccDriver = getRuntimeDriver('claude-code')
-        const claudeProbe = await ccDriver.probe(ccDriver.defaultBinary(config)[0]!)
-        if (!claudeProbe.compatible) {
-          log.warn('claude-code default runtime unavailable (nodes selecting it will fail)', {
-            binary: claudeProbe.binary,
-            found: claudeProbe.version,
-            requiredMinimum: ccDriver.minVersion,
-            reason: claudeProbe.incompatibleReason ?? 'not found',
-          })
-        } else {
-          log.info('claude-code probe ok', {
-            version: claudeProbe.version,
-            binary: claudeProbe.binary,
-          })
-        }
-      }
-    } else {
-      log.info('execution runs on the platform; local git and runtime probes skipped')
+    const fatal = await profile.probeHost({ log, config })
+    if (fatal !== null) {
+      console.error(fatal)
+      await lock.release()
+      process.exit(1)
     }
 
     // Provider-independent bootstrap secrets are needed by either selected
     // composition. They are created before opening a client, but no owner module
     // receives them until its verified provider graph is composed below.
-    const secretBox = opts.secretBox ?? createSecretBox(Paths.secretKeyFile)
+    const secretBox = profile.selections.secretBox ?? createSecretBox(Paths.secretKeyFile)
     log.info('secret box ready', {
-      keyFile: opts.secretBox === undefined ? Paths.secretKeyFile : 'deployment-provided',
+      keyFile:
+        profile.selections.secretBox === undefined ? Paths.secretKeyFile : 'deployment-provided',
     })
     const token = ensureTokenFile(Paths.tokenFile)
     log.info('token ready', { tokenFile: Paths.tokenFile })
@@ -595,7 +358,7 @@ export async function startCommand(
     // background set that fails to activate, drains and exits non-zero so the
     // platform restarts this instance as standby. Standalone never loses it.
     const executionExit = createExecutionExitRequests()
-    opts.executionAuthority?.onLost((state) => {
+    profile.selections.executionAuthority?.onLost((state) => {
       log.warn('execution authority lost', { state: state.kind })
       executionExit.request(`execution-authority-${state.kind}`)
     })
@@ -607,7 +370,7 @@ export async function startCommand(
     // but cannot silently select a different database.
     const preparedDatabase = await prepareDaemonDatabaseProviderForBoot({
       configuration: applicationConfiguration.databaseConfiguration,
-      installation: opts.databaseInstallation,
+      installation: profile.selections.databaseInstallation,
       file: {
         config: config.database,
         sqlitePath: Paths.db,
@@ -624,7 +387,7 @@ export async function startCommand(
           mmapMib: config.sqliteMmapMib,
           slowQueryMs: config.sqliteSlowQueryMs,
           skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
-          developmentIntegrity: opts.developmentIntegrity,
+          developmentIntegrity: development?.developmentIntegrity,
         },
         beforeSqliteOpen: () =>
           maybePreMigrationBackup({
@@ -663,89 +426,30 @@ export async function startCommand(
     // backupOnMigration=false is the operator's explicit opt-out.
     // RFC-359 W3-T16：这里没有 provider 执行分支——按 provider 查表取会话装配器，
     // bootstrap / resume / 监听全部走同一条中立序列（design §6 / §7 守卫 4）。
-    const bindHost = opts.host ?? config.bindHost
-    const bindPort = opts.port ?? config.bindPort ?? 0
+    const bindHost = launch.host ?? profile.listen.host ?? config.bindHost
+    const bindPort = launch.port ?? profile.listen.port ?? config.bindPort ?? 0
     const lifecycle = Object.freeze({
       operationId: 'daemon-start',
       provider: databaseProvider.provider,
       generationId: databaseProvider.generation.payload.generationId,
     })
     const sessionInput = Object.freeze({
-      taskDeletionEffects: opts.taskDeletionEffects,
-      repositoryPublicationTransport: opts.repositoryPublicationTransport,
-      nodeRunPromptContentEffects: opts.nodeRunPromptContentEffects,
-      portArtifactContentEffects: opts.portArtifactContentEffects,
-      runtimeInventoryContent: opts.runtimeInventoryContent,
-      taskRunSelection: opts.taskRunSelection,
-      taskRecovery: opts.taskRecovery,
-      taskInputFiles: opts.taskInputFiles,
-      repositoryPreparationEffects: opts.repositoryPreparationEffects,
-      scratchWorkspaceEffects: opts.scratchWorkspaceEffects,
-      fusionWorkspaceEffects: opts.fusionWorkspaceEffects,
-      workspaceMaintenanceFilesystem: opts.workspaceMaintenanceFilesystem,
-      workspacePresence: opts.workspacePresence,
-      initializeExecution: opts.initializeExecution,
-      recoveredExecutionTaskIds: opts.recoveredExecutionTaskIds,
-      hostedBackgroundOwners: opts.hostedBackgroundOwners,
-      systemAgentRunFamily: opts.systemAgentRunFamily,
-      mcpDiagnostics: opts.mcpDiagnostics,
-      developmentPurposes: opts.developmentPurposes,
-      runtimeManagement: opts.runtimeManagement,
-      reviewArtifacts: opts.reviewArtifacts,
-      reviewRollbackSnapshots: opts.reviewRollbackSnapshots,
-      developmentWorkspaceRepositoryPreparation: opts.developmentWorkspaceRepositoryPreparation,
-      workspaceExcludeProfiles: opts.workspaceExcludeProfiles,
-      automationWorkspaceEffects: opts.automationWorkspaceEffects,
-      actionWorkspaceEffects: opts.actionWorkspaceEffects,
-      conflictMergeWorkspaceEffects: opts.conflictMergeWorkspaceEffects,
+      ...profile.selections,
+      requiredProvider: profile.requiredProvider,
       config,
       configuration,
       applicationConfiguration,
       taskLaunchConfiguration,
       runtimeLegacyConfiguration,
-      taskArchive: opts.taskArchive,
-      skillContent: opts.skillContent,
-      employeePrograms: opts.employeePrograms,
-      programFixtureProcess: opts.programFixtureProcess,
-      actionWorkspaceEntries: opts.actionWorkspaceEntries,
-      repositoryRevisionContent: opts.repositoryRevisionContent,
-      codeReviewArtifacts: opts.codeReviewArtifacts,
-      employeeInputArtifacts: opts.employeeInputArtifacts,
-      missionInputBlobs: opts.missionInputBlobs,
-      pluginInstaller: opts.pluginInstaller,
-      beforeEventObservationWrite: opts.beforeEventObservationWrite,
-      humanGateArtifactRecovery: opts.humanGateArtifactRecovery,
-      databaseBackup: opts.databaseBackup,
-      archivedNodeEvents: opts.archivedNodeEvents,
-      crewStationEvents: opts.crewStationEvents,
-      intentArtifacts: opts.intentArtifacts,
-      evidenceArtifacts: opts.evidenceArtifacts,
-      resourcePackageSkillArtifacts: opts.resourcePackageSkillArtifacts,
-      resourcePackagePluginArtifacts: opts.resourcePackagePluginArtifacts,
-      resourcePackageSkillContent: opts.resourcePackageSkillContent,
-      workspaceContent: opts.workspaceContent,
-      repositoryRemote: opts.repositoryRemote,
-      workspaceUploads: selectWorkspaceUploadContentFactory(opts.workspaceUploads),
-      isolationWorkspaces: selectIsolationWorkspaceFactory(opts.isolationWorkspaces),
-      repositoryGitWorkspaces: selectRepositoryGitWorkspaceFactory(opts.repositoryGitWorkspaces),
-      repositoryCandidateEffects: opts.repositoryCandidateEffects,
-      workspaceReads: selectRepositoryWorkspaceReadQueries(opts.workspaceReads),
-      employeeCaseWorkspaceEffects: opts.employeeCaseWorkspaceEffects,
-      repositoryBaselines: opts.repositoryBaselines,
-      verificationCommands: opts.verificationCommands,
-      bootExecutionRecovery: opts.bootExecutionRecovery,
-      customObserverPrograms: opts.customObserverPrograms,
-      maintenanceEffectsBootstrap: opts.maintenanceEffectsBootstrap,
-      evidenceRead: opts.evidenceRead,
-      evidenceDocumentCommands: opts.evidenceDocumentCommands,
-      attemptContext: opts.attemptContext,
+      workspaceUploads: selectWorkspaceUploadContentFactory(profile.selections.workspaceUploads),
+      isolationWorkspaces: selectIsolationWorkspaceFactory(profile.selections.isolationWorkspaces),
+      repositoryGitWorkspaces: selectRepositoryGitWorkspaceFactory(
+        profile.selections.repositoryGitWorkspaces,
+      ),
+      workspaceReads: selectRepositoryWorkspaceReadQueries(profile.selections.workspaceReads),
       daemonRuntime: daemonHost,
       token,
       secretBox,
-      ...(opts.executionAuthority === undefined
-        ? {}
-        : { executionAuthority: opts.executionAuthority }),
-      ...(opts.credentials === undefined ? {} : { credentials: opts.credentials }),
       onExecutionActivationFailure(error: unknown) {
         log.error('background activation failed', {
           error: error instanceof Error ? error.message : String(error),
@@ -761,7 +465,7 @@ export async function startCommand(
     const { initial, bootstrap: daemonProviderBootstrap } = await composeDaemonProviderBootstrap({
       initial: lifecycle,
       composeInitial: (bindings) =>
-        composeSession({
+        composeDaemonSession({
           ...sessionInput,
           ...bindings,
           provider: databaseProvider,
@@ -790,7 +494,7 @@ export async function startCommand(
             throw new Error('daemon-provider-target-generation-mismatch')
           }
           return (
-            await composeSession({
+            await composeDaemonSession({
               ...sessionInput,
               ...bindings,
               config: nextConfig,

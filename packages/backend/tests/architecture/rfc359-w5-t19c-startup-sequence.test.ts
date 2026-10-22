@@ -54,7 +54,6 @@
 // 与既有守卫的分工：`rfc359-w3-t14-serve-daemon.test.ts` 是 W3 落地时的**文本**锁（一个
 // `Bun.serve`、一个 `serveDaemon` 定义、关闭参与者集合相等）；本文件是 W5 的**结构**锁——
 // 全仓 AST 数调用点、逐条分类 provider 判别式，两者互补不重叠。
-
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
@@ -108,21 +107,18 @@ const STARTUP_SEQUENCE_CALL_SITES: readonly string[] = [
   // One real listener fixture exercises the same exported serve path; no second boot sequence.
   'serveDaemon @ packages/backend/tests/rfc370-daemon-host-lifecycle.test.ts: 1',
   'startCommand @ packages/backend/src/main.ts: 1',
+  'startCommand @ packages/backend/tests/rfc394-start-sequence.test.ts: 1',
 ]
 
-/**
- * 两个 provider 会话装配器**只许被查表引用、不许被直接调用**。
- *
- * 它们是「选装配」的两个叶子：`composeDaemonProviderSession` 的
- * `satisfies Record<DatabaseProvider, …>` 表把它们各引用一次，运行时按
- * `composers[provider](input)` 取。任何一处**具名调用**都意味着有人在表之外又开了一条
- * 「这个 provider 走这边」的路——那就是 provider 执行分支，只是换了个写法。
- */
+/** RFC-394: the neutral session composer is imported directly by startup.
+ * Its two production calls own initial boot and migration replacement; the
+ * provider-admission fixture is the only direct test call. Keep exact callers. */
 const PROVIDER_SESSION_COMPOSERS: readonly string[] = ['composeDaemonSession']
 
 /** `<函数> @ <路径>: <定义处之外的引用数>`。逐字相等。 */
 const PROVIDER_SESSION_COMPOSER_REFERENCES: readonly string[] = [
-  'composeDaemonSession @ packages/backend/src/main.ts: 1',
+  'composeDaemonSession @ packages/backend/src/bootstrap/daemonStart.ts: 2',
+  'composeDaemonSession @ packages/backend/tests/rfc370-v9-sqlite-root-selections.test.ts: 1',
 ]
 
 /** (b) 的被扫面：两个 daemon 入口文件。 */
@@ -582,30 +578,25 @@ describe('RFC-359 W5-T19c (a) —— 启动序列恰有一个调用方', () => {
   )
 
   test(
-    'provider 会话装配器只被查表引用、零具名调用',
+    '中立会话装配器的初始、迁移与准入测试调用点精确锁定',
     () => {
       const result = scan()
       expect(
         result.composerCallRows,
-        '有人直接具名调用了 provider 会话装配器。它们只许经 `composeDaemonProviderSession` 的 ' +
-          '`satisfies Record<DatabaseProvider, …>` 表取用——那张表少一个 provider 就编译不过，' +
-          '而一处具名调用等于在表外又写了一条「这个 provider 走这边」，就是 provider 执行分支换了个写法。',
-      ).toEqual([])
-      expect(
-        result.composerReferenceRows,
-        '两个 provider 会话装配器的引用点数变了：它们各自只该在查表里出现一次。',
+        'neutral session composition gained an unreviewed caller',
       ).toEqual([...PROVIDER_SESSION_COMPOSER_REFERENCES])
+      expect(result.composerReferenceRows, 'neutral session composer references changed').toEqual([
+        ...PROVIDER_SESSION_COMPOSER_REFERENCES,
+      ])
     },
     CORPUS_SCAN_TIMEOUT_MS,
   )
 
-  test('initial and migration target sessions use the injected composer exactly twice', () => {
+  test('initial and migration target sessions directly use the neutral composer exactly twice', () => {
     const start = readFileSync(resolve(BACKEND_SRC, 'bootstrap/daemonStart.ts'), 'utf8')
-    expect(namedCallCount(start, 'composeSession')).toBe(2)
+    expect(namedCallCount(start, 'composeDaemonSession')).toBe(2)
     const main = readFileSync(resolve(BACKEND_SRC, 'main.ts'), 'utf8')
-    expect(main).toContain(
-      'startCommand({ ...deployment, ...opts, ...development }, composeDaemonSession)',
-    )
+    expect(main).toContain('startCommand(profile, launch, development)')
   })
 
   test('账本自身：无重复行、按字典序（清点稳定的前提）', () => {

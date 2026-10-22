@@ -1,3 +1,4 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 A2: complete selected evidence receiver at every real root and dual-provider HTTP.
 // Exact 694 CI repair: preserve the selected EvidenceStore default after reference-factory migration.
@@ -61,16 +62,16 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
     bind(source, 'composeDevelopmentPurposeRoot', 'evidenceArtifacts', receiver)
     bind(source, 'composeDaemonDevelopmentAutomationModules', 'evidenceArtifacts', receiver)
     bind(source, 'composeDaemonDigitalEmployeeModules', 'evidenceArtifacts', receiver)
-    expect(source.text).toContain('evidenceArtifacts?: EvidenceArtifactPort')
+    expectDeploymentSelection('evidenceArtifacts', 'EvidenceArtifactPort')
   }
-  bind(start, 'composeDaemonApplication', 'evidenceArtifacts', 'input')
+  expect(start.text).toContain('...deploymentSelectionsOf(input)')
   bind(start, 'composeDaemonDigitalEmployeeModules', 'evidenceArtifacts', 'input')
   const development = load('bootstrap/daemonModules/developmentAutomation.ts')
   const employee = load('bootstrap/daemonModules/digitalEmployee.ts')
   bind(development, 'composeDevelopmentAutomation', 'evidenceArtifacts', 'developmentPurposeRoot')
   bind(development, 'composeMissionInputUploadOperations', 'artifacts', 'input')
   bind(employee, 'composeDevelopmentEmployeePlatformWorkItems', 'evidenceArtifacts', 'input')
-  expect(start.text).toContain('evidenceArtifacts: opts.evidenceArtifacts,')
+  expectDeploymentSelection('evidenceArtifacts')
   expect(start.text).toContain('...sessionInput,')
   const composition = load('modules/development-automation/composition.ts')
   expect(composition.text).toContain(

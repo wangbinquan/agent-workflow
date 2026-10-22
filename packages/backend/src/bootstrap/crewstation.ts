@@ -30,7 +30,7 @@ import {
 } from '@/modules/intent/composition/crewstationArtifacts'
 import { composeCrewStationTaskArchive } from '@/modules/task-execution/composition/crewstationArchive'
 import { z } from 'zod'
-import type { StartOptions } from './daemonStart'
+import type { DeploymentProfile } from './deploymentProfile'
 import { composeCrewStationResourceContent } from '@/modules/resource-catalog/composition/skillContentBinding'
 import {
   HOSTED_TASK_CONTRACT_VERSION,
@@ -79,9 +79,9 @@ const Profiles = z
 
 /** The only hosted assembly root. Business applications consume the same
  * owner ports as standalone; no deployment branch enters a task or engine. */
-export async function composeCrewStationStartOptions(
+export async function composeCrewStationProfile(
   env: Readonly<Record<string, string | undefined>>,
-): Promise<StartOptions> {
+): Promise<DeploymentProfile> {
   const environment = readCrewStationEnvironment(env)
   if (environment.objectsUrl === null || environment.objectSpaceId === null)
     throw new Error('CS_OBJECTS_URL and CS_OBJECT_SPACE_ID are required for hosted artifacts')
@@ -213,143 +213,151 @@ export async function composeCrewStationStartOptions(
   })
   const workspaceSelections = workspace.bind()
   return {
-    taskInputFiles: composeCrewStationTaskInputFiles({ db, objects, publications }),
-    databaseBackup: composeCrewStationDatabaseBackups({
-      db,
-      runtime: prepared.runtime.runtime,
-      fence,
-      objects,
-      publications,
-      installation: `${environment.project}/${environment.service}`,
-      objectSpaceId: environment.objectSpaceId,
-      secretKey: environment.secretKey,
-    }).backup,
-    archivedNodeEvents,
-    runtimeInventoryContent: composeStreamTaskRuntimeInventoryContent(),
-    humanGateArtifactRecovery: composeCrewStationHumanGateRecovery({
-      db,
-      fence,
-      artifacts: reviewArtifacts.store,
-    }),
-    beforeEventObservationWrite: (tx) => fence.assertHeld(tx, fence.current()),
-    crewStationEvents: composeCrewStationEventIngress({
-      db,
-      fence,
-      installationId: `${environment.project}/${environment.service}`,
-      sources: eventSources,
-      verifySource: composeCrewStationSourceTokenVerifier({
-        jwksUrl: environment.jwksUrl,
-        audience: crewStationPlatformSourceAudiences(environment),
-        source: { project: 'platform', service: 'cs-events' },
-      }).verify,
-    }),
-    host: '0.0.0.0',
-    port: environment.port,
-    applicationConfiguration: system.applicationConfiguration,
-    databaseInstallation: system.databaseInstallation,
-    executionAuthority: initialized.authority,
-    initializeExecution: initialized.initialize,
-    ...execution.selections,
-    // MCP diagnostics are a Resource Catalog capability running on the shared
-    // hosted Agent execution; bootstrap is the only place both meet.
-    mcpDiagnostics: createCrewStationMcpDiagnostics({
-      ...execution.hostedAgents,
-      workspaces: workspace.workspaces,
-      locate: workspace.locate,
-    }),
-    hostedBackgroundOwners: [
-      ...execution.backgroundOwners,
-      // §9.2 V3: pause idle parents, finish lost closes (Source Control),
-      // judged by Task Execution's volume-use facts.
-      workspace.lifecycleOwner(execution.volumeActivity, {
-        log: createLogger('crewstation-workspace-lifecycle'),
-      }),
-    ],
-    taskRecovery: composeCrewStationRecovery({
-      db,
-      fence,
-      platform: system.platform,
-      api,
-      log: createLogger('crewstation-recovery'),
-      requesterFor: (identityAccess) => composeCrewStationRecoveryRequester({ db, identityAccess }),
-    }),
-    ...evidence,
-    reviewArtifacts,
-    // §10 V16: structural diffs and change narratives as object publications;
-    // the code-review reads themselves arrive with the workspace selections.
-    codeReviewArtifacts: composeCrewStationCodeReviewArtifacts({ objects, publications }),
-    taskArchive: composeCrewStationTaskArchive({
-      db,
-      fence,
-      objects,
-      publications,
-      helper: execution.helper,
-      locate: workspace.locate,
-      reference: workspace.reference,
-      workspaces: workspace.workspaces,
-      openFile: workspace.openFile,
-      reviewFiles: reviewArtifacts.archiveFiles,
-      eventFiles: archivedNodeEvents.files,
-    }),
-    missionInputBlobs: evidence.evidenceArtifacts,
-    attemptContext: evidence.evidenceArtifacts.contexts,
-    developmentPurposes: {
-      requirement: {
-        configurationFor: adapters.configurationFor,
-        effects: adapters.requirement,
-        staging: staging.factory,
-        documentCommands: evidence.evidenceDocumentCommands,
-      },
-      pipeline: {
-        configurationFor: adapters.configurationFor,
-        effects: adapters.pipeline,
-        staging: { collect: staging.factory, trigger: staging.factory, rerun: staging.factory },
-      },
-      approval: {
-        configurationFor: adapters.configurationFor,
-        effects: adapters.approval,
-        staging: staging.factory,
-      },
+    kind: 'crewstation',
+    requiredProvider: 'postgresql',
+    async probeHost({ log }) {
+      log.info('execution runs on the platform; local git and runtime probes skipped')
+      return null
     },
-    customObserverPrograms: createCrewStationObserverProgramFactory(execution.helper),
-    // RFC-370 §10 V19: program tool contract fixtures run in the task image.
-    programFixtureProcess: createHostedScriptFixtureProcess({ helper: execution.helper }),
-    verificationCommands: createCrewStationVerificationCommandEffectsFactory({
-      helper: execution.helper,
-      locate: workspace.locate,
-      reference: workspace.reference,
-      retainWorkspace: workspace.retainWorkspace,
-    }),
-    ...composeCrewStationEmployeeContent({
-      publications,
-      objects,
-      writeWorkspace: (reference, stream, facts) => workspace.writeStream(reference, stream, facts),
-    }),
-    secretBox: system.secretBox,
-    credentials: composeCrewStationCredentialAdapters({
-      jwksUrl: environment.jwksUrl,
-      project: environment.project,
-      service: environment.service,
-      administratorSubjects: environment.adminSubjects,
-    }),
-    executionHost: 'remote',
-    ...resources,
-    ...resourceArtifacts.selections,
-    intentArtifacts: composeCrewStationIntentArtifacts(resourceArtifacts.intent),
-    maintenanceEffectsBootstrap: composeCrewStationMaintenanceDescriptor({
-      database: prepared.databaseConfig,
-      generationId: prepared.runtime.generation.payload.generationId,
-      fence,
-    }),
-    ...workspaceSelections,
-    ...composeCrewStationDevelopmentWorkspaces({
-      helper: execution.helper,
-      applicationRootReference: workspace.reference('development:shared', '/work'),
-      locate: workspace.locate,
-      reference: workspace.reference,
-      readFile: workspace.readFile,
-      // RFC-370 §9.2 V3: large tree-operation inputs travel as volume files.
-      writeFile: workspace.writeFile,
-    }),
+    listen: { host: '0.0.0.0', port: environment.port },
+    selections: {
+      taskInputFiles: composeCrewStationTaskInputFiles({ db, objects, publications }),
+      databaseBackup: composeCrewStationDatabaseBackups({
+        db,
+        runtime: prepared.runtime.runtime,
+        fence,
+        objects,
+        publications,
+        installation: `${environment.project}/${environment.service}`,
+        objectSpaceId: environment.objectSpaceId,
+        secretKey: environment.secretKey,
+      }).backup,
+      archivedNodeEvents,
+      runtimeInventoryContent: composeStreamTaskRuntimeInventoryContent(),
+      humanGateArtifactRecovery: composeCrewStationHumanGateRecovery({
+        db,
+        fence,
+        artifacts: reviewArtifacts.store,
+      }),
+      beforeEventObservationWrite: (tx) => fence.assertHeld(tx, fence.current()),
+      crewStationEvents: composeCrewStationEventIngress({
+        db,
+        fence,
+        installationId: `${environment.project}/${environment.service}`,
+        sources: eventSources,
+        verifySource: composeCrewStationSourceTokenVerifier({
+          jwksUrl: environment.jwksUrl,
+          audience: crewStationPlatformSourceAudiences(environment),
+          source: { project: 'platform', service: 'cs-events' },
+        }).verify,
+      }),
+      applicationConfiguration: system.applicationConfiguration,
+      databaseInstallation: system.databaseInstallation,
+      executionAuthority: initialized.authority,
+      initializeExecution: initialized.initialize,
+      ...execution.selections,
+      // MCP diagnostics are a Resource Catalog capability running on the shared
+      // hosted Agent execution; bootstrap is the only place both meet.
+      mcpDiagnostics: createCrewStationMcpDiagnostics({
+        ...execution.hostedAgents,
+        workspaces: workspace.workspaces,
+        locate: workspace.locate,
+      }),
+      hostedBackgroundOwners: [
+        ...execution.backgroundOwners,
+        // §9.2 V3: pause idle parents, finish lost closes (Source Control),
+        // judged by Task Execution's volume-use facts.
+        workspace.lifecycleOwner(execution.volumeActivity, {
+          log: createLogger('crewstation-workspace-lifecycle'),
+        }),
+      ],
+      taskRecovery: composeCrewStationRecovery({
+        db,
+        fence,
+        platform: system.platform,
+        api,
+        log: createLogger('crewstation-recovery'),
+        requesterFor: (identityAccess) =>
+          composeCrewStationRecoveryRequester({ db, identityAccess }),
+      }),
+      ...evidence,
+      reviewArtifacts,
+      // §10 V16: structural diffs and change narratives as object publications;
+      // the code-review reads themselves arrive with the workspace selections.
+      codeReviewArtifacts: composeCrewStationCodeReviewArtifacts({ objects, publications }),
+      taskArchive: composeCrewStationTaskArchive({
+        db,
+        fence,
+        objects,
+        publications,
+        helper: execution.helper,
+        locate: workspace.locate,
+        reference: workspace.reference,
+        workspaces: workspace.workspaces,
+        openFile: workspace.openFile,
+        reviewFiles: reviewArtifacts.archiveFiles,
+        eventFiles: archivedNodeEvents.files,
+      }),
+      missionInputBlobs: evidence.evidenceArtifacts,
+      attemptContext: evidence.evidenceArtifacts.contexts,
+      developmentPurposes: {
+        requirement: {
+          configurationFor: adapters.configurationFor,
+          effects: adapters.requirement,
+          staging: staging.factory,
+          documentCommands: evidence.evidenceDocumentCommands,
+        },
+        pipeline: {
+          configurationFor: adapters.configurationFor,
+          effects: adapters.pipeline,
+          staging: { collect: staging.factory, trigger: staging.factory, rerun: staging.factory },
+        },
+        approval: {
+          configurationFor: adapters.configurationFor,
+          effects: adapters.approval,
+          staging: staging.factory,
+        },
+      },
+      customObserverPrograms: createCrewStationObserverProgramFactory(execution.helper),
+      // RFC-370 §10 V19: program tool contract fixtures run in the task image.
+      programFixtureProcess: createHostedScriptFixtureProcess({ helper: execution.helper }),
+      verificationCommands: createCrewStationVerificationCommandEffectsFactory({
+        helper: execution.helper,
+        locate: workspace.locate,
+        reference: workspace.reference,
+        retainWorkspace: workspace.retainWorkspace,
+      }),
+      ...composeCrewStationEmployeeContent({
+        publications,
+        objects,
+        writeWorkspace: (reference, stream, facts) =>
+          workspace.writeStream(reference, stream, facts),
+      }),
+      secretBox: system.secretBox,
+      credentials: composeCrewStationCredentialAdapters({
+        jwksUrl: environment.jwksUrl,
+        project: environment.project,
+        service: environment.service,
+        administratorSubjects: environment.adminSubjects,
+      }),
+      ...resources,
+      ...resourceArtifacts.selections,
+      intentArtifacts: composeCrewStationIntentArtifacts(resourceArtifacts.intent),
+      maintenanceEffectsBootstrap: composeCrewStationMaintenanceDescriptor({
+        database: prepared.databaseConfig,
+        generationId: prepared.runtime.generation.payload.generationId,
+        fence,
+      }),
+      ...workspaceSelections,
+      ...composeCrewStationDevelopmentWorkspaces({
+        helper: execution.helper,
+        applicationRootReference: workspace.reference('development:shared', '/work'),
+        locate: workspace.locate,
+        reference: workspace.reference,
+        readFile: workspace.readFile,
+        // RFC-370 §9.2 V3: large tree-operation inputs travel as volume files.
+        writeFile: workspace.writeFile,
+      }),
+    },
   }
 }

@@ -1,3 +1,4 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 A2: actual session, daemon and standalone roots share selected
 // program artifacts and all evidence read faces; no daemon starts here.
@@ -58,13 +59,13 @@ test('provider session and recompose retain both bootstrap selections', () => {
     (item) => ts.isVariableDeclaration(item) && item.name.getText(start) === 'sessionInput',
   ).filter(ts.isVariableDeclaration)
   expect(inputs).toHaveLength(1)
-  for (const key of ['employeePrograms', 'evidenceRead', 'evidenceDocumentCommands']) {
-    expect(compact(inputs[0]!, start)).toContain(`${key}:opts.${key},`)
+  for (const key of ['employeePrograms', 'evidenceRead', 'evidenceDocumentCommands'] as const) {
+    expectDeploymentSelection(key)
     selected(
       declaration(start, 'composeDaemonSession'),
       start,
       'composeDaemonApplication',
-      `${key}:input.${key},`,
+      '...deploymentSelectionsOf(input),',
     )
     selected(
       declaration(start, 'composeDaemonApplication'),

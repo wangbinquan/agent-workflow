@@ -13,7 +13,6 @@
 // 避免再造一个 env 型 test seam）。
 import { readdirSync, readFileSync, statSync, type Dirent } from 'node:fs'
 import { posix, relative, resolve } from 'node:path'
-
 import ts from 'typescript'
 
 export interface SourceUnit {
@@ -110,6 +109,9 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/bootstrap/daemonSessionInput.ts',
   'packages/backend/src/bootstrap/migrate.ts',
   'packages/backend/src/bootstrap/daemonStart.ts',
+  'packages/backend/src/bootstrap/deploymentProfile.ts',
+  'packages/backend/src/bootstrap/deploymentSelections.ts',
+  'packages/backend/src/bootstrap/standalone.ts',
   'packages/backend/src/server.ts',
 ] as const
 

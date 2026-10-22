@@ -1,3 +1,4 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: the same verification policy drives selected command/evidence owners.
 // Opaque fixtures exercise real DA persistence; they are not CS acceptance.
@@ -728,11 +729,8 @@ describe('RFC-370 verification command composition contract', () => {
   }
   test('CLI initial construction, PostgreSQL dispatch and SQLite HTTP reassembly forward the same factory', () => {
     const source = readSource('bootstrap/daemonStart.ts')
-    for (const [name, receiver] of [
-      ['startCommand', 'opts'],
-      ['composeDaemonSession', 'input'],
-      ['composeDaemonApplication', 'input'],
-    ] as const) {
+    expectDeploymentSelection('verificationCommands', 'VerificationCommandEffectsFactory')
+    for (const [name, receiver] of [['composeDaemonApplication', 'input']] as const) {
       const forwards = propertiesOf(bodyOf(source, name), source).filter((p) =>
         ts.isPropertyAccessExpression(p.initializer),
       )

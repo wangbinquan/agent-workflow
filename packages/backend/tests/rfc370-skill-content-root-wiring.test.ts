@@ -1,3 +1,4 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 A2: locks real-root propagation of the complete skill store into
 // editing, availability and restart recovery without starting a daemon.
@@ -67,12 +68,12 @@ test('daemon preserves the same complete skill content binding across provider s
     (item) => ts.isVariableDeclaration(item) && item.name.getText(start) === 'sessionInput',
   ).filter(ts.isVariableDeclaration)
   expect(inputs).toHaveLength(1)
-  expect(compact(inputs[0]!, start)).toContain('skillContent:opts.skillContent,')
+  expectDeploymentSelection('skillContent')
   const postgres = declaration(start, 'composeDaemonSession')
   const application = calls(postgres, start, 'composeDaemonApplication')
   expect(application).toHaveLength(1)
   expect(compact(application[0]!.arguments[0]!, start)).toContain(
-    'skillContent:input.skillContent,',
+    '...deploymentSelectionsOf(input),',
   )
   const sqlite = declaration(start, 'composeDaemonApplication')
   selectedCatalog(sqlite, start, 'composeDaemonResourceCatalogModules', 'input', 'input.appHome')

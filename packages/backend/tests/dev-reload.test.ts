@@ -8,7 +8,7 @@ import {
   createDevelopmentDaemonState,
   reloadDevelopmentDaemon,
 } from '../src/bootstrap/developmentReload'
-import type { StartOptions } from '../src/bootstrap/daemonStart'
+import type { DevelopmentOverlay } from '../src/bootstrap/developmentReload'
 import { runDaemonHostApplication } from '../src/modules/system-operations/application/daemonHostApplication'
 import type { DaemonHostLifecyclePort } from '../src/modules/system-operations/application/ports/daemonHostLifecycle'
 import { selectDaemonHostLifecycle } from '../src/modules/system-operations/composition/daemonHostLifecycle'
@@ -16,7 +16,7 @@ import { selectDaemonHostLifecycle } from '../src/modules/system-operations/comp
 function fixture() {
   const events: string[] = []
   let starts = 0
-  const preparations: Array<StartOptions['developmentIntegrity']> = []
+  const preparations: Array<DevelopmentOverlay['developmentIntegrity']> = []
   const drain = Promise.withResolvers<void>()
   const draining = Promise.withResolvers<void>()
   const createHost = (): DaemonHostLifecyclePort => ({
@@ -39,7 +39,7 @@ function fixture() {
       throw new Error('source reload must retain the process')
     },
   })
-  const start = async (options: StartOptions) => {
+  const start = async (options: DevelopmentOverlay) => {
     const generation = ++starts
     events.push(`start-${generation}`)
     preparations.push(options.developmentIntegrity)

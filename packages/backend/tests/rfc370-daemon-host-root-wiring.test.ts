@@ -52,14 +52,14 @@ test('start selects the host once and passes the same object to serving, initial
   const root = declaration(start, 'startCommand')
   const factories = calls(root, start, 'selectDaemonHostLifecycle')
   expect(factories).toHaveLength(1)
-  expect(compact(factories[0]!.arguments[0]!, start)).toBe('opts.daemonHost')
+  expect(compact(factories[0]!.arguments[0]!, start)).toBe('development?.daemonHost')
   const sessionInputs = find(
     root,
     (item) => ts.isVariableDeclaration(item) && item.name.getText(start) === 'sessionInput',
   ).filter(ts.isVariableDeclaration)
   expect(sessionInputs).toHaveLength(1)
   expect(compact(sessionInputs[0]!, start)).toContain('daemonRuntime:daemonHost,')
-  const compositions = calls(root, start, 'composeSession')
+  const compositions = calls(root, start, 'composeDaemonSession')
   expect(compositions).toHaveLength(2)
   for (const composition of compositions)
     expect(compact(composition.arguments[0]!, start)).toContain('...sessionInput,')

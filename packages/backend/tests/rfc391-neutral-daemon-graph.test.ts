@@ -17,7 +17,6 @@ import {
 } from '@/bootstrap/daemonApplication'
 import {
   DAEMON_SESSION_ADAPTERS,
-  HOSTED_ONLY_SELECTIONS,
   type DaemonSessionAdapter,
 } from '@/bootstrap/daemonSessionAdapters'
 import { snapshotMaintenanceTaskIds } from '@/bootstrap/daemonSession'
@@ -59,6 +58,7 @@ function fixture(harness: ProviderDatabaseHarness) {
     configPath,
   })
   const input: DaemonApplicationInput = {
+    requiredProvider: null,
     log: createLogger('rfc391-test'),
     sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
     applicationConfiguration,
@@ -204,15 +204,22 @@ describeEachProvider('RFC-391 neutral application and session behavior', (harnes
     }
   })
 
-  test('selection admission rejects every hosted field on SQLite and preserves the PostgreSQL receiver', () => {
-    const adapter = DAEMON_SESSION_ADAPTERS[harness.applicationBinding.provider]
-    for (const key of HOSTED_ONLY_SELECTIONS) {
-      const selection = { [key]: {} }
-      if (harness.applicationBinding.provider === 'sqlite')
-        expect(() => adapter.admitSelections(selection)).toThrow(
-          `hosted-deployment-requires-postgresql: ${key}`,
+  test('the graph admits the required provider before composing owners', async () => {
+    const f = fixture(harness)
+    try {
+      const compose = () =>
+        composeUnstartedApplication((scope) =>
+          f.compose({ kind: 'unstarted', scope }, { requiredProvider: 'postgresql' }),
         )
-      else expect(adapter.admitSelections(selection)).toBe(selection)
+      if (harness.applicationBinding.provider === 'sqlite')
+        await expect(compose()).rejects.toThrow('hosted-deployment-requires-postgresql')
+      else {
+        const application = await compose()
+        await application.runtime.mcpRuntimeTests.dispose()
+        application.core.identityAccess.shutdown()
+      }
+    } finally {
+      f.remove()
     }
   })
 

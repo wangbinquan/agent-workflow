@@ -1,3 +1,4 @@
+import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: actual DE Case persistence/recomposition and complete bootstrap owner selection.
 import { expect, test } from 'bun:test'
@@ -110,10 +111,10 @@ test('RFC-383 shared conflict bindings and paired root selections retain the exp
     }
   }
   const start = readDaemonGraphSource()
-  for (const name of ['actionWorkspaceEffects', 'conflictMergeWorkspaceEffects']) {
-    expect(start).toContain(`${name}: opts.${name},`)
+  for (const name of ['actionWorkspaceEffects', 'conflictMergeWorkspaceEffects'] as const) {
+    expectDeploymentSelection(name)
     expect(start.split(`${name}: input.${name},`)).toHaveLength(
-      name === 'actionWorkspaceEffects' ? 3 : 4,
+      name === 'actionWorkspaceEffects' ? 2 : 3,
     )
   }
 })

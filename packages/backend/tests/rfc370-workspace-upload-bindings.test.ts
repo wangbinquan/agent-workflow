@@ -403,9 +403,9 @@ test('real roots, provider reassembly, SQLite arms and PG preselection preserve 
     return result
   }
   expect(values(cli, 'workspaceUploads')).toEqual([
-    'selectWorkspaceUploadContentFactory(opts.workspaceUploads)',
+    'selectWorkspaceUploadContentFactory(profile.selections.workspaceUploads)',
   ])
-  expect(values(session, 'workspaceUploads')).toEqual(['input.workspaceUploads'])
+  expect(session).toContain('...deploymentSelectionsOf(input)')
   expect(values(pg, 'workspaceUploads')).toEqual(['workspaceUploads'])
   // RFC-382 shares the selected receiver with the bundle and the HTTP dependency record.
   expect(http).toContain('taskLaunch: taskExecutionProvider.routeLaunch.agent')
