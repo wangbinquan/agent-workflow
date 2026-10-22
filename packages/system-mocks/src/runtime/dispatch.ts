@@ -63,7 +63,14 @@ async function main(): Promise<void> {
   // un-awaited call because a pending timer happens to hold the event loop
   // open; anything that awaits I/O instead would exit early and silently skip
   // its own output.
-  await runner(process.argv.slice(2))
+  const argv = process.argv.slice(2)
+  // RFC-396: the production OpenCode driver uses stdin when a prompt exceeds
+  // the native argv budget. Adapt that transport once for every mode; keep
+  // each mode's strict positional parser and nonce checks unchanged. Explicit
+  // `--` (including an empty positional), version probes and Claude invocations
+  // retain their original input contract and never consume this stdin path.
+  if (argv[0] === 'run' && !argv.includes('--')) argv.push('--', await Bun.stdin.text())
+  await runner(argv)
 }
 
 await main()

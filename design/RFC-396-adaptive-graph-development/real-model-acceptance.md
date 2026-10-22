@@ -4,7 +4,7 @@
 
 用户在本会话明确回复“1.这个不阻塞你 2.允许”：共享 schema 断言不阻止本任务继续，允许将虚构验收需求、夹具代码、生成的设计和执行上下文发送到已配置的 `opencode-go/deepseek-v4.1-flash`。此前暂停调用的许可条件已解除。
 
-## 候选与环境
+## 初始候选与环境（后续升级见下方时间记录）
 
 - 实现候选：`fe835ab435b86e814ce48aafe9197dd2e08a4181`；单机使用 [CI 39729036993](https://github.com/wangbinquan/agent-workflow/actions/runs/39729036993) 的 `agent-workflow-e2e-macos-latest` 编译产物，真实运行时为本机 OpenCode 与上述模型。
 - 隔离单机地址和端口会随重启变化，持久目录为 `/tmp/rfc396-live-McVHGG`；原始验收材料放在 `/tmp/rfc396-live-evidence/`。临时控制文件含会话凭据，不纳入仓库或报告。
@@ -131,7 +131,7 @@
 
 - 单机运行 `ccde54fafcee93c21ca0d66ca79d574f14ef34fc`（CI `39767238898`，artifact `12420274604`）。三条 Case 都经完整冻结正文核对、原生审核批准、模型代码生成、独立 profile、代理人工义务核对，最终状态为 terminal / delivered。以下是虚构业务候选提交，未配置业务远端发布；不等于 RFC 仓库 CI 或托管服务已通过。
 - 已有模块 v8：basis `a4524d9492df4e92e6ea03407b000dd71a800bb9b411a7f33d26d34ddbded697`，tree `6cb114c7678258359c3559e42b9f977c3c3d327c`，交付 commit `6dcda12b3f1897a5867800c4092d6eb4b31cbdea`。新环境下 execution `execution:01M5HNDKFG4GRSE587J88CC8J2:4b5b2bd050323ec3` 为 13 pass / 0 fail、16 assertions；三个原始 provisional 回答与 consumer blob 均未变。
-- 预约 v5 原 profile 虽为 21 pass / 0 fail，但代理业务复核发现键碰撞：`("a", "b\\u0000c")` 与 `("a\\u0000b", "c")` 的分隔符编码相同，不相交时段仍返回 `accepted / idempotency-conflict`。通过正常设计变更补充无损二元键要求与回归义务，刷新受影响视图并重新批准 v9；不是直接代改模型候选或放宽验证。
+- 预约 v5 原 profile 虽为 21 pass / 0 fail，但代理业务复核发现键碰撞：`("a", "b\u0000c")` 与 `("a\u0000b", "c")` 的分隔符编码相同，不相交时段仍返回 `accepted / idempotency-conflict`。通过正常设计变更补充无损二元键要求与回归义务，刷新受影响视图并重新批准 v9；不是直接代改模型候选或放宽验证。
 - 预约 v9：basis `c085816d91c0b8f65e6115cbfe2cca3da87a0d434b9c0c74f1257e512c32cfe0`，Task `01M5HNN67G2NZ69J0Q76BTR2P3`，tree `746925f72ffc19d0c784087126bfc1ecad412722`，交付 commit `7485e154f176b40a7a69ba60c3a0f653cef04643`。模型改为嵌套 Map 并加入 NUL 键回归及单进程交错调用测试；profile 实际 24 pass / 0 fail、90 assertions，原反例独立重放也得到两个 accepted。六条原始回答和 confirmedBasis 保留，全部仍 provisional，负责人和复查日期未知。最终证据 round `01M5HPHABK3X5WY01FZJH715J5`。
 - 通知 v9：basis `65572e58d141e320e47d1823ef980c3946207fbf0b7d4ae8a134f6c4644c6d0b`，Task `01M5HNG126KBR5SBANSF447NR4`，tree `b7d5c10b97511b5b823066196bca7b26ee2c4330`，交付 commit `dc2f0e1a2c39b3ab081d78cf87423a302a2c45b4`。核心代码与 v7 相同，新增实际决策规则测试；profile 为 44 pass / 0 fail、129 assertions。已读独立规则函数、状态/返回类型及尝试预算常量，判断内部可扩展且不用增加现有 ingest 输入字段；未来终态/新策略仍需后续实现，不宣称已支持。三个回答及暂定策略、未知责任信息保留。最终证据 round `01M5HPHAB1S1ACNSWCB7HQBWJC`。
 - 预约与通知原报告把已批准范围、后续 profile 和人工待办误列为“未实现”。其原始失败报告保留，普通 feedback 提案进入模型后形成新约束，明确 `limitations` 只报告未履行的批准范围；人工义务和真实执行仍由平台单独检查。新候选在人工核对前继续 blocked，直到收到精确 tree 的 acceptance 后才交付；没有过滤或清空旧失败回执来变绿。
@@ -139,3 +139,14 @@
 - `c38be1ef0` 的 CI `39763563985` 和 `ccde54faf` 的 CI `39767238898` 均为 47 success / 2 failure。后者唯一功能失败是 Windows e2e shard 3/4 的三条图研发旅程（同分片其余 135 项通过），另一失败为汇总门。下载前者 trace，Case round `01M5HMPZ2VQG7ZTGW13QH1BKWB` 明确记录 `spawn opencode failed: ENAMETOOLONG: name too long, uv_spawn`，不是审核业务超时。原实现仅按 Linux 单参数 120 KiB 判断；Windows 的整个命令行更小，且 JSON 引号会增加传输长度。修正改为对 Windows 计算全 argv 的保守 UTF-16/转义预算，超限完整走 stdin；保留小提示、POSIX 和 argv-only 旧合同。[Microsoft CreateProcessW 文档](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw) 给出的命令行上限为 32767 字符，包含末尾空字符。
 - 托管 v0.1.4 构建完整日志最后为 BuildKit `error: failed to receive status: rpc error: code = Unavailable desc = error reading from server: EOF`；未见足以判定 OOM 或业务编译错误的证据。GitLab 全树 GET 两次 HTTP 500 后读取成功，只对只读请求加入有限重试；v0.1.5 已发布源码 `22fdad79c0e043fd88ac643977d7f914e56c0e82`（对应 `ccde54faf`），构建成功并进入部署。新任务 helper 镜像、实际托管业务和最终 CI 继续另验。
 - Windows 传输修正的集中复验：runtime golden 与统一装配两文件 24 pass / 0 fail、79 assertions，目标 lint 与格式检查通过。覆盖低于 Linux 阈值的中等提示、引号/反斜线、运行时路径和 session 参数、UTF-16 代理对，以及真实子进程完整 stdin；本机跨平台参数用例不冒充 Windows OS 实测，最终仍消费新的 hosted Windows E2E。
+- Windows 修正提交 `c70dfe096f41f97b2689c0a0bbbe29a1b8bfbd8d` 已推送；其后发现确定性图模型夹具仍只读 argv，`268006ef5e833116160b34133cdb0c84327cff18` 补齐无 positional 时的 stdin，同时保留显式 argv 和缺 nonce 拒绝。实际子进程四项回归 4 pass / 0 fail、12 assertions，system-mocks typecheck / lint / 格式通过；前一生产修复的 backend typecheck 也已通过。
+- `c70dfe096` 包含并发提交 `e2e8b925b`（RFC-395 II-pre）。CI `39773159336` 的 frontend Windows shard 2/3（job `119805441430`）和 Ubuntu shard 2/3（job `119805441453`）均为同一来源断言失败：`tests/task-wizard-builders.test.ts:727` 仍从 `backend/src/services/task.ts` 查找 `worktree creation failed:`。该提交删除旧启动入口，实际发射点已在 `modules/task-execution/infrastructure/taskRouteLaunchOperations.ts`；本次 runtime 修复三文件没有改动这些路径。两 job 各为 2289 pass / 1 fail，归属于该并发迁移的断言更新，不由本会话改动或撤回。工作树已出现该断言指向新入口的并发修正，是否发布及后继 CI 另行核实。
+- 托管任务镜像 `sha256:21b2a5640e5d2970392cd7ca0e9ad85beb7ea26b327bd5ad42c832041d2f9043` 使用 v0.1.5 精确服务二进制（SHA-256 `bd7691af92d18779a2ff2c562e49e1506ce88d3f577d07d6450ecdea7a237db6`），版本 `01a16378-f7e5-7000-bdd3-8e0b9c23565b` 的平台验证 `01a1637d-8b01-7000-9cc8-c0b40dc5c6ec` passed。v0.1.6 release `01a16383-b997-7000-93d3-910a448addd9` 已创建，GitLab source `945896cd3a6cf47bfa77e6508f45d50588f7d640` 对应 AW `ccde54faf` 加发布元数据；实际业务闭环继续。后续 `c70dfe096` / `268006ef5` 是 Windows 提示传输与测试夹具变更，托管 Linux 证据的原始 SHA 保留，不冒称已经部署这两个后继提交。
+- 并发会话随后发布 `7ee66e0cdbf52d5e6b7363d80f03d6d7770ab9dc`，修正前述前端断言的生产入口路径，保留原 marker 断言；该提交包含 `268006ef5`。其 [CI 39777271182](https://github.com/wangbinquan/agent-workflow/actions/runs/39777271182) 为后继候选证据，原 `268006ef5` 的 frontend Windows job `119807831937` 已核对仍为同一断言失败，不重写旧 run 的结论。后继内容没有更改本 RFC 的生产与夹具修正。
+
+### 2026-10-22 12:40 UTC：Windows 图旅程通过与共用夹具传输补齐
+
+- `268006ef5` 的 Windows E2E shard 3/4（job `119815867156`）三条图研发旅程分别 31.9s、28.2s、36.0s 通过；整分片为 137 pass / 1 fail，剩余失败是旧 `rfc372-recorded-mindmap` 录制旅程，仍不能签整个 CI 通过。相同 SHA 的定时 Windows platform `39774476061`、视觉 `39773872359` 和 OpenCode integration `39773872472` 均成功；原 push Windows platform `39773872401` 为 cancelled，保留其状态，未把取消算作通过。
+- `c70dfe096` 的 Windows trace（artifact `12425342916`）确认录制脑图交叉审核报 `opencode exited with code 3; stderr tail: rfc372-recorded-mindmap: prompt is missing the RFC-200 envelope nonce`。生产传输切换后，先前只补了 graph-development 模式，旧 clarify 模式仍只读 argv。这属于本次兼容修复范围；其余窗口 UI 选择器重复项失败保留原日志，当前不足以归责给提示传输。
+- 将 OpenCode 无 positional 的 stdin 读取统一放在模型夹具 dispatcher，内部再传给各模式原有严格解析器；移除 graph 模式重复适配。保留显式 `--`（含空串）、参数与正文边界、缺 nonce 拒绝、版本探测，以及 Claude 原生 stdin。新子进程用例验证完整录制设计、两个运行时和保持 stdin 打开时的探测/显式 argv 不等待。
+- 新传输、原 graph 和录制内容三文件共 13 pass / 0 fail、57 assertions；原 golden differential、生产 argv 消费合同和双运行时情景三文件 172 pass / 0 fail、1637 assertions。system-mocks typecheck、目标 lint 通过。第一次从仓库根运行 system-mocks 的相对 filter 没匹配文件，是命令定位错误；改在该包执行后才取得上述 13 项结果，未计作任何用例失败或成功。

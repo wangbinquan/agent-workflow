@@ -187,19 +187,15 @@ function proposed(input: ObjectValue, additional: boolean) {
     ],
   }
 }
-export async function run(argv: readonly string[]) {
+export function run(argv: readonly string[]) {
   const call = parseInvocation(argv, 'stub-graph-development')
   if (call.kind === 'version') {
     process.stdout.write('1.0.0\n')
     return
   }
-  // RFC-396: the production driver pipes prompts that exceed the native argv
-  // budget. Keep explicit positional parsing intact; only the no-positional
-  // transport reads stdin, as emitted by buildOpencodeSpawn.
-  const inputPrompt = argv.includes('--') ? call.prompt : await Bun.stdin.text()
-  const prompt = inputPrompt.includes('Read graph-design-request.json in the current workspace.')
+  const prompt = call.prompt.includes('Read graph-design-request.json in the current workspace.')
     ? readFileSync('graph-design-request.json', 'utf8')
-    : inputPrompt
+    : call.prompt
   if (!prompt.includes('INPUT_JSON') && prompt.includes('"outputSchema"')) {
     if (prompt.includes('rfc396-cancelable-call')) Bun.sleepSync(3000)
     const input = objectAfter(prompt, '')
