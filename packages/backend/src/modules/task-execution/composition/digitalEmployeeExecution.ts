@@ -25,6 +25,7 @@ import {
 } from '@/modules/execution-contract/public/types'
 import { composeTaskCancellation } from './taskCancellation'
 import { getTask } from '@/services/task'
+import { projectExecutionOutcome } from '@/services/execution/outcome'
 import { NotFoundError } from '@/util/errors'
 import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
 import { readTaskResourceUsage } from '@/services/limits'
@@ -709,10 +710,11 @@ function buildDigitalEmployeeExecution(
         task.worktreePath,
       )
     }
-    const output =
-      outcome.outputs.find(
-        (candidate) => candidate.active && candidate.portName === DIGITAL_EMPLOYEE_RESULT_PORT,
-      )?.content ?? null
+    // A workflow can publish this port on intermediate agents as well as its
+    // output node. Use the same task-boundary projection as every other caller,
+    // including settled-run freshness and inactive-branch semantics.
+    const resultPort = projectExecutionOutcome(outcome).outputs[DIGITAL_EMPLOYEE_RESULT_PORT]
+    const output = resultPort?.active === false ? null : (resultPort?.content ?? null)
     const planPrompt = task.inputs[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]
     if (typeof planPrompt === 'string') {
       const expectedPath = parsedPlanOutputPath(planPrompt)

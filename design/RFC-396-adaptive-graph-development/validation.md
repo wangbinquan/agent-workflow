@@ -63,7 +63,7 @@
 
 使用 `opencode-go/deepseek-v4.1-flash` 与专用虚构预约需求、测试仓库。当前 Case `01M5GTZ28ESS39E82ET3CK0TKZ`，Task `01M5GTZ3AVPRH3T9306DCMXRM7`，原生澄清节点 `01M5GVC6NP67VH6CR6049YVFMP`。模型完成初始设计并提出优先级、并发表达和验证证据问题；这仅证明到达原生澄清门，尚不证明完整澄清→实现→验证→交付。
 
-继续真实模型验收时，自动审批要求用户明确许可将这些验收材料发送到该外部模型服务。已在当前会话请求许可，尚未收到批准；因此暂停新增真实模型调用，继续其余不依赖该许可的验证工作。这是当前验收执行限制，不是产品能力结论。异步通知与已有模块两条真实模型旅程尚未完成。
+继续真实模型验收时，自动审批要求用户明确许可将这些验收材料发送到该外部模型服务。当时在当前会话请求许可并暂停新增真实模型调用；用户随后明确回复“1.这个不阻塞你 2.允许”，许可条件已解除，继续记录见 real-model-acceptance.md。这是当前验收执行限制，不是产品能力结论。异步通知与已有模块两条真实模型旅程尚未完成。
 
 ## AC 证据归属
 
@@ -151,10 +151,17 @@ schema 报告与原路由覆盖扫描已经以 `baf4ac29317b67bc7ef9ebc0c32ffeb4
 - 同一失败 backend 分片内，canonical JSON/Markdown 与运行时合同一致性、表归属、digest、归档表边界与变异负面对照均通过；唯一失败仍为已提交旧测试的 `Expected length: 217 / Received length: 222`。日志为 `rfc396-ci-http-job-119659567973.txt`，完整 job 状态快照为 `rfc396-ci-final-fe835.json`。
 - 前序 `b8d1f9fcc` 的主 CI 终态为 46 success / 3 failure（schema 与 HTTP 两个失败 job，加汇总门），其后真实缺陷和报告问题均已分别处置，未抹去历史失败。
 
-截至本段记录仍有三个未关闭条件：
+以下是该候选终态时的三个未关闭事项；2026-10-22 用户已解除模型许可条件，并明确共享 schema 不阻止继续工作：
 
-1. **共享 schema 断言发布**：工作区的 `packages/backend/tests/architecture/rfc349-schema-contract.test.ts` 已含 222/216 与精确五表断言；同时含 RFC-395 对未提交 `bootstrap/persistenceSchema.ts` 的新导入及其整组 contribution 依赖。需要依赖形成可发布状态后，再保留全部共同产出发布该文件并消费新 CI。此项仍是本 RFC 的交付欠项；不撤走、改回或单独提交会缺依赖的共享中间态。
-2. **真实模型三场景**：材料发送许可仍待当前会话用户明确批准，未重试被自动审批拒绝的外部调用。预约只到澄清门；三个完整真实模型旅程与固定组合效果对照尚未签收。
+1. **共享 schema 断言发布**：工作区的 `packages/backend/tests/architecture/rfc349-schema-contract.test.ts` 已含 222/216 与精确五表断言；同时含 RFC-395 对未提交 `bootstrap/persistenceSchema.ts` 的新导入及其整组 contribution 依赖。需要依赖形成可发布状态后，再保留全部共同产出发布该文件并消费新 CI。此项仍是整仓 CI 的未关闭失败，用户明确不阻止本任务继续；不撤走、改回或单独提交会缺依赖的共享中间态。
+2. **真实模型三场景**：材料发送许可现已获得，三个场景已实际调用配置的模型。首轮语义失败、8 分钟超时，以及实际调用揭示的最终端口取值缺陷均有原始记录；完整旅程与固定组合效果对照仍在执行，见 [真实验收](./real-model-acceptance.md)。
 3. **实际托管执行证据**：AC14 要求真实接线和执行，并不要求自动部署业务应用。当前 `rfc396-workspace.test.ts` 真实执行双库、工作区/Git、材料和恢复路径，但 hosted helper 在测试进程内转发到 `executeWorkspaceTaskImageOperation`，不能替代实际托管传输与执行环境证据。因此保留该验收项，不以静态接线或该 fixture 冒签。
 
 本次后续记录提交只更新 RFC 状态和证据，不改变 `fe835ab43` 的生产与测试候选。继续保持 **In Progress**；后继记录提交的 CI 与上述实现候选证据分别看待。
+
+
+## 2026-10-22 真实调用揭示的结果收取修复
+
+通知案例的 designer 和澄清后的 output 都发布 `agent-result`；原宿主按原始输出行顺序取首个同名端口，错误地重复消费首稿，导致 Task 已 done 而 Case 卡在 running。修复复用已有 `projectExecutionOutcome`，按工作流 output 节点和最新 settled run 取结果，保留 inactive/skipped/缺失端口语义。另将设计导入的 `ValidationError` 归为 semantic 失败回执；真实存储错误仍传播，避免吞掉基础设施问题。冻结材料补充 decision 人工来源、决策表规则引用、预算单位和验收义务规则，不修改已发布内置资源版本，也不放宽领域校验。
+
+完成上述代码和用例后集中复验：同一 5 文件集合在 SQLite 与独立真实 PostgreSQL 分别 **20 pass / 0 fail / 116 assertions**，涵盖最终端口选择、两部署材料/恢复、原生人工来源导入、组合规划，以及既有 agent/workflow 真实子进程执行；相关架构 3 文件 **45 pass / 0 fail / 146 assertions**；backend typecheck、目标文件 ESLint 和格式检查通过。日志为 `rfc396-result-repair-{tests,postgresql,architecture,types,lint}.log`。本地测试使用保留 RFC-395 并发内容的共享工作区；其结果不是新候选 exact-SHA CI 或真实模型恢复验收。

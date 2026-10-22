@@ -16,6 +16,7 @@ import {
 } from '../../domain/graph-development/model'
 import { GRAPH_VIEW_CAPABILITIES } from '../../domain/graph-development/viewCapabilities'
 import {
+  GRAPH_DEFAULT_PLANNING_BUDGET,
   selectGraphViews,
   type GraphPlanningBudget,
 } from '../../domain/graph-development/selectViews'
@@ -40,7 +41,7 @@ export function createGraphViewPlanning(deps: {
   readonly changed?: (caseId: string) => void
 }) {
   const now = deps.now ?? Date.now
-  const budget = deps.budget ?? { reading: 12, generation: 24 }
+  const budget = deps.budget ?? GRAPH_DEFAULT_PLANNING_BUDGET
   const active = new Map<string, { controller: AbortController; promise: Promise<void> }>()
   const keyOf = (id: string, requestId: string) => `${id}\0${requestId}`
   async function update(record: GraphStoredRecord, status: string, payload: unknown) {

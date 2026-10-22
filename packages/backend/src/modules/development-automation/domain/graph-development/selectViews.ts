@@ -6,6 +6,10 @@ export interface GraphPlanningBudget {
   readonly reading: number
   readonly generation: number
 }
+export const GRAPH_DEFAULT_PLANNING_BUDGET: GraphPlanningBudget = Object.freeze({
+  reading: 12,
+  generation: 24,
+})
 const concernWeight = { required: 8, important: 3, optional: 1 } as const
 
 /** Deterministic bounded recommendation given candidates; candidate generation remains model-driven. */

@@ -4,6 +4,14 @@ import type { ExecutionContractRegistration } from '@/modules/execution-contract
 import { GRAPH_WORK_CONTRACTS, GRAPH_WORK_ITEMS, graphText as text } from './employeeType'
 
 const id = z.string().min(1).max(200)
+/** Semantic requirements supplement the JSON shape in every frozen work material. */
+export const GRAPH_DESIGN_AUTHORING_RULES = [
+  'Use only the provided schema kinds and capability versions. Keep every referenced ID declared in its owning collection.',
+  'A decision element may omit its optional decision property. Omit it for model assumptions and whenever no matching committed clarify source is available; even status=unmarked requires a matching source. The platform imports actual human answers, maturity, notes and confirmedBasis.',
+  'Each decision-table rows[].ruleId must identify a declared element, for example a behavior element with behaviorKind=action. A row ID alone does not declare an element; the schema has no rule element kind.',
+  'Candidate costs use the supplied planningBudget units. Offer a useful affordable combination and expose uncovered concerns; do not assume the model-recommended combination will be selected. Keep candidate material concise and avoid unnecessary semantic objects.',
+  'A provisional decision or unknown owner does not prove implementation or verification impossible. Bind concrete behavior obligations to an actual execution profile or an explicit manual check; retain responsibility gaps separately and use unassigned only when the verification itself is unresolved.',
+] as const
 export const GraphReviewDecisionOutputSchema = z
   .object({
     schemaVersion: z.literal(1),

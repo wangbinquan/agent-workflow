@@ -8,7 +8,10 @@ import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/
 import type { GraphHumanInputFacts, GraphExecutionFacts } from '../ports/graphHostFacts'
 import { sha256Hex } from '@/util/hash'
 import { graphContentRefs, graphDigest } from '../../domain/graph-development/model'
-import { selectGraphViews } from '../../domain/graph-development/selectViews'
+import {
+  GRAPH_DEFAULT_PLANNING_BUDGET,
+  selectGraphViews,
+} from '../../domain/graph-development/selectViews'
 import { graphToolResultSchema, graphResultSchemas } from './toolContracts'
 import type { GraphDesignStore } from '../ports/graphDesignStore'
 import type { GraphDesignArtifacts } from '../ports/graphDesignArtifacts'
@@ -198,7 +201,7 @@ export function createGraphExecutionConsumption(deps: {
     const importId = `import:${graphDigest({ round: plan.roundRef, content: output, sources })}`
     if (links.some((link) => link.id === importId)) return
     const document = { ...output.document, sources, views: frozen.views }
-    const viewPlan = selectGraphViews(document, output.candidates, { reading: 12, generation: 24 })
+    const viewPlan = selectGraphViews(document, output.candidates, GRAPH_DEFAULT_PLANNING_BUDGET)
     const views: GraphViewSpec[] = viewPlan.selectedIds.map((id) => {
       const candidate = output.candidates.find((value) => value.id === id)
       const old = frozen.views.find((value) => value.id === id)

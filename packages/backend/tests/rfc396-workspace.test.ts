@@ -18,6 +18,7 @@ import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { describeEachProvider } from './helpers/eachProvider'
 import { graphFixture } from './helpers/graphDesign'
 import { sha256Hex } from '@/util/hash'
+import { ValidationError } from '@/util/errors'
 import {
   bindChangeCandidateParticipant,
   bindCandidateDeliveryParticipant,
@@ -180,6 +181,7 @@ describeEachProvider('RFC-396 selected workspace material and recovery', (harnes
       }
       const upload = join(root, 'upload')
       writeFileSync(upload, 'user supplied reference')
+      let consumptionFailure: Error | null = null
       const workspace = createGraphEmployeeWorkspace({
         ...f,
         appHome: root,
@@ -197,7 +199,9 @@ describeEachProvider('RFC-396 selected workspace material and recovery', (harnes
             copyFileSync(upload, physical(target))
           },
         },
-        consumeResult: async () => {},
+        consumeResult: async () => {
+          if (consumptionFailure) throw consumptionFailure
+        },
         verificationProfiles: async () => [],
       })
       const first = await workspace.prepare({
@@ -205,6 +209,9 @@ describeEachProvider('RFC-396 selected workspace material and recovery', (harnes
         attemptJson: JSON.stringify({ ordinal: 1, mode: 'fresh' }),
       })
       const projection = JSON.parse(first.contractProjectionJson)
+      expect(projection.materials.authoringRules.join('\n')).toContain('rows[].ruleId')
+      expect(projection.materials.authoringRules.join('\n')).toContain('omit its optional decision')
+      expect(projection.materials.planningBudget).toEqual({ reading: 12, generation: 24 })
       const state = await workspace.state(work.designId)
       expect(state.uploadPlan?.entries[0]?.targetPath).toBe('explicit-upload.txt')
       const candidateEffects =
@@ -269,6 +276,44 @@ describeEachProvider('RFC-396 selected workspace material and recovery', (harnes
         (await workspace.validate({ roundRef: 'round', taskStatus: 'done', outputJson: '{broken' }))
           .ok,
       ).toBe(false)
+      const outputJson = JSON.stringify({
+        summary: 'Review result',
+        result: {
+          basisId: basis.id,
+          basisDigest: basis.digest,
+          receipt: {
+            schemaVersion: 1,
+            receiptId: 'receipt',
+            taskId: 'task',
+            nodeRunId: 'review',
+            decision: 'approved',
+            decidedAt: 1,
+            reviewIteration: 0,
+            reason: '',
+            documents: [
+              {
+                docVersionId: 'doc',
+                sourceNodeId: 'material',
+                sourcePortName: 'document',
+                contentDigest: '1'.repeat(64),
+              },
+            ],
+          },
+        },
+      })
+      consumptionFailure = new ValidationError('graph-design-invalid', 'missing-reference: rule')
+      expect(
+        await workspace.validate({ roundRef: 'round', taskStatus: 'done', outputJson }),
+      ).toEqual({
+        ok: false,
+        errorClass: 'semantic',
+        errorCode: 'graph-design-invalid',
+        errorDetail: 'missing-reference: rule',
+      })
+      consumptionFailure = new Error('artifact-store-offline')
+      await expect(
+        workspace.validate({ roundRef: 'round', taskStatus: 'done', outputJson }),
+      ).rejects.toThrow('artifact-store-offline')
       if (deployment === 'hosted') {
         expect(operations).toContain('employee-case')
         expect(operations.some((op) => op.includes('development'))).toBe(true)

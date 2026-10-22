@@ -13,8 +13,13 @@ import type { EmployeeCaseWorkspaceParticipant } from '@/modules/source-control/
 import { stableIdentityComponent } from '@/util/gitRef'
 import { graphDigest } from '../../domain/graph-development/model'
 import { sha256Hex } from '@/util/hash'
+import { ValidationError } from '@/util/errors'
 import type { GraphVerificationWorkspace } from '../../application/graph-development/verification'
-import { graphToolResultSchema } from '../../application/graph-development/toolContracts'
+import {
+  GRAPH_DESIGN_AUTHORING_RULES,
+  graphToolResultSchema,
+} from '../../application/graph-development/toolContracts'
+import { GRAPH_DEFAULT_PLANNING_BUDGET } from '../../domain/graph-development/selectViews'
 import type { GraphEmployeeContext } from '../../application/graph-development/employeeCodec'
 import { GRAPH_VIEW_CAPABILITIES } from '../../domain/graph-development/viewCapabilities'
 import type { GraphDesignArtifacts } from '../../application/ports/graphDesignArtifacts'
@@ -219,6 +224,8 @@ export function createGraphEmployeeWorkspace(deps: {
               document: material.document,
               request: material.request,
               capabilityCatalog: GRAPH_VIEW_CAPABILITIES,
+              authoringRules: GRAPH_DESIGN_AUTHORING_RULES,
+              planningBudget: GRAPH_DEFAULT_PLANNING_BUDGET,
               verificationProfiles: await deps.verificationProfiles(),
               basis: material.basis?.basis ?? null,
               // Workflow nodes run in their selected workspace; paths in the contract
@@ -351,7 +358,17 @@ export function createGraphEmployeeWorkspace(deps: {
           errorCode: `graph-workspace-${checked.code}`,
           errorDetail: checked.detail,
         }
-      await deps.consumeResult({ planJson: frozen.planJson, outputJson: input.outputJson })
+      try {
+        await deps.consumeResult({ planJson: frozen.planJson, outputJson: input.outputJson })
+      } catch (error) {
+        if (!(error instanceof ValidationError)) throw error
+        return {
+          ok: false as const,
+          errorClass: 'semantic' as WorkspaceFailureClass,
+          errorCode: error.code,
+          errorDetail: error.message.slice(0, 4000),
+        }
+      }
       return { ok: true as const }
     },
   }
