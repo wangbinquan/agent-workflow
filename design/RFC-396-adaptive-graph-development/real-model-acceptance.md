@@ -109,3 +109,11 @@
 - 完整升级链与 Case 受理限定复验两文件 SQLite / 真实 PostgreSQL 各 9 pass / 0 fail、83 assertions，backend typecheck、目标 backend/E2E lint 通过；中间的 Agent 引用回归各 6 pass 属于重叠范围，不累计。实际存量升级继续使用精确 CI 二进制另验。
 - `3a36ce4c7` 的 [失败 job 119748379649](https://github.com/wangbinquan/agent-workflow/actions/runs/39756102381/job/119748379649) 明确为 `test-suite-policy` 的 RFC-396 Unix fixture skipIf 登记数 5/实际7 不一致；是本次两项新增测试漏更新清单，已由 `6b97e9978cd103945d271b19b6e12db94270c95a` 修复。该清单限定复验 12 pass / 0 fail、15 assertions，没有放宽断言或移除测试。
 - 同一设计材料的自适应/固定组合投影对照见 [比较记录](./adaptive-comparison.md)。它保留固定三类对预约批内顺序表达的遗漏，也明确其他两例的有效模型内容相同；不把模型覆盖分数、渲染字节数或代理审阅推断为真人理解效果。浏览器控制当前不可用，本轮 API 证据不冒称新的真实浏览器走查。
+
+### 真实岗位名称与托管材料传输
+
+- `4df20d2a53b23227d56bd870555dbfcf642184ac` 的实际升级发现 `ConflictError: job template name already exists`：岗位名称还有独立唯一约束，旧测试用了不同的历史名字而遗漏该情形。新岗位明确命名为“图驱动研发 v2”，测试预装真实旧名“图驱动研发”；旧名称和旧 ID 均不改。原隔离实例再恢复兼容二进制，原业务数据不变。升级不能只以新建库或局部目录加载通过作结论。
+- 托管设计 Task `01M5HGXDX009KPKE77VKFV2Z46` 已实际完成并导入 revision 2，唯一需求 clamp 的单 flow 表达、执行 profile 和测试引用可读取。冻结请求 `hosted-clamp-basis-v2` 返回 500；重启前日志明确 `CrewStation object storage responded 429`。其后实例因 `platform-unreachable` 失去执行租约而按既有流程退出，不能仅凭时间相邻认定两者同一根因。
+- `createGraphDesignArtifacts.files()` 原来并发读取全部文件，且每个文件再次读取同一清单，超过本项目两路对象传输额度。改为顺序读取已验证清单指向的实际 blob，保留整包/每文件摘要与缺失检查；单文件读取也复用已验证清单。真实文件回归用两路额度模拟拒绝，八份中文材料完整返回，清单只读取一次；缺失内容、被改字节和错误清单仍拒绝。
+- 本隔离服务原采用小型接入验收的 50m CPU 套餐，有持续 event-loop stall。下一版配置选择平台已存在的 250m/512Mi `agent-workflow-control` 套餐，仅作用于 `rfc396-graph-acceptance`；不修改共享套餐。该资源调整与 429 修复分别记录，不能把延迟或租约退出全部归因于 CPU。
+- 材料读取与设计/工作区限定验证：SQLite 三文件 12 pass / 0 fail、83 assertions，真实 PostgreSQL 两文件 10 pass / 0 fail、73 assertions；岗位真名回归两库各 7 pass / 0 fail、71 assertions。backend typecheck 和目标 lint 通过。范围包含重叠检查，未累计为全仓结论，实际托管重试另验。

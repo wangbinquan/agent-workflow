@@ -164,7 +164,7 @@ describeEachProvider('RFC-396 registered graph resources and legacy compatibilit
         f.employee.module.commands.publishJobTemplate(request),
       ).ensure({
         id: 'platform:graph-development:job:v1',
-        name: '原始图驱动研发岗位',
+        name: '图驱动研发',
         content: {
           schemaVersion: 1,
           typeRef,

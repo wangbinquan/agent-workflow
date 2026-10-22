@@ -61,29 +61,24 @@ export function createGraphDesignArtifacts(evidence: EvidenceArtifactPort): Grap
       const value = await bundle(reference)
       const entry = value.entries.find((item) => item.relativePath === path)
       if (!entry) return null
-      const content = await evidence.documents.readText({
-        bundleRef: reference.artifactRef,
-        relativePath: path,
-      })
+      const content = await evidence.contents.readText(entry.sha256)
       if (content !== null && sha256Hex(content) !== entry.sha256)
         throw new Error('graph-artifact-content-digest-mismatch')
       return content
     },
     async files(reference) {
       const value = await bundle(reference)
-      return await Promise.all(
-        value.entries.map(async (entry) => {
-          const content = await evidence.documents.readText({
-            bundleRef: reference.artifactRef,
-            relativePath: entry.relativePath,
-          })
-          if (content === null)
-            throw new Error(`graph-artifact-file-missing: ${entry.relativePath}`)
-          if (sha256Hex(content) !== entry.sha256)
-            throw new Error('graph-artifact-content-digest-mismatch')
-          return { path: entry.relativePath, content }
-        }),
-      )
+      const files: { path: string; content: string }[] = []
+      // The verified bundle already supplies exact blob refs. Avoid reopening
+      // its manifest for every file and bursting past hosted transfer quotas.
+      for (const entry of value.entries) {
+        const content = await evidence.contents.readText(entry.sha256)
+        if (content === null) throw new Error(`graph-artifact-file-missing: ${entry.relativePath}`)
+        if (sha256Hex(content) !== entry.sha256)
+          throw new Error('graph-artifact-content-digest-mismatch')
+        files.push({ path: entry.relativePath, content })
+      }
+      return files
     },
   }
 }

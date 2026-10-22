@@ -411,7 +411,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
         module.commands.publishJobTemplate(request),
       ).ensure({
         id: 'platform:graph-development:job:v2',
-        name: '图驱动研发',
+        name: '图驱动研发 v2',
         content: {
           schemaVersion: 1,
           typeRef: { typeId: 'graph-development', revision: 1 },
