@@ -80,6 +80,11 @@ const routeFiles = [
   // 而真正的危害是反过来的——搬走之后这些分支就再也不受本守卫约束了。
   // 缩小语料 = 静默丢掉压力，正是本文件开头那段注释在防的事。
   ...trackedFiles('packages/backend/src/modules/*/inbound/*.ts'),
+  // RFC-396: the graph HTTP adapter moved from inbound/http to its owner's
+  // infrastructure/http layer. Keep its existing route error coverage intact.
+  ...trackedFiles(
+    'packages/backend/src/modules/development-automation/infrastructure/http/graphDesignRoutes.ts',
+  ),
   // RFC-359 W4-D19b：两个 provider 的任务房合成一份中立实现，legacy 那三个动作文件随之退役。
   // 同样的道理——语料跟着搬，否则这些客户端可达的错误码会从棘轮里消失。
   ...trackedFiles(

@@ -108,3 +108,16 @@
 随后 RFC-395 在共享树迁移 schema contribution，导致本轮复验出现 `RFC349_DEFER_TABLES` 导出不存在、schema 类型字段暂失、历史迁移接口在修改中的错误。保留 `rfc396-ci-repair-behavior-2.txt`（37 pass / 9 errors）及 `rfc396-ci-repair-contracts-2.txt`（62 pass / 5 fail，其中三项加载错误）原记录；这些不是本 RFC 新发布 SHA 的 CI，也不是可宣称的整套通过。图领域/HTTP 层次、公开面合同、组合根 holder、API 源码登记、skip 清单和能力账本在该轮对应检查通过。SourceControl 新 DTO 的错误导入另行归因并自行修正，未把它归到并发工作。
 
 大请求和实际运行时选择的独立回归已通过，见 `rfc396-design-assist-transport.test.ts`、`rfc396-assist-transport-test.txt`。本次后端确切修复路径 lint 通过；最终修复候选仍须消费新的 hosted exact-SHA CI。共享 schema 清单测试的并发导入与本 RFC 五表断言完整保留，生成的 schema 报告与最终复验待共享依赖形成可运行候选后完成；不临时撤走他人产物制造绿树。
+
+
+## 第二轮发布与 schema 报告补齐
+
+修复提交 `b8d1f9fcc7f695655cb8112f2d4b103c5c5cdd6a` 已推送；推送后 `main == origin/main`、差异 `0/0`、共享 index 为空。此次仅提交明确的 64 个新旧路径名，未带入 RFC-395 的在制迁移。
+
+该提交的 [主 CI 39725052164](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052164)、[Windows 平台 39725052080](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052080)、[视觉回归 39725052043](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052043) 在本段取证时执行中；[integration-opencode 39725052079](https://github.com/wangbinquan/agent-workflow/actions/runs/39725052079) 成功。尚未宣称本轮整仓通过。
+
+schema contribution 的导出修复后，重新生成 canonical JSON/Markdown。逐表比较确认原有 217 张表的全部合同字段不变，新增恰好为 `development_designs`、`development_design_revisions`、`development_design_proposals`、`development_design_baselines`、`development_design_links`。总数为 222 source / 216 active / 6 archive-only，digest 为 `sha256:3f8b275e388697cc6d9f5005dc3c9cf9acd70fe97c1bb00407223dfcf4d39743`。生成器读取当前共享 contribution，但此次报告不包含其他 schema 语义变化。
+
+HTTP 适配器迁到 `infrastructure/http` 后，错误码覆盖扫描现继续显式包含其确切路径，避免移动文件使原有检查消失。该文件的四项检查全部通过。schema 联合检查首轮为 `10 pass / 2 fail`（`rfc396-schema-final-check.txt`）：本 RFC 五表名称断言遗漏排序，已修正；另一个失败为 RFC-395 新 schema 声明入口被原归档表 consumer 扫描识别，不改动其在制迁移。随后限定计数与生成报告两项复验 `2 pass / 0 fail`、26 assertions，见 `rfc396-schema-final-targeted.txt`。
+
+共享 `tests/architecture/rfc349-schema-contract.test.ts` 同时包含本 RFC 的计数/五表断言与 RFC-395 的新 bootstrap 导入。完整保留这些改动；在其依赖仍未提交时，不单独发布这个共享文件制造缺依赖提交。canonical 报告和路由覆盖修复可独立发布；共享断言的发布及其 CI 仍需后续收齐。未重复运行全量本地 gate。
