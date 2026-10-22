@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "observedAt": "2026-10-22T14:44:00Z",
+  "observedAt": "2026-10-22T16:04:41Z",
   "rfc": "RFC-396",
   "rfcStatus": "In Progress",
   "acceptanceCriterion": "AC14",
   "result": "incomplete",
-  "scope": "Deterministic hosted Graph transport and execution fixture; real model quality is recorded separately.",
+  "scope": "Actual hosted transport with the built-in file review and approved real model; design and implementation remain deterministic fixtures. The three complete real-model journeys are recorded separately.",
   "deployment": {
     "projectId": "01a16258-52b4-7000-8510-afa1ee567504",
     "serviceId": "01a16258-52b4-7001-a23f-ab6109ec10ce",
@@ -24,7 +24,7 @@
     "declaredNewTaskImageDigest": "sha256:21b2a5640e5d2970392cd7ca0e9ad85beb7ea26b327bd5ad42c832041d2f9043",
     "actualTaskImageUpgradeObserved": false
   },
-  "fixture": {
+  "failedInlineFixture": {
     "caseId": "01M5HWSH80PTX0K0ER0WADS9FF",
     "employeeId": "01M5HWSG3791BYBY256AERM56M",
     "employeeVersion": 1,
@@ -34,8 +34,26 @@
     "includedElementIds": ["req-clamp"],
     "viewKinds": ["flow"],
     "freezeRequestId": "hosted-clamp-inline-basis-v2",
-    "basisReceipt": null,
+    "basisReceipt": {
+      "id": "basis:hosted-clamp-inline-basis-v2",
+      "digest": "2cad7df102456e38e1240f36e7beba01533bd37017bbc39ed445c0074bece28f"
+    },
     "reviewWorkflowId": "01M5HWSBYEFZGJH48TKM8V4KMM",
+    "nativeDecisionReceipt": {
+      "id": "01M5J49CXW966MP7F2C61QMAX5",
+      "taskId": "01M5J26M09WJX7NQX9NPGXG3R3",
+      "nodeRunId": "01M5J36XG017ZXYJWG7RDFCXS2",
+      "decision": "approved",
+      "graphAuthoritative": false,
+      "rejection": "graph-review-output-not-authoritative",
+      "actualTaskFileMatchesFrozenBytes": true,
+      "sourceBytes": 3351,
+      "sourceDigest": "d012cfcc70607eda8832cae304cdf598fb66d72db4c9c90b91dac0a1cff36f6b",
+      "nativeBodyBytes": 3343,
+      "nativeBodyDigest": "f50b5239a3287d832be38dc75234d4d00a2cc259deae5c02a15e651035ccc17b"
+    },
+    "caseState": "terminal",
+    "terminalKind": "fixture-review-digest-mismatch",
     "reviewReceipt": null,
     "candidate": null,
     "verificationReceipt": null,
@@ -47,6 +65,49 @@
       "testCount": 1,
       "assertionCount": 6,
       "executed": false
+    }
+  },
+  "fixture": {
+    "caseId": "01M5J5MH5Q3M2ZBAYK0VPT200M",
+    "employeeId": "01M5J5MECE0RMPHDP7GR9V4DFT",
+    "jobTemplate": "platform:graph-development:job:v2@1",
+    "reviewWorkflowId": "00000000000000GRAPHWFRV1",
+    "reviewWorkflowVersion": 1,
+    "reviewModel": "opencode-go/deepseek-v4.1-flash",
+    "hostedAgentProfileId": "01a146ce-c2ce-7fe4-97ab-3cddd340967d",
+    "designTaskId": null,
+    "designTaskStatus": "not-observed",
+    "designRevision": null,
+    "freezeRequestId": "hosted-clamp-native-basis-v2",
+    "basisReceipt": null,
+    "reviewReceipt": null,
+    "candidate": null,
+    "verificationReceipt": null,
+    "deliveryReceipt": null,
+    "expectedVerification": {
+      "profileId": "01M5HCDKS9T3174V2B9JKV2CDE",
+      "profileVersion": 1,
+      "profileDigest": "09ca94409b9f984781c1e468ae6464d0ba361a3e3e97503f824417de81c67c67",
+      "testCount": 1,
+      "assertionCount": 6,
+      "executed": false
+    }
+  },
+  "documentationCi": {
+    "commit": "49285bcc90e12260832bfff49d91ede3bfb86ca3",
+    "runId": 39798908249,
+    "attempt1": {
+      "successJobs": 47,
+      "cancelledJobId": 119898458751,
+      "cancelledStep": "Install Playwright system deps (cache hit, Linux only)",
+      "productTestsStartedInCancelledJob": false,
+      "requiredSummary": "failure"
+    },
+    "attempt2": {
+      "scope": "Rerun only the cancelled Ubuntu browser shard and dependent summary; retain the other successful jobs.",
+      "conclusion": "success",
+      "successJobs": 49,
+      "totalJobs": 49
     }
   },
   "storageObservation": {
