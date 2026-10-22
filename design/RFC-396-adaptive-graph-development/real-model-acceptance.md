@@ -94,3 +94,13 @@
 - 实现报告中六条 limitations 已生成正常 code-feedback 提案，继续阻止自动交付。内置提示明确：limitations 用于未满足批准范围的实现缺口；已批准边界写 summary，人工与 profile 待办保留原验收，不能伪称通过。未放宽非空 limitations 的交付门。
 - 通知经人工采纳反馈和正常编辑，明确单进程内存范围、任意整数起始与版本空洞，以及 failed 无 error 时“同版本保留最近已知错误、更高版本清除旧错误”的虚构验收策略，并要求新增真实测试。冻结 revision 7、basis digest `86e0a0a4bbc9cb8485a62acbf5cc4fb581e055e3ff685dd820f6104eaf3b1420`，进入原生评审；原三条 provisional 来源及未知责任人/日期不变。
 - 托管 v0.1.3 已 Ready 并申请激活，traffic switch `01a162e6-4cd2-7000-958e-3fe0b026b383`。freeze 与 handoff-prepare 成功，route 阶段等待“目标生产路由实际生效”，业务入口 503；尚未完成激活和 AC14。两槽 Pod Ready 且 Service 端点存在，继续核查正常平台路由，不改其他项目。
+
+### 存量实例升级回归与保留历史
+
+- `3a36ce4c7a51c5d697102b23a306863684b8acc2` 在原验收目录升级时拒绝启动，错误 `graph-builtin-agent-content-conflict:00000000000000GRAPHBUILD1`。原因是本次修改了已发布 v1 的内置 Agent 正文，触发原有不可变内容校验；新建实例的 CI 不能替代升级验收。先恢复到兼容的 `8325059a5`，原数据库、回答和评审均保留。
+- 前向修复使用新的 `00000000000000GRAPHBUILD2` / `graph-development-implementer-v2`，保留两种曾发布的 v1 安装快照及冻结任务引用，绝不改写旧记录或放宽冲突校验。额外指导进入可演进的冻结 `materials.authoringRules`；明确实际缺口必须报告、平台待办不能伪称通过，责任假设不能伪造 `.agent-workflow` 代码追溯。
+- 升级夹具保存真实原实例 v1 正文（2588 bytes，SHA-256 `e5de5ebf79fcc528237b34f04c286eab57681c2cf3f83843e78303fa41c0f1a3`）。回归同时安装原始 v1 与 `3a36ce4c7` 的 v1 变体，检查新会话加载、再次加载以及旧资源完全不变；实际升级结果另记。
+- 最终升级回归两文件 SQLite / 真实 PostgreSQL 各 8 pass / 0 fail、77 assertions，完整 backend typecheck 与目标 lint 通过。首次未限定 provider 的本地命令因没有 PostgreSQL 环境变量出现两项配置失败，分别使用明确的 SQLite 和隔离 PostgreSQL 配置完成复验；不计作产品缺陷。`8325059a5` 的 [CI 39753694035](https://github.com/wangbinquan/agent-workflow/actions/runs/39753694035) 已终态 49/49 success；其后候选的 CI 和实际升级另验。
+- 预约的原生追加需求已生成状态、决策表与序列组合，批量请求按输入顺序逐项处理、前项成功对后项可见、失败不回滚且不终止后项。保留六条真实回答来源及各自成熟度，revision 5 的 basis `320c5f1c9e50c64e28cac3b896a16a7d2c5ee3a566c24177d86b427c2571a951` 已经原生审核 `01M5HFN2SRBVT5CG9R2APB98EH` 批准。
+- 已有模块首个真实候选 tree `8a7fdaa72f762e2544868e15eff3ce96c219b282` 保持 consumer.ts 未改，模型报告 12 项通过；平台尚未独立执行，且责任假设错误追溯到平台材料被正确拒绝。反馈经正常提案采纳与编辑，revision 8 basis `a4524d9492df4e92e6ea03407b000dd71a800bb9b411a7f33d26d34ddbded697` 已经原生审核 `01M5HFNX4MNW1XTNRZ1FJ6378K` 批准。通知 revision 7 也已批准，三者均待修复版继续实际代码与验证。
+- 托管 v0.1.3 激活最终完成，journey `01a162da-f73e-7000-9a4e-c285844c8023` succeeded；私有仓库导入 batch `01M5HFM4KBKS8H2JCDQF1E4RA6` completed，repo `01M5HFXD9V3BA8QTAKAGX94G56`。受控夹具 Case `01M5HG061H9GVQDME92SJA2AJK` 已创建，实际 TaskRunner 准备工作区；此夹具只证明托管运输和执行链路，不算真实模型质量或 AC14 完成。

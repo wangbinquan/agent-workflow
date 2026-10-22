@@ -215,6 +215,13 @@ describeEachProvider('RFC-396 selected workspace material and recovery', (harnes
       expect(projection.materials.authoringRules.join('\n')).toContain(
         'repository-relative test paths',
       )
+      expect(projection.materials.authoringRules.join('\n')).toContain(
+        'limitations block automatic delivery',
+      )
+      expect(projection.materials.authoringRules.join('\n')).toContain('do not claim they passed')
+      expect(projection.materials.authoringRules.join('\n')).toContain(
+        '.agent-workflow is excluded',
+      )
       expect(projection.materials.planningBudget).toEqual({ reading: 12, generation: 24 })
       const state = await workspace.state(work.designId)
       expect(state.uploadPlan?.entries[0]?.targetPath).toBe('explicit-upload.txt')

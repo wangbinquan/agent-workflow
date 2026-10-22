@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseTemplate } from '@agent-workflow/shared'
@@ -28,11 +28,9 @@ test('graph type has six responsibilities while view combinations are selected w
   )!
   expect(designer.definition.bodyMd).toContain('不得固定输出')
   const implementer = GRAPH_BUILTIN_AGENTS.find(
-    (agent) => agent.definition.name === 'graph-development-implementer-v1',
+    (agent) => agent.definition.name === 'graph-development-implementer-v2',
   )!
-  expect(implementer.definition.bodyMd).toContain('limitations 阻止自动交付')
-  expect(implementer.definition.bodyMd).toContain('未满足已批准范围的实现缺口')
-  expect(implementer.definition.bodyMd).toContain('不宣称已通过')
+  expect(implementer.definition.bodyMd).toContain('无法实现的部分如实写 limitations')
   for (const workflow of GRAPH_BUILTIN_WORKFLOWS) {
     for (const node of workflow.definition.definition.nodes) {
       if ('promptTemplate' in node && typeof node.promptTemplate === 'string')
@@ -97,35 +95,70 @@ describeEachProvider('RFC-396 registered graph resources and legacy compatibilit
   afterEach(() => {
     for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
   })
-  test('the actual session bundle loads both types and publishes a reusable graph job', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'rfc396-registration-'))
-    homes.push(home)
-    const f = employeeAutomationFixture(harness, home)
-    await f.employee.platformTools.load()
-    await f.employee.module.maintenance.ready()
-    await f.employee.initializeGraph()
-    const tools = JSON.parse(
-      f.employee.platformTools.listJson(
-        JSON.stringify({ typeId: 'graph-development', revision: 1 }),
-        'design-and-clarify',
-      ),
-    )
-    expect(tools).toHaveLength(1)
-    expect(tools[0].content.implementation.kind).toBe('workflow')
-    const legacy = employeeTypePackageDescriptorSchema.parse(
-      JSON.parse(
-        (await import('@/modules/development-automation/composition/employeeTypePackage'))
-          .developmentEmployeeTypePackage.descriptorJson,
-      ),
-    )
-    expect(
-      (await f.employee.module.queries.listTypes()).find(
-        (type) => type.typeRef.typeId === 'development',
-      ),
-    ).toEqual(legacy)
-    await f.employee.initializeGraph()
-    expect(f.employee.graph).toBeDefined()
-  }, 30_000)
+  test.each(['original', '3a36ce4c7'])(
+    'the actual session bundle preserves installed %s v1 and publishes a reusable graph job',
+    async (installedVersion) => {
+      const home = mkdtempSync(join(tmpdir(), 'rfc396-registration-'))
+      homes.push(home)
+      const f = employeeAutomationFixture(harness, home)
+      // Captured from the existing real-model instance before the guidance edit.
+      // Reusing its immutable v1 identity with new prose previously stopped boot.
+      const implementer = GRAPH_BUILTIN_AGENTS.find(
+        (agent) => agent.definition.name === 'graph-development-implementer-v2',
+      )!
+      const agents = f.tasks.resourceCatalog.digitalEmployeeAgentTemplates
+      const legacyId = '00000000000000GRAPHBUILD1'
+      const originalBody = readFileSync(
+        join(import.meta.dir, 'fixtures/rfc396-implementer-v1.txt'),
+        'utf8',
+      )
+      const publishedBody =
+        installedVersion === 'original'
+          ? originalBody
+          : originalBody.replace(
+              '无法实现的部分如实写 limitations。',
+              'limitations 阻止自动交付，必须如实列出未满足已批准范围的实现缺口，不得为通过而省略缺口。已批准的范围边界、暂定状态和未定负责人写入 summary；既有人工义务与平台 profile 仍由原流程独立验收，不宣称已通过，也不把这些平台待办误报为未实现功能。',
+            )
+      await agents.createBuiltin(legacyId, {
+        ...implementer.definition,
+        name: 'graph-development-implementer-v1',
+        bodyMd: publishedBody,
+      })
+      const installed = await agents.get(legacyId)
+      await f.employee.platformTools.load()
+      expect(await agents.get(legacyId)).toEqual(installed)
+      expect((await agents.get(implementer.id))?.bodyMd).toBe(implementer.definition.bodyMd)
+      await f.employee.module.maintenance.ready()
+      await f.employee.initializeGraph()
+      const tools = JSON.parse(
+        f.employee.platformTools.listJson(
+          JSON.stringify({ typeId: 'graph-development', revision: 1 }),
+          'design-and-clarify',
+        ),
+      )
+      expect(tools).toHaveLength(1)
+      expect(tools[0].content.implementation.kind).toBe('workflow')
+      const legacy = employeeTypePackageDescriptorSchema.parse(
+        JSON.parse(
+          (await import('@/modules/development-automation/composition/employeeTypePackage'))
+            .developmentEmployeeTypePackage.descriptorJson,
+        ),
+      )
+      expect(
+        (await f.employee.module.queries.listTypes()).find(
+          (type) => type.typeRef.typeId === 'development',
+        ),
+      ).toEqual(legacy)
+      await f.employee.initializeGraph()
+      expect(f.employee.graph).toBeDefined()
+      const restarted = employeeAutomationFixture(harness, home)
+      await restarted.employee.platformTools.load()
+      expect(
+        await restarted.tasks.resourceCatalog.digitalEmployeeAgentTemplates.get(legacyId),
+      ).toEqual(installed)
+    },
+    30_000,
+  )
 })
 
 test('implementation contract is shared by Agent, Workflow and Program with explicit transports', () => {
