@@ -721,9 +721,17 @@ describe('RFC-175 §3 — snapshotClarifyState + taskToLaunchPayload', () => {
   // Re-review F2: the space-unresolvable heuristic keys off the EXACT backend
   // errorSummary marker, so lock the two together — a change to the backend
   // emitter must red this test, not silently break the discriminator.
+  // RFC-395 II-pre: the emitter is the production root launch kernel; the old
+  // services/task.ts launcher that also wrote it is deleted.
   test('impl-gate F2 marker is coupled to the backend worktree-creation errorSummary', () => {
     const here = dirname(fileURLToPath(import.meta.url))
-    const backend = readFileSync(join(here, '../../backend/src/services/task.ts'), 'utf-8')
+    const backend = readFileSync(
+      join(
+        here,
+        '../../backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+      ),
+      'utf-8',
+    )
     expect(backend).toContain('worktree creation failed:')
     const wiz = readFileSync(join(here, '../src/lib/task-wizard.ts'), 'utf-8')
     expect(wiz).toContain("startsWith('worktree creation failed:')")

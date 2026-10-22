@@ -1,6 +1,6 @@
 // Locks in the UX decision from the 2026-05-17 conversation: clicking
 // "启动任务 / Launch task" in the workflow editor must run the same
-// static validation the backend performs in services/task.ts §startTask
+// static validation the backend launch performs (taskRouteLaunchOperations.ts)
 // BEFORE navigating to the launcher form. Previously the button was a
 // plain `<Link>`, so users had to fill in repo/inputs and click Start
 // before the backend rejected a structurally invalid workflow with

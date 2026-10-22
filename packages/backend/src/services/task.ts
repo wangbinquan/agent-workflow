@@ -84,15 +84,12 @@ import { setDwStateTx } from '@/services/workgroup/state'
 import type { SecretBox } from '@/auth/secretBox'
 
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
-
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
 import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
-
 import type { StaleRunKillOutcome } from '@/util/process'
-
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
@@ -118,10 +115,8 @@ import {
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
 import { pickFreshestRun } from '@/services/freshness'
-
 import { reclaimStaleRefLocks, runGit, withWorktreeRegistryLock } from '@/util/git'
 import { removeDirectoryWithRetry } from '@/util/fsReclaim'
-
 import { redactGitUrl } from '@agent-workflow/shared'
 import {
   ConflictError,
@@ -138,24 +133,19 @@ import {
   composeSqliteRepositoryWorkspaceStore,
   type RepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
-
 import {
   builtinWorkflowSyncPreview,
   workflowSyncGateReason,
 } from '@/modules/task-execution/public/participants'
-
 import { SYSTEM_USER_ID } from '@/auth/actor'
-
 import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
 import type { TaskExecutionResourceAuthority } from '@/services/execution/taskExecutionResources'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
 import { assertFrozenTaskTriggerPreflight } from '@/modules/task-execution/infrastructure/frozenTaskTriggerPreflight'
 import { collectExecutionRefs } from '@agent-workflow/shared'
 import {} from '@/services/taskAuthorization'
-
 import { composeAgentRunDistillObserver } from '@/modules/task-execution/composition/agentRunDistillObserver'
 import { selectResumeRollbackTargets } from '@/modules/task-execution/application/resumeRollbackTargets'
-
 import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
 
 type WorkspacePreparationRepositoryProjection = Parameters<

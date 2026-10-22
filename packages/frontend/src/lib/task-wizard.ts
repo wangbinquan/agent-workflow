@@ -490,7 +490,7 @@ export function taskToLaunchPayload(task: Task): {
     // RFC-175 impl-gate F2 (re-review): ONLY a materialize/worktree-creation
     // failure risks a truncated repo prefix. A multi-repo materialize aborts on
     // the first bad repo and persists only the successful PREFIX, with repo_count
-    // collapsed to that length (services/task.ts persists
+    // collapsed to that length (taskRouteLaunchOperations.ts persists
     // `errorSummary: 'worktree creation failed: …'` + `repoCount:
     // Math.max(1, materializedRepos.length)`) — the dropped repos are
     // unrecoverable from the DTO, so refuse to reconstruct a SUBSET. Match the
