@@ -11,11 +11,7 @@ import {
   resolveLogicalDatabaseRestoreSourceContract,
   LogicalDatabaseRestoreError,
 } from '@/platform/persistence/logicalDatabaseRestore'
-import {
-  createPostgresqlDatabaseRuntime,
-  type PostgresqlReservedConnection,
-  type SqlRows,
-} from '@/platform/persistence/postgresqlRuntime'
+import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 
 const headContract = buildLogicalSchemaContract()
 let history: PostgresqlMigrationHistory
@@ -23,69 +19,34 @@ beforeAll(async () => {
   history = await loadPostgresqlMigrationHistory({ headContract })
 }, 60_000)
 
-function targetRuntime() {
-  const queries: string[] = []
-  let releases = 0
-  const connection: PostgresqlReservedConnection = {
-    unsafe(query): SqlRows {
-      queries.push(query)
-      const rows = query.includes('pg_try_advisory_lock') ? [{ acquired: true }] : []
-      return Object.assign(Promise.resolve(rows), {
-        async values() {
-          return rows.map(Object.values)
-        },
-      })
-    },
-    release() {
-      releases += 1
-    },
-  }
-  const runtime = createPostgresqlDatabaseRuntime({
-    generationId: 'dbg_rfc395_historical_target',
+// A real runtime: Bun.SQL connects lazily, and nothing listens on this port, so any
+// attempt to reach the database would surface as a connection error instead of the
+// contract error asserted below. Opening a historical target over a real database is
+// covered by the RFC-359 T19h old-copy upgrade and old-backup restore cases.
+function unreachableRuntime() {
+  return createPostgresqlDatabaseRuntime({
+    generationId: 'dbg_rfc395_unreachable',
     config: {
       provider: 'postgresql',
       urlEnv: 'RFC395_DATABASE_URL',
       poolMax: 1,
-      connectTimeoutMs: 10_000,
+      connectTimeoutMs: 1_000,
       statementTimeoutMs: 60_000,
       idleTimeoutMs: 30_000,
     },
-    env: { RFC395_DATABASE_URL: 'postgresql://fixture:fixture@localhost/fixture' },
-    poolFactory: () => ({
-      async reserve() {
-        return connection
-      },
-      unsafe: connection.unsafe,
-      async close() {},
-    }),
+    env: { RFC395_DATABASE_URL: 'postgresql://fixture:fixture@127.0.0.1:1/fixture' },
   })
-  return { runtime, queries, releases: () => releases }
 }
 
 describe('RFC-395 I-a binary head and historical operation contracts', () => {
-  test('opens an exact historical target after checking the complete binary history', async () => {
+  test('verifies an exact historical plan against the complete binary history', async () => {
     expect(history.root.contract.digest).not.toBe(headContract.digest)
-    const fixture = targetRuntime()
-    try {
-      const receipt = await verifyPostgresqlMigrationHistory({
-        headContract,
-        plan: history.root.plan,
-      })
-      expect(receipt.contractDigest).toBe(history.root.contract.digest)
-      const target = await openPostgresqlLogicalTarget({
-        headContract,
-        contract: history.root.contract,
-        plan: history.root.plan,
-        runtime: fixture.runtime,
-        operationId: 'dbm_rfc395_historical',
-        sourceGenerationId: 'dbg_rfc395_source',
-      })
-      await target.close()
-      expect(fixture.queries.some((query) => query.includes('pg_try_advisory_lock'))).toBe(true)
-      expect(fixture.releases()).toBe(1)
-    } finally {
-      await fixture.runtime.close()
-    }
+    const receipt = await verifyPostgresqlMigrationHistory({
+      headContract,
+      plan: history.root.plan,
+    })
+    expect(receipt.contractDigest).toBe(history.root.contract.digest)
+    expect(receipt.planDigest).toBe(history.root.plan.digest)
   })
 
   test('resolves the published historical source against the complete binary head', async () => {
@@ -120,14 +81,14 @@ describe('RFC-395 I-a binary head and historical operation contracts', () => {
   })
 
   test('keeps target contract/plan mismatches separate from migration history verification', async () => {
-    const fixture = targetRuntime()
+    const runtime = unreachableRuntime()
     try {
       await expect(
         openPostgresqlLogicalTarget({
           headContract,
           contract: history.root.contract,
           plan: history.head.plan,
-          runtime: fixture.runtime,
+          runtime,
           operationId: 'dbm_rfc395_mismatch',
           sourceGenerationId: 'dbg_rfc395_source',
         }),
@@ -135,9 +96,8 @@ describe('RFC-395 I-a binary head and historical operation contracts', () => {
         code: 'postgresql-target-operation-mismatch',
         message: 'PostgreSQL target plan and logical contract differ',
       })
-      expect(fixture.queries).toEqual([])
     } finally {
-      await fixture.runtime.close()
+      await runtime.close()
     }
   })
 

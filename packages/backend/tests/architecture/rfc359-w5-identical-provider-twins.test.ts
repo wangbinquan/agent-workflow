@@ -179,7 +179,8 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // RFC-382: composeSqliteDynamicWorkflowValidationContext becomes neutral; 65 -> 64.
       // RFC-391 retired five provider-named constructors: 55 -> 50.
       // RFC-392 removes composeSqliteAppDeps and composeSqliteApplicationDeps: 50 -> 48.
-    ).toBeGreaterThanOrEqual(48)
+      // RFC-395 I-a deletes the unused legacy projector buildPostgresqlTable: 48 -> 47.
+    ).toBeGreaterThanOrEqual(47)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {
