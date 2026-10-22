@@ -1,6 +1,6 @@
 # RFC-396 实现候选验收记录
 
-2026-10-22 后续真实模型恢复、模型提案审阅、结果解析与人工来源修正，以及隔离托管镜像/服务发布均记录于 [真实模型与托管验收](./real-model-acceptance.md)。三条真实模型完整旅程已经交付（预约 24/0、通知 44/0、已有模块 13/0）；实现候选 `bcdfdc366` 的主 CI 39780611814 已 49/49 success，托管业务闭环尚未关闭，RFC 保持 In Progress。精确 basis/tree/commit/profile/receipt 见 [机器可读汇总](./real-model-summary.json)。
+2026-10-22 当前功能验收已完成：三个真实模型旅程已交付（预约 24/0、通知 44/0、已有模块 13/0）；实际托管 Case 已 terminal / graph-development.delivered，独立测试 1/0、6 assertions，原始证据和产品入口均已读回。最新修复源码 `67795ed462` 的主 CI 39814553963 为 49/49 success；共享 main 后继整体 CI 尚有失败，RFC 保持 In Progress，功能验收与最终仓库 CI 分列。精确版本见 [真实模型汇总](./real-model-summary.json)、[托管完整回执](./hosted-completion-evidence.json) 和 [失败及恢复历史](./real-model-acceptance.md)。
 
 以下为 2026-10-21 首轮候选及后续修复的历史验证记录；最新状态见上方和真实验收文档。用户批准完整实现与远端交付；此记录分别说明已证实内容和尚未证实内容，不以单个通过结果宣称 RFC Done。
 
@@ -171,3 +171,18 @@ schema 报告与原路由覆盖扫描已经以 `baf4ac29317b67bc7ef9ebc0c32ffeb4
 ### 大冻结依据提示传输修复（2026-10-22）
 
 真实审核的 322 KB 提示触发 OpenCode 单参数限制。大提示改走已有 SpawnPlan stdin，完整材料不截断，小提示 argv 与直接 buildCommand 的有界校验保持原语义。真实子进程检验 CJK、多行、末尾哨兵，业务与系统装配均检验 stdin 和续跑 session 标识；对应两文件集中验证 **21 pass / 0 fail / 61 assertions**，目标 lint/格式通过。这是传输和装配范围的证据，不替代真实模型审核成功或全仓 CI。
+
+
+## 2026-10-22 当前功能矩阵与剩余退出条件
+
+| 验收点 | 当前证据与结果 |
+| --- | --- |
+| AC01、08、13、18 | 注册、原生协作门、执行合同、版本兼容及恢复用例通过；生产源码 67795ed462 的 exact-SHA CI 49/49 success。托管实际原文批准、重复请求身份、续跑和终态完整记录。实际恢复含有限运维配置操作，不宣称默认自动恢复已覆盖全部租约故障。 |
+| AC02～07、12 | 领域、组合规划、过期读集、语义与布局分离、差异审阅、固定视图、原始人工来源测试和三条完整真实模型旅程通过；组合与有边界的固定对照见 adaptive-comparison.md。 |
+| AC09～11 | 三个真实模型候选及托管候选分别有实际代码/测试、独立 profile 回执、basis/tree/profile/environment 绑定与原始日志；托管 transient unknown 与最终 current 均保留，未执行或读取失败未冒充通过。 |
+| AC14 | SQLite/PostgreSQL 的实际回归、单机完整执行，以及托管 PostgreSQL/服务/任务传输/原生 review/profile/交付均有实际证据；本轮关闭，见 hosted-completion-evidence.json。 |
+| AC15 | 原三个确定性浏览器旅程覆盖桌面、320/390px、键盘和图/列表定位；托管实际页面完成原始证据读取。后者不替代此前窄屏和交互覆盖。 |
+| AC16 | 实际 Case 页面可找到交付 commit 与原始报告；任务工作区普通 API 可读取代码/测试/脚本，clamp.ts blob 与候选 trace 一致。已有配置发布/冲突/重放测试保留；本托管案例 publication=null，没有声称业务远端发布或部署。 |
+| AC17 | 三条实际 DeepSeek 完整旅程已交付，分别 24/0、44/0、13/0，原始失败及代理针对虚构案例作出的 provisional 判断保留。托管受控夹具不额外计入真实模型案例数量。 |
+
+当前剩余项是 T15/T16 的共享 main CI 与最终状态收尾。前继 42611df21 的 CI 39848361400 为 47 success / 2 failure，所有功能 job 成功，整体 required 失败；407fb491 的 CI 39858220290 于 22:02:18 UTC completed / failure，同为 47 success / 2 failure：静态检查 job 120101856514 与 CI required 120114469860，所有功能 job success；静态项仅读取状态元数据，未读取 findings 或日志。本次收尾提交仍须消费自身 exact-SHA CI。未因文档收尾重复本地全量门禁、重跑业务测试或改动其他会话代码。功能证据完整不代表共享 CI 总绿，因此此记录仍不将 RFC 标为 Done。

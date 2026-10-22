@@ -1,6 +1,6 @@
 # RFC-396 真实模型与托管验收
 
-状态：进行中。本文记录实际失败、修正和验收结果，不将确定性夹具、接口接线或部署就绪当作真实模型交付通过。
+状态：三个真实模型旅程与实际托管闭环均已完成；RFC 保持 In Progress，最后共享 main CI 与收尾单列。最新托管通过证据见本文末节和 [完整回执](./hosted-completion-evidence.json)，历史失败全部保留。
 
 用户在本会话明确回复“1.这个不阻塞你 2.允许”：共享 schema 断言不阻止本任务继续，允许将虚构验收需求、夹具代码、生成的设计和执行上下文发送到已配置的 `opencode-go/deepseek-v4.1-flash`。此前暂停调用的许可条件已解除。
 
@@ -10,7 +10,7 @@
 - 隔离单机地址和端口会随重启变化，持久目录为 `/tmp/rfc396-live-McVHGG`；原始验收材料放在 `/tmp/rfc396-live-evidence/`。临时控制文件含会话凭据，不纳入仓库或报告。
 - 独立托管项目：`rfc396-graph-acceptance`，project `01a16258-52b4-7000-8510-afa1ee567504`，service `01a16258-52b4-7001-a23f-ab6109ec10ce`。使用本机 CrewStation 的正式项目、配置、构建和发布接口；不更新已有正式 AW 服务。
 - 托管源码快照：内部项目 `main@448b9cabf68635995c9cb502ecdd99627c3f2fd7` 对应上述 AW 候选。任务镜像为本次单独登记的 `01a1625d-689a-7000-a82a-372cacccc834`，构建 `01a1625d-a8ed-7000-ad84-412c942d0d51`；构建、镜像验证、服务就绪、业务执行分别记录。
-- 本轮浏览器控制没有可用 surface，因此当前真实模型旅程由产品 API 操作。此前三平台十个浏览器分片和三个确定性完整旅程的结果继续有效，但不混记为本轮代理实际点击了界面。
+- 初始浏览器控制没有可用 surface，三个真实模型旅程由产品 API 操作。此前三平台十个浏览器分片和三个确定性完整旅程的结果继续有效，但不混记为本轮代理实际点击了界面。
 
 ## 三个案例
 
@@ -34,7 +34,7 @@
 
 ## 证据边界
 
-三个单机真实模型闭环及固定图组合对照已收齐，详细版本与失败历史见后文；托管业务执行、最后 exact-SHA CI 和收尾仍在进行。模型调用累计 token 字段包含其会话记账，不能直接推算费用或独立输入规模。
+三个单机真实模型闭环、固定图组合对照与实际托管业务执行已收齐，详细版本与失败历史见后文；最后共享 main exact-SHA CI 与 RFC 收尾仍单列。模型调用累计 token 字段包含其会话记账，不能直接推算费用或独立输入规模。
 
 文档提交 `b45f3712740e6f70c45d88fe4912434dbb738749` 的 [CI 39732007816](https://github.com/wangbinquan/agent-workflow/actions/runs/39732007816) 终态为 47 success / 2 failure；失败根因仍是 [backend 12/24](https://github.com/wangbinquan/agent-workflow/actions/runs/39732007816/job/119668947797) 的 `Expected length: 217 / Received length: 222`，另一个失败是汇总门。用户已明确这不阻止继续验收；该事实不等同于整仓 CI 通过。
 
@@ -228,3 +228,28 @@
 - 使用既有批准发出同一幂等实现请求 hosted-clamp-native-implement-v2。首个请求于 21:08:57 在 assertMaterialsReadable → files → object open 返回 503，产品 API 返回 500 internal-error；同一请求的第二次尝试仍遇到对象读取 503，随后原交付观察器在审核 round 完成后成功受理相同幂等请求；独立有界重试器检测到已有回执便退出，没有再重投。实际事件 01M5JQKMK2HZX29XQVRGWQ7WS0 对应 implement-change round 01M5JQKN530518T6MGWSH90CM2、预分配 Task 01M5JQKNC0DKC9Q68Q572JRM8P；21:27:47 该 Task API 仍返回 task-not-found，不能把预分配身份当作已执行。成功受理前，另一次普通对象内容 API 读取对冻结 bundle 对象 01a164ad-703e-7000-be31-1084f9966592 也曾返回 503 unavailable，details.code 为 object_storage_busy，原文为“存储元数据正在变更，请重试”。源码将此码映射为短元数据事务无法取得锁后的临时拒绝；未识别线上持锁者，也未修改 CrewStation 源码、全局配置、平台锁或业务 Task 数据。
 - 同时读取的本项目对象空间观测为 ready / 非 stale，usedBytes 101740、reservedBytes 0、quotaBytes 268435456；这只能证明空间级观测，不能替代上述具体内容读取结果。实际 candidate、独立 profile 和 terminal / delivered 仍未取得，AC14 / T14 未完成，RFC 保持 In Progress。
 - 文档提交 42611df21e71ca2db7f04846a54f00d80d8ea3af 的 [CI 39848361400](https://github.com/wangbinquan/agent-workflow/actions/runs/39848361400) 最终为 47 success / 2 failure。真实 PostgreSQL job 120067595146 通过，包括双库 P0 变异步骤（artifact 12456597057）；Ubuntu backend shard 20 job 120067595127 为 1112 pass / 0 fail / 7 skip。前两轮失败证据继续保留，不追溯改写。本轮剩余失败为既有静态检查及 CI required 汇总（120084452568）；未读取排除范围内的检查详情，没有改他人代码、削弱断言或重跑追绿。
+
+
+### 2026-10-22 托管完整闭环与产品证据入口通过
+
+同一 Case `01M5J5MH5Q3M2ZBAYK0VPT200M` 在 **2026-10-22T21:52:10.801Z** 进入 `terminal / graph-development.delivered`；21:56:19 UTC 终态读回，21:59:57 UTC 实际浏览器读取原始证据，22:02:50 UTC 任务工作区代码读回。**AC14 / T14 的托管缺口关闭**。本节及 [机器可读完整回执](./hosted-completion-evidence.json) 是当前功能结论，上面的未完成状态均为带时间的历史观察。
+
+| 阶段 | 实际结果与版本 |
+| --- | --- |
+| 批准依据 | `basis:hosted-clamp-native-basis-v2`，digest `833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9`；3351 bytes 原文批准回执 `01M5JP2FCQ8B0Q57H3G22ZS4XQ` 沿用 |
+| 实现 | Task `01M5JQKNC0DKC9Q68Q572JRM8P` 于 21:38:52 UTC done；NodeRun `01M5JRE8422WZA369PZXRP70PZ` exit 0；两个对象读取失败和预分配身份 404 后，同一请求正常完成，没有重复启动 |
+| 候选 | tree `28cd65cf2f92ae948841d57ff3ae8db58b3b3db7`；新增 `clamp.ts`、`clamp.test.ts`、`verify.sh`，基线内容未删除或修改 |
+| 独立校验 | round `01M5JRXFTKD6CKDV8VVN51RVFA`；profile `01M5HCDKS9T3174V2B9JKV2CDE@1` / digest `09ca94409b9f984781c1e468ae6464d0ba361a3e3e97503f824417de81c67c67`；实际 **1 pass / 0 fail / 6 assertions**，exit 0，未超时 |
+| 执行环境 | Linux arm64 / Bun 1.4.3 / Node 26.3.0；environment digest `f16a9c8e58bffcc58750ac5008ac42083fee37ad2f98ecdebb351b8e77c1d5b6`；回执耗时包含托管往返，测试自身输出 403 ms |
+| 交付 | 内部 commit `cafc85a528c3d1b518f73475ff5c92f9b30d6a11`；tree 与校验一致；publication 为 null，未声称业务远端发布或部署 |
+| 当前证据 | design-review、structure、execution 全部 `passed / current`，`ob-clamp` 为 passed；原始 `execution.json`、测试 stdout、候选源码均已读回 |
+
+产品页面从 Case 的设计工作区打开“原始验证证据”，显示真实测试输出、basis、candidate tree 与最终交付提交，无页面脚本错误。首次浏览器脚本只匹配英文标签，实际页面为中文，因此超时；修改验收脚本识别中英文后通过，没有修改产品或重跑业务。普通 Task 工作区读回的 `clamp.ts` Git blob 为 `6d9e42530a42783647c42f938a70aeccba1d95ab`，与候选 trace 相符；测试包含 -1、0、5、10、11、0.5 六个输入。
+
+![托管产品页面中的原始独立测试报告](./hosted-execution-evidence.png)
+
+第一次终态前证据读取遇到对象产物不可读，execution 被准确投影为 `unknown / evidence-artifact-unreadable`；后续正常读取得到原字节和 `current`，未伪造证据或重复测试。一次工作区文件请求也返回 500，随后同一普通只读接口读回三份文件。这些可用性失败保留在完整回执中，不宣称对象存储或平台租约根因已修复。
+
+范围保持明确：托管设计与实现是受控夹具，文件审核调用了获准真实模型；这不是第四条真实模型设计/编码旅程。三个完整真实模型案例仍以 [原汇总](./real-model-summary.json) 为准。实际任务父环境继续使用已记录的旧镜像，没有借验收修改 Task 数据库、安装工具或换镜像；手动路由调和、两次有限启动续跑及还原 `autoResumeOnBoot=false` 的历史不被抹去。实现源码 `67795ed462` 的 CI 49/49 success 有效，共享 main 后继 CI 的整体失败也仍有效；功能通过不等于整仓 CI 总绿，RFC 最终 Done 尚未签署。
+
+后继文档提交 `407fb491ad5a592590d56d3b88136114443e74dd` 的 [CI 39858220290](https://github.com/wangbinquan/agent-workflow/actions/runs/39858220290) 于 22:02:18 UTC 结束，为 **47 success / 2 failure**。所有功能 job 成功，剩余失败是静态检查 job `120101856514` 和汇总 `CI required` `120114469860`；静态项只记录状态元数据，没有读取 findings 或日志。保留整体失败，未重跑 CI 或改动他人代码；本次证据收尾提交还需单独消费其 exact-SHA CI。

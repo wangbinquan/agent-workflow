@@ -1,0 +1,920 @@
+{
+  "schemaVersion": 1,
+  "rfc": "RFC-396",
+  "criterion": "AC14",
+  "result": "passed",
+  "observedAt": "2026-10-22T22:08:30.625Z",
+  "scope": "Actual hosted transport with the built-in file review and approved real model; design and implementation remain deterministic fixtures. The three complete real-model journeys are recorded separately.",
+  "boundary": "Actual hosted PostgreSQL/service/task transport, native immutable review, independent profile and internal candidate delivery. Design and implementation are controlled fixtures; this is not a fourth real-model design/implementation journey, automatic routing acceptance, default boot recovery acceptance, or external business publication.",
+  "case": {
+    "id": "01M5J5MH5Q3M2ZBAYK0VPT200M",
+    "revision": 20,
+    "state": "terminal",
+    "terminalKind": "graph-development.delivered",
+    "terminalAt": "2026-10-22T21:52:10.801Z",
+    "observedAt": "2026-10-22T21:56:19.369Z"
+  },
+  "deployment": {
+    "projectId": "01a16258-52b4-7000-8510-afa1ee567504",
+    "serviceId": "01a16258-52b4-7001-a23f-ab6109ec10ce",
+    "projectSlug": "rfc396-graph-acceptance",
+    "releaseId": "01a164f2-b7a0-7000-8caf-c3a9d1f2d8ec",
+    "releaseVersion": "0.1.8",
+    "sourceCommit": "67795ed462db9b78cea82fad5ae14c9d09bbca91",
+    "serviceImageDigest": "sha256:48b6900402c2874e3c3efdbb5869557e7fe9582e39bf47eb74d2e3fa49ed0321",
+    "releaseJourneyId": "01a164f2-c061-7000-9d13-456440e9d79d",
+    "activationId": "01a16505-d31d-7000-9eb6-6af46a97c076",
+    "activationResult": "succeeded",
+    "manualRouteReconciliation": true,
+    "actualTaskParentId": "01a16306-bf25-7000-b9e2-0ed0ae73e2e9",
+    "actualTaskGeneration": 1,
+    "actualTaskImageDigest": "sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91",
+    "declaredNewTaskImageDigest": "sha256:21b2a5640e5d2970392cd7ca0e9ad85beb7ea26b327bd5ad42c832041d2f9043",
+    "actualTaskImageUpgradeObserved": false,
+    "productionRouteObserved": "rfc396-graph-acceptance-green",
+    "previewRouteObserved": "rfc396-graph-acceptance-blue",
+    "routeScope": "The platform declared prod and internal targets as green, but both physical routes remained blue. Exact resourceVersion/spec-guarded changes reconciled only these two owned routes. The platform then completed its handoff. This is manual operations evidence, not automatic routing acceptance.",
+    "servicePlanId": "01a0bf5d-8f4b-7000-9e4b-b54e91ee9d10",
+    "resources": {
+      "cpu": "500m",
+      "memory": "512Mi"
+    },
+    "internalRouteObserved": "rfc396-graph-acceptance-green",
+    "previewOffline": {
+      "at": "2026-10-22T19:46:57.035Z",
+      "method": "normal preview/offline API",
+      "releaseId": "01a16484-de19-7000-b60c-4ba2b51f2bcd",
+      "replicas": 0,
+      "physicalPodDeletionConfirmed": true
+    }
+  },
+  "sourceCi": {
+    "commit": "67795ed462db9b78cea82fad5ae14c9d09bbca91",
+    "runId": 39814553963,
+    "attempt": 1,
+    "status": "completed",
+    "conclusion": "success",
+    "successJobs": 49,
+    "totalJobs": 49,
+    "requiredCheckId": 119960898866,
+    "requiredCheckCompletedAt": "2026-10-22T16:53:25Z",
+    "activationProof": "All 49 terminal jobs and the exact-SHA CI required check passed while the run aggregate still appeared in_progress. The aggregate was subsequently observed completed/success."
+  },
+  "basis": {
+    "id": "basis:hosted-clamp-native-basis-v2",
+    "digest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9"
+  },
+  "review": {
+    "receipt": {
+      "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+      "caseId": "01M5J5MH5Q3M2ZBAYK0VPT200M",
+      "decidedAt": 1792702234007,
+      "decision": "approved",
+      "id": "01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+      "nodeRunId": "01M5JP0DS1Z2BMGN0X8Y1KFQ7X",
+      "reason": "",
+      "taskId": "01M5JMN7NKDXW8TTMFG01BM7G6"
+    },
+    "bodyProof": {
+      "at": "2026-10-22T20:50:03.854Z",
+      "basisId": "basis:hosted-clamp-native-basis-v2",
+      "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+      "taskId": "01M5JMN7NKDXW8TTMFG01BM7G6",
+      "nodeRunId": "01M5JP0DS1Z2BMGN0X8Y1KFQ7X",
+      "exactMatch": true,
+      "expectedBytes": 3351,
+      "actualBytes": 3351,
+      "expectedDigest": "b9e19ccbfa30a335fb7867b387b876314b8342d8d7d12b46b58986aa01aedda1",
+      "actualDigest": "b9e19ccbfa30a335fb7867b387b876314b8342d8d7d12b46b58986aa01aedda1"
+    },
+    "nativeGateReceipt": {
+      "operationId": "01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+      "gate": {
+        "kind": "review",
+        "ref": "review:01M5JP0DS1Z2BMGN0X8Y1KFQ7X"
+      },
+      "gateRevision": 2,
+      "taskRevision": 4,
+      "acceptedAt": 1792702234007,
+      "replayed": false
+    }
+  },
+  "implementation": {
+    "taskId": "01M5JQKNC0DKC9Q68Q572JRM8P",
+    "status": "done",
+    "startedAt": 1792704714326,
+    "finishedAt": 1792705132091,
+    "worktreePath": "cs-workspace:development%3Ashared/graph-development/01m5j5mh5q3m2zbayk0vpt200m/workspace",
+    "result": {
+      "deliveryContent": {
+        "commitMessage": "test: RFC396 hosted clamp fixture",
+        "description": "Controlled fixture exercising real runtime, candidate and profile",
+        "title": "Hosted clamp acceptance"
+      },
+      "limitations": [],
+      "testRefs": ["clamp.test.ts"],
+      "traceProposals": [
+        {
+          "elementId": "req-clamp",
+          "obligationId": "ob-clamp",
+          "path": "clamp.ts",
+          "reason": "Finite clamp implementation with boundary tests",
+          "symbol": "export function clamp",
+          "testRef": "clamp.test.ts"
+        }
+      ]
+    }
+  },
+  "rounds": [
+    {
+      "id": "01M5JSGADBCABXZXGDNB2C4YGF",
+      "state": "completed",
+      "workItemRef": "deliver-result",
+      "executionRef": null,
+      "attemptOrdinal": 0,
+      "createdAt": "2026-10-22T21:50:33.387Z",
+      "updatedAt": "2026-10-22T21:52:10.801Z"
+    },
+    {
+      "id": "01M5JRXFTKD6CKDV8VVN51RVFA",
+      "state": "completed",
+      "workItemRef": "verify-change",
+      "executionRef": null,
+      "attemptOrdinal": 0,
+      "createdAt": "2026-10-22T21:40:16.340Z",
+      "updatedAt": "2026-10-22T21:50:33.285Z"
+    },
+    {
+      "id": "01M5JQKN530518T6MGWSH90CM2",
+      "state": "completed",
+      "workItemRef": "implement-change",
+      "executionRef": "01M5JQKNC0DKC9Q68Q572JRM8P",
+      "attemptOrdinal": 0,
+      "createdAt": "2026-10-22T21:17:25.540Z",
+      "updatedAt": "2026-10-22T21:40:16.137Z"
+    },
+    {
+      "id": "01M5JAY36499QEA29XXNZ7YEKN",
+      "state": "completed",
+      "workItemRef": "review-design",
+      "executionRef": "01M5JMN7NKDXW8TTMFG01BM7G6",
+      "attemptOrdinal": 1,
+      "createdAt": "2026-10-22T17:35:56.101Z",
+      "updatedAt": "2026-10-22T21:13:37.785Z"
+    },
+    {
+      "id": "01M5J6MG42T2P1RVDW5W091ZSX",
+      "state": "completed",
+      "workItemRef": "design-and-clarify",
+      "executionRef": "01M5J6MGFDZKC7S81ZS7Q19XTR",
+      "attemptOrdinal": 0,
+      "createdAt": "2026-10-22T16:20:47.362Z",
+      "updatedAt": "2026-10-22T17:29:56.397Z"
+    },
+    {
+      "id": "01M5J5QMEK61T98Q2N6CYRVEM9",
+      "state": "completed",
+      "workItemRef": "understand-request",
+      "executionRef": null,
+      "attemptOrdinal": 0,
+      "createdAt": "2026-10-22T16:05:01.525Z",
+      "updatedAt": "2026-10-22T16:19:11.424Z"
+    }
+  ],
+  "candidate": {
+    "agentOutcomeRef": "01M5JQKN530518T6MGWSH90CM2",
+    "baselineSnapshotRef": "git:370e6f922a40d698e526696633c145879c6afb16",
+    "candidateRef": "1166fe1533530d2abd7180c6f26fc3ee42687b63f2594e2877e9483ec6aee217",
+    "changed": {
+      "added": ["clamp.test.ts", "clamp.ts", "verify.sh"],
+      "deleted": [],
+      "modified": []
+    },
+    "excludePolicyDigest": "19a325e1e95e0529d9fc0ecb1a89be2ce6355a385ef1b99a598ac07bb771c412",
+    "repositoryBaseline": {
+      "commitSha": "370e6f922a40d698e526696633c145879c6afb16",
+      "kind": "commit",
+      "treeOid": "b3e43cf7fca3ea9ed8e102d6021b405c1c204afe"
+    },
+    "treeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+    "uploadLineage": {
+      "finalDigests": [],
+      "planDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  },
+  "verification": {
+    "result": {
+      "candidateRef": "1166fe1533530d2abd7180c6f26fc3ee42687b63f2594e2877e9483ec6aee217",
+      "candidateTreeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+      "evidenceIds": [
+        "structure:01M5JRXFTKD6CKDV8VVN51RVFA",
+        "execution:01M5JRXFTKD6CKDV8VVN51RVFA:7e47211b50a9eb9f"
+      ],
+      "limitations": [],
+      "passed": true
+    },
+    "binding": {
+      "evidence": {
+        "id": "execution:01M5JRXFTKD6CKDV8VVN51RVFA:7e47211b50a9eb9f",
+        "kind": "execution",
+        "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+        "obligationIds": ["ob-clamp"],
+        "readSet": [
+          {
+            "id": "c-clamp",
+            "revision": 1,
+            "digest": "5c9fc60cad0f3004fa57dc87c01a91400429496e631af653ab044862ecb8bcea"
+          },
+          {
+            "id": "dependencies:a4d3aa7faa58ef36e45b4ed8580cd9454693f622",
+            "revision": 1,
+            "digest": "3db1300e81fd5e01269fcba857f893577931933fc3bb80570b785403d37f0bc5"
+          },
+          {
+            "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:repository",
+            "revision": 1,
+            "digest": "c0231ee500c36bd67825bdfd2ed44eba7b439975e37cf323633b199aba81c7a1"
+          },
+          {
+            "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:scope",
+            "revision": 1,
+            "digest": "aff01d20fc1c8eba693fff69a27df3bb479a94fb781b4c177c24ddf8ca841913"
+          },
+          {
+            "id": "flow-clamp",
+            "revision": 1,
+            "digest": "dbed419da00ca0b18dd36042e37db7f4037e705ec64b01321bb15acbd9d28306"
+          },
+          {
+            "id": "ob-clamp",
+            "revision": 1,
+            "digest": "3481bce2397a51b1d140ddb7a6e660530d7ec729231b1c9642152b1a49827447"
+          },
+          {
+            "id": "req-clamp",
+            "revision": 1,
+            "digest": "954ff173576ff4819c2ed9a0901054a0739e7313c37f4e09263fbaae7589038f"
+          },
+          {
+            "id": "request-material",
+            "revision": 1,
+            "digest": "2efcc46c4ee5a2da2ab6a9ec18323ec9fb4848f1163e73f41577ff0ca3be61ab"
+          }
+        ],
+        "candidateTreeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+        "commitSha": null,
+        "profileRef": {
+          "id": "01M5HCDKS9T3174V2B9JKV2CDE",
+          "revision": 1,
+          "digest": "09ca94409b9f984781c1e468ae6464d0ba361a3e3e97503f824417de81c67c67"
+        },
+        "environmentDigest": "f16a9c8e58bffcc58750ac5008ac42083fee37ad2f98ecdebb351b8e77c1d5b6",
+        "executionRef": "01M5JRXFTKD6CKDV8VVN51RVFA:01M5HCDKS9T3174V2B9JKV2CDE@1:7af64de6997adbdc5f15ffba71f444c6fe7ec90b9930ec31e0296fbfe2f3bb6a",
+        "artifactRef": "01M5JSDT6212B24TNDENE3X74V",
+        "artifactDigest": "7d33b64ac9c023f8b45158fc07694535a85ac80c57904fb7a61d22855fc8ba48",
+        "ci": null,
+        "result": "passed",
+        "summary": "01M5HCDKS9T3174V2B9JKV2CDE@1: 执行通过",
+        "limitations": [
+          "测试执行通过不代表已证明所有输入上的行为；环境快照不包含远端服务或未声明的外部依赖。"
+        ],
+        "recordedAt": 1792705258031
+      },
+      "freshness": "current",
+      "reasons": []
+    },
+    "profile": {
+      "digest": "09ca94409b9f984781c1e468ae6464d0ba361a3e3e97503f824417de81c67c67",
+      "id": "01M5HCDKS9T3174V2B9JKV2CDE",
+      "revision": 1
+    },
+    "environment": {
+      "description": "{\"arch\":\"arm64\",\"dependencies\":{},\"locale\":null,\"osRelease\":\"7.0.12-linuxkit\",\"platform\":\"linux\",\"runtimes\":{\"bun\":\"1.4.3\",\"node\":\"26.3.0\"},\"timezone\":null}",
+      "digest": "f16a9c8e58bffcc58750ac5008ac42083fee37ad2f98ecdebb351b8e77c1d5b6"
+    },
+    "receipt": {
+      "ok": true,
+      "receiptDigest": "7af64de6997adbdc5f15ffba71f444c6fe7ec90b9930ec31e0296fbfe2f3bb6a",
+      "steps": [
+        {
+          "durationMs": 206598,
+          "evidenceFiles": [],
+          "exitCode": 0,
+          "ok": true,
+          "outputTailRef": "d695cb42bf3ab021df08df6b7677648c89305c6ab28c93d79040c2cc4b404d15",
+          "stepId": "hosted-bun",
+          "timedOut": false
+        }
+      ],
+      "stopPolicy": "first-failure"
+    },
+    "testReferencesChecked": true,
+    "actualTests": {
+      "passed": 1,
+      "failed": 0,
+      "assertions": 6,
+      "testFiles": 1,
+      "output": "bun test v1.4.3 (c6da4a4d3)\n\n\nclamp.test.ts:\n(pass) finite clamp boundaries [0.30ms]\n\n 1 pass\n 0 fail\n 6 expect() calls\nRan 1 test across 1 file. [403.00ms]\n"
+    },
+    "artifact": {
+      "ref": "01M5JSDT6212B24TNDENE3X74V",
+      "digest": "7d33b64ac9c023f8b45158fc07694535a85ac80c57904fb7a61d22855fc8ba48",
+      "files": [
+        {
+          "path": "execution.json",
+          "content": "{\"basisDigest\":\"833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9\",\"behavior\":[],\"candidate\":{\"agentOutcomeRef\":\"01M5JQKN530518T6MGWSH90CM2\",\"baselineSnapshotRef\":\"git:370e6f922a40d698e526696633c145879c6afb16\",\"candidateRef\":\"1166fe1533530d2abd7180c6f26fc3ee42687b63f2594e2877e9483ec6aee217\",\"changed\":{\"added\":[\"clamp.test.ts\",\"clamp.ts\",\"verify.sh\"],\"deleted\":[],\"modified\":[]},\"excludePolicyDigest\":\"19a325e1e95e0529d9fc0ecb1a89be2ce6355a385ef1b99a598ac07bb771c412\",\"repositoryBaseline\":{\"commitSha\":\"370e6f922a40d698e526696633c145879c6afb16\",\"kind\":\"commit\",\"treeOid\":\"b3e43cf7fca3ea9ed8e102d6021b405c1c204afe\"},\"treeOid\":\"28cd65cf2f92ae948841d57ff3ae8db58b3b3db7\",\"uploadLineage\":{\"finalDigests\":[],\"planDigest\":\"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\"}},\"environment\":{\"description\":\"{\\\"arch\\\":\\\"arm64\\\",\\\"dependencies\\\":{},\\\"locale\\\":null,\\\"osRelease\\\":\\\"7.0.12-linuxkit\\\",\\\"platform\\\":\\\"linux\\\",\\\"runtimes\\\":{\\\"bun\\\":\\\"1.4.3\\\",\\\"node\\\":\\\"26.3.0\\\"},\\\"timezone\\\":null}\",\"digest\":\"f16a9c8e58bffcc58750ac5008ac42083fee37ad2f98ecdebb351b8e77c1d5b6\"},\"profile\":{\"digest\":\"09ca94409b9f984781c1e468ae6464d0ba361a3e3e97503f824417de81c67c67\",\"id\":\"01M5HCDKS9T3174V2B9JKV2CDE\",\"revision\":1},\"receipt\":{\"ok\":true,\"receiptDigest\":\"7af64de6997adbdc5f15ffba71f444c6fe7ec90b9930ec31e0296fbfe2f3bb6a\",\"steps\":[{\"durationMs\":206598,\"evidenceFiles\":[],\"exitCode\":0,\"ok\":true,\"outputTailRef\":\"d695cb42bf3ab021df08df6b7677648c89305c6ab28c93d79040c2cc4b404d15\",\"stepId\":\"hosted-bun\",\"timedOut\":false}],\"stopPolicy\":\"first-failure\"},\"testReferencesChecked\":true}"
+        },
+        {
+          "path": "logs/0-output-tail.txt",
+          "content": "bun test v1.4.3 (c6da4a4d3)\n\n\nclamp.test.ts:\n(pass) finite clamp boundaries [0.30ms]\n\n 1 pass\n 0 fail\n 6 expect() calls\nRan 1 test across 1 file. [403.00ms]\n"
+        }
+      ]
+    }
+  },
+  "delivery": {
+    "artifact": {
+      "artifactRef": "01M5JSJRP982VVTR4E1823FX1S",
+      "digest": "9e1256c4764c3252c77489446f006c75ec8b824e571d988417e9d4da2d69b3b4"
+    },
+    "candidate": {
+      "agentOutcomeRef": "01M5JQKN530518T6MGWSH90CM2",
+      "baselineSnapshotRef": "git:370e6f922a40d698e526696633c145879c6afb16",
+      "candidateRef": "1166fe1533530d2abd7180c6f26fc3ee42687b63f2594e2877e9483ec6aee217",
+      "changed": {
+        "added": ["clamp.test.ts", "clamp.ts", "verify.sh"],
+        "deleted": [],
+        "modified": []
+      },
+      "excludePolicyDigest": "19a325e1e95e0529d9fc0ecb1a89be2ce6355a385ef1b99a598ac07bb771c412",
+      "repositoryBaseline": {
+        "commitSha": "370e6f922a40d698e526696633c145879c6afb16",
+        "kind": "commit",
+        "treeOid": "b3e43cf7fca3ea9ed8e102d6021b405c1c204afe"
+      },
+      "treeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+      "uploadLineage": {
+        "finalDigests": [],
+        "planDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "commitSha": "cafc85a528c3d1b518f73475ff5c92f9b30d6a11",
+    "kind": "delivery",
+    "publication": null,
+    "result": {
+      "artifactRefs": ["01M5JATS0CSTF30P8Q9WDY0EP1", "01M5JSJRP982VVTR4E1823FX1S"],
+      "commitSha": "cafc85a528c3d1b518f73475ff5c92f9b30d6a11",
+      "publication": null
+    }
+  },
+  "currentEvidence": {
+    "evidence": [
+      {
+        "evidence": {
+          "id": "review-evidence:01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+          "kind": "design-review",
+          "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+          "obligationIds": ["ob-clamp"],
+          "readSet": [
+            {
+              "id": "c-clamp",
+              "revision": 1,
+              "digest": "5c9fc60cad0f3004fa57dc87c01a91400429496e631af653ab044862ecb8bcea"
+            },
+            {
+              "id": "dependencies:a4d3aa7faa58ef36e45b4ed8580cd9454693f622",
+              "revision": 1,
+              "digest": "3db1300e81fd5e01269fcba857f893577931933fc3bb80570b785403d37f0bc5"
+            },
+            {
+              "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:repository",
+              "revision": 1,
+              "digest": "c0231ee500c36bd67825bdfd2ed44eba7b439975e37cf323633b199aba81c7a1"
+            },
+            {
+              "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:scope",
+              "revision": 1,
+              "digest": "aff01d20fc1c8eba693fff69a27df3bb479a94fb781b4c177c24ddf8ca841913"
+            },
+            {
+              "id": "flow-clamp",
+              "revision": 1,
+              "digest": "dbed419da00ca0b18dd36042e37db7f4037e705ec64b01321bb15acbd9d28306"
+            },
+            {
+              "id": "ob-clamp",
+              "revision": 1,
+              "digest": "3481bce2397a51b1d140ddb7a6e660530d7ec729231b1c9642152b1a49827447"
+            },
+            {
+              "id": "req-clamp",
+              "revision": 1,
+              "digest": "954ff173576ff4819c2ed9a0901054a0739e7313c37f4e09263fbaae7589038f"
+            },
+            {
+              "id": "request-material",
+              "revision": 1,
+              "digest": "2efcc46c4ee5a2da2ab6a9ec18323ec9fb4848f1163e73f41577ff0ca3be61ab"
+            }
+          ],
+          "candidateTreeOid": null,
+          "commitSha": null,
+          "profileRef": null,
+          "environmentDigest": null,
+          "executionRef": "01M5JMN7NKDXW8TTMFG01BM7G6",
+          "artifactRef": "01M5JP4ZH249XVRQKVMZK71T0N",
+          "artifactDigest": "b25262d4c41e5efac67e9d8ba6a77fe74eb9230965611877d040c9d7bc25196d",
+          "ci": null,
+          "result": "passed",
+          "summary": "approved: ",
+          "limitations": ["人工批准设计并不证明候选代码已通过执行验证。"],
+          "recordedAt": 1792702234007
+        },
+        "freshness": "current",
+        "reasons": []
+      },
+      {
+        "evidence": {
+          "id": "execution:01M5JRXFTKD6CKDV8VVN51RVFA:7e47211b50a9eb9f",
+          "kind": "execution",
+          "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+          "obligationIds": ["ob-clamp"],
+          "readSet": [
+            {
+              "id": "c-clamp",
+              "revision": 1,
+              "digest": "5c9fc60cad0f3004fa57dc87c01a91400429496e631af653ab044862ecb8bcea"
+            },
+            {
+              "id": "dependencies:a4d3aa7faa58ef36e45b4ed8580cd9454693f622",
+              "revision": 1,
+              "digest": "3db1300e81fd5e01269fcba857f893577931933fc3bb80570b785403d37f0bc5"
+            },
+            {
+              "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:repository",
+              "revision": 1,
+              "digest": "c0231ee500c36bd67825bdfd2ed44eba7b439975e37cf323633b199aba81c7a1"
+            },
+            {
+              "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:scope",
+              "revision": 1,
+              "digest": "aff01d20fc1c8eba693fff69a27df3bb479a94fb781b4c177c24ddf8ca841913"
+            },
+            {
+              "id": "flow-clamp",
+              "revision": 1,
+              "digest": "dbed419da00ca0b18dd36042e37db7f4037e705ec64b01321bb15acbd9d28306"
+            },
+            {
+              "id": "ob-clamp",
+              "revision": 1,
+              "digest": "3481bce2397a51b1d140ddb7a6e660530d7ec729231b1c9642152b1a49827447"
+            },
+            {
+              "id": "req-clamp",
+              "revision": 1,
+              "digest": "954ff173576ff4819c2ed9a0901054a0739e7313c37f4e09263fbaae7589038f"
+            },
+            {
+              "id": "request-material",
+              "revision": 1,
+              "digest": "2efcc46c4ee5a2da2ab6a9ec18323ec9fb4848f1163e73f41577ff0ca3be61ab"
+            }
+          ],
+          "candidateTreeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+          "commitSha": null,
+          "profileRef": {
+            "id": "01M5HCDKS9T3174V2B9JKV2CDE",
+            "revision": 1,
+            "digest": "09ca94409b9f984781c1e468ae6464d0ba361a3e3e97503f824417de81c67c67"
+          },
+          "environmentDigest": "f16a9c8e58bffcc58750ac5008ac42083fee37ad2f98ecdebb351b8e77c1d5b6",
+          "executionRef": "01M5JRXFTKD6CKDV8VVN51RVFA:01M5HCDKS9T3174V2B9JKV2CDE@1:7af64de6997adbdc5f15ffba71f444c6fe7ec90b9930ec31e0296fbfe2f3bb6a",
+          "artifactRef": "01M5JSDT6212B24TNDENE3X74V",
+          "artifactDigest": "7d33b64ac9c023f8b45158fc07694535a85ac80c57904fb7a61d22855fc8ba48",
+          "ci": null,
+          "result": "passed",
+          "summary": "01M5HCDKS9T3174V2B9JKV2CDE@1: 执行通过",
+          "limitations": [
+            "测试执行通过不代表已证明所有输入上的行为；环境快照不包含远端服务或未声明的外部依赖。"
+          ],
+          "recordedAt": 1792705258031
+        },
+        "freshness": "current",
+        "reasons": []
+      },
+      {
+        "evidence": {
+          "id": "structure:01M5JRXFTKD6CKDV8VVN51RVFA",
+          "kind": "structure",
+          "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+          "obligationIds": ["ob-clamp"],
+          "readSet": [
+            {
+              "id": "c-clamp",
+              "revision": 1,
+              "digest": "5c9fc60cad0f3004fa57dc87c01a91400429496e631af653ab044862ecb8bcea"
+            },
+            {
+              "id": "dependencies:a4d3aa7faa58ef36e45b4ed8580cd9454693f622",
+              "revision": 1,
+              "digest": "3db1300e81fd5e01269fcba857f893577931933fc3bb80570b785403d37f0bc5"
+            },
+            {
+              "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:repository",
+              "revision": 1,
+              "digest": "c0231ee500c36bd67825bdfd2ed44eba7b439975e37cf323633b199aba81c7a1"
+            },
+            {
+              "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:scope",
+              "revision": 1,
+              "digest": "aff01d20fc1c8eba693fff69a27df3bb479a94fb781b4c177c24ddf8ca841913"
+            },
+            {
+              "id": "flow-clamp",
+              "revision": 1,
+              "digest": "dbed419da00ca0b18dd36042e37db7f4037e705ec64b01321bb15acbd9d28306"
+            },
+            {
+              "id": "ob-clamp",
+              "revision": 1,
+              "digest": "3481bce2397a51b1d140ddb7a6e660530d7ec729231b1c9642152b1a49827447"
+            },
+            {
+              "id": "req-clamp",
+              "revision": 1,
+              "digest": "954ff173576ff4819c2ed9a0901054a0739e7313c37f4e09263fbaae7589038f"
+            },
+            {
+              "id": "request-material",
+              "revision": 1,
+              "digest": "2efcc46c4ee5a2da2ab6a9ec18323ec9fb4848f1163e73f41577ff0ca3be61ab"
+            }
+          ],
+          "candidateTreeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+          "commitSha": null,
+          "profileRef": null,
+          "environmentDigest": null,
+          "executionRef": null,
+          "artifactRef": "01M5JS0M0BH5JG7TYXC1W00G93",
+          "artifactDigest": "bd400caf23495b1e517a3b450d2eba5bb3057b507c44b316577ad8fcd8a03759",
+          "ci": null,
+          "result": "passed",
+          "summary": "设计结构检查通过",
+          "limitations": ["结构一致性不证明代码正确。"],
+          "recordedAt": 1792705258031
+        },
+        "freshness": "current",
+        "reasons": []
+      }
+    ],
+    "traces": [
+      {
+        "id": "trace:01M5JRXFTKD6CKDV8VVN51RVFA:0",
+        "elementId": "req-clamp",
+        "obligationId": "ob-clamp",
+        "candidateTreeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+        "path": "clamp.ts",
+        "blobOid": "6d9e42530a42783647c42f938a70aeccba1d95ab",
+        "symbol": "export function clamp",
+        "testRef": "clamp.test.ts",
+        "status": "reference-checked",
+        "reason": "Finite clamp implementation with boundary tests"
+      }
+    ],
+    "obligations": [
+      {
+        "obligationId": "ob-clamp",
+        "state": "passed",
+        "evidenceIds": ["execution:01M5JRXFTKD6CKDV8VVN51RVFA:7e47211b50a9eb9f"]
+      }
+    ]
+  },
+  "sourceReadback": {
+    "at": "2026-10-22T22:02:50.317Z",
+    "taskId": "01M5JQKNC0DKC9Q68Q572JRM8P",
+    "files": [
+      {
+        "path": "clamp.ts",
+        "status": "fulfilled",
+        "value": {
+          "path": "clamp.ts",
+          "size": 81,
+          "oversized": false,
+          "content": "export function clamp(x: number): number { return Math.max(0, Math.min(10, x)) }\n"
+        }
+      },
+      {
+        "path": "clamp.test.ts",
+        "status": "fulfilled",
+        "value": {
+          "path": "clamp.test.ts",
+          "size": 196,
+          "oversized": false,
+          "content": "import {expect,test} from 'bun:test'\nimport {clamp} from './clamp'\ntest('finite clamp boundaries',()=>{for(const [x,y] of [[-1,0],[0,0],[5,5],[10,10],[11,10],[0.5,0.5]])expect(clamp(x)).toBe(y)})\n"
+        }
+      },
+      {
+        "path": "verify.sh",
+        "status": "fulfilled",
+        "value": {
+          "path": "verify.sh",
+          "size": 24,
+          "oversized": false,
+          "content": "#!/bin/sh\nexec bun test\n"
+        }
+      }
+    ],
+    "scope": "Normal Task workspace API after delivery. The clamp.ts Git blob matches the candidate trace; these are readable workspace files, not a separate immutable export of every candidate file.",
+    "verifiedClampBlobOid": "6d9e42530a42783647c42f938a70aeccba1d95ab"
+  },
+  "ui": {
+    "at": "2026-10-22T21:59:57.512Z",
+    "url": "http://rfc396-graph-acceptance.cs.localhost/tasks/employee-cases/01M5J5MH5Q3M2ZBAYK0VPT200M?tab=design",
+    "workspaceVisible": true,
+    "originalExecutionEvidenceVisible": true,
+    "actualTestOutputVisible": true,
+    "candidateTreeVisible": true,
+    "basisDigestVisible": true,
+    "deliveredCommitVisible": true,
+    "errors": [],
+    "screenshot": "hosted-execution-evidence.png",
+    "screenshotSha256": "45bd6b5a1423347a11f02b7c1089f552aea68e5402411cdb99bc2c2689122ea9",
+    "firstAttempt": {
+      "at": "2026-10-22T21:56:29.184Z",
+      "error": "TimeoutError: waitFor: Timeout 120000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('section').filter({ has: getByRole('heading', { name: 'Code execution', exact: true }) }).getByRole('button', { name: 'Inspect original evidence and logs' }) to be visible\u001b[22m\n"
+    },
+    "firstAttemptAttribution": "The script waited for English labels, while the actual page was Chinese. The corrected read-only script accepted both labels and read the actual report. No product change or workflow retry was needed."
+  },
+  "transientReads": {
+    "firstEvidenceRead": {
+      "at": "2026-10-22T21:52:34.911Z",
+      "evidence": [
+        {
+          "evidence": {
+            "id": "review-evidence:01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+            "kind": "design-review",
+            "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+            "obligationIds": ["ob-clamp"],
+            "readSet": [
+              {
+                "id": "c-clamp",
+                "revision": 1,
+                "digest": "5c9fc60cad0f3004fa57dc87c01a91400429496e631af653ab044862ecb8bcea"
+              },
+              {
+                "id": "dependencies:a4d3aa7faa58ef36e45b4ed8580cd9454693f622",
+                "revision": 1,
+                "digest": "3db1300e81fd5e01269fcba857f893577931933fc3bb80570b785403d37f0bc5"
+              },
+              {
+                "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:repository",
+                "revision": 1,
+                "digest": "c0231ee500c36bd67825bdfd2ed44eba7b439975e37cf323633b199aba81c7a1"
+              },
+              {
+                "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:scope",
+                "revision": 1,
+                "digest": "aff01d20fc1c8eba693fff69a27df3bb479a94fb781b4c177c24ddf8ca841913"
+              },
+              {
+                "id": "flow-clamp",
+                "revision": 1,
+                "digest": "dbed419da00ca0b18dd36042e37db7f4037e705ec64b01321bb15acbd9d28306"
+              },
+              {
+                "id": "ob-clamp",
+                "revision": 1,
+                "digest": "3481bce2397a51b1d140ddb7a6e660530d7ec729231b1c9642152b1a49827447"
+              },
+              {
+                "id": "req-clamp",
+                "revision": 1,
+                "digest": "954ff173576ff4819c2ed9a0901054a0739e7313c37f4e09263fbaae7589038f"
+              },
+              {
+                "id": "request-material",
+                "revision": 1,
+                "digest": "2efcc46c4ee5a2da2ab6a9ec18323ec9fb4848f1163e73f41577ff0ca3be61ab"
+              }
+            ],
+            "candidateTreeOid": null,
+            "commitSha": null,
+            "profileRef": null,
+            "environmentDigest": null,
+            "executionRef": "01M5JMN7NKDXW8TTMFG01BM7G6",
+            "artifactRef": "01M5JP4ZH249XVRQKVMZK71T0N",
+            "artifactDigest": "b25262d4c41e5efac67e9d8ba6a77fe74eb9230965611877d040c9d7bc25196d",
+            "ci": null,
+            "result": "passed",
+            "summary": "approved: ",
+            "limitations": ["人工批准设计并不证明候选代码已通过执行验证。"],
+            "recordedAt": 1792702234007
+          },
+          "freshness": "current",
+          "reasons": []
+        },
+        {
+          "evidence": {
+            "id": "execution:01M5JRXFTKD6CKDV8VVN51RVFA:7e47211b50a9eb9f",
+            "kind": "execution",
+            "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+            "obligationIds": ["ob-clamp"],
+            "readSet": [
+              {
+                "id": "c-clamp",
+                "revision": 1,
+                "digest": "5c9fc60cad0f3004fa57dc87c01a91400429496e631af653ab044862ecb8bcea"
+              },
+              {
+                "id": "dependencies:a4d3aa7faa58ef36e45b4ed8580cd9454693f622",
+                "revision": 1,
+                "digest": "3db1300e81fd5e01269fcba857f893577931933fc3bb80570b785403d37f0bc5"
+              },
+              {
+                "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:repository",
+                "revision": 1,
+                "digest": "c0231ee500c36bd67825bdfd2ed44eba7b439975e37cf323633b199aba81c7a1"
+              },
+              {
+                "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:scope",
+                "revision": 1,
+                "digest": "aff01d20fc1c8eba693fff69a27df3bb479a94fb781b4c177c24ddf8ca841913"
+              },
+              {
+                "id": "flow-clamp",
+                "revision": 1,
+                "digest": "dbed419da00ca0b18dd36042e37db7f4037e705ec64b01321bb15acbd9d28306"
+              },
+              {
+                "id": "ob-clamp",
+                "revision": 1,
+                "digest": "3481bce2397a51b1d140ddb7a6e660530d7ec729231b1c9642152b1a49827447"
+              },
+              {
+                "id": "req-clamp",
+                "revision": 1,
+                "digest": "954ff173576ff4819c2ed9a0901054a0739e7313c37f4e09263fbaae7589038f"
+              },
+              {
+                "id": "request-material",
+                "revision": 1,
+                "digest": "2efcc46c4ee5a2da2ab6a9ec18323ec9fb4848f1163e73f41577ff0ca3be61ab"
+              }
+            ],
+            "candidateTreeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+            "commitSha": null,
+            "profileRef": {
+              "id": "01M5HCDKS9T3174V2B9JKV2CDE",
+              "revision": 1,
+              "digest": "09ca94409b9f984781c1e468ae6464d0ba361a3e3e97503f824417de81c67c67"
+            },
+            "environmentDigest": "f16a9c8e58bffcc58750ac5008ac42083fee37ad2f98ecdebb351b8e77c1d5b6",
+            "executionRef": "01M5JRXFTKD6CKDV8VVN51RVFA:01M5HCDKS9T3174V2B9JKV2CDE@1:7af64de6997adbdc5f15ffba71f444c6fe7ec90b9930ec31e0296fbfe2f3bb6a",
+            "artifactRef": "01M5JSDT6212B24TNDENE3X74V",
+            "artifactDigest": "7d33b64ac9c023f8b45158fc07694535a85ac80c57904fb7a61d22855fc8ba48",
+            "ci": null,
+            "result": "passed",
+            "summary": "01M5HCDKS9T3174V2B9JKV2CDE@1: 执行通过",
+            "limitations": [
+              "测试执行通过不代表已证明所有输入上的行为；环境快照不包含远端服务或未声明的外部依赖。"
+            ],
+            "recordedAt": 1792705258031
+          },
+          "freshness": "unknown",
+          "reasons": ["evidence-artifact-unreadable"]
+        },
+        {
+          "evidence": {
+            "id": "structure:01M5JRXFTKD6CKDV8VVN51RVFA",
+            "kind": "structure",
+            "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+            "obligationIds": ["ob-clamp"],
+            "readSet": [
+              {
+                "id": "c-clamp",
+                "revision": 1,
+                "digest": "5c9fc60cad0f3004fa57dc87c01a91400429496e631af653ab044862ecb8bcea"
+              },
+              {
+                "id": "dependencies:a4d3aa7faa58ef36e45b4ed8580cd9454693f622",
+                "revision": 1,
+                "digest": "3db1300e81fd5e01269fcba857f893577931933fc3bb80570b785403d37f0bc5"
+              },
+              {
+                "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:repository",
+                "revision": 1,
+                "digest": "c0231ee500c36bd67825bdfd2ed44eba7b439975e37cf323633b199aba81c7a1"
+              },
+              {
+                "id": "design:01M5J5MH5Q3M2ZBAYK0VPT200M:scope",
+                "revision": 1,
+                "digest": "aff01d20fc1c8eba693fff69a27df3bb479a94fb781b4c177c24ddf8ca841913"
+              },
+              {
+                "id": "flow-clamp",
+                "revision": 1,
+                "digest": "dbed419da00ca0b18dd36042e37db7f4037e705ec64b01321bb15acbd9d28306"
+              },
+              {
+                "id": "ob-clamp",
+                "revision": 1,
+                "digest": "3481bce2397a51b1d140ddb7a6e660530d7ec729231b1c9642152b1a49827447"
+              },
+              {
+                "id": "req-clamp",
+                "revision": 1,
+                "digest": "954ff173576ff4819c2ed9a0901054a0739e7313c37f4e09263fbaae7589038f"
+              },
+              {
+                "id": "request-material",
+                "revision": 1,
+                "digest": "2efcc46c4ee5a2da2ab6a9ec18323ec9fb4848f1163e73f41577ff0ca3be61ab"
+              }
+            ],
+            "candidateTreeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+            "commitSha": null,
+            "profileRef": null,
+            "environmentDigest": null,
+            "executionRef": null,
+            "artifactRef": "01M5JS0M0BH5JG7TYXC1W00G93",
+            "artifactDigest": "bd400caf23495b1e517a3b450d2eba5bb3057b507c44b316577ad8fcd8a03759",
+            "ci": null,
+            "result": "passed",
+            "summary": "设计结构检查通过",
+            "limitations": ["结构一致性不证明代码正确。"],
+            "recordedAt": 1792705258031
+          },
+          "freshness": "current",
+          "reasons": []
+        }
+      ],
+      "traces": [
+        {
+          "id": "trace:01M5JRXFTKD6CKDV8VVN51RVFA:0",
+          "elementId": "req-clamp",
+          "obligationId": "ob-clamp",
+          "candidateTreeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+          "path": "clamp.ts",
+          "blobOid": "6d9e42530a42783647c42f938a70aeccba1d95ab",
+          "symbol": "export function clamp",
+          "testRef": "clamp.test.ts",
+          "status": "reference-checked",
+          "reason": "Finite clamp implementation with boundary tests"
+        }
+      ],
+      "obligations": [
+        {
+          "obligationId": "ob-clamp",
+          "state": "pending",
+          "evidenceIds": []
+        }
+      ]
+    },
+    "laterCurrentEvidenceAt": "2026-10-22T21:56:19.369Z",
+    "workspaceFileInitialFailure": {
+      "operation": "/api/tasks/01M5JQKNC0DKC9Q68Q572JRM8P/worktree-file?path=verify.sh",
+      "status": 500,
+      "code": "internal-error",
+      "subsequentReadSucceededAt": "2026-10-22T22:02:50.317Z"
+    },
+    "boundary": "The first evidence response marked execution freshness unknown/evidence-artifact-unreadable. Later normal reads returned original bytes and current evidence. These reads did not rerun verification or replace stored results; storage availability and root cause are not claimed fixed."
+  },
+  "limits": [
+    "Only finite clamp inputs and the six declared examples were exercised; tests are not a general proof.",
+    "The service uses 67795ed462; the actual parent task still uses the recorded older task image. A task-image upgrade was not observed.",
+    "The scoped boot recovery switches, platform lease failures and manual route reconciliation remain in hosted-acceptance-status.json.",
+    "publication is null: the business candidate was not published to a remote business repository or deployed.",
+    "Functional acceptance does not make the latest shared-main CI green; final RFC status remains separate."
+  ],
+  "latestSharedMainCi": {
+    "commit": "407fb491ad5a592590d56d3b88136114443e74dd",
+    "runId": 39858220290,
+    "status": "completed",
+    "conclusion": "failure",
+    "completedAt": "2026-10-22T22:02:18Z",
+    "jobs": {
+      "total": 49,
+      "success": 47,
+      "failure": 2
+    },
+    "requiredCheckId": 120114469860,
+    "remainingFailureIds": [120101856514, 120114469860],
+    "failedJobs": [
+      {
+        "id": 120101856514,
+        "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+        "conclusion": "failure",
+        "completedAt": "2026-10-22T21:34:35Z"
+      },
+      {
+        "id": 120114469860,
+        "name": "CI required",
+        "conclusion": "failure",
+        "completedAt": "2026-10-22T22:02:18Z"
+      }
+    ],
+    "allFunctionalJobsSucceeded": true,
+    "excludedStaticFindingsRead": false,
+    "boundary": "Only job metadata was read for the excluded static check. Its findings/logs were not inspected. No job was rerun, no foreign source was changed, and overall CI is not green."
+  }
+}

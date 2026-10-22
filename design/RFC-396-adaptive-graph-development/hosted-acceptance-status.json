@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "observedAt": "2026-10-22T21:31:19.100Z",
+  "observedAt": "2026-10-22T22:08:30.625Z",
   "rfc": "RFC-396",
   "rfcStatus": "In Progress",
   "acceptanceCriterion": "AC14",
-  "result": "incomplete",
+  "result": "passed",
   "scope": "Actual hosted transport with the built-in file review and approved real model; design and implementation remain deterministic fixtures. The three complete real-model journeys are recorded separately.",
   "deployment": {
     "projectId": "01a16258-52b4-7000-8510-afa1ee567504",
@@ -118,16 +118,102 @@
       "reason": "",
       "taskId": "01M5JMN7NKDXW8TTMFG01BM7G6"
     },
-    "candidate": null,
-    "verificationReceipt": null,
-    "deliveryReceipt": null,
+    "candidate": {
+      "agentOutcomeRef": "01M5JQKN530518T6MGWSH90CM2",
+      "baselineSnapshotRef": "git:370e6f922a40d698e526696633c145879c6afb16",
+      "candidateRef": "1166fe1533530d2abd7180c6f26fc3ee42687b63f2594e2877e9483ec6aee217",
+      "changed": {
+        "added": ["clamp.test.ts", "clamp.ts", "verify.sh"],
+        "deleted": [],
+        "modified": []
+      },
+      "excludePolicyDigest": "19a325e1e95e0529d9fc0ecb1a89be2ce6355a385ef1b99a598ac07bb771c412",
+      "repositoryBaseline": {
+        "commitSha": "370e6f922a40d698e526696633c145879c6afb16",
+        "kind": "commit",
+        "treeOid": "b3e43cf7fca3ea9ed8e102d6021b405c1c204afe"
+      },
+      "treeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+      "uploadLineage": {
+        "finalDigests": [],
+        "planDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "verificationReceipt": {
+      "ok": true,
+      "receiptDigest": "7af64de6997adbdc5f15ffba71f444c6fe7ec90b9930ec31e0296fbfe2f3bb6a",
+      "steps": [
+        {
+          "durationMs": 206598,
+          "evidenceFiles": [],
+          "exitCode": 0,
+          "ok": true,
+          "outputTailRef": "d695cb42bf3ab021df08df6b7677648c89305c6ab28c93d79040c2cc4b404d15",
+          "stepId": "hosted-bun",
+          "timedOut": false
+        }
+      ],
+      "stopPolicy": "first-failure",
+      "profile": {
+        "digest": "09ca94409b9f984781c1e468ae6464d0ba361a3e3e97503f824417de81c67c67",
+        "id": "01M5HCDKS9T3174V2B9JKV2CDE",
+        "revision": 1
+      },
+      "environment": {
+        "description": "{\"arch\":\"arm64\",\"dependencies\":{},\"locale\":null,\"osRelease\":\"7.0.12-linuxkit\",\"platform\":\"linux\",\"runtimes\":{\"bun\":\"1.4.3\",\"node\":\"26.3.0\"},\"timezone\":null}",
+        "digest": "f16a9c8e58bffcc58750ac5008ac42083fee37ad2f98ecdebb351b8e77c1d5b6"
+      },
+      "evidenceId": "execution:01M5JRXFTKD6CKDV8VVN51RVFA:7e47211b50a9eb9f",
+      "artifactRef": "01M5JSDT6212B24TNDENE3X74V",
+      "artifactDigest": "7d33b64ac9c023f8b45158fc07694535a85ac80c57904fb7a61d22855fc8ba48",
+      "actualTests": {
+        "passed": 1,
+        "failed": 0,
+        "assertions": 6
+      }
+    },
+    "deliveryReceipt": {
+      "artifact": {
+        "artifactRef": "01M5JSJRP982VVTR4E1823FX1S",
+        "digest": "9e1256c4764c3252c77489446f006c75ec8b824e571d988417e9d4da2d69b3b4"
+      },
+      "candidate": {
+        "agentOutcomeRef": "01M5JQKN530518T6MGWSH90CM2",
+        "baselineSnapshotRef": "git:370e6f922a40d698e526696633c145879c6afb16",
+        "candidateRef": "1166fe1533530d2abd7180c6f26fc3ee42687b63f2594e2877e9483ec6aee217",
+        "changed": {
+          "added": ["clamp.test.ts", "clamp.ts", "verify.sh"],
+          "deleted": [],
+          "modified": []
+        },
+        "excludePolicyDigest": "19a325e1e95e0529d9fc0ecb1a89be2ce6355a385ef1b99a598ac07bb771c412",
+        "repositoryBaseline": {
+          "commitSha": "370e6f922a40d698e526696633c145879c6afb16",
+          "kind": "commit",
+          "treeOid": "b3e43cf7fca3ea9ed8e102d6021b405c1c204afe"
+        },
+        "treeOid": "28cd65cf2f92ae948841d57ff3ae8db58b3b3db7",
+        "uploadLineage": {
+          "finalDigests": [],
+          "planDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      },
+      "commitSha": "cafc85a528c3d1b518f73475ff5c92f9b30d6a11",
+      "kind": "delivery",
+      "publication": null,
+      "result": {
+        "artifactRefs": ["01M5JATS0CSTF30P8Q9WDY0EP1", "01M5JSJRP982VVTR4E1823FX1S"],
+        "commitSha": "cafc85a528c3d1b518f73475ff5c92f9b30d6a11",
+        "publication": null
+      }
+    },
     "expectedVerification": {
       "profileId": "01M5HCDKS9T3174V2B9JKV2CDE",
       "profileVersion": 1,
       "profileDigest": "09ca94409b9f984781c1e468ae6464d0ba361a3e3e97503f824417de81c67c67",
       "testCount": 1,
       "assertionCount": 6,
-      "executed": false
+      "executed": true
     },
     "reviewExecution": {
       "roundId": "01M5JAY36499QEA29XXNZ7YEKN",
@@ -172,7 +258,7 @@
         "replayed": false
       },
       "approvalScope": "代理逐项核对虚构 clamp 托管验收的完整冻结依据；实际执行与交付另行取得。",
-      "stageBoundary": "The complete native body was read and matched byte for byte before approval. Graph recorded the actual approval. The review Task completed after scoped operator-enabled boot recovery; implementation and delivery have not completed."
+      "stageBoundary": "The complete native body was read and matched byte for byte before approval. Graph recorded the actual approval; the review Task completed after scoped operator-enabled boot recovery. Implementation, independent verification and delivery completed later, with separate receipts below."
     },
     "reviewExecutionHistory": [
       {
@@ -199,18 +285,41 @@
         "latestMaterialNodeRunId": "01M5JM340DMD1AT4XFN45E2GGB",
         "latestMaterialRetryIndex": 1
       }
-    ]
+    ],
+    "caseState": "terminal",
+    "terminalKind": "graph-development.delivered",
+    "terminalAt": "2026-10-22T21:52:10.801Z"
   },
   "documentationCi": {
-    "commit": "42611df21e71ca2db7f04846a54f00d80d8ea3af",
-    "runId": 39848361400,
+    "commit": "407fb491ad5a592590d56d3b88136114443e74dd",
+    "runId": 39858220290,
     "status": "completed",
     "conclusion": "failure",
+    "completedAt": "2026-10-22T22:02:18Z",
     "jobs": {
       "total": 49,
       "success": 47,
       "failure": 2
-    }
+    },
+    "requiredCheckId": 120114469860,
+    "remainingFailureIds": [120101856514, 120114469860],
+    "failedJobs": [
+      {
+        "id": 120101856514,
+        "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+        "conclusion": "failure",
+        "completedAt": "2026-10-22T21:34:35Z"
+      },
+      {
+        "id": 120114469860,
+        "name": "CI required",
+        "conclusion": "failure",
+        "completedAt": "2026-10-22T22:02:18Z"
+      }
+    ],
+    "allFunctionalJobsSucceeded": true,
+    "excludedStaticFindingsRead": false,
+    "boundary": "Only job metadata was read for the excluded static check. Its findings/logs were not inspected. No job was rerun, no foreign source was changed, and overall CI is not green."
   },
   "storageObservation": {
     "at": "2026-10-22T21:08:50.171Z",
@@ -247,9 +356,9 @@
     "boundary": "Space-level ready does not establish that a particular content read is admitted. The frozen bundle content returned object_storage_busy through the normal admin API as well."
   },
   "resumeRequirements": [
-    "Continue the already accepted implement-change round and the same frozen basis and approval; do not submit a duplicate request.",
-    "Collect actual candidate tree, independent profile exit/evidence and terminal delivered Case.",
-    "Keep the exact service/task images and previous failures in the acceptance record; do not treat operator-enabled boot recovery as default automatic recovery acceptance."
+    "No business replay is needed: this Case is terminal/delivered.",
+    "Consume the final exact-SHA shared-main CI and keep its outcome separate from the successful functional acceptance.",
+    "Preserve actual deployment/task image, manual routing, scoped recovery and transient-read failures; do not infer that their causes were fixed."
   ],
   "deploymentHistory": [
     {
@@ -327,7 +436,7 @@
     "effect": "The approval stayed persisted. The gate continuation was interrupted; normal boot recovery resumed the sole eligible Task and it finished at 21:03:09 UTC.",
     "rootCause": "The original platform-unreachable cause remains unconfirmed."
   },
-  "currentAcceptancePosition": "Native review body is exact, approval is authoritative, and the review Task is done. Two implementation requests encountered object content 503 errors. The same idempotent request was subsequently accepted and created the implement-change round. Its preallocated Task was still task-not-found at the last probe. Candidate, independent verification and delivered Case remain open.",
+  "currentAcceptancePosition": "The same approved basis completed implementation, independent hosted profile execution, and terminal graph-development.delivered. Actual test output is 1 pass / 0 fail / 6 assertions. All three evidence bindings are passed/current, the obligation is passed, and the product UI reads the report and delivered commit.",
   "resourceTrial": {
     "sourceCommit": "67795ed462db9b78cea82fad5ae14c9d09bbca91",
     "gitlabCommit": "eea8eda466c0a7afa739153e74e6c926fe2690cb",
@@ -391,29 +500,35 @@
     }
   ],
   "sharedMainCi": {
-    "commit": "42611df21e71ca2db7f04846a54f00d80d8ea3af",
-    "runId": 39848361400,
+    "commit": "407fb491ad5a592590d56d3b88136114443e74dd",
+    "runId": 39858220290,
     "status": "completed",
     "conclusion": "failure",
+    "completedAt": "2026-10-22T22:02:18Z",
     "jobs": {
       "total": 49,
       "success": 47,
       "failure": 2
     },
-    "requiredCheckId": 120084452568,
-    "remainingFailureIds": [120067595038, 120084452568],
-    "postgresql": {
-      "jobId": 120067595146,
-      "p0MutationStep": "success",
-      "artifactId": 12456597057
-    },
-    "backendUbuntu20": {
-      "jobId": 120067595127,
-      "pass": 1112,
-      "fail": 0,
-      "skip": 7
-    },
-    "boundary": "Exact-SHA functional jobs succeeded. Overall CI and its required check failed. Excluded static-check findings were not read. Prior failures remain preserved; no assertion or foreign source was changed and no job was rerun."
+    "requiredCheckId": 120114469860,
+    "remainingFailureIds": [120101856514, 120114469860],
+    "failedJobs": [
+      {
+        "id": 120101856514,
+        "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+        "conclusion": "failure",
+        "completedAt": "2026-10-22T21:34:35Z"
+      },
+      {
+        "id": 120114469860,
+        "name": "CI required",
+        "conclusion": "failure",
+        "completedAt": "2026-10-22T22:02:18Z"
+      }
+    ],
+    "allFunctionalJobsSucceeded": true,
+    "excludedStaticFindingsRead": false,
+    "boundary": "Only job metadata was read for the excluded static check. Its findings/logs were not inspected. No job was rerun, no foreign source was changed, and overall CI is not green."
   },
   "hostedRecoveryInvestigation": {
     "observedAt": "2026-10-22T19:59:26.934Z",
@@ -630,6 +745,31 @@
         ]
       },
       "boundary": "Only the two functional failures were attributed here; the overall required check remains failed. No foreign source, assertions or CI rules were changed and no jobs were rerun."
+    },
+    {
+      "commit": "42611df21e71ca2db7f04846a54f00d80d8ea3af",
+      "runId": 39848361400,
+      "status": "completed",
+      "conclusion": "failure",
+      "jobs": {
+        "total": 49,
+        "success": 47,
+        "failure": 2
+      },
+      "requiredCheckId": 120084452568,
+      "remainingFailureIds": [120067595038, 120084452568],
+      "postgresql": {
+        "jobId": 120067595146,
+        "p0MutationStep": "success",
+        "artifactId": 12456597057
+      },
+      "backendUbuntu20": {
+        "jobId": 120067595127,
+        "pass": 1112,
+        "fail": 0,
+        "skip": 7
+      },
+      "boundary": "Exact-SHA functional jobs succeeded. Overall CI and its required check failed. Excluded static-check findings were not read. Prior failures remain preserved; no assertion or foreign source was changed and no job was rerun."
     }
   ],
   "materialRetryFailure": {
@@ -825,13 +965,19 @@
     },
     "acceptedAt": "2026-10-22T21:17:25.270Z",
     "roundId": "01M5JQKN530518T6MGWSH90CM2",
-    "roundState": "planned",
+    "roundState": "completed",
     "preallocatedTaskId": "01M5JQKNC0DKC9Q68Q572JRM8P",
     "lastTaskProbe": {
       "at": "2026-10-22T21:27:47.428Z",
       "error": "Error: /api/tasks/01M5JQKNC0DKC9Q68Q572JRM8P: 404 {\"ok\":false,\"code\":\"task-not-found\",\"message\":\"task '01M5JQKNC0DKC9Q68Q572JRM8P' not found\"}"
     },
-    "boundary": "Two failed attempts were retained. The ordinary delivery helper then admitted the same idempotent request. A preallocated Task identity is not proof that execution has started; candidate, profile execution and delivery remain unobserved."
+    "boundary": "Two failed attempts and the preallocated-Task 404 are retained. The same admitted request subsequently produced one implementation Task, followed by independent verification and delivery; no duplicate implementation request or approval was needed.",
+    "executionObserved": {
+      "taskId": "01M5JQKNC0DKC9Q68Q572JRM8P",
+      "status": "done",
+      "startedAt": 1792704714326,
+      "finishedAt": 1792705132091
+    }
   },
   "documentationCiHistory": [
     {
@@ -850,6 +996,117 @@
         "successJobs": 49,
         "totalJobs": 49
       }
+    },
+    {
+      "commit": "42611df21e71ca2db7f04846a54f00d80d8ea3af",
+      "runId": 39848361400,
+      "status": "completed",
+      "conclusion": "failure",
+      "jobs": {
+        "total": 49,
+        "success": 47,
+        "failure": 2
+      }
     }
-  ]
+  ],
+  "acceptanceProgressHistory": [
+    {
+      "observedAt": "2026-10-22T21:31:19.100Z",
+      "result": "incomplete",
+      "position": "Native review body is exact, approval is authoritative, and the review Task is done. Two implementation requests encountered object content 503 errors. The same idempotent request was subsequently accepted and created the implement-change round. Its preallocated Task was still task-not-found at the last probe. Candidate, independent verification and delivered Case remain open.",
+      "resumeRequirements": [
+        "Continue the already accepted implement-change round and the same frozen basis and approval; do not submit a duplicate request.",
+        "Collect actual candidate tree, independent profile exit/evidence and terminal delivered Case.",
+        "Keep the exact service/task images and previous failures in the acceptance record; do not treat operator-enabled boot recovery as default automatic recovery acceptance."
+      ],
+      "implementationAdmission": {
+        "requestId": "hosted-clamp-native-implement-v2",
+        "basisId": "basis:hosted-clamp-native-basis-v2",
+        "reviewReceiptId": "01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+        "initialFailure": {
+          "at": "2026-10-22T21:12:59.414Z",
+          "operation": "requestImplementation",
+          "caseId": "01M5J5MH5Q3M2ZBAYK0VPT200M",
+          "requestId": "hosted-clamp-native-implement-v2",
+          "basisId": "basis:hosted-clamp-native-basis-v2",
+          "reviewReceiptId": "01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+          "response": {
+            "status": 500,
+            "code": "internal-error"
+          },
+          "applicationLogAt": "2026-10-22T21:08:57.781Z",
+          "applicationError": "CrewStation object storage responded 503",
+          "stackBoundary": ["open", "files", "assertMaterialsReadable", "requestImplementation"],
+          "objectProbe": {
+            "objectId": "01a164ad-703e-7000-be31-1084f9966592",
+            "method": "GET",
+            "path": "/v3/object-storage/objects/01a164ad-703e-7000-be31-1084f9966592/content",
+            "status": 503,
+            "error": "unavailable",
+            "message": "存储元数据正在变更，请重试",
+            "code": "object_storage_busy"
+          },
+          "candidateGenerated": false,
+          "verificationExecuted": false
+        },
+        "subsequentAttempts": [
+          {
+            "attempt": 2,
+            "startedAt": "2026-10-22T21:14:53.893Z",
+            "finishedAt": "2026-10-22T21:15:29.414Z",
+            "accepted": false,
+            "error": "Error: /api/development-designs/design%3A01M5J5MH5Q3M2ZBAYK0VPT200M/implementation-requests: 500 {\"ok\":false,\"code\":\"internal-error\",\"message\":\"internal server error\"}"
+          }
+        ],
+        "accepted": true,
+        "receipt": {
+          "basisId": "basis:hosted-clamp-native-basis-v2",
+          "basisDigest": "833ecd749ff3cce980fd5b6d871b7db064b70e46d2ba52cb5a1759388b3714b9",
+          "reviewReceiptId": "01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+          "result": {
+            "eventId": "01M5JQKMK2HZX29XQVRGWQ7WS0",
+            "caseId": "01M5J5MH5Q3M2ZBAYK0VPT200M",
+            "queued": false
+          }
+        },
+        "acceptedAt": "2026-10-22T21:17:25.270Z",
+        "roundId": "01M5JQKN530518T6MGWSH90CM2",
+        "roundState": "planned",
+        "preallocatedTaskId": "01M5JQKNC0DKC9Q68Q572JRM8P",
+        "lastTaskProbe": {
+          "at": "2026-10-22T21:27:47.428Z",
+          "error": "Error: /api/tasks/01M5JQKNC0DKC9Q68Q572JRM8P: 404 {\"ok\":false,\"code\":\"task-not-found\",\"message\":\"task '01M5JQKNC0DKC9Q68Q572JRM8P' not found\"}"
+        },
+        "boundary": "Two failed attempts were retained. The ordinary delivery helper then admitted the same idempotent request. A preallocated Task identity is not proof that execution has started; candidate, profile execution and delivery remain unobserved."
+      }
+    }
+  ],
+  "rfcStatusReason": "AC14/T14 functional acceptance completed. Final shared-main CI and publication bookkeeping remain separate; latest observed overall CI is not green.",
+  "completionEvidence": {
+    "path": "./hosted-completion-evidence.json",
+    "uiScreenshot": "./hosted-execution-evidence.png",
+    "terminalAt": "2026-10-22T21:52:10.801Z",
+    "observedAt": "2026-10-22T21:56:19.369Z",
+    "uiObservedAt": "2026-10-22T21:59:57.512Z",
+    "currentEvidence": [
+      {
+        "id": "review-evidence:01M5JP2FCQ8B0Q57H3G22ZS4XQ",
+        "result": "passed",
+        "freshness": "current",
+        "reasons": []
+      },
+      {
+        "id": "execution:01M5JRXFTKD6CKDV8VVN51RVFA:7e47211b50a9eb9f",
+        "result": "passed",
+        "freshness": "current",
+        "reasons": []
+      },
+      {
+        "id": "structure:01M5JRXFTKD6CKDV8VVN51RVFA",
+        "result": "passed",
+        "freshness": "current",
+        "reasons": []
+      }
+    ]
+  }
 }
