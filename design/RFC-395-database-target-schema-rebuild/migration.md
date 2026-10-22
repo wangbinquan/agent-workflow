@@ -84,7 +84,7 @@
 ### 4.4 澄清、依赖与内容
 
 - questions 保留顺序和完整 snapshot；按稳定 question ID 分解最终答案、草稿与 attribution。孤立 answer key / 重复 question ID 必须逐项决议，不能截断或合并覆盖。
-- 资源名转 ID 只接受唯一且可证明的对应；保留数组顺序、必选属性和各引用参数。所有 Workflow dependency index 与定义 revision 对拍。
+- 旧落库形态需要资源名转 ID 时，只接受唯一且可证明的对应；保留数组顺序、必选属性和各引用参数。有意保留的 Workflow name selector 不改为 ID 权威。所有 Workflow dependency index 与定义 revision 对拍。
 - 所有原文摘要继续对原 bytes 计算，不因迁到 jsonb 或重新序列化改变历史 digest。需要查询的结构化投影另存。
 - base64 / UTF-8 技能内容解码成 bytes；验证 BOM、非法 UTF-8、空内容。外置内容先发布 ready，再提交最终引用；失败可重试，source 内容在目标验收前不释放。
 - 缺少历史 artifact 可以保留“原本已缺失”的证据和原有用户可见错误，但不得将迁移新丢失混入其中。活跃任务所需内容缺失一律阻塞。
