@@ -79,6 +79,7 @@ async function restoreStrictClarifyTransition(): Promise<void> {
   const target = sourcePath('modules/collaboration/infrastructure/clarify/seal.ts')
   const original = await import(target)
   const current = `      if (flipNow) {
+        // rfc053-allow-direct-status-write -- atomic clarify-node close on full seal (mirrors resume-clarify)
         await tx
           .update(nodeRuns)
           .set({ status: 'done', finishedAt: ts })
@@ -116,6 +117,7 @@ async function restoreDecodeBeforeWorkflowDelete(): Promise<void> {
   const original: typeof WorkflowRepository = await import(target)
   const current = `    async delete(authority, id, deletion) {
       const deletedVersion = await runResourceCatalogTransaction(input.db, async (transaction) => {
+        const { workflows, resourceGrants } = tablesOf(transaction)
         const row = (
           await transaction.select().from(workflows).where(eq(workflows.id, id)).limit(1)
         )[0]
@@ -428,7 +430,9 @@ async function restoreFrozenEffectOwnerSnapshot(): Promise<void> {
   if (source.split(current).length !== 4) throw new Error('P0-2 mutation sites drifted')
   // 01e4b1b7b: postgresqlTaskExecutionEffectPersistence.ts:72–102. This is the
   // original private read predicate and native throw. Only its function/Tx
-  // names and imports are adapted. The diagnostic observes the same real row;
+  // names and imports are adapted; since RFC-395 I-b the owner table comes from
+  // the session (`tablesOf`, already imported by the target file) so each provider
+  // decodes its own native columns. The diagnostic observes the same real row;
   // it does not supply the error or change the predicate. All three real calls
   // (prepare, settle, spawn receipt) use this historical function in memory.
   const historical = `
@@ -436,6 +440,7 @@ async function assertHistoricalEffectOwner(
   tx: TaskExecutionTransaction, token: OwnershipToken, now: number,
 ): Promise<void> {
   assertOwnershipToken(token)
+  const { taskExecutionOwners } = tablesOf(tx)
   const rows = await tx
     .select({
       ownerId: taskExecutionOwners.ownerId,
@@ -473,8 +478,7 @@ async function assertHistoricalEffectOwner(
   }
 }
 `
-  const changed = `import { taskExecutionOwners } from '@/db/schema'
-import { assertOwnershipToken, type OwnershipToken } from '../domain/ownership'
+  const changed = `import { assertOwnershipToken, type OwnershipToken } from '../domain/ownership'
 ${source.replaceAll(current, 'await assertHistoricalEffectOwner(tx, input.token, now)')}
 ${historical}`
   const mutated: typeof TaskEffectPersistence = await import(

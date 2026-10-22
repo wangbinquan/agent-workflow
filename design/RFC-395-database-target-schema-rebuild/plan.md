@@ -353,3 +353,13 @@ I-b 由 Codex 实施（S0～S5），本会话审核并补正，一次提交落�
   tasks-second 21.21 → 13.02、tasks-running 20.89 → 10.83、repos-first 7.63 → 2.85、repos-referenced 6.47 → 4.12、
   reviews-pending 4.33 → 1.94、clarify-pending 2.19 → 1.08、workgroup-pending 6.97 → 3.77、overview 13.98 → 5.11。
   I-b 九个端点全部在原始预算与 PostgreSQL 容差之内；改动前这次有两个端点超出容差。两台 runner 不同，绝对值只作参考，结论是没有退化。
+- **第二轮 CI（`c35067361`，run 39836782229）**：49 个 job 中 5 个失败。后端 24 个分片中 23 个通过，含全部 PostgreSQL 泳道，
+  上一轮本机超时的 MCP 诊断与能力矩阵用例在 CI 上通过。归因：
+  - 本会话：分片 20 的 S-14 棘轮账本。`taskCollab.ts` 恢复别名后，按名字计数的 `update(tasks)` 回到 0，删除 Codex 补录的那一行，
+    账本与 I-b 之前逐字一致；
+  - I-b 交付：真库 job 的 RFC-359 P0 变异取证。P0-5、P0-6 的变异点原文随 I-b 改写而漂移（放行注释挪进了 `if (flipNow)`、
+    删除路径多了一行会话取表）；P0-2 的历史谓词仍从 `@/db/schema` 取表，在 PostgreSQL 上用 SQLite 列解码，int8 回成字符串，
+    严格相等恒不成立。三处夹具按现状更新，P0-2 改从会话取表；
+  - 与本次无关：
+    - 静态扫描的依赖审计门因外部新公告 dompurify GHSA-mrv2-3pqr-j5jr 失败，属安全类依赖处置，不在本 RFC 范围；
+    - Playwright e2e ubuntu 2/3 在安装浏览器依赖时 apt 源返回 403，未执行任何用例。
