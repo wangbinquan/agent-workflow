@@ -235,3 +235,65 @@ FK 由聚合删除语义决定：owned child 才 cascade，历史引用保持可
 验证矩阵、故障点和实施依赖见 [plan](./plan.md)。本设计要求先完成全部实现和测试编写，再集中执行功能验证。至少包括：旧写法反例、双 provider 行为对拍、非空多版本迁移、并发协作、恢复及 effect 不重复、制品字节校验、完整用户旅程、备份恢复和三平台二进制启动。
 
 迁移后性能的判断以同一真实样本、同一查询、同一机器的前后结果为准：Task 列表 / 当前 run 选择 / 资源反向引用 / 单题修改 / 启动恢复记录 rows examined、SQL 次数、耗时分布和锁等待。新增索引来自这些访问路径；不要求每个 FK 列都机械加索引，也不许靠扩大超时掩盖回归。
+
+## 12. 阶段 I 技术方案（2026-10-21 接手会话补充）
+
+阶段 I 在现有物理 schema 上完成，不产生 schema epoch，现有双引擎测试即行为判据（plan §6.2，用户已确认单独落地）。分两次交付：
+I-a（T1 + T2a）与 I-b（T3）。依据是接手会话的只读研究（合同与迁移机制、provider 查询面）。
+
+### 12.1 I-a：显式 contribution 与等价证明
+
+- **落位**：
+  - `platform/persistence/schema/`：contribution DSL、codec 目录、表达式 AST、registry 校验、合同 / SQLite plan / PostgreSQL plan 编译器、
+    drizzle 物化。platform 不 import modules，registry 以参数注入；platform 内现有对 `buildLogicalSchemaContract()` 的默认值调用改为注入。
+  - `modules/<ctx>/infrastructure/persistence/schema.ts`：本域 contribution 与本域 drizzle 表；`modules/<ctx>/composition.ts` 导出
+    `schemaContribution`。平台自有表（committed events、内容发布、迁移元数据、维护）放在对应 `platform/*` contribution。
+  - `bootstrap/persistenceSchema.ts`：唯一汇集点，供 DDL、迁移、诊断与测试使用；业务模块不得 import。
+- **contribution**：每表显式声明 `id, owner, columns（有序；codec 描述符含物理列名、可空、默认值）, primaryKey, migrationKey, unique
+  （声明 NULL 语义）, foreignKeys（目标用逻辑表 id 字符串，注明生命周期）, checks / indexes（类型化表达式 AST + 带理由的按 provider
+  raw 逃生口）, retention, migrationPolicy`。owner 与 codec 无兜底；I-a 的 owner 取 table-mapping 的目标 owner，`migrationPolicy`
+  取今日合同的 disposition。
+- **codec 目录**：`id / text / enum / bool / int / bigint / epochMs / durationMs / real / jsonText / jsonDoc / rawJson / bytes / seq /
+  identity / slotKey`，SQLite 与 PostgreSQL 的物理表达见 §2.2。I-a 只用重述今日声明所需的 codec，不改任何列的物理类型。
+- **`@/db/schema`**：改为转出编译出的表与现有 facade，336 个引用方不改。
+- **等价证明（验收）**：
+  1. legacy v2 合同投影（冻结的旧 `ownerFor / codecFor` 规则移入 `platform/persistence/migration/legacy/`）与今日
+     `buildLogicalSchemaContract()` 的 canonical JSON 相等，目标是 digest `sha256:8e6510…` 逐字节相等；做不到时以 t19g 的规范化相等为准并在
+     RFC 记录原因，下面两条物理证明兜底；
+  2. 编译出的 PostgreSQL plan 与今日 plan 逐条相等，真引擎上编译 plan 建的库与历史迁移 replay 建的库 catalog 相等；
+  3. 编译出的 SQLite DDL 在内存库执行后的物理结构，与迁移 replay 结构的差异等于已审账本：7 个仅 SQLite 的 trigger、8 条仅 SQLite
+     的 FK、`tasks.name` 可空性、42 张表列序、2 处 partial 与 full unique 差异；账本中各项的目标裁决留到 II-0；
+  4. 两套 drizzle 表与今日 SQLite 表、PostgreSQL 运行时投影逐列相等（列名、类型、notNull、主键、默认值、枚举值）；
+  5. 负例：缺 owner / codec、`jsonDoc` 用于有原文摘要合同的列、identity 无高水位策略、跨域 FK 目标不存在，均编译失败。
+- **结构锁**：新表必须经 contribution 声明；`db/schema.ts` 不得再直接声明表；以后新增表的 RFC 须同时提供 contribution。
+
+### 12.2 I-b：原生 provider（方案 B）
+
+- **选择**：显式合同生成 SQLite 与 PostgreSQL 两套原生表；会话提供本 provider 的表集；业务代码写在窄中立查询接口
+  `PersistenceDb / PersistenceTx` 上，只收录实测用到的约 25 个 builder 方法，结果类型复用 drizzle 根层类型；运行时是原生
+  bun-sqlite / bun-sql 的 drizzle 对象，不包一层。不采用「每模块两份适配器」与「底层换驱动、上层仍 sqlite 类型」。
+- **辅助**：`first / affectedRows / rawRows / rawFirst / rawExec`，原始行按合同 codec 解码（统一 int8 字符串、布尔 0/1 与 true/false）。
+- **方言差异**：继续只走 `EngineCapabilities`，签名改为中立类型；`instr` 收为能力；新增方法须附两侧测试，保持闭集。
+- **开发顺序**（作为一次交付集中验证）：
+  - S0 PostgreSQL 表固化为显式表并与运行时投影等价；
+  - S1 中立类型改名；
+  - S2 清除 SQLite 专属终端与原始执行，加守卫；
+  - S3 会话提供表集（先给全表集，收紧到本模块表留给 T11），删除进程级投影与切换调用，SQLite 与 PostgreSQL 客户端可同进程并存；
+  - S4 PostgreSQL 改原生 bun-sql 会话，写闸、世代围栏与首写标记只做语句分类、不改写 SQL，删除 sqlite-proxy 与 SQL 编译链；
+  - S5 业务 SQL 不再依赖 PostgreSQL 同名函数（CHECK / 默认值里的保留到新 baseline）。
+- **已裁决的风险**：
+  - 单行 INSERT 往返合并今日靠 SQL 改写；改为会话内原生构造的带围栏写入，保持一次往返，性能对拍不得退化（实测基线 p95 约 5.6ms）；
+  - 省略列：两侧数据库默认值必须等于合同声明，加对拍用例；
+  - Bun.SQL 事务：先 reserve 再在其上构造会话，保持不嵌套 reserve，reserve 等待遥测覆盖 begin；
+  - 类型系统不阻止跨方言混用表：由会话提供表集，并加守卫禁止模块直接导入方言表模块；
+  - drizzle 升级可能破坏中立接口可赋值性：类型级一致性测试进 CI；
+  - 预编译与缓存键按会话方言区分。
+- **必须继续成立**：`describeEachProvider` 给用例的 harness 形状（仅 `db` 类型改为中立句柄）；用例体看不到 provider 名；PostgreSQL 客户端
+  行为合同（`tests/rfc349-postgresql-database-client.test.ts`）；语句录制改为包装 bun-sql 实际调用的 client，性能形状测试不失去被测面；
+  `explain()`；SQLite 侧写者租约、`BEGIN IMMEDIATE` 重试与变更计数归一；CI 中 PostgreSQL 分片不得降级为 skip。
+- **改指向而非删除的守卫**：`postgresqlSurface`、`rfc349-postgresql-surface-guard`、`rfc349-provider-cutover`、
+  `rfc359-w5-adapter-production-consumer`、`rfc359-w5-identical-provider-twins`、`rfc359-w5-t17-provider-file-location`、
+  `rfc359-w5-t18-bare-transaction`、`rfc359-w5-t19-provider-branch`、`rfc359-w5-t19f-*`、`rfc359-w5-t19g-schema-contract-reconciliation`、
+  `rfc359-w5-t20-dialect-completeness`、`architectureReport`。
+
+I-b 完成后，D10 中「查询与执行」一半销账；「合同来源」一半由 I-a 销账。
