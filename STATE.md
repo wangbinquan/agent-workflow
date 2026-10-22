@@ -1,3 +1,7 @@
+## 2026-10-21 RFC-395 Draft：数据库阶段目标模型与一次迁移
+
+**进行中 RFC（设计阶段）**：[RFC-395](design/RFC-395-database-target-schema-rebuild/proposal.md)，用户要求全面数据库调研并落地 RFC。以 `3fcb14dbf8ab27cf451934942ea6b9cd647077f8` / schema digest `8e6510d4d0927d538692ecf22cde0b1fa9a97c733a9e044af8d9768418ecb956` 为基线，六份文档明确 217 张源表处置、Task / NodeRun / workspace / 澄清 / 资源引用 / 内容模型、双 provider 原生合同及离线转换后一次切换。重点删除 host workflow、主仓镜像、单仓/多仓快照双形态、运行时 seq/ID 回退与旧 provider 适配；保留事件、Case/Reaction/Task、观测与领域 effect 边界。当前仅文档，未改生产代码或真实数据库；独立功能设计门与实现批准待完成（本会话无可调用 openai-codex review 工具）。完整任务与验收矩阵见 RFC plan；真实切换需另有具体 MigrationPlan 和实例操作批准。
+
 ## 2026-10-21 RFC-396 Draft：自适应图驱动研发数字人
 
 用户要求基于脑图澄清提案新增数字人，并明确“根据不同需求，自适应生成最优的图组合”，本轮授权为“落地 RFC”。[RFC-396](design/RFC-396-adaptive-graph-development/proposal.md) 三件套已写：`graph-development@1` 覆盖图上澄清、代码与测试生成、实际验证和证据交付；关注问题驱动选图，图的种类、数量、粒度与组合可随需求变化，不固化 4+1 或其他图清单。共享语义模型归 development-automation，复用既有 Case、Workflow、clarify/review 和候选交付链；实现基线、候选内容和证据分别绑定版本。源码核对基线 `3fcb14dbf8ab27cf451934942ea6b9cd647077f8`，按 RFC-393 后的 `bootstrap/daemonModules/` 落位；18 项 AC、T00～T16 和双 provider/双部署验收矩阵见配套设计与计划。**当前仅 Draft**：未改生产和测试，原型审核、独立功能设计门、用户实现批准均待完成。下一步是可交互原型和功能设计审查。编号避让并发的 RFC-395 数据库方案。
